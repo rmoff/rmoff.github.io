@@ -1,19 +1,165 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
 	<channel>
-		<title>rmoff.net </title>
+		<title>rmoff&#39;s random ramblings </title>
 		<link>https://rmoff.github.io/</link>
 		<generator>Hugo -- gohugo.io</generator>
 		<language>en-us</language>
-		<author></author>
+		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2018</rights>
-		<updated>2018-12-12 09:49:04 &#43;0000 UTC</updated>
+		<updated>2018-12-15 22:00:55 &#43;0000 UTC</updated>
+		
+		<item>
+			<title>Docker Tips and Tricks with KSQL and Kafka</title>
+			<link>https://rmoff.github.io/2018/12/15/docker-tips-and-tricks-with-ksql-and-kafka/</link>
+			<pubDate>Sat, 15 Dec 2018 22:00:55 UTC</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/2018/12/15/docker-tips-and-tricks-with-ksql-and-kafka/</guid>
+			<description>
+
+&lt;p&gt;A few years ago a colleague of mine told me about this thing called Docker, and I must admit I dismissed it as a fad…how wrong was I. Docker, and Docker Compose, are one of my key tools of the trade. With them I can build self-contained environments for tutorials, demos, conference talks etc. Tear it down, run it again, without worrying that somewhere a local config changed and will break things.&lt;/p&gt;
+
+&lt;p&gt;So, here&amp;rsquo;s a collection of tricks I use with Docker and Docker Compose that might be useful, particularly for those working with Apache Kafka and Confluent Platform.&lt;/p&gt;
+
+&lt;h2 id=&#34;wait-for-an-http-endpoint-to-be-available&#34;&gt;Wait for an HTTP endpoint to be available&lt;/h2&gt;
+
+&lt;p&gt;Often a container will be &amp;lsquo;up&amp;rsquo; before it&amp;rsquo;s &lt;em&gt;actually&lt;/em&gt; up. So Docker Compose&amp;rsquo;s &lt;code&gt;depends_on&lt;/code&gt; dependencies don&amp;rsquo;t do everything we need here. For a service that exposes an HTTP endpoint (e.g. Kafka Connect, KSQL Server, etc) you can use this bash snippet to force a script to wait before continuing execution of something that requires the service to actually be ready and available:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;echo -e &amp;quot;\n\n⏳ Waiting for KSQL to be available before launching CLI\n&amp;quot;
+while [ $$(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) -eq 000 ]
+do 
+  echo -e $$(date) &amp;quot;KSQL Server HTTP state: &amp;quot; $$(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) &amp;quot; (waiting for 200)&amp;quot;
+  sleep 5
+done
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Here this is assuming that KSQL Server is running on a host accessible as &lt;code&gt;ksql-server&lt;/code&gt; and on port &lt;code&gt;8088&lt;/code&gt;. You can use this trick if, for example, you only want to launch the KSQL CLI once the server is available:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;docker-compose exec ksql-cli bash -c &#39;echo -e &amp;quot;\n\n⏳ Waiting for KSQL to be available before launching CLI\n&amp;quot;; while [ $(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) -eq 000 ] ; do echo -e $(date) &amp;quot;KSQL Server HTTP state: &amp;quot; $(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) &amp;quot; (waiting for 200)&amp;quot; ; sleep 5 ; done; ksql http://ksql-server:8088&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;You can also build it into a Docker Compose file as shown below&lt;/p&gt;
+
+&lt;h2 id=&#34;wait-for-a-particular-message-in-a-container-s-log&#34;&gt;Wait for a particular message in a container&amp;rsquo;s log&lt;/h2&gt;
+
+&lt;p&gt;For the same reason as above—waiting for a service to be ready—you can use this trick built around &lt;code&gt;grep&lt;/code&gt; and bash&amp;rsquo;s &lt;a href=&#34;http://tldp.org/LDP/abs/html/process-sub.html&#34;&gt;&lt;em&gt;process substitution&lt;/em&gt;&lt;/a&gt;, which will make the script wait until the given phrase is found in the logs from Docker Compose:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;export CONNECT_HOST=connect-debezium
+echo -e &amp;quot;\n--\n\nWaiting for Kafka Connect to start on $CONNECT_HOST … ⏳&amp;quot;
+grep -q &amp;quot;Kafka Connect started&amp;quot; &amp;lt;(docker-compose logs -f $CONNECT_HOST)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;run-custom-code-before-launching-a-container-s-program&#34;&gt;Run custom code before launching a container&amp;rsquo;s program&lt;/h2&gt;
+
+&lt;p&gt;Maybe you want to download a dependency, or move some files around, or do something. You could build a new &lt;code&gt;Dockerfile&lt;/code&gt;, but often you want to overlay on an existing standard image a slight tweak for a demo. With Docker Compose this is easy enough to do. First you need to figure out what command the container is going to run when it launches, which will either be through &lt;code&gt;Entrypoint&lt;/code&gt; or &lt;code&gt;Cmd&lt;/code&gt;:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker inspect --format=&#39;{{.Config.Entrypoint}}&#39; confluentinc/cp-ksql-server:5.0.1
+[]
+
+$ docker inspect --format=&#39;{{.Config.Cmd}}&#39; confluentinc/cp-ksql-server:5.0.1
+[/etc/confluent/docker/run]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;In the above example it&amp;rsquo;s &lt;code&gt;/etc/confluent/docker/run&lt;/code&gt;. So now build this into your Docker Compose:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ksql-server:
+  image: confluentinc/cp-ksql-server:5.0.1
+  depends_on:
+    - kafka
+  environment:
+    KSQL_BOOTSTRAP_SERVERS: kafka:29092
+    KSQL_LISTENERS: http://0.0.0.0:8088
+  command: 
+    - /bin/bash
+    - -c 
+    - |
+      mkdir -p /data/maxmind
+      cd /data/maxmind
+      curl https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz | tar xz 
+      /etc/confluent/docker/run 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Now the additional bits will run, and &lt;em&gt;then&lt;/em&gt; the container&amp;rsquo;s intended process will actually run.&lt;/p&gt;
+
+&lt;p&gt;The &lt;code&gt;- |&lt;/code&gt; is some YAML magic; we&amp;rsquo;re passing in three arguments to &lt;code&gt;command&lt;/code&gt;, and the &lt;code&gt;|&lt;/code&gt; tells YAML that the following lines are all part of the same entry. It makes for a much neater and easier to read file than trying to put everything into a single line as is sometimes done with &lt;code&gt;command&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h2 id=&#34;deploy-a-kafka-connect-connector-automatically&#34;&gt;Deploy a Kafka Connect connector automatically&lt;/h2&gt;
+
+&lt;p&gt;In the above example, we run some code &lt;em&gt;before&lt;/em&gt; the container&amp;rsquo;s payload (the KSQL Server) starts because of a dependency on it. In the next example we&amp;rsquo;ll do it the other way around; launch the service and wait for it to start, and then run some more code. This is the pattern we need for deploying a Kafka Connect connector.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;kafka-connect:
+  image: confluentinc/cp-kafka-connect:5.0.1
+  environment:
+    CONNECT_REST_PORT: 18083
+    CONNECT_REST_ADVERTISED_HOST_NAME: &amp;quot;kafka-connect&amp;quot;
+    […]
+  volumes:
+    - $PWD/scripts:/scripts
+  command: 
+    - bash 
+    - -c 
+    - |
+      /etc/confluent/docker/run &amp;amp; 
+      echo &amp;quot;Waiting for Kafka Connect to start listening on $$CONNECT_REST_ADVERTISED_HOST_NAME ⏳&amp;quot;
+      while [ $$(curl -s -o /dev/null -w %{http_code} http://$$CONNECT_REST_ADVERTISED_HOST_NAME:$$CONNECT_REST_PORT/connectors) -eq 000 ] ; do 
+        echo -e $$(date) &amp;quot; Kafka Connect listener HTTP state: &amp;quot; $$(curl -s -o /dev/null -w %{http_code} http://$$CONNECT_REST_ADVERTISED_HOST_NAME:$$CONNECT_REST_PORT/connectors) &amp;quot; (waiting for 200)&amp;quot;
+        sleep 5 
+      done
+      nc -vz $$CONNECT_REST_ADVERTISED_HOST_NAME $$CONNECT_REST_PORT
+      echo -e &amp;quot;\n--\n+&amp;gt; Creating Kafka Connect Elasticsearch sink&amp;quot;
+      /scripts/create-es-sink.sh 
+      sleep infinity
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Notes:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;In the command section, &lt;code&gt;$&lt;/code&gt; are replaced with &lt;code&gt;$$&lt;/code&gt; to avoid the error &lt;code&gt;Invalid interpolation format for &amp;quot;command&amp;quot; option&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;sleep infinity&lt;/code&gt; is necessary, because we&amp;rsquo;ve sent the &lt;code&gt;/etc/confluent/docker/run&lt;/code&gt; process to a background thread (&lt;code&gt;&amp;amp;&lt;/code&gt;) and so the container will exit if the main &lt;code&gt;command&lt;/code&gt; finishes.&lt;/li&gt;
+&lt;li&gt;The actual script to configure the connector is a &lt;code&gt;curl&lt;/code&gt; call in &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/ksql-atm-fraud-detection/scripts/create-es-sink.sh&#34;&gt;a separate file&lt;/a&gt;. You &lt;em&gt;could&lt;/em&gt; build this into the Docker Compose but it feels a bit yucky.&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;You could combine both this and the technique above if you wanted to install a custom connector plugin before launching Kafka Connect, e.g.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;confluent-hub install --no-prompt confluentinc/kafka-connect-gcs:5.0.0 
+/etc/confluent/docker/run
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;execute-a-ksql-script-through-ksql-cli&#34;&gt;Execute a KSQL script through ksql-cli&lt;/h2&gt;
+
+&lt;p&gt;This Docker Compose snippet will run KSQL CLI and pass in a KSQL script for execution to it. The manual &lt;code&gt;EXIT&lt;/code&gt; is required because of a &lt;a href=&#34;https://github.com/confluentinc/ksql/issues/1327&#34;&gt;NPE bug&lt;/a&gt;. The advantage of this method vs running KSQL Server headless with a queries file passed to it is that you can still interact with KSQL this way, but can pre-build the environment to a certain state.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ksql-cli:
+  image: confluentinc/cp-ksql-cli:5.0.1
+  depends_on:
+    - ksql-server
+  volumes:
+    - $PWD/ksql-scripts/:/data/scripts/
+  entrypoint: 
+    - /bin/bash
+    - -c
+    - |
+      echo -e &amp;quot;\n\n⏳ Waiting for KSQL to be available before launching CLI\n&amp;quot;
+      while [ $$(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) -eq 000 ]
+      do 
+        echo -e $$(date) &amp;quot;KSQL Server HTTP state: &amp;quot; $$(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) &amp;quot; (waiting for 200)&amp;quot;
+        sleep 5
+      done
+      echo -e &amp;quot;\n\n-&amp;gt; Running KSQL commands\n&amp;quot;
+      cat /data/scripts/my-ksql-script.sql &amp;lt;(echo &#39;EXIT&#39;)| ksql http://ksql-server:8088
+      echo -e &amp;quot;\n\n-&amp;gt; Sleeping…\n&amp;quot;
+      sleep infinity
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Note that the &lt;code&gt;sleep infinity&lt;/code&gt; is required, otherwise the container will exit since all of the defined &lt;code&gt;entrypoint&lt;/code&gt; will have executed.&lt;/p&gt;
+</description>
+		</item>
 		
 		<item>
 			<title>Streaming data from Oracle into Kafka (December 2018)</title>
 			<link>https://rmoff.github.io/2018/12/12/streaming-data-from-oracle-into-kafka-december-2018/</link>
 			<pubDate>Wed, 12 Dec 2018 09:49:04 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/12/12/streaming-data-from-oracle-into-kafka-december-2018/</guid>
 			<description>
 
@@ -652,7 +798,7 @@ d | null | Platinum | null
 			<title>Tools I Use: iPad Pro</title>
 			<link>https://rmoff.github.io/2018/12/11/tools-i-use-ipad-pro/</link>
 			<pubDate>Tue, 11 Dec 2018 15:12:15 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/12/11/tools-i-use-ipad-pro/</guid>
 			<description>
 
@@ -760,7 +906,7 @@ I&amp;rsquo;ve yet present from the iPad but do have the connector for the time 
 			<title>So how DO you make those cool diagrams?</title>
 			<link>https://rmoff.github.io/2018/12/10/so-how-do-you-make-those-cool-diagrams/</link>
 			<pubDate>Mon, 10 Dec 2018 12:38:18 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/12/10/so-how-do-you-make-those-cool-diagrams/</guid>
 			<description>
 
@@ -832,7 +978,7 @@ I rarely try to do actual handwriting in Paper, because (a) my handwriting is pr
 			<title>Get mtr working on the Mac</title>
 			<link>https://rmoff.github.io/2018/12/08/get-mtr-working-on-the-mac/</link>
 			<pubDate>Sat, 08 Dec 2018 12:45:40 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/12/08/get-mtr-working-on-the-mac/</guid>
 			<description>
 
@@ -858,7 +1004,7 @@ sudo ln /usr/local/Cellar/mtr/0.92/sbin/mtr-packet /usr/local/bin/mtr-packet
 			<title>Kafka Connect CLI tricks</title>
 			<link>https://rmoff.github.io/2018/12/03/kafka-connect-cli-tricks/</link>
 			<pubDate>Mon, 03 Dec 2018 14:50:45 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/12/03/kafka-connect-cli-tricks/</guid>
 			<description>
 
@@ -904,7 +1050,7 @@ xargs -I{connector_name} curl -s -XDELETE &amp;quot;http://localhost:8083/connec
 			<title>Logging in as root on Oracle Database Docker image</title>
 			<link>https://rmoff.github.io/2018/11/30/logging-in-as-root-on-oracle-database-docker-image/</link>
 			<pubDate>Fri, 30 Nov 2018 12:13:41 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/11/30/logging-in-as-root-on-oracle-database-docker-image/</guid>
 			<description>&lt;p&gt;tl;dr:&lt;/p&gt;
 
@@ -951,7 +1097,7 @@ root
 			<title>ERROR: Invalid interpolation format for &#34;command&#34; option in service…</title>
 			<link>https://rmoff.github.io/2018/11/20/error-invalid-interpolation-format-for-command-option-in-service/</link>
 			<pubDate>Tue, 20 Nov 2018 17:47:54 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/11/20/error-invalid-interpolation-format-for-command-option-in-service/</guid>
 			<description>&lt;p&gt;Doing some funky Docker Compose stuff, including:&lt;/p&gt;
 
@@ -1018,7 +1164,7 @@ do awk &#39;{print $0;system(&amp;quot;sleep 0.5&amp;quot;);}&#39; /data/data.js
 			<title>Flatten CDC records in KSQL</title>
 			<link>https://rmoff.github.io/2018/10/11/flatten-cdc-records-in-ksql/</link>
 			<pubDate>Thu, 11 Oct 2018 15:13:59 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/10/11/flatten-cdc-records-in-ksql/</guid>
 			<description>
 
@@ -1135,7 +1281,7 @@ ksql&amp;gt;
 			<title>Streaming geopoint data from Kafka to Elasticsearch</title>
 			<link>https://rmoff.github.io/2018/10/05/streaming-geopoint-data-from-kafka-to-elasticsearch/</link>
 			<pubDate>Fri, 05 Oct 2018 15:22:51 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/10/05/streaming-geopoint-data-from-kafka-to-elasticsearch/</guid>
 			<description>&lt;p&gt;Using the &lt;a href=&#34;https://www.confluent.io/connector/kafka-connect-elasticsearch/&#34;&gt;Elasticsearch Kafka Connect connector&lt;/a&gt; to stream events from a Kafka topic to Elasticsearch.&lt;/p&gt;
 
@@ -1383,7 +1529,7 @@ FROM   ATM_TXNS X
 			<title>Exploring JMX with jmxterm</title>
 			<link>https://rmoff.github.io/2018/09/19/exploring-jmx-with-jmxterm/</link>
 			<pubDate>Wed, 19 Sep 2018 08:11:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/09/19/exploring-jmx-with-jmxterm/</guid>
 			<description>&lt;p&gt;Check out the &lt;a href=&#34;https://github.com/jiaqi/jmxterm/&#34;&gt;jmxterm repository&lt;/a&gt; / Download jmxterm from &lt;a href=&#34;http://wiki.cyclopsgroup.org/jmxterm/&#34;&gt;http://wiki.cyclopsgroup.org/jmxterm/&lt;/a&gt;&lt;/p&gt;
 
@@ -1471,7 +1617,7 @@ messages-consumed-total = 251329.0;
 			<title>Accessing Kafka Docker containers&#39; JMX from host</title>
 			<link>https://rmoff.github.io/2018/09/17/accessing-kafka-docker-containers-jmx-from-host/</link>
 			<pubDate>Mon, 17 Sep 2018 15:29:48 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/09/17/accessing-kafka-docker-containers-jmx-from-host/</guid>
 			<description>&lt;p&gt;To help future Googlers… with the Confluent docker images for Kafka, KSQL, Kafka Connect, etc, if you want to access JMX metrics from within, you just need to pass two environment variables:&lt;/p&gt;
 
@@ -1508,7 +1654,7 @@ $&amp;gt;open localhost:18088
 			<title>Sending multiline messages to Kafka</title>
 			<link>https://rmoff.github.io/2018/09/04/sending-multiline-messages-to-kafka/</link>
 			<pubDate>Tue, 04 Sep 2018 08:26:51 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/09/04/sending-multiline-messages-to-kafka/</guid>
 			<description>&lt;p&gt;(&lt;a href=&#34;https://stackoverflow.com/questions/52151816/push-multiple-line-text-as-one-message-in-a-kafka-topic/52162998#52162998&#34;&gt;SO answer repost&lt;/a&gt;)&lt;/p&gt;
 
@@ -1575,7 +1721,7 @@ line breaks!
 			<title>Window Timestamps in KSQL / Integration with Elasticsearch</title>
 			<link>https://rmoff.github.io/2018/09/03/window-timestamps-in-ksql-integration-with-elasticsearch/</link>
 			<pubDate>Mon, 03 Sep 2018 16:16:30 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/09/03/window-timestamps-in-ksql-integration-with-elasticsearch/</guid>
 			<description>&lt;p&gt;KSQL provides the ability to create windowed aggregations. For example,
 count the number of messages in a 1 minute window, grouped by a
@@ -1662,7 +1808,7 @@ display it rounded:&lt;/p&gt;
 			<title>Converting from AsciiDoc to MS Word</title>
 			<link>https://rmoff.github.io/2018/08/22/converting-from-asciidoc-to-ms-word/</link>
 			<pubDate>Wed, 22 Aug 2018 18:50:53 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/08/22/converting-from-asciidoc-to-ms-word/</guid>
 			<description>&lt;p&gt;Short and sweet this one. I&amp;rsquo;ve written in the past how &lt;a href=&#34;https://rmoff.net/2017/09/12/what-is-markdown-and-why-is-it-awesome/&#34;&gt;I love Markdown&lt;/a&gt; but I&amp;rsquo;ve actually moved on from that and now firmly throw my hat in the &lt;a href=&#34;http://www.methods.co.nz/asciidoc/&#34;&gt;AsciiDoc&lt;/a&gt; ring. I&amp;rsquo;ll write another post another time explaining why in more detail, but in short it&amp;rsquo;s just more powerful whilst still simple and readable without compilation.&lt;/p&gt;
 
@@ -1707,7 +1853,7 @@ open $INPUT_ADOC.docx
 			<title>Where I&#39;m speaking in the rest of 2018</title>
 			<link>https://rmoff.github.io/2018/08/21/where-im-speaking-in-the-rest-of-2018/</link>
 			<pubDate>Tue, 21 Aug 2018 21:01:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/08/21/where-im-speaking-in-the-rest-of-2018/</guid>
 			<description>
 
@@ -1807,7 +1953,7 @@ open $INPUT_ADOC.docx
 			<title>Kafka Listeners - Explained</title>
 			<link>https://rmoff.github.io/2018/08/02/kafka-listeners-explained/</link>
 			<pubDate>Thu, 02 Aug 2018 19:38:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/08/02/kafka-listeners-explained/</guid>
 			<description>
 
@@ -2120,7 +2266,7 @@ Metadata for all topics (from broker -1: kafka0:29094/bootstrap):
 			<title>Syntax highlighting code for presentation slides</title>
 			<link>https://rmoff.github.io/2018/06/20/syntax-highlighting-code-for-presentation-slides/</link>
 			<pubDate>Wed, 20 Jun 2018 18:32:10 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/06/20/syntax-highlighting-code-for-presentation-slides/</guid>
 			<description>
 
@@ -2213,7 +2359,7 @@ Metadata for all topics (from broker -1: kafka0:29094/bootstrap):
 			<title>Analysing Network Data with Apache Kafka, KSQL, and Elasticsearch</title>
 			<link>https://rmoff.github.io/2018/06/17/analysing-network-data-with-apache-kafka-ksql-and-elasticsearch/</link>
 			<pubDate>Sun, 17 Jun 2018 11:35:20 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/06/17/analysing-network-data-with-apache-kafka-ksql-and-elasticsearch/</guid>
 			<description>&lt;p&gt;In &lt;a href=&#34;http://cnfl.io/syslogs-filtering&#34;&gt;this article&lt;/a&gt; I demonstrated how to use KSQL to filter streams of network event data. As well as filtering, KSQL can be used to easily &lt;a href=&#34;https://www.confluent.io/blog/real-time-syslog-processing-apache-kafka-ksql-enriching-events-with-external-data/&#34;&gt;enrich streams&lt;/a&gt;. In this article we&amp;rsquo;ll see how this enriched data can be used to drive analysis in Elasticsearch and Kibana—and how KSQL again came into use for building some stream processing as a result of the discovery made.&lt;/p&gt;
 
@@ -2301,7 +2447,7 @@ HAVING COUNT(*)&amp;gt;2;
 			<title>Compare and apply a diff / patch recursively</title>
 			<link>https://rmoff.github.io/2018/06/07/compare-and-apply-a-diff-patch-recursively/</link>
 			<pubDate>Thu, 07 Jun 2018 14:35:36 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/06/07/compare-and-apply-a-diff-patch-recursively/</guid>
 			<description>&lt;p&gt;Hacky way to keep config files in sync when there&amp;rsquo;s a new version of some software.&lt;/p&gt;
 
@@ -2343,7 +2489,7 @@ confluent-4.1.1
 			<title>Kafka Connect and Oracle data types</title>
 			<link>https://rmoff.github.io/2018/05/21/kafka-connect-and-oracle-data-types/</link>
 			<pubDate>Mon, 21 May 2018 08:59:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/05/21/kafka-connect-and-oracle-data-types/</guid>
 			<description>
 
@@ -2610,7 +2756,7 @@ Processed a total of 1 messages
 			<title>Stream-Table Joins in KSQL: Stream events must be timestamped after the Table messages</title>
 			<link>https://rmoff.github.io/2018/05/17/stream-table-joins-in-ksql-stream-events-must-be-timestamped-after-the-table-messages/</link>
 			<pubDate>Thu, 17 May 2018 10:16:43 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/05/17/stream-table-joins-in-ksql-stream-events-must-be-timestamped-after-the-table-messages/</guid>
 			<description>
 
@@ -2765,7 +2911,7 @@ ksql&amp;gt; SELECT ROWTIME, ROWKEY, root, details FROM VOIP;
 			<title>Quick &#39;n Easy Population of Realistic Test Data into Kafka</title>
 			<link>https://rmoff.github.io/2018/05/10/quick-n-easy-population-of-realistic-test-data-into-kafka/</link>
 			<pubDate>Thu, 10 May 2018 12:56:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/05/10/quick-n-easy-population-of-realistic-test-data-into-kafka/</guid>
 			<description>&lt;p&gt;&lt;strong&gt;tl;dr&lt;/strong&gt; Use &lt;code&gt;curl&lt;/code&gt; to pull data from the Mockaroo REST endpoint, and pipe it into &lt;code&gt;kafkacat&lt;/code&gt;, thus:&lt;/p&gt;
 
@@ -2860,7 +3006,7 @@ kafka-console-producer \
 			<title>Streaming Data from MongoDB into Kafka with Kafka Connect and Debezium</title>
 			<link>https://rmoff.github.io/2018/03/27/streaming-data-from-mongodb-into-kafka-with-kafka-connect-and-debezium/</link>
 			<pubDate>Tue, 27 Mar 2018 18:52:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/03/27/streaming-data-from-mongodb-into-kafka-with-kafka-connect-and-debezium/</guid>
 			<description>
 
@@ -3032,7 +3178,7 @@ Unifi AP - Pantry | 192.168.10.71
 			<title>Cloning Ubiquiti&#39;s MongoDB instance to a separate server</title>
 			<link>https://rmoff.github.io/2018/03/27/cloning-ubiquitis-mongodb-instance-to-a-separate-server/</link>
 			<pubDate>Tue, 27 Mar 2018 18:45:20 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/03/27/cloning-ubiquitis-mongodb-instance-to-a-separate-server/</guid>
 			<description>
 
@@ -3133,7 +3279,7 @@ Wed Mar  7 12:17:31.932 unifi-mongodump/ace/radiusprofile.bson
 			<title>Streaming Data from MySQL into Kafka with Kafka Connect and Debezium</title>
 			<link>https://rmoff.github.io/2018/03/24/streaming-data-from-mysql-into-kafka-with-kafka-connect-and-debezium/</link>
 			<pubDate>Sat, 24 Mar 2018 14:58:14 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/03/24/streaming-data-from-mysql-into-kafka-with-kafka-connect-and-debezium/</guid>
 			<description>
 
@@ -3444,7 +3590,7 @@ fullfillment.sakila.category
 			<title>KSQL: Topic … does not conform to the requirements</title>
 			<link>https://rmoff.github.io/2018/03/06/ksql-topic-does-not-conform-to-the-requirements/</link>
 			<pubDate>Tue, 06 Mar 2018 23:08:11 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/03/06/ksql-topic-does-not-conform-to-the-requirements/</guid>
 			<description>&lt;pre&gt;&lt;code&gt;io.confluent.ksql.exception.KafkaTopicException: Topic &#39;KSQL_NOTIFY&#39; does not conform to the requirements Partitions:1 v 4. Replication: 1 v 1
 &lt;/code&gt;&lt;/pre&gt;
@@ -3471,7 +3617,7 @@ fullfillment.sakila.category
 			<title>Streaming data from Kafka into Elasticsearch</title>
 			<link>https://rmoff.github.io/2018/03/06/streaming-data-from-kafka-into-elasticsearch/</link>
 			<pubDate>Tue, 06 Mar 2018 22:21:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/03/06/streaming-data-from-kafka-into-elasticsearch/</guid>
 			<description>&lt;p&gt;&lt;em&gt;This article is part of a series exploring Streaming ETL in practice. You can read about &lt;a href=&#34;https://rmoff.net/2018/02/01/howto-oracle-goldengate-apache-kafka-schema-registry-swingbench/&#34;&gt;setting up the ingest of realtime events from a standard Oracle platform&lt;/a&gt;, and &lt;a href=&#34;https://www.confluent.io/blog/ksql-in-action-real-time-streaming-etl-from-oracle-transactional-data&#34;&gt;building streaming ETL using KSQL&lt;/a&gt;.&lt;/em&gt;&lt;/p&gt;
 
@@ -3535,7 +3681,7 @@ fullfillment.sakila.category
 			<title>Installing the Python Kafka library from Confluent - troubleshooting some silly errors…</title>
 			<link>https://rmoff.github.io/2018/03/06/installing-the-python-kafka-library-from-confluent-troubleshooting-some-silly-errors/</link>
 			<pubDate>Tue, 06 Mar 2018 22:18:24 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/03/06/installing-the-python-kafka-library-from-confluent-troubleshooting-some-silly-errors/</guid>
 			<description>&lt;p&gt;System:&lt;/p&gt;
 
@@ -3680,7 +3826,7 @@ Cleaning up...
 			<title>Why Do We Need Streaming ETL?</title>
 			<link>https://rmoff.github.io/2018/03/06/why-do-we-need-streaming-etl/</link>
 			<pubDate>Tue, 06 Mar 2018 22:18:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/03/06/why-do-we-need-streaming-etl/</guid>
 			<description>&lt;p&gt;&lt;em&gt;(This is an expanded version of the intro to an article I posted over on the &lt;a href=&#34;https://www.confluent.io/blog/ksql-in-action-real-time-streaming-etl-from-oracle-transactional-data&#34;&gt;Confluent blog&lt;/a&gt;. Here I get to be as verbose as I like &lt;code&gt;;)&lt;/code&gt;)&lt;/em&gt;&lt;/p&gt;
 
@@ -3731,7 +3877,7 @@ Cleaning up...
 			<title>HOWTO: Oracle GoldenGate &#43; Apache Kafka &#43; Schema Registry &#43; Swingbench</title>
 			<link>https://rmoff.github.io/2018/02/01/howto-oracle-goldengate-apache-kafka-schema-registry-swingbench/</link>
 			<pubDate>Thu, 01 Feb 2018 23:15:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/02/01/howto-oracle-goldengate-apache-kafka-schema-registry-swingbench/</guid>
 			<description>
 
@@ -3903,7 +4049,7 @@ Time            NCR     UCD     BP      OP      PO      BO      SQ      WQ      
 			<title>Kafka - AdminClient - Connection to node -1 could not be established. Broker may not be available</title>
 			<link>https://rmoff.github.io/2018/01/03/kafka-adminclient-connection-to-node-1-could-not-be-established.-broker-may-not-be-available/</link>
 			<pubDate>Wed, 03 Jan 2018 11:26:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2018/01/03/kafka-adminclient-connection-to-node-1-could-not-be-established.-broker-may-not-be-available/</guid>
 			<description>&lt;hr /&gt;
 
@@ -3968,7 +4114,7 @@ tcp6       0      0 192.168.10.250:9092     :::*                    LISTEN      
 			<title>Installing Oracle GoldenGate for Big Data 12.3.1 with Kafka Connect and Confluent Platform</title>
 			<link>https://rmoff.github.io/2017/11/21/installing-oracle-goldengate-for-big-data-12.3.1-with-kafka-connect-and-confluent-platform/</link>
 			<pubDate>Tue, 21 Nov 2017 17:31:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/11/21/installing-oracle-goldengate-for-big-data-12.3.1-with-kafka-connect-and-confluent-platform/</guid>
 			<description>
 
@@ -4570,7 +4716,7 @@ oracle@localhost /o/swingbench&amp;gt;
 			<title>Where will I be at OpenWorld / Oak Table World?</title>
 			<link>https://rmoff.github.io/2017/09/29/where-will-i-be-at-openworld-oak-table-world/</link>
 			<pubDate>Fri, 29 Sep 2017 19:02:55 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/09/29/where-will-i-be-at-openworld-oak-table-world/</guid>
 			<description>&lt;p&gt;Here&amp;rsquo;s where I&amp;rsquo;ll be!&lt;/p&gt;
 
@@ -4586,7 +4732,7 @@ oracle@localhost /o/swingbench&amp;gt;
 			<title>Apache Kafka™ talks at Oracle OpenWorld, JavaOne, and Oak Table World 2017</title>
 			<link>https://rmoff.github.io/2017/09/20/apache-kafka-talks-at-oracle-openworld-javaone-and-oak-table-world-2017/</link>
 			<pubDate>Wed, 20 Sep 2017 15:46:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/09/20/apache-kafka-talks-at-oracle-openworld-javaone-and-oak-table-world-2017/</guid>
 			<description>&lt;p&gt;There&amp;rsquo;s an impressive 19 sessions that cover Apache Kafka™ at Oracle OpenWorld, JavaOne, and Oak Table World this year! You can find the full list with speakers in the session catalogs for &lt;a href=&#34;https://events.rainfocus.com/catalog/oracle/oow17/catalogoow17?search=kafka&amp;amp;showEnrolled=false&#34;&gt;OOW&lt;/a&gt;, &lt;a href=&#34;https://events.rainfocus.com/catalog/oracle/oow17/catalogjavaone17?search=kafka&amp;amp;showEnrolled=false&#34;&gt;JavaOne&lt;/a&gt;, and &lt;a href=&#34;http://www.oaktable.net/blog/oak-table-world-2017-oracle-open-world&#34;&gt;Oak Table World&lt;/a&gt;. OTW is an awesome techie conference which is at the same time as OpenWorld, next door to Moscone. Hope to see you there!&lt;/p&gt;
 
@@ -4627,7 +4773,7 @@ oracle@localhost /o/swingbench&amp;gt;
 			<title>Oracle GoldenGate / Kafka Connect Handler troubleshooting</title>
 			<link>https://rmoff.github.io/2017/09/12/oracle-goldengate-kafka-connect-handler-troubleshooting/</link>
 			<pubDate>Tue, 12 Sep 2017 21:55:16 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/09/12/oracle-goldengate-kafka-connect-handler-troubleshooting/</guid>
 			<description>&lt;p&gt;The Replicat was kapput:&lt;/p&gt;
 
@@ -4793,7 +4939,7 @@ Log Read Checkpoint  File /u01/app/ogg/dirdat/oe000000001
 			<title>What is Markdown, and Why is it Awesome?</title>
 			<link>https://rmoff.github.io/2017/09/12/what-is-markdown-and-why-is-it-awesome/</link>
 			<pubDate>Tue, 12 Sep 2017 19:00:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/09/12/what-is-markdown-and-why-is-it-awesome/</guid>
 			<description>
 
@@ -4863,7 +5009,7 @@ Log Read Checkpoint  File /u01/app/ogg/dirdat/oe000000001
 			<title>Conferences &amp; Meetups at which I&#39;ll be speaking - 2017</title>
 			<link>https://rmoff.github.io/2017/09/11/conferences-meetups-at-which-ill-be-speaking-2017/</link>
 			<pubDate>Mon, 11 Sep 2017 06:45:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/09/11/conferences-meetups-at-which-ill-be-speaking-2017/</guid>
 			<description>
 
@@ -4935,7 +5081,7 @@ Log Read Checkpoint  File /u01/app/ogg/dirdat/oe000000001
 			<title>Kafka Connect - JsonDeserializer with schemas.enable requires &#34;schema&#34; and &#34;payload&#34; fields</title>
 			<link>https://rmoff.github.io/2017/09/06/kafka-connect-jsondeserializer-with-schemas.enable-requires-schema-and-payload-fields/</link>
 			<pubDate>Wed, 06 Sep 2017 12:00:25 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/09/06/kafka-connect-jsondeserializer-with-schemas.enable-requires-schema-and-payload-fields/</guid>
 			<description>&lt;p&gt;An error that I see coming up frequently in the Kafka Connect community (e.g. &lt;a href=&#34;https://groups.google.com/forum/#!forum/confluent-platform&#34;&gt;mailing list&lt;/a&gt;, &lt;a href=&#34;https://slackpass.io/confluentcommunity&#34;&gt;Slack group&lt;/a&gt;, &lt;a href=&#34;https://stackoverflow.com/questions/tagged/apache-kafka-connect&#34;&gt;StackOverflow&lt;/a&gt;) is:&lt;/p&gt;
 
@@ -4999,7 +5145,7 @@ Which is pretty much verbatim what the error says 😁), like this:&lt;/p&gt;
 			<title>Simple export/import of Data Sources in Grafana</title>
 			<link>https://rmoff.github.io/2017/08/08/simple-export-import-of-data-sources-in-grafana/</link>
 			<pubDate>Tue, 08 Aug 2017 19:32:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/08/08/simple-export-import-of-data-sources-in-grafana/</guid>
 			<description>
 
@@ -5030,7 +5176,7 @@ done
 			<title>Linux - USB disk connection problems - uas: probe failed with error -12</title>
 			<link>https://rmoff.github.io/2017/06/21/linux-usb-disk-connection-problems-uas-probe-failed-with-error-12/</link>
 			<pubDate>Wed, 21 Jun 2017 06:14:45 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/06/21/linux-usb-disk-connection-problems-uas-probe-failed-with-error-12/</guid>
 			<description>&lt;p&gt;Usually connecting external disks in Linux is easy. Plug it in, run &lt;code&gt;fdisk -l&lt;/code&gt; or &lt;code&gt;lsblk | grep disk&lt;/code&gt; to identify the device ID, and then &lt;code&gt;mount&lt;/code&gt; it.&lt;/p&gt;
 
@@ -5125,7 +5271,7 @@ sd 16:0:0:0: [sdj] Attached SCSI disk
 			<title>Configuring Kafka Connect to log REST HTTP messages to a separate file</title>
 			<link>https://rmoff.github.io/2017/06/12/configuring-kafka-connect-to-log-rest-http-messages-to-a-separate-file/</link>
 			<pubDate>Mon, 12 Jun 2017 15:28:15 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/06/12/configuring-kafka-connect-to-log-rest-http-messages-to-a-separate-file/</guid>
 			<description>&lt;p&gt;Kafka&amp;rsquo;s Connect API is a wondrous way of easily bringing data in and out of Apache Kafka without having to write a line of code. By choosing a Connector from &lt;a href=&#34;https://www.confluent.io/product/connectors/&#34;&gt;the many available&lt;/a&gt;, it&amp;rsquo;s possible to set up and end-to-end data pipeline with just a few lines of configuration. You can configure this by hand, or you can use the &lt;a href=&#34;https://www.confluent.io/product/control-center/&#34;&gt;Confluent Control Center&lt;/a&gt;, for both management and monitoring:&lt;/p&gt;
 
@@ -5164,7 +5310,7 @@ log4j.additivity.org.apache.kafka.connect.runtime.rest=false
 			<title>kafka.common.KafkaException: No key found on line 1</title>
 			<link>https://rmoff.github.io/2017/05/12/kafka.common.kafkaexception-no-key-found-on-line-1/</link>
 			<pubDate>Fri, 12 May 2017 00:52:41 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/05/12/kafka.common.kafkaexception-no-key-found-on-line-1/</guid>
 			<description>&lt;p&gt;A very silly &lt;a href=&#34;https://en.wiktionary.org/wiki/PEBCAK&#34;&gt;PEBCAK&lt;/a&gt; problem this one, but Google hits weren&amp;rsquo;t so helpful so here goes.&lt;/p&gt;
 
@@ -5205,7 +5351,7 @@ kafka.common.KafkaException: No key found on line 1: 1,foo
 			<title>Keeping Up with the Deluge</title>
 			<link>https://rmoff.github.io/2017/03/11/keeping-up-with-the-deluge/</link>
 			<pubDate>Sat, 11 Mar 2017 15:30:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/03/11/keeping-up-with-the-deluge/</guid>
 			<description>
 
@@ -5336,7 +5482,7 @@ The technical books that I do read I get as &lt;code&gt;epub&lt;/code&gt; to con
 			<title>Install qemu on AWS EC2 Amazon Linux</title>
 			<link>https://rmoff.github.io/2017/03/11/install-qemu-on-aws-ec2-amazon-linux/</link>
 			<pubDate>Sat, 11 Mar 2017 15:04:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/03/11/install-qemu-on-aws-ec2-amazon-linux/</guid>
 			<description>&lt;p&gt;Mucking about with virtual disks, I wanted to install &lt;code&gt;qemu&lt;/code&gt; on a AWS EC2 instance in order to use &lt;code&gt;qemu-img&lt;/code&gt;.&lt;/p&gt;
 
@@ -5398,7 +5544,7 @@ ERROR: glib-2.22 gthread-2.0 is required to compile QEMU
 			<title>Mount VMDK/OVF/OVA on Amazon Web Services (AWS) EC2</title>
 			<link>https://rmoff.github.io/2017/03/11/mount-vmdk-ovf-ova-on-amazon-web-services-aws-ec2/</link>
 			<pubDate>Sat, 11 Mar 2017 14:21:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/03/11/mount-vmdk-ovf-ova-on-amazon-web-services-aws-ec2/</guid>
 			<description>&lt;p&gt;So you&amp;rsquo;ve got a Linux VM that you want to access the contents of in EC2 - how do you do it? Let&amp;rsquo;s see how. First up, convert the VMDK to raw image file. If you&amp;rsquo;ve got a &lt;code&gt;ova&lt;/code&gt;/&lt;code&gt;ovf&lt;/code&gt; then just untar it first (&lt;code&gt;tar -xvf my_vm.ova&lt;/code&gt;), from which you should get the VMDK. With that, convert it using &lt;code&gt;qemu-img&lt;/code&gt;:&lt;/p&gt;
 
@@ -5518,7 +5664,7 @@ sys     3m25.332s
 			<title>Little Technology Wins</title>
 			<link>https://rmoff.github.io/2017/03/11/little-technology-wins/</link>
 			<pubDate>Sat, 11 Mar 2017 11:00:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/03/11/little-technology-wins/</guid>
 			<description>
 
@@ -5558,7 +5704,7 @@ This happened regardless of platform (Hangouts / Zoom / Skype / etc). I figured 
 			<title>Time For a Change</title>
 			<link>https://rmoff.github.io/2017/03/10/time-for-a-change/</link>
 			<pubDate>Fri, 10 Mar 2017 17:30:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/03/10/time-for-a-change/</guid>
 			<description>&lt;p&gt;After 5 years at Rittman Mead, &lt;a href=&#34;https://www.rittmanmead.com/blog/author/robin-moffatt/&#34;&gt;126 blog posts&lt;/a&gt;, &lt;a href=&#34;https://speakerdeck.com/rmoff/&#34;&gt;16 conferences&lt;/a&gt;, &lt;a href=&#34;https://community.oracle.com/docs/DOC-993649&#34;&gt;four&lt;/a&gt; &lt;a href=&#34;https://community.oracle.com/docs/DOC-1010305&#34;&gt;published&lt;/a&gt; &lt;a href=&#34;https://community.oracle.com/docs/DOC-1009358&#34;&gt;OTN&lt;/a&gt; &lt;a href=&#34;https://community.oracle.com/docs/DOC-1006400&#34;&gt;articles&lt;/a&gt;, an &lt;a href=&#34;https://apex.oracle.com/pls/otn/f?p=19297:4:::NO:4:P4_ID:10100&#34;&gt;Oracle ACE award&lt;/a&gt; - not to mention, of course, a whole heap of interesting and challenging client work - I&amp;rsquo;ve decided that it&amp;rsquo;s time to do something different.&lt;/p&gt;
 
@@ -5576,7 +5722,7 @@ This happened regardless of platform (Hangouts / Zoom / Skype / etc). I figured 
 			<title>HBase crash after resuming suspended VM</title>
 			<link>https://rmoff.github.io/2017/01/20/hbase-crash-after-resuming-suspended-vm/</link>
 			<pubDate>Fri, 20 Jan 2017 09:36:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/01/20/hbase-crash-after-resuming-suspended-vm/</guid>
 			<description>&lt;p&gt;I use &lt;a href=&#34;http://www.oracle.com/technetwork/database/bigdata-appliance/oracle-bigdatalite-2104726.html&#34;&gt;BigDataLite&lt;/a&gt; for a lot of my sandboxing work. This is a &lt;code&gt;OVA&lt;/code&gt; provided by Oracle which can be run on VirtualBox, VMWare, etc and has the Cloudera Hadoop platform (CDH) along with all of Oracle&amp;rsquo;s Big Data goodies including Big Data Discovery and Big Data Spatial and Graph (BDSG).&lt;/p&gt;
 
@@ -5654,7 +5800,7 @@ org.apache.zookeeper.KeeperException$SessionExpiredException: KeeperErrorCode = 
 			<title>Kibana Timelion - Anomaly Detection</title>
 			<link>https://rmoff.github.io/2017/01/18/kibana-timelion-anomaly-detection/</link>
 			<pubDate>Wed, 18 Jan 2017 19:53:10 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/01/18/kibana-timelion-anomaly-detection/</guid>
 			<description>&lt;p&gt;Using the &lt;code&gt;holt&lt;/code&gt; function in Timelion to do anomaly detection on Metricbeat data in Kibana:&lt;/p&gt;
 
@@ -5679,7 +5825,7 @@ org.apache.zookeeper.KeeperException$SessionExpiredException: KeeperErrorCode = 
 			<title>Streaming / Unbounded Data - Resources</title>
 			<link>https://rmoff.github.io/2017/01/16/streaming-unbounded-data-resources/</link>
 			<pubDate>Mon, 16 Jan 2017 11:10:38 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2017/01/16/streaming-unbounded-data-resources/</guid>
 			<description>&lt;ul&gt;
 &lt;li&gt;&lt;a href=&#34;https://www.oreilly.com/ideas/the-world-beyond-batch-streaming-101&#34;&gt;The world beyond batch: Streaming 101&lt;/a&gt;&lt;/li&gt;
@@ -5696,7 +5842,7 @@ org.apache.zookeeper.KeeperException$SessionExpiredException: KeeperErrorCode = 
 			<title>kafka-avro-console-producer - Error registering Avro schema / io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException</title>
 			<link>https://rmoff.github.io/2016/12/02/kafka-avro-console-producer-error-registering-avro-schema-io.confluent.kafka.schemaregistry.client.rest.exceptions.restclientexception/</link>
 			<pubDate>Fri, 02 Dec 2016 11:35:57 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/12/02/kafka-avro-console-producer-error-registering-avro-schema-io.confluent.kafka.schemaregistry.client.rest.exceptions.restclientexception/</guid>
 			<description>&lt;p&gt;By default, the &lt;code&gt;kafka-avro-console-producer&lt;/code&gt; will assume that the schema registry is on port 8081, and happily connect to it. Unfortunately, this can lead to some weird errors if another process happens to be listening on port 8081 &lt;em&gt;already&lt;/em&gt;!&lt;/p&gt;
 
@@ -5736,7 +5882,7 @@ Caused by: io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientEx
 			<title>Oracle GoldenGate -&gt; Kafka Connect - &#34;Failed to serialize Avro data&#34;</title>
 			<link>https://rmoff.github.io/2016/11/29/oracle-goldengate-kafka-connect-failed-to-serialize-avro-data/</link>
 			<pubDate>Tue, 29 Nov 2016 22:04:38 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/11/29/oracle-goldengate-kafka-connect-failed-to-serialize-avro-data/</guid>
 			<description>&lt;p&gt;&lt;strong&gt;tl;dr&lt;/strong&gt; &lt;em&gt;Make sure that &lt;code&gt;key.converter.schema.registry.url&lt;/code&gt; and &lt;code&gt;value.converter.schema.registry.url&lt;/code&gt; are specified, and that there are no trailing whitespaces.&lt;/em&gt;&lt;/p&gt;
 
@@ -5827,7 +5973,7 @@ Caused by: java.lang.NumberFormatException: For input string: &amp;quot;18081 &a
 			<title>Kafka Connect - java.lang.IncompatibleClassChangeError</title>
 			<link>https://rmoff.github.io/2016/11/24/kafka-connect-java.lang.incompatibleclasschangeerror/</link>
 			<pubDate>Thu, 24 Nov 2016 20:58:44 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/11/24/kafka-connect-java.lang.incompatibleclasschangeerror/</guid>
 			<description>&lt;p&gt;I hit this error running Kafka Connect HDFS connector from Confluent Platform v3.1.1 on BigDataLite 4.6:&lt;/p&gt;
 
@@ -5862,7 +6008,7 @@ Exception in thread &amp;quot;main&amp;quot; java.lang.IncompatibleClassChangeEr
 			<title>boto / S3 errors</title>
 			<link>https://rmoff.github.io/2016/10/14/boto-s3-errors/</link>
 			<pubDate>Fri, 14 Oct 2016 08:41:30 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/10/14/boto-s3-errors/</guid>
 			<description>
 
@@ -5895,7 +6041,7 @@ Exception in thread &amp;quot;main&amp;quot; java.lang.IncompatibleClassChangeEr
 			<title>OGG-15051 oracle.goldengate.util.GGException:  Class not found: &#34;kafkahandler&#34;</title>
 			<link>https://rmoff.github.io/2016/07/29/ogg-15051-oracle.goldengate.util.ggexception-class-not-found-kafkahandler/</link>
 			<pubDate>Fri, 29 Jul 2016 07:47:30 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/07/29/ogg-15051-oracle.goldengate.util.ggexception-class-not-found-kafkahandler/</guid>
 			<description>&lt;p&gt;Similar to the &lt;a href=&#34;http://rmoff.net/2016/07/28/ogg-class-not-found-com-company-kafka-customproducerrecord/&#34;&gt;previous issue&lt;/a&gt;, the &lt;a href=&#34;http://docs.oracle.com/goldengate/bd1221/gg-bd/GADBD/GUID-2561CA12-9BAC-454B-A2E3-2D36C5C60EE5.htm#GADBD457&#34;&gt;sample config&lt;/a&gt; in the docs causes another snafu:&lt;/p&gt;
 
@@ -5926,7 +6072,7 @@ oracle.goldengate.util.GGException:  Class not found: &amp;quot;kafkahandler&amp
 			<title>OGG -  Class not found: &#34;com.company.kafka.CustomProducerRecord&#34;</title>
 			<link>https://rmoff.github.io/2016/07/28/ogg-class-not-found-com.company.kafka.customproducerrecord/</link>
 			<pubDate>Thu, 28 Jul 2016 16:34:37 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/07/28/ogg-class-not-found-com.company.kafka.customproducerrecord/</guid>
 			<description>&lt;p&gt;In the documentation for the current release of Oracle GoldenGate for Big Data (12.2.0.1.1.011) there&amp;rsquo;s a &lt;a href=&#34;https://docs.oracle.com/goldengate/bd1221/gg-bd/GADBD/GUID-2561CA12-9BAC-454B-A2E3-2D36C5C60EE5.htm#GADBD457&#34;&gt;helpful sample configuration&lt;/a&gt;, which isn&amp;rsquo;t so helpful &amp;hellip;&lt;/p&gt;
 
@@ -5954,7 +6100,7 @@ Class not found: &amp;quot;com.company.kafka.CustomProducerRecord&amp;quot;
 			<title>Kafka Connect JDBC - Oracle - Number of groups must be positive</title>
 			<link>https://rmoff.github.io/2016/07/27/kafka-connect-jdbc-oracle-number-of-groups-must-be-positive/</link>
 			<pubDate>Wed, 27 Jul 2016 15:23:14 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/07/27/kafka-connect-jdbc-oracle-number-of-groups-must-be-positive/</guid>
 			<description>&lt;p&gt;There are &lt;a href=&#34;https://groups.google.com/forum/#!searchin/confluent-platform/%22Number$20of$20groups$20must$20be$20positive%22&#34;&gt;various reasons for this error&lt;/a&gt;, but the one I hit was that &lt;strong&gt;the table name is case sensitive&lt;/strong&gt;, and returned from Oracle by the JDBC driver in uppercase.&lt;/p&gt;
 
@@ -5985,7 +6131,7 @@ table.whitelist=KAFKA_TEST
 			<title>Kafka Connect - HDFS with Hive Integration - SchemaProjectorException - Schema version required</title>
 			<link>https://rmoff.github.io/2016/07/19/kafka-connect-hdfs-with-hive-integration-schemaprojectorexception-schema-version-required/</link>
 			<pubDate>Tue, 19 Jul 2016 14:36:52 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/07/19/kafka-connect-hdfs-with-hive-integration-schemaprojectorexception-schema-version-required/</guid>
 			<description>&lt;p&gt;I&amp;rsquo;ve been doing some noodling around with Confluent&amp;rsquo;s Kafka Connect recently, as part of gaining a wider understanding into Kafka. If you&amp;rsquo;re not familiar with Kafka Connect &lt;a href=&#34;http://docs.confluent.io/3.0.0/connect/design.html&#34;&gt;this page&lt;/a&gt; gives a good idea of the thinking behind it.&lt;/p&gt;
 
@@ -6019,7 +6165,7 @@ table.whitelist=KAFKA_TEST
 			<title>Configuring UPS/apcupsd</title>
 			<link>https://rmoff.github.io/2016/07/18/configuring-ups-apcupsd/</link>
 			<pubDate>Mon, 18 Jul 2016 07:59:51 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/07/18/configuring-ups-apcupsd/</guid>
 			<description>
 
@@ -6274,7 +6420,7 @@ TIMELEFT : 14.9 Minutes
 			<title>Spark sqlContext.read.json - java.io.IOException: No input paths specified in job</title>
 			<link>https://rmoff.github.io/2016/07/13/spark-sqlcontext.read.json-java.io.ioexception-no-input-paths-specified-in-job/</link>
 			<pubDate>Wed, 13 Jul 2016 04:50:16 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/07/13/spark-sqlcontext.read.json-java.io.ioexception-no-input-paths-specified-in-job/</guid>
 			<description>&lt;p&gt;Trying to use &lt;a href=&#34;http://spark.apache.org/docs/latest/sql-programming-guide.html#json-datasets&#34;&gt;SparkSQL to read a JSON file&lt;/a&gt;, from either pyspark or spark-shell, I got this error:&lt;/p&gt;
 
@@ -6305,7 +6451,7 @@ res5: org.apache.spark.sql.DataFrame = [@timestamp: string, @version: string, co
 			<title>Proxmox 4 Containers - ssh - ssh_exchange_identification: read: Connection reset by peer</title>
 			<link>https://rmoff.github.io/2016/07/05/proxmox-4-containers-ssh-ssh_exchange_identification-read-connection-reset-by-peer/</link>
 			<pubDate>Tue, 05 Jul 2016 15:20:37 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/07/05/proxmox-4-containers-ssh-ssh_exchange_identification-read-connection-reset-by-peer/</guid>
 			<description>&lt;p&gt;&lt;strong&gt;TL;DR&lt;/strong&gt; When defining networking on Proxmox 4 LXC containers, use an appropriate CIDR suffix (e.g. 24) - don&amp;rsquo;t use 32!&lt;/p&gt;
 
@@ -6346,7 +6492,7 @@ get_remote_port failed
 			<title>Reset Hue password</title>
 			<link>https://rmoff.github.io/2016/07/05/reset-hue-password/</link>
 			<pubDate>Tue, 05 Jul 2016 13:27:06 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/07/05/reset-hue-password/</guid>
 			<description>&lt;p&gt;(&lt;a href=&#34;http://gethue.com/password-management-in-hue/&#34;&gt;Ref&lt;/a&gt;)&lt;/p&gt;
 
@@ -6386,7 +6532,7 @@ user.save()
 			<title>Apache Drill - conflicting jar problem - &#34;No current connection&#34;</title>
 			<link>https://rmoff.github.io/2016/06/20/apache-drill-conflicting-jar-problem-no-current-connection/</link>
 			<pubDate>Mon, 20 Jun 2016 19:04:18 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/20/apache-drill-conflicting-jar-problem-no-current-connection/</guid>
 			<description>&lt;p&gt;Vanilla download of Apache Drill 1.6, attempting to follow the Followed the &lt;a href=&#34;https://drill.apache.org/docs/drill-in-10-minutes/&#34;&gt;Drill in 10 Minutes&lt;/a&gt; tutorial - but kept just getting the error &lt;code&gt;No current connection&lt;/code&gt;. Here&amp;rsquo;s an example:&lt;/p&gt;
 
@@ -6437,7 +6583,7 @@ apache drill 1.6.0
 			<title>ClassNotFoundException with MongoDB-Hadoop in Hive</title>
 			<link>https://rmoff.github.io/2016/06/15/classnotfoundexception-with-mongodb-hadoop-in-hive/</link>
 			<pubDate>Wed, 15 Jun 2016 17:58:19 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/15/classnotfoundexception-with-mongodb-hadoop-in-hive/</guid>
 			<description>
 
@@ -6486,7 +6632,7 @@ Caused by: java.lang.ClassNotFoundException: org.bson.io.OutputBuffer
 			<title>Erroneous SwapFree on LXC causes problems with CDH install</title>
 			<link>https://rmoff.github.io/2016/06/15/erroneous-swapfree-on-lxc-causes-problems-with-cdh-install/</link>
 			<pubDate>Wed, 15 Jun 2016 17:52:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/15/erroneous-swapfree-on-lxc-causes-problems-with-cdh-install/</guid>
 			<description>&lt;p&gt;Installing CDH 5.7 on Linux Containers (LXC) hosted on Proxmox 4. Everything was going well until &lt;strong&gt;Cluster Setup&lt;/strong&gt;, and which point it failed on &lt;strong&gt;Start YARN (MR2 included)&lt;/strong&gt;&lt;/p&gt;
 
@@ -6575,7 +6721,7 @@ cdh57-01-node-06: SwapTotal:        524288 kB
 			<title>Reviving a bricked EdgeRouter Lite (ERL) from a Mac</title>
 			<link>https://rmoff.github.io/2016/06/08/reviving-a-bricked-edgerouter-lite-erl-from-a-mac/</link>
 			<pubDate>Wed, 08 Jun 2016 15:58:30 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/08/reviving-a-bricked-edgerouter-lite-erl-from-a-mac/</guid>
 			<description>&lt;p&gt;I&amp;rsquo;ve got an &lt;a href=&#34;https://www.ubnt.com/edgemax/edgerouter-lite/&#34;&gt;EdgeRouter LITE&lt;/a&gt; (ERL) which I used as my home router until a powercut fried it a while ago (&lt;a href=&#34;https://community.ubnt.com/t5/EdgeMAX/2nd-Failed-ERLite/m-p/601815&#34;&gt;looks like I&amp;rsquo;m not the only one to have this issue&lt;/a&gt;). The symptoms were it powering on but not giving any DHCP addresses, or after a factory reset responding on the default IP of 192.168.1.1. It was a real shame, because it had been a great bit of kit up until then. I am a complete hack when it comes to networking, and it struck the balance right between letting me do what I needed to do, without overwhelming me with complexity.
 I&amp;rsquo;d replaced it with a SonicWall TZ105 but having utterly failed to get the latter to permit OpenVPN traffic (so I can access my home server when on the road), which I had done with no problem on the ERL I thought I&amp;rsquo;d try and resurrect the ERL using &lt;a href=&#34;https://help.ubnt.com/hc/en-us/articles/204959514-EdgeMAX-Last-resort-recovery-of-failed-EdgeOS-device&#34;&gt;the instructions here&lt;/a&gt;.&lt;/p&gt;
@@ -6861,7 +7007,7 @@ ubnt login:
 			<title>Running a Docker Container on Proxmox for BitTorrent Sync</title>
 			<link>https://rmoff.github.io/2016/06/07/running-a-docker-container-on-proxmox-for-bittorrent-sync/</link>
 			<pubDate>Tue, 07 Jun 2016 21:43:26 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/07/running-a-docker-container-on-proxmox-for-bittorrent-sync/</guid>
 			<description>&lt;p&gt;(&lt;a href=&#34;http://rmoff.net/2016/06/07/a-new-arrival/&#34;&gt;Previously&lt;/a&gt;, &lt;a href=&#34;http://rmoff.net/2016/06/07/commissioning-my-proxmox-server/&#34;&gt;previously&lt;/a&gt;, &lt;a href=&#34;http://rmoff.net/2016/06/07/importing-vmware-and-virtualbox-vms-to-proxmox/&#34;&gt;previously&lt;/a&gt;)&lt;/p&gt;
 
@@ -6945,7 +7091,7 @@ b9081e03570b        bittorrent/sync:latest   &amp;quot;/opt/run_sync --log   11 
 			<title>Importing VMWare and VirtualBox VMs to Proxmox</title>
 			<link>https://rmoff.github.io/2016/06/07/importing-vmware-and-virtualbox-vms-to-proxmox/</link>
 			<pubDate>Tue, 07 Jun 2016 21:14:26 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/07/importing-vmware-and-virtualbox-vms-to-proxmox/</guid>
 			<description>&lt;p&gt;(&lt;a href=&#34;http://rmoff.net/2016/06/07/a-new-arrival/&#34;&gt;Previously&lt;/a&gt;, &lt;a href=&#34;http://rmoff.net/2016/06/07/commissioning-my-proxmox-server/&#34;&gt;previously&lt;/a&gt;)&lt;/p&gt;
 
@@ -7063,7 +7209,7 @@ time mv -f /data04/vms/bdl44/BigDataLite440-disk4.qcow2 /data01/images/100/vm-10
 			<title>Commissioning my Proxmox Server - OS and filesystems</title>
 			<link>https://rmoff.github.io/2016/06/07/commissioning-my-proxmox-server-os-and-filesystems/</link>
 			<pubDate>Tue, 07 Jun 2016 21:03:22 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/07/commissioning-my-proxmox-server-os-and-filesystems/</guid>
 			<description>&lt;p&gt;(&lt;a href=&#34;http://rmoff.net/2016/06/07/a-new-arrival/&#34;&gt;Previously&lt;/a&gt;)&lt;/p&gt;
 
@@ -7231,7 +7377,7 @@ sysdig-probe-loader
 			<title>A New Arrival</title>
 			<link>https://rmoff.github.io/2016/06/07/a-new-arrival/</link>
 			<pubDate>Tue, 07 Jun 2016 20:43:20 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/07/a-new-arrival/</guid>
 			<description>&lt;p&gt;After a long and painful delivery, I&amp;rsquo;m delighted to announce the arrival of a new addition to my household &amp;hellip; :&lt;/p&gt;
 
@@ -7259,7 +7405,7 @@ I&amp;rsquo;ll blog various installations that I&amp;rsquo;ve done on it as a re
 			<title>New version of BigDataLite VM from Oracle</title>
 			<link>https://rmoff.github.io/2016/06/06/new-version-of-bigdatalite-vm-from-oracle/</link>
 			<pubDate>Mon, 06 Jun 2016 22:28:25 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/06/new-version-of-bigdatalite-vm-from-oracle/</guid>
 			<description>&lt;p&gt;Oracle&amp;rsquo;s excellent &lt;a href=&#34;http://www.oracle.com/technetwork/database/bigdata-appliance/oracle-bigdatalite-2104726.html&#34;&gt;Big Data Lite VM&lt;/a&gt; has been updated, to version 4.5.&lt;/p&gt;
 
@@ -7282,7 +7428,7 @@ I&amp;rsquo;ll blog various installations that I&amp;rsquo;ve done on it as a re
 			<title>OBIEE 12c blog posts</title>
 			<link>https://rmoff.github.io/2016/06/01/obiee-12c-blog-posts/</link>
 			<pubDate>Wed, 01 Jun 2016 22:30:14 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/01/obiee-12c-blog-posts/</guid>
 			<description>&lt;p&gt;I&amp;rsquo;ve been spending some interesting hours digging into OBIEE 12c recently, with some interesting blog posts to show for it. Some of it is just curiosities discovered along the way, but the real meaty stuff is the in the RESTful APIs - lots of potential here for cool integrations I think&amp;hellip;&lt;/p&gt;
 
@@ -7305,7 +7451,7 @@ I&amp;rsquo;ll blog various installations that I&amp;rsquo;ve done on it as a re
 			<title>Presentation Services Logsources in OBIEE 12c</title>
 			<link>https://rmoff.github.io/2016/06/01/presentation-services-logsources-in-obiee-12c/</link>
 			<pubDate>Wed, 01 Jun 2016 11:03:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/06/01/presentation-services-logsources-in-obiee-12c/</guid>
 			<description>&lt;p&gt;Presentation Services can provide some very detailed logs, useful for troubleshooting, performance tracing, and general poking around. &lt;a href=&#34;http://www.rittmanmead.com/2014/11/auditing-obiee-presentation-catalog-activity-with-custom-log-filters/&#34;&gt;See here&lt;/a&gt; for details.&lt;/p&gt;
 
@@ -7327,7 +7473,7 @@ I&amp;rsquo;ll blog various installations that I&amp;rsquo;ve done on it as a re
 			<title>Lifting the Lid on OBIEE 12c Web Services - Part 2</title>
 			<link>https://rmoff.github.io/2016/05/28/lifting-the-lid-on-obiee-12c-web-services-part-2/</link>
 			<pubDate>Sat, 28 May 2016 20:30:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/28/lifting-the-lid-on-obiee-12c-web-services-part-2/</guid>
 			<description>&lt;p&gt;In OBIEE 12c &lt;code&gt;data-model-cmd&lt;/code&gt; is a wrapper for some java code which ultimately calls an internal RESTful web service in OBIEE 12c, &lt;code&gt;bi-lcm&lt;/code&gt;. We saw in the &lt;a href=&#34;http://rmoff.net/2016/05/24/lifting-the-lid-on-obiee-12c-web-services-part-1/&#34;&gt;previous post&lt;/a&gt; how these internal web services can be opened up slightly, and we&amp;rsquo;re going to do the same again here. Which means, time for the same caveat:&lt;/p&gt;
 
@@ -7548,7 +7694,7 @@ Content-Disposition: form-data; filename=&amp;quot;myRPD.rpd&amp;quot;; modifica
 			<title>Dynamic Naming of OBIEE 12c Service Instance Exports</title>
 			<link>https://rmoff.github.io/2016/05/27/dynamic-naming-of-obiee-12c-service-instance-exports/</link>
 			<pubDate>Fri, 27 May 2016 09:13:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/27/dynamic-naming-of-obiee-12c-service-instance-exports/</guid>
 			<description>&lt;p&gt;&lt;a href=&#34;http://docs.oracle.com/middleware/1221/biee/BIESG/configrepos.htm#BIESG9314&#34;&gt;&lt;code&gt;exportServiceInstance&lt;/code&gt;&lt;/a&gt; will export the RPD, Presentation Catalog, and Security model (application roles &amp;amp; policies etc &amp;ndash; but &lt;em&gt;not&lt;/em&gt; WLS LDAP) into a single &lt;code&gt;.bar&lt;/code&gt; file, from which they can be imported to another environment, or restored to the same one at a later date (e.g. for backup/restore).&lt;/p&gt;
 
@@ -7581,7 +7727,7 @@ EOF
 			<title>OBIEE 12c - &#34;Add Data Source&#34; in Answers</title>
 			<link>https://rmoff.github.io/2016/05/27/obiee-12c-add-data-source-in-answers/</link>
 			<pubDate>Fri, 27 May 2016 08:44:24 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/27/obiee-12c-add-data-source-in-answers/</guid>
 			<description>&lt;p&gt;So this had me scratching my head for a good hour today. Comparing SampleApp v511 against a vanilla OBIEE 12c install I&amp;rsquo;d done, one had &amp;ldquo;Add Data Source&amp;rdquo; as an option in Answers, the other didn&amp;rsquo;t. The strange thing was that the option &lt;em&gt;wasn&amp;rsquo;t&lt;/em&gt; there in SampleApp &amp;ndash; and usually that has all the bells and whistles enabled.&lt;/p&gt;
 
@@ -7601,7 +7747,7 @@ EOF
 			<title>York Fry Ups</title>
 			<link>https://rmoff.github.io/2016/05/24/york-fry-ups/</link>
 			<pubDate>Tue, 24 May 2016 21:45:09 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/24/york-fry-ups/</guid>
 			<description>&lt;p&gt;I had the pleasure of not one but two fry-ups in York, UK last weekend.&lt;/p&gt;
 
@@ -7627,7 +7773,7 @@ EOF
 			<title>Lifting the Lid on OBIEE 12c Web Services - Part 1</title>
 			<link>https://rmoff.github.io/2016/05/24/lifting-the-lid-on-obiee-12c-web-services-part-1/</link>
 			<pubDate>Tue, 24 May 2016 21:15:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/24/lifting-the-lid-on-obiee-12c-web-services-part-1/</guid>
 			<description>
 
@@ -7887,7 +8033,7 @@ User has  20971462  KB remaining in their quota
 			<title>Kibana Timelion - Series Calculations - Difference from One Week Ago</title>
 			<link>https://rmoff.github.io/2016/05/23/kibana-timelion-series-calculations-difference-from-one-week-ago/</link>
 			<pubDate>Mon, 23 May 2016 09:46:28 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/23/kibana-timelion-series-calculations-difference-from-one-week-ago/</guid>
 			<description>&lt;p&gt;I wrote recently about &lt;a href=&#34;http://rmoff.net/2016/03/29/experiments-with-kibana-timelion-2/&#34;&gt;Kibana&amp;rsquo;s excellent Timelion feature&lt;/a&gt;, which brings time-series visualisations to Kibana. In the comments Ben Huang asked:&lt;/p&gt;
 
@@ -7949,7 +8095,7 @@ User has  20971462  KB remaining in their quota
 			<title>OBIEE 12c hangs at startup - Starting AdminServer ...</title>
 			<link>https://rmoff.github.io/2016/05/20/obiee-12c-hangs-at-startup-starting-adminserver-.../</link>
 			<pubDate>Fri, 20 May 2016 14:22:21 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/20/obiee-12c-hangs-at-startup-starting-adminserver-.../</guid>
 			<description>&lt;p&gt;Running the OBIEE 12c startup on Windows:&lt;/p&gt;
 
@@ -8014,7 +8160,7 @@ username=weblogic
 			<title>oracle.bi.bar.exceptions.UnSupportedBarException: The Bar file provided as input is not supported in this BI Platfrom release.</title>
 			<link>https://rmoff.github.io/2016/05/19/oracle.bi.bar.exceptions.unsupportedbarexception-the-bar-file-provided-as-input-is-not-supported-in-this-bi-platfrom-release./</link>
 			<pubDate>Thu, 19 May 2016 10:06:03 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/19/oracle.bi.bar.exceptions.unsupportedbarexception-the-bar-file-provided-as-input-is-not-supported-in-this-bi-platfrom-release./</guid>
 			<description>&lt;p&gt;Another quick note on OBIEE 12c, this time on the &lt;a href=&#34;https://docs.oracle.com/middleware/1221/biee/BIESG/configrepos.htm#BIESG9316&#34;&gt;importServiceInstance&lt;/a&gt; command. If you run it with a BAR file that doesn&amp;rsquo;t exist, it&amp;rsquo;ll fail (obviously), but the error at the end of the stack trace is slightly confusing:&lt;/p&gt;
 
@@ -8126,7 +8272,7 @@ wls:/offline&amp;gt;
 			<title>OBIEE Baseline Validation Tool - Parameter &#39;directory&#39; is not a directory</title>
 			<link>https://rmoff.github.io/2016/05/18/obiee-baseline-validation-tool-parameter-directory-is-not-a-directory/</link>
 			<pubDate>Wed, 18 May 2016 15:35:46 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/18/obiee-baseline-validation-tool-parameter-directory-is-not-a-directory/</guid>
 			<description>&lt;p&gt;Interesting quirk in running Baseline Validation Tool for OBIEE here. If you invoke &lt;code&gt;obibvt&lt;/code&gt; from the &lt;code&gt;bin&lt;/code&gt; folder, it errors with &lt;strong&gt;Parameter &amp;lsquo;directory&amp;rsquo; is not a directory&lt;/strong&gt;&lt;/p&gt;
 
@@ -8163,7 +8309,7 @@ PS C:\OracleBI-BVT\bin&amp;gt;
 			<title>Monitoring Logstash Ingest Rates with Elasticsearch, Kibana, and Timelion</title>
 			<link>https://rmoff.github.io/2016/05/13/monitoring-logstash-ingest-rates-with-elasticsearch-kibana-and-timelion/</link>
 			<pubDate>Fri, 13 May 2016 05:45:19 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/13/monitoring-logstash-ingest-rates-with-elasticsearch-kibana-and-timelion/</guid>
 			<description>
 
@@ -8278,7 +8424,7 @@ output {
 			<title>Monitoring Logstash Ingest Rates with InfluxDB and Grafana</title>
 			<link>https://rmoff.github.io/2016/05/12/monitoring-logstash-ingest-rates-with-influxdb-and-grafana/</link>
 			<pubDate>Thu, 12 May 2016 20:56:38 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/12/monitoring-logstash-ingest-rates-with-influxdb-and-grafana/</guid>
 			<description>
 
@@ -8474,7 +8620,7 @@ time                    value
 			<title>Collection of Articles on How to Write a Good Conference Abstract</title>
 			<link>https://rmoff.github.io/2016/05/05/collection-of-articles-on-how-to-write-a-good-conference-abstract/</link>
 			<pubDate>Thu, 05 May 2016 09:57:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/05/05/collection-of-articles-on-how-to-write-a-good-conference-abstract/</guid>
 			<description>&lt;p&gt;Here&amp;rsquo;s a collection of useful articles that I&amp;rsquo;ve found over the years that give good advice on writing a good abstract, mistakes to avoid, etc:&lt;/p&gt;
 
@@ -8496,7 +8642,7 @@ time                    value
 			<title>Using R to Denormalise Data for Analysis in Kibana</title>
 			<link>https://rmoff.github.io/2016/04/24/using-r-to-denormalise-data-for-analysis-in-kibana/</link>
 			<pubDate>Sun, 24 Apr 2016 12:22:12 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/04/24/using-r-to-denormalise-data-for-analysis-in-kibana/</guid>
 			<description>&lt;p&gt;&lt;a href=&#34;https://www.elastic.co/products/kibana&#34;&gt;Kibana&lt;/a&gt; is a tool from &lt;a href=&#34;https://www.elastic.co/&#34;&gt;Elastic&lt;/a&gt; that makes analysis of data held in &lt;a href=&#34;https://www.elastic.co/products/elasticsearch&#34;&gt;Elasticsearch&lt;/a&gt; really easy and very powerful. Because Elasticsearch has very loose schema that can evolve on demand it makes it very quick to get up and running with some cool visualisations and analysis on any set of data. I demonstrated this in a &lt;a href=&#34;http://www.rittmanmead.com/2015/04/using-the-elk-stack-to-analyse-donors-choose-data/&#34;&gt;blog post last year&lt;/a&gt;, taking a CSV file and loading it into Elasticsearch via Logstash.&lt;/p&gt;
 
@@ -8662,7 +8808,7 @@ docs_bulk(accidents,doc_ids = accidents$Accident_Index,index=&amp;quot;dftroadsa
 			<title>OBIEE security patches, and FINAL 11.1.1.7 patchset release</title>
 			<link>https://rmoff.github.io/2016/04/18/obiee-security-patches-and-final-11.1.1.7-patchset-release/</link>
 			<pubDate>Mon, 18 Apr 2016 15:36:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/04/18/obiee-security-patches-and-final-11.1.1.7-patchset-release/</guid>
 			<description>&lt;p&gt;Two vulns for OBIEE in the latest critical patch update (CPU): &lt;a href=&#34;http://www.oracle.com/technetwork/security-advisory/cpuapr2016v3-2985753.html?elq_mid=45463&amp;amp;sh=91225181314122121267715271910&amp;amp;cmid=WWMK10067711MPP001C140&#34;&gt;http://www.oracle.com/technetwork/security-advisory/cpuapr2016v3-2985753.html?elq_mid=45463&amp;amp;sh=91225181314122121267715271910&amp;amp;cmid=WWMK10067711MPP001C140&lt;/a&gt;&lt;/p&gt;
 
@@ -8686,7 +8832,7 @@ docs_bulk(accidents,doc_ids = accidents$Accident_Index,index=&amp;quot;dftroadsa
 			<title>Streaming Data through Oracle GoldenGate to Elasticsearch</title>
 			<link>https://rmoff.github.io/2016/04/14/streaming-data-through-oracle-goldengate-to-elasticsearch/</link>
 			<pubDate>Thu, 14 Apr 2016 22:51:43 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/04/14/streaming-data-through-oracle-goldengate-to-elasticsearch/</guid>
 			<description>
 
@@ -9307,7 +9453,7 @@ Commit complete.
 			<title>Decoupling the Data Pipeline with Kafka - A (Very) Simple Real Life Example</title>
 			<link>https://rmoff.github.io/2016/04/12/decoupling-the-data-pipeline-with-kafka-a-very-simple-real-life-example/</link>
 			<pubDate>Tue, 12 Apr 2016 21:50:46 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/04/12/decoupling-the-data-pipeline-with-kafka-a-very-simple-real-life-example/</guid>
 			<description>
 
@@ -9417,7 +9563,7 @@ logstash-5-testing irc                            0   4143            4148      
 			<title>Food Pr0n 02 - Devon &amp; Dorset</title>
 			<link>https://rmoff.github.io/2016/04/11/food-pr0n-02-devon-dorset/</link>
 			<pubDate>Mon, 11 Apr 2016 19:00:56 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/04/11/food-pr0n-02-devon-dorset/</guid>
 			<description>
 
@@ -9477,7 +9623,7 @@ logstash-5-testing irc                            0   4143            4148      
 			<title>Experiments with Kibana Timelion</title>
 			<link>https://rmoff.github.io/2016/03/29/experiments-with-kibana-timelion/</link>
 			<pubDate>Tue, 29 Mar 2016 21:07:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/03/29/experiments-with-kibana-timelion/</guid>
 			<description>&lt;p&gt;&lt;a href=&#34;https://www.elastic.co/blog/timelion-timeline&#34;&gt;Timelion&lt;/a&gt; was released in November 2015 and with the 4.4.2 release of &lt;a href=&#34;https://www.elastic.co/products/kibana&#34;&gt;Kibana&lt;/a&gt; is available as a native visualisation once installed. It adds some powerful capabilities to Kibana as an timeseries analysis tool, using its own data manipulation language.&lt;/p&gt;
 
@@ -9608,7 +9754,7 @@ vi timelion.json
 			<title>Connecting to OBIEE via JDBC - with jisql</title>
 			<link>https://rmoff.github.io/2016/03/28/connecting-to-obiee-via-jdbc-with-jisql/</link>
 			<pubDate>Mon, 28 Mar 2016 21:01:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/03/28/connecting-to-obiee-via-jdbc-with-jisql/</guid>
 			<description>&lt;p&gt;OBIEE supports JDBC as a connection protocol, using the driver available on all installations of OBIEE, &lt;a href=&#34;https://docs.oracle.com/middleware/11119/biee/BIEIT/odbc_data_source.htm#BIEIT1738&#34;&gt;bijdbc.jar&lt;/a&gt;. This makes connecting to OBIEE from custom or third-party applications very easy. Once connected, you issue &amp;ldquo;Logical SQL&amp;rdquo; against the &amp;ldquo;tables&amp;rdquo; of the Presentation Layer. An example of logical SQL is:&lt;/p&gt;
 
@@ -9701,7 +9847,7 @@ sys     0m2.761s
 			<title>My latest IRC client : Kibana</title>
 			<link>https://rmoff.github.io/2016/03/24/my-latest-irc-client-kibana/</link>
 			<pubDate>Thu, 24 Mar 2016 21:38:02 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/03/24/my-latest-irc-client-kibana/</guid>
 			<description>&lt;p&gt;OK, maybe that&amp;rsquo;s not entirely true. But my &lt;em&gt;read-only&lt;/em&gt; client, certainly.&lt;/p&gt;
 
@@ -9837,7 +9983,7 @@ output {
 			<title>Food Pr0n - 01</title>
 			<link>https://rmoff.github.io/2016/03/19/food-pr0n-01/</link>
 			<pubDate>Sat, 19 Mar 2016 21:18:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/03/19/food-pr0n-01/</guid>
 			<description>&lt;p&gt;One of the perks of my job is that I get to travel to some pretty nice places (hi, San Francisco, Bergen, Åland Islands), and get to eat some pretty good food too. If you&amp;rsquo;re looking for some techie content, then move along and go and read about &lt;a href=&#34;http://rmoff.net/2016/03/16/oracle-goldengate-kafka-hive-on-bigdatalite-4-4/&#34;&gt;Kafka&lt;/a&gt;, but if you enjoy food pr0n then stay put.&lt;/p&gt;
 
@@ -9884,7 +10030,7 @@ output {
 			<title>OBIEE 11.1.1.9 installation - JPS-06514: Opening of file based keystore failed</title>
 			<link>https://rmoff.github.io/2016/03/18/obiee-11.1.1.9-installation-jps-06514-opening-of-file-based-keystore-failed/</link>
 			<pubDate>Fri, 18 Mar 2016 18:04:07 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/03/18/obiee-11.1.1.9-installation-jps-06514-opening-of-file-based-keystore-failed/</guid>
 			<description>&lt;p&gt;I got this lovely failure &lt;strong&gt;during a fresh install&lt;/strong&gt; of OBIEE 11.1.1.9. I emphasise that it was during the install because there&amp;rsquo;s other causes for this error &lt;strong&gt;on an existing system&lt;/strong&gt; to do with corrupted credential stores etc &amp;ndash; not the case here.&lt;/p&gt;
 
@@ -9912,7 +10058,7 @@ Caused By: oracle.security.jps.service.credstore.CredStoreException: JPS-01061: 
 			<title>Fun and Games with Oracle GoldenGate, Kafka, and Logstash on BigDataLite 4.4</title>
 			<link>https://rmoff.github.io/2016/03/16/fun-and-games-with-oracle-goldengate-kafka-and-logstash-on-bigdatalite-4.4/</link>
 			<pubDate>Wed, 16 Mar 2016 22:01:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/03/16/fun-and-games-with-oracle-goldengate-kafka-and-logstash-on-bigdatalite-4.4/</guid>
 			<description>
 
@@ -10269,7 +10415,7 @@ Logstash startup completed
 			<title>Presentation Slides… bye-bye Slideshare, hello Speakerdeck</title>
 			<link>https://rmoff.github.io/2016/03/09/presentation-slides-bye-bye-slideshare-hello-speakerdeck/</link>
 			<pubDate>Wed, 09 Mar 2016 09:43:30 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/03/09/presentation-slides-bye-bye-slideshare-hello-speakerdeck/</guid>
 			<description>&lt;p&gt;I&amp;rsquo;ve always defaulted to &lt;a href=&#34;http://slideshare.net/themoff&#34;&gt;Slideshare&lt;/a&gt; for hosting slides from presentations that I&amp;rsquo;ve given, but it&amp;rsquo;s become more and more crap-infested. The UI is messy, and the UX sucks - for example, I want to download a slide deck, I most definitely 100% am not interested in &amp;ldquo;clipping&amp;rdquo; it&amp;hellip;even if you ask me every. damn. time:&lt;/p&gt;
 
@@ -10285,7 +10431,7 @@ Logstash startup completed
 			<title>#obihackers IRC channel</title>
 			<link>https://rmoff.github.io/2016/03/03/obihackers-irc-channel/</link>
 			<pubDate>Thu, 03 Mar 2016 22:55:37 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/03/03/obihackers-irc-channel/</guid>
 			<description>
 
@@ -10311,7 +10457,7 @@ Logstash startup completed
 			<title>Streaming data to InfluxDB from any bash command</title>
 			<link>https://rmoff.github.io/2016/02/27/streaming-data-to-influxdb-from-any-bash-command/</link>
 			<pubDate>Sat, 27 Feb 2016 21:05:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/02/27/streaming-data-to-influxdb-from-any-bash-command/</guid>
 			<description>&lt;p&gt;&lt;a href=&#34;https://influxdata.com/time-series-platform/influxdb/&#34;&gt;InfluxDB&lt;/a&gt; is a great time series database, that&amp;rsquo;s recently been rebranded as part of the &amp;ldquo;&lt;a href=&#34;https://influxdata.com/&#34;&gt;TICK&lt;/a&gt;&amp;rdquo; stack, including data collectors, visualisation, and ETL/Alerting. I&amp;rsquo;ve yet to really look at the other components, but InfluxDB alone works just great with my favourite visualisation/analysis tool for time series metrics, &lt;a href=&#34;http://grafana.org/&#34;&gt;Grafana&lt;/a&gt;.&lt;/p&gt;
 
@@ -10365,7 +10511,7 @@ done
 			<title>#FullEnglish</title>
 			<link>https://rmoff.github.io/2016/02/26/fullenglish/</link>
 			<pubDate>Fri, 26 Feb 2016 18:02:31 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/02/26/fullenglish/</guid>
 			<description>&lt;p&gt;Thanks to the power of twitter, I can look back on all the many and varied Full English breakfasts that I&amp;rsquo;ve (mostly) enjoyed: &lt;a href=&#34;https://twitter.com/search?q=rmoff%20%23fullenglish&amp;amp;src=typd&#34;&gt;https://twitter.com/search?q=rmoff%20%23fullenglish&amp;amp;src=typd&lt;/a&gt;&lt;/p&gt;
 
@@ -10395,7 +10541,7 @@ done
 			<title>Visualising OBIEE DMS Metrics over the years</title>
 			<link>https://rmoff.github.io/2016/02/26/visualising-obiee-dms-metrics-over-the-years/</link>
 			<pubDate>Fri, 26 Feb 2016 17:54:54 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2016/02/26/visualising-obiee-dms-metrics-over-the-years/</guid>
 			<description>&lt;p&gt;It struck me today when I was writing my most recent blog over at &lt;a href=&#34;http://ritt.md/obi-dms&#34;&gt;Rittman Mead&lt;/a&gt; that I&amp;rsquo;ve been playing with visualising OBIEE metrics for &lt;em&gt;years&lt;/em&gt; now.&lt;/p&gt;
 
@@ -10425,13 +10571,281 @@ done
 			<title></title>
 			<link>https://rmoff.github.io/1/01/01/</link>
 			<pubDate>Mon, 01 Jan 0001 00:00:00 UTC</pubDate>
-			<author></author>
+			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/1/01/01/</guid>
 			<description>&lt;p&gt;brew install hugo&lt;/p&gt;
 
 &lt;p&gt;Export from Ghost to get a json file
 Convert it with &lt;a href=&#34;https://github.com/jbarone/ghostToHugo&#34;&gt;https://github.com/jbarone/ghostToHugo&lt;/a&gt;
 ./ghostToHugo -p ~/git/rmoff-blog/ &amp;ndash;dateformat &amp;ldquo;2006-01-02 15:04:05&amp;rdquo; ~/Downloads/rmoffs-random-ramblings.ghost.2018-12-15.json&lt;/p&gt;
+</description>
+		</item>
+		
+		<item>
+			<title>About Me</title>
+			<link>https://rmoff.github.io/about-me/</link>
+			<pubDate>Mon, 01 Jan 0001 00:00:00 UTC</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/about-me/</guid>
+			<description>
+
+&lt;p&gt;&lt;em&gt;My primary blog writing is &lt;a href=&#34;https://www.confluent.io/blog/author/robin/&#34;&gt;elsewhere&lt;/a&gt; (&lt;a href=&#34;http://ritt.md/rmoff&#34;&gt;previously&lt;/a&gt;). I write at &lt;a href=&#34;http://rmoff.net&#34;&gt;rmoff.net&lt;/a&gt; for random tech scribblings and notes, and pictures of fried breakfasts.&lt;/em&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;whoami&#34;&gt;&lt;code&gt;whoami&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;em&gt;Robin is a Developer Advocate at Confluent, the company founded by the creators of Apache Kafka, as well as an Oracle Groundbreaker Ambassador and ACE Director (alumnus). His career has always involved data, from the old worlds of COBOL and DB2, through the worlds of Oracle and Hadoop, and into the current world with Kafka. His particular interests are analytics, systems architecture, performance testing and optimization. He blogs at &lt;a href=&#34;http://cnfl.io/rmoff&#34;&gt;http://cnfl.io/rmoff&lt;/a&gt; and &lt;a href=&#34;http://rmoff.net/&#34;&gt;http://rmoff.net/&lt;/a&gt; (and previously &lt;a href=&#34;http://ritt.md/rmoff&#34;&gt;http://ritt.md/rmoff&lt;/a&gt;) and can be found tweeting grumpy geek thoughts as @rmoff. Outside of work he enjoys drinking good beer and eating fried breakfasts, although generally not at the same time.&lt;/em&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;speaking-experience&#34;&gt;Speaking experience&lt;/h2&gt;
+
+&lt;p&gt;Speaker since 2009 at conferences including Devoxx, USENIX LISA, Kafka Summit, Oracle OpenWorld, JavaZone, Big Data LDN, UKOUG, Oracle CODE, PGConf, etc plus numerous meetups.&lt;/p&gt;
+
+&lt;p&gt;Slides &amp;amp; Recordings: &lt;a href=&#34;http://rmoff.net/presentations/&#34;&gt;http://rmoff.net/presentations/&lt;/a&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;social&#34;&gt;Social&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Twitter &lt;a href=&#34;https://twitter.com/rmoff/&#34;&gt;@rmoff&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;mailto:robin@rmoff.net&#34;&gt;Email&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.linkedin.com/in/robinmoffatt&#34;&gt;LinkedIn&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/rmoff&#34;&gt;SpeakerDeck&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/rmoff&#34;&gt;GitHub&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://t.me/rmoff&#34;&gt;Telegram&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://keybase.io/rmoff/&#34;&gt;Keybase&lt;/a&gt; 🔑&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://untappd.com/user/rmoff&#34;&gt;Untappd&lt;/a&gt; 🍻&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.last.fm/user/themoff&#34;&gt;last.fm&lt;/a&gt; 🎵&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://soundcloud.com/rmoff&#34;&gt;Soundcloud&lt;/a&gt; 🎶&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.mixcloud.com/rmoff/&#34;&gt;Mixcloud&lt;/a&gt; 🎶&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.strava.com/athletes/10250052/badge&#34;&gt;Strava&lt;/a&gt; 🏃&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://stackexchange.com/users/142729/robin-moffatt&#34;&gt;&lt;img src=&#34;https://stackexchange.com/users/flair/142729.png&#34; width=&#34;208&#34; height=&#34;58&#34; alt=&#34;profile for Robin Moffatt on Stack Exchange, a network of free, community-driven Q&amp;amp;A sites&#34; title=&#34;profile for Robin Moffatt on Stack Exchange, a network of free, community-driven Q&amp;amp;A sites&#34; /&gt;&lt;/a&gt;&lt;/p&gt;
+
+&lt;iframe height=&#39;160&#39; width=&#39;300&#39; frameborder=&#39;0&#39; allowtransparency=&#39;true&#39; scrolling=&#39;no&#39; src=&#39;https://www.strava.com/athletes/10250052/activity-summary/0fbe8f47b3fae6b562f6c9fba66b4d66492c0805&#39;&gt;&lt;/iframe&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;mugshots&#34;&gt;Mugshots&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://rmoff.github.io/content/images/2018/05/ksldn18-01.jpg&#34; alt=&#34;&#34; /&gt;
+&lt;img src=&#34;https://rmoff.github.io/content/images/2018/05/robin-moffatt-600px.jpg&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
+</description>
+		</item>
+		
+		<item>
+			<title>List of Presentations</title>
+			<link>https://rmoff.github.io/list-of-presentations/</link>
+			<pubDate>Mon, 01 Jan 0001 00:00:00 UTC</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/list-of-presentations/</guid>
+			<description>&lt;p&gt;See &lt;a href=&#34;https://speakerdeck.com/rmoff/&#34;&gt;SpeakerDeck&lt;/a&gt; for a list of all my presentations.&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;(image by &lt;a href=&#34;https://unsplash.com/@rgrzybowski&#34;&gt;Radek Grzybowski&lt;/a&gt;, via &lt;a href=&#34;https://unsplash.com&#34;&gt;unsplash.com&lt;/a&gt;)&lt;/p&gt;
+</description>
+		</item>
+		
+		<item>
+			<title>My Favourite Song</title>
+			<link>https://rmoff.github.io/my-favourite-song/</link>
+			<pubDate>Mon, 01 Jan 0001 00:00:00 UTC</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/my-favourite-song/</guid>
+			<description>&lt;iframe width=&#34;560&#34; height=&#34;315&#34; src=&#34;https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&#34; frameborder=&#34;0&#34; allowfullscreen&gt;&lt;/iframe&gt;
+</description>
+		</item>
+		
+		<item>
+			<title>Presentations and Talks</title>
+			<link>https://rmoff.github.io/presentations/</link>
+			<pubDate>Mon, 01 Jan 0001 00:00:00 UTC</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/presentations/</guid>
+			<description>
+
+&lt;p&gt;You can find most of my slide decks on &lt;a href=&#34;https://speakerdeck.com/rmoff/&#34;&gt;Speaker Deck&lt;/a&gt;. Below are links to particular talks I&amp;rsquo;ve done recently, along with recordings where available.&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;embrace-the-anarchy-apache-kafka-s-role-in-modern-data-architectures&#34;&gt;Embrace the Anarchy: Apache Kafka&amp;rsquo;s Role in Modern Data Architectures&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://rmoff.github.io/content/images/2018/06/2018-06-08_10-04-24.jpg&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;📽 Recording
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=bapHWhtf6fE&#34;&gt;Devoxx Belgium&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Rated &lt;a href=&#34;https://twitter.com/Devoxx/status/1064452715034669056&#34;&gt;32&lt;/a&gt; out of all the conference talks&lt;/li&gt;
+&lt;li&gt;Scored 4.&lt;sup&gt;31&lt;/sup&gt;&amp;frasl;&lt;sub&gt;5&lt;/sub&gt;, 134 votes&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=Y5qeKmL5xMg&#34;&gt;Oracle CODE London&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/rmoff/embrace-the-anarchy-apache-kafkas-role-in-modern-data-architectures&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;apache-kafka-and-ksql-in-action-let-s-build-a-streaming-data-pipeline&#34;&gt;Apache Kafka and KSQL in Action : Let’s Build a Streaming Data Pipeline!&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;📽 Recording
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=RJtEacDX4Oc&#34;&gt;Devoxx Belgium&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Rated &lt;a href=&#34;https://twitter.com/Devoxx/status/1064452715034669056&#34;&gt;17&lt;/a&gt; out of all the conference talks&lt;/li&gt;
+&lt;li&gt;Scored 4.&lt;sup&gt;55&lt;/sup&gt;&amp;frasl;&lt;sub&gt;5&lt;/sub&gt;, 102 votes&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=FD2z3bdN1Jw&#34;&gt;USENIX LISA18&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=hZE409e1tlg&amp;amp;feature=youtu.be&#34;&gt;Kraków meetup&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=SvaMFCT_6GI&#34;&gt;Madrid meetup&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/rmoff/apache-kafka-and-ksql-in-action-lets-build-a-streaming-data-pipeline&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/mysql-debezium-ksql-elasticsearch/&#34;&gt;👾 Code&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;no-more-silos-integrating-databases-and-apache-kafka&#34;&gt;No More Silos: Integrating Databases and Apache Kafka&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/rmoff/no-more-silos-integrating-databases-and-apache-kafka&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/confluentinc/demo-scene/tree/master/no-more-silos-mysql&#34;&gt;👾 Code (MySQL)&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/confluentinc/demo-scene/tree/master/no-more-silos-oracle&#34;&gt;👾 Code (Oracle)&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;look-ma-no-code-building-streaming-data-pipelines-with-apache-kafka-and-ksql&#34;&gt;Look Ma, no Code! Building Streaming Data Pipelines with Apache Kafka and KSQL&lt;/h2&gt;
+
+&lt;p&gt;🥇 &lt;strong&gt;Top-rated session at Kafka Summit London 2018!&lt;/strong&gt; 🥇&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/kafka-summit-london18/look-ma-no-code-building-streaming-data-pipelines-with-apache-kafka-and-ksql&#34;&gt;📽 Recording&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/kafka-summit-london18/look-ma-no-code-building-streaming-data-pipelines-with-apache-kafka-and-ksql&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;steps-to-building-a-streaming-etl-pipeline-with-apache-kafka-and-ksql&#34;&gt;Steps to Building a Streaming ETL Pipeline with Apache Kafka and KSQL&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://videos.confluent.io/watch/4cVXUQ2jCLgJNmg4kjCRqo&#34;&gt;📽 Recording&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.slideshare.net/ConfluentInc/steps-to-building-a-streaming-etl-pipeline-with-apache-kafka-and-ksql&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;live-coding-a-ksql-application&#34;&gt;Live Coding a KSQL Application&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://videos.confluent.io/watch/m1LpiDwQo4Vvd4YHWKcszs&#34;&gt;📽 Recording&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://gist.github.com/rmoff/7efa882dfd808dbab4eb7b8e6f9eda16&#34;&gt;📝 Code&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+		</item>
+		
+		<item>
+			<title>Talks</title>
+			<link>https://rmoff.github.io/talks/</link>
+			<pubDate>Mon, 01 Jan 0001 00:00:00 UTC</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/talks/</guid>
+			<description>
+
+&lt;p&gt;You can find most of my slide decks on &lt;a href=&#34;https://speakerdeck.com/rmoff/&#34;&gt;Speaker Deck&lt;/a&gt;. Below are links to particular talks I&amp;rsquo;ve done recently, along with recordings where available.&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;embrace-the-anarchy-apache-kafka-s-role-in-modern-data-architectures&#34;&gt;Embrace the Anarchy: Apache Kafka&amp;rsquo;s Role in Modern Data Architectures&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://rmoff.github.io/content/images/2018/06/2018-06-08_10-04-24.jpg&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;📽 Recording
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=bapHWhtf6fE&#34;&gt;Devoxx Belgium&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Rated &lt;a href=&#34;https://twitter.com/Devoxx/status/1064452715034669056&#34;&gt;32&lt;/a&gt; out of all the conference talks&lt;/li&gt;
+&lt;li&gt;Scored 4.&lt;sup&gt;31&lt;/sup&gt;&amp;frasl;&lt;sub&gt;5&lt;/sub&gt;, 134 votes&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=Y5qeKmL5xMg&#34;&gt;Oracle CODE London&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/rmoff/embrace-the-anarchy-apache-kafkas-role-in-modern-data-architectures&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;apache-kafka-and-ksql-in-action-let-s-build-a-streaming-data-pipeline&#34;&gt;Apache Kafka and KSQL in Action : Let’s Build a Streaming Data Pipeline!&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;📽 Recording
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=RJtEacDX4Oc&#34;&gt;Devoxx Belgium&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Rated &lt;a href=&#34;https://twitter.com/Devoxx/status/1064452715034669056&#34;&gt;17&lt;/a&gt; out of all the conference talks&lt;/li&gt;
+&lt;li&gt;Scored 4.&lt;sup&gt;55&lt;/sup&gt;&amp;frasl;&lt;sub&gt;5&lt;/sub&gt;, 102 votes&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=FD2z3bdN1Jw&#34;&gt;USENIX LISA18&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=hZE409e1tlg&amp;amp;feature=youtu.be&#34;&gt;Kraków meetup&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=SvaMFCT_6GI&#34;&gt;Madrid meetup&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/rmoff/apache-kafka-and-ksql-in-action-lets-build-a-streaming-data-pipeline&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/mysql-debezium-ksql-elasticsearch/&#34;&gt;👾 Code&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;no-more-silos-integrating-databases-and-apache-kafka&#34;&gt;No More Silos: Integrating Databases and Apache Kafka&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/rmoff/no-more-silos-integrating-databases-and-apache-kafka&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/confluentinc/demo-scene/tree/master/no-more-silos-mysql&#34;&gt;👾 Code (MySQL)&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/confluentinc/demo-scene/tree/master/no-more-silos-oracle&#34;&gt;👾 Code (Oracle)&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;look-ma-no-code-building-streaming-data-pipelines-with-apache-kafka-and-ksql&#34;&gt;Look Ma, no Code! Building Streaming Data Pipelines with Apache Kafka and KSQL&lt;/h2&gt;
+
+&lt;p&gt;🥇 &lt;strong&gt;Top-rated session at Kafka Summit London 2018!&lt;/strong&gt; 🥇&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/kafka-summit-london18/look-ma-no-code-building-streaming-data-pipelines-with-apache-kafka-and-ksql&#34;&gt;📽 Recording&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/kafka-summit-london18/look-ma-no-code-building-streaming-data-pipelines-with-apache-kafka-and-ksql&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;steps-to-building-a-streaming-etl-pipeline-with-apache-kafka-and-ksql&#34;&gt;Steps to Building a Streaming ETL Pipeline with Apache Kafka and KSQL&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://videos.confluent.io/watch/4cVXUQ2jCLgJNmg4kjCRqo&#34;&gt;📽 Recording&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.slideshare.net/ConfluentInc/steps-to-building-a-streaming-etl-pipeline-with-apache-kafka-and-ksql&#34;&gt;📖 Slides&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;hr /&gt;
+
+&lt;h2 id=&#34;live-coding-a-ksql-application&#34;&gt;Live Coding a KSQL Application&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://videos.confluent.io/watch/m1LpiDwQo4Vvd4YHWKcszs&#34;&gt;📽 Recording&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://gist.github.com/rmoff/7efa882dfd808dbab4eb7b8e6f9eda16&#34;&gt;📝 Code&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
 </description>
 		</item>
 		

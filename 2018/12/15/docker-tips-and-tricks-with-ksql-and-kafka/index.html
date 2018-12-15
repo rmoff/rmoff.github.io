@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Docker Tips and Tricks with KSQL and Kafka</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.github.io/index.xml">
+		<link rel="canonical" href="https://rmoff.github.io/2018/12/15/docker-tips-and-tricks-with-ksql-and-kafka/">
+		
+		<link rel="shortcut icon" type="image/png" href="https://rmoff.github.io/apple-touch-icon-precomposed.png">
+		
+		
+		<meta name="generator" content="Hugo 0.52" />
+
+		
+		<meta name="og:title" content="Docker Tips and Tricks with KSQL and Kafka" />
+		<meta name="og:type" content="article" />
+		<meta name="og:image" content="https://rmoff.github.io/images/2018/12/IMG_7431.jpg" />
+		<meta name="og:description" content="" />
+		<meta name="og:url" content="https://rmoff.github.io/2018/12/15/docker-tips-and-tricks-with-ksql-and-kafka/" />
+		<meta name="og:site_name" content="Docker Tips and Tricks with KSQL and Kafka" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.github.io/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.github.io/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.github.io/images/2018/12/IMG_7431.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.github.io" title="Home">
+						<img src="https://rmoff.github.io/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/">github</a>
+						<a class="link f5 ml2 dim near-white" href="/talks/">talks</a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.github.io/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.github.io/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Docker Tips and Tricks with KSQL and Kafka</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2018-12-15T22:00:55Z">Dec 15, 2018</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.github.io/categories//docker" class="no-underline category near-white dim">Docker</a>, <a href="https://rmoff.github.io/categories//docker-compose" class="no-underline category near-white dim">Docker Compose</a>, <a href="https://rmoff.github.io/categories//ksql" class="no-underline category near-white dim">Ksql</a>, <a href="https://rmoff.github.io/categories//ksql-cli" class="no-underline category near-white dim">Ksql-Cli</a>, <a href="https://rmoff.github.io/categories//ksql-server" class="no-underline category near-white dim">Ksql-Server</a>, <a href="https://rmoff.github.io/categories//kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>
+								<span class="display-print">at https://rmoff.github.io/2018/12/15/docker-tips-and-tricks-with-ksql-and-kafka/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 nested-copy-line-height lh-copy f4 nested-links mw-100 measure-wide">
+	
+
+<p>A few years ago a colleague of mine told me about this thing called Docker, and I must admit I dismissed it as a fad…how wrong was I. Docker, and Docker Compose, are one of my key tools of the trade. With them I can build self-contained environments for tutorials, demos, conference talks etc. Tear it down, run it again, without worrying that somewhere a local config changed and will break things.</p>
+
+<p>So, here&rsquo;s a collection of tricks I use with Docker and Docker Compose that might be useful, particularly for those working with Apache Kafka and Confluent Platform.</p>
+
+<h2 id="wait-for-an-http-endpoint-to-be-available">Wait for an HTTP endpoint to be available</h2>
+
+<p>Often a container will be &lsquo;up&rsquo; before it&rsquo;s <em>actually</em> up. So Docker Compose&rsquo;s <code>depends_on</code> dependencies don&rsquo;t do everything we need here. For a service that exposes an HTTP endpoint (e.g. Kafka Connect, KSQL Server, etc) you can use this bash snippet to force a script to wait before continuing execution of something that requires the service to actually be ready and available:</p>
+
+<pre><code>echo -e &quot;\n\n⏳ Waiting for KSQL to be available before launching CLI\n&quot;
+while [ $$(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) -eq 000 ]
+do 
+  echo -e $$(date) &quot;KSQL Server HTTP state: &quot; $$(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) &quot; (waiting for 200)&quot;
+  sleep 5
+done
+</code></pre>
+
+<p>Here this is assuming that KSQL Server is running on a host accessible as <code>ksql-server</code> and on port <code>8088</code>. You can use this trick if, for example, you only want to launch the KSQL CLI once the server is available:</p>
+
+<pre><code>docker-compose exec ksql-cli bash -c 'echo -e &quot;\n\n⏳ Waiting for KSQL to be available before launching CLI\n&quot;; while [ $(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) -eq 000 ] ; do echo -e $(date) &quot;KSQL Server HTTP state: &quot; $(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) &quot; (waiting for 200)&quot; ; sleep 5 ; done; ksql http://ksql-server:8088'
+</code></pre>
+
+<p>You can also build it into a Docker Compose file as shown below</p>
+
+<h2 id="wait-for-a-particular-message-in-a-container-s-log">Wait for a particular message in a container&rsquo;s log</h2>
+
+<p>For the same reason as above—waiting for a service to be ready—you can use this trick built around <code>grep</code> and bash&rsquo;s <a href="http://tldp.org/LDP/abs/html/process-sub.html"><em>process substitution</em></a>, which will make the script wait until the given phrase is found in the logs from Docker Compose:</p>
+
+<pre><code>export CONNECT_HOST=connect-debezium
+echo -e &quot;\n--\n\nWaiting for Kafka Connect to start on $CONNECT_HOST … ⏳&quot;
+grep -q &quot;Kafka Connect started&quot; &lt;(docker-compose logs -f $CONNECT_HOST)
+</code></pre>
+
+<h2 id="run-custom-code-before-launching-a-container-s-program">Run custom code before launching a container&rsquo;s program</h2>
+
+<p>Maybe you want to download a dependency, or move some files around, or do something. You could build a new <code>Dockerfile</code>, but often you want to overlay on an existing standard image a slight tweak for a demo. With Docker Compose this is easy enough to do. First you need to figure out what command the container is going to run when it launches, which will either be through <code>Entrypoint</code> or <code>Cmd</code>:</p>
+
+<pre><code>$ docker inspect --format='{{.Config.Entrypoint}}' confluentinc/cp-ksql-server:5.0.1
+[]
+
+$ docker inspect --format='{{.Config.Cmd}}' confluentinc/cp-ksql-server:5.0.1
+[/etc/confluent/docker/run]
+</code></pre>
+
+<p>In the above example it&rsquo;s <code>/etc/confluent/docker/run</code>. So now build this into your Docker Compose:</p>
+
+<pre><code>ksql-server:
+  image: confluentinc/cp-ksql-server:5.0.1
+  depends_on:
+    - kafka
+  environment:
+    KSQL_BOOTSTRAP_SERVERS: kafka:29092
+    KSQL_LISTENERS: http://0.0.0.0:8088
+  command: 
+    - /bin/bash
+    - -c 
+    - |
+      mkdir -p /data/maxmind
+      cd /data/maxmind
+      curl https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz | tar xz 
+      /etc/confluent/docker/run 
+</code></pre>
+
+<p>Now the additional bits will run, and <em>then</em> the container&rsquo;s intended process will actually run.</p>
+
+<p>The <code>- |</code> is some YAML magic; we&rsquo;re passing in three arguments to <code>command</code>, and the <code>|</code> tells YAML that the following lines are all part of the same entry. It makes for a much neater and easier to read file than trying to put everything into a single line as is sometimes done with <code>command</code>.</p>
+
+<h2 id="deploy-a-kafka-connect-connector-automatically">Deploy a Kafka Connect connector automatically</h2>
+
+<p>In the above example, we run some code <em>before</em> the container&rsquo;s payload (the KSQL Server) starts because of a dependency on it. In the next example we&rsquo;ll do it the other way around; launch the service and wait for it to start, and then run some more code. This is the pattern we need for deploying a Kafka Connect connector.</p>
+
+<pre><code>kafka-connect:
+  image: confluentinc/cp-kafka-connect:5.0.1
+  environment:
+    CONNECT_REST_PORT: 18083
+    CONNECT_REST_ADVERTISED_HOST_NAME: &quot;kafka-connect&quot;
+    […]
+  volumes:
+    - $PWD/scripts:/scripts
+  command: 
+    - bash 
+    - -c 
+    - |
+      /etc/confluent/docker/run &amp; 
+      echo &quot;Waiting for Kafka Connect to start listening on $$CONNECT_REST_ADVERTISED_HOST_NAME ⏳&quot;
+      while [ $$(curl -s -o /dev/null -w %{http_code} http://$$CONNECT_REST_ADVERTISED_HOST_NAME:$$CONNECT_REST_PORT/connectors) -eq 000 ] ; do 
+        echo -e $$(date) &quot; Kafka Connect listener HTTP state: &quot; $$(curl -s -o /dev/null -w %{http_code} http://$$CONNECT_REST_ADVERTISED_HOST_NAME:$$CONNECT_REST_PORT/connectors) &quot; (waiting for 200)&quot;
+        sleep 5 
+      done
+      nc -vz $$CONNECT_REST_ADVERTISED_HOST_NAME $$CONNECT_REST_PORT
+      echo -e &quot;\n--\n+&gt; Creating Kafka Connect Elasticsearch sink&quot;
+      /scripts/create-es-sink.sh 
+      sleep infinity
+</code></pre>
+
+<p>Notes:</p>
+
+<ul>
+<li>In the command section, <code>$</code> are replaced with <code>$$</code> to avoid the error <code>Invalid interpolation format for &quot;command&quot; option</code></li>
+<li><code>sleep infinity</code> is necessary, because we&rsquo;ve sent the <code>/etc/confluent/docker/run</code> process to a background thread (<code>&amp;</code>) and so the container will exit if the main <code>command</code> finishes.</li>
+<li>The actual script to configure the connector is a <code>curl</code> call in <a href="https://github.com/confluentinc/demo-scene/blob/master/ksql-atm-fraud-detection/scripts/create-es-sink.sh">a separate file</a>. You <em>could</em> build this into the Docker Compose but it feels a bit yucky.</li>
+
+<li><p>You could combine both this and the technique above if you wanted to install a custom connector plugin before launching Kafka Connect, e.g.</p>
+
+<pre><code>confluent-hub install --no-prompt confluentinc/kafka-connect-gcs:5.0.0 
+/etc/confluent/docker/run
+</code></pre></li>
+</ul>
+
+<h2 id="execute-a-ksql-script-through-ksql-cli">Execute a KSQL script through ksql-cli</h2>
+
+<p>This Docker Compose snippet will run KSQL CLI and pass in a KSQL script for execution to it. The manual <code>EXIT</code> is required because of a <a href="https://github.com/confluentinc/ksql/issues/1327">NPE bug</a>. The advantage of this method vs running KSQL Server headless with a queries file passed to it is that you can still interact with KSQL this way, but can pre-build the environment to a certain state.</p>
+
+<pre><code>ksql-cli:
+  image: confluentinc/cp-ksql-cli:5.0.1
+  depends_on:
+    - ksql-server
+  volumes:
+    - $PWD/ksql-scripts/:/data/scripts/
+  entrypoint: 
+    - /bin/bash
+    - -c
+    - |
+      echo -e &quot;\n\n⏳ Waiting for KSQL to be available before launching CLI\n&quot;
+      while [ $$(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) -eq 000 ]
+      do 
+        echo -e $$(date) &quot;KSQL Server HTTP state: &quot; $$(curl -s -o /dev/null -w %{http_code} http://ksql-server:8088/) &quot; (waiting for 200)&quot;
+        sleep 5
+      done
+      echo -e &quot;\n\n-&gt; Running KSQL commands\n&quot;
+      cat /data/scripts/my-ksql-script.sql &lt;(echo 'EXIT')| ksql http://ksql-server:8088
+      echo -e &quot;\n\n-&gt; Sleeping…\n&quot;
+      sleep infinity
+</code></pre>
+
+<p>Note that the <code>sleep infinity</code> is required, otherwise the container will exit since all of the defined <code>entrypoint</code> will have executed.</p>
+
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
+
+<p>Robin Moffatt is a Developer Advocate at Confluent, and Oracle Groundbreaker Ambassador. He also likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.github.io/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2018 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+	
+	</body>
+</html>
