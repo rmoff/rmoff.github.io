@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+
+  <meta charset="utf-8" />
+
+  
+  <title>Streaming Data from MongoDB into Kafka with Kafka Connect and Debezium</title>
+
+  
+  
+  <link href="//cdn.jsdelivr.net" rel="dns-prefetch">
+  <link href="//cdnjs.cloudflare.com" rel="dns-prefetch">
+  <link href="//at.alicdn.com" rel="dns-prefetch">
+  <link href="//fonts.googleapis.com" rel="dns-prefetch">
+  <link href="//fonts.gstatic.com" rel="dns-prefetch">
+  <link href="///disqus.com" rel="dns-prefetch">
+  <link href="//c.disquscdn.com" rel="dns-prefetch">
+  
+  
+  
+
+  
+
+  
+  <meta name="author" content="Robin Moffatt">
+  <meta name="description" content="Disclaimer: I am not a MongoDB person. These steps may or may not be appropriate and proper. But they worked for me :) Feel free to post in comments if I&amp;rsquo;m doing something wrong
+MongoDB config - enabling replica sets For Debezium to be able to stream changes from MongoDB, Mongo needs to have replication configured:
+Docs: Replication / Convert a Standalone to a Replica Set
+Stop Mongo:
+rmoff@proxmox01 ~&amp;gt; sudo service mongod stop  Add replica set config to /etc/mongod.">
+
+  
+  
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@gohugoio">
+    <meta name="twitter:title" content="Streaming Data from MongoDB into Kafka with Kafka Connect and Debezium">
+    <meta name="twitter:description" content="Disclaimer: I am not a MongoDB person. These steps may or may not be appropriate and proper. But they worked for me :) Feel free to post in comments if I&amp;rsquo;m doing something wrong
+MongoDB config - enabling replica sets For Debezium to be able to stream changes from MongoDB, Mongo needs to have replication configured:
+Docs: Replication / Convert a Standalone to a Replica Set
+Stop Mongo:
+rmoff@proxmox01 ~&amp;gt; sudo service mongod stop  Add replica set config to /etc/mongod.">
+    <meta name="twitter:image" content="/images/avatar.jpg">
+  
+
+  
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Streaming Data from MongoDB into Kafka with Kafka Connect and Debezium">
+  <meta property="og:description" content="Disclaimer: I am not a MongoDB person. These steps may or may not be appropriate and proper. But they worked for me :) Feel free to post in comments if I&amp;rsquo;m doing something wrong
+MongoDB config - enabling replica sets For Debezium to be able to stream changes from MongoDB, Mongo needs to have replication configured:
+Docs: Replication / Convert a Standalone to a Replica Set
+Stop Mongo:
+rmoff@proxmox01 ~&amp;gt; sudo service mongod stop  Add replica set config to /etc/mongod.">
+  <meta property="og:url" content="https://rmoff.github.io/2018/03/27/streaming-data-from-mongodb-into-kafka-with-kafka-connect-and-debezium/">
+  <meta property="og:image" content="/images/avatar.jpg">
+
+
+
+
+<meta name="generator" content="Hugo 0.52">
+
+
+<link rel="canonical" href="https://rmoff.github.io/2018/03/27/streaming-data-from-mongodb-into-kafka-with-kafka-connect-and-debezium/">
+
+<meta name="renderer" content="webkit">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="format-detection" content="telephone=no,email=no,adress=no">
+<meta http-equiv="Cache-Control" content="no-transform">
+
+
+<meta name="robots" content="index,follow">
+<meta name="referrer" content="origin-when-cross-origin">
+
+
+
+
+
+
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="rmoff.net">
+<meta name="msapplication-tooltip" content="rmoff.net">
+<meta name='msapplication-navbutton-color' content="#5fbf5e">
+<meta name="msapplication-TileColor" content="#5fbf5e">
+<meta name="msapplication-TileImage" content="/images/tile-image-windows.png">
+<link rel="icon" href="/images/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+<link rel="icon" sizes="192x192" href="/images/touch-icon-android.png">
+<link rel="apple-touch-icon" href="/images/touch-icon-apple.png">
+
+
+<link rel="preload" href="/styles/main.min.css" as="style">
+<link rel="preload" href="https://fonts.googleapis.com/css?family=Lobster" as="style">
+<link rel="preload" href="/images/avatar.jpg" as="image">
+<link rel="preload" href="/images/grey-prism.svg" as="image">
+
+
+<style>
+  body {
+    background: rgb(244, 243, 241) url('/images/grey-prism.svg') repeat fixed;
+  }
+</style>
+<link rel="stylesheet" href="/styles/main.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lobster">
+
+
+<script src="https://cdn.jsdelivr.net/npm/medium-zoom@1.0.2/dist/medium-zoom.min.js"></script>
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video-js.min.css">
+
+
+
+  
+  
+<!--[if lte IE 8]>
+  <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/videojs-ie8@1.1.2/dist/videojs-ie8.min.js"></script>
+<![endif]-->
+
+<!--[if lte IE 9]>
+  <script src="https://cdn.jsdelivr.net/npm/eligrey-classlist-js-polyfill@1.2.20180112/classList.min.js"></script>
+<![endif]-->
+
+
+<script src="https://cdn.jsdelivr.net/npm/smooth-scroll@14.2.1/dist/smooth-scroll.polyfills.min.js"></script>
+
+
+</head>
+  <body>
+    
+    <div class="suspension">
+      <a title="Go to top" class="to-top is-hide"><span class="icon icon-up"></span></a>
+      
+        
+        <a title="Go to comments" class="to-comment" href="#disqus_thread"><span class="icon icon-comment"></span></a>
+        
+      
+    </div>
+    
+    
+  <header class="site-header">
+  <img class="avatar" src="/images/avatar.jpg" alt="Avatar">
+  
+  <h2 class="title">rmoff.net</h2>
+  
+  <p class="subtitle"></p>
+  <button class="menu-toggle" type="button">
+    <span class="icon icon-menu"></span>
+  </button>
+  <nav class="site-menu collapsed">
+    <h2 class="offscreen">Main Menu</h2>
+    <ul class="menu-list">
+      
+      
+      
+      
+        <li class="menu-item
+            
+            
+            ">
+            <a href="/about-me/">about me</a>
+          </li>
+      
+        <li class="menu-item
+            
+            
+            ">
+            <a href="/presentations/">presentations</a>
+          </li>
+      
+    </ul>
+  </nav>
+  <nav class="social-menu collapsed">
+    <h2 class="offscreen">Social Networks</h2>
+    <ul class="social-list"></ul>
+  </nav>
+</header>
+
+  <section class="main post-detail">
+    <header class="post-header">
+      <h1 class="post-title">Streaming Data from MongoDB into Kafka with Kafka Connect and Debezium</h1>
+      <p class="post-meta">@Robin Moffatt · Mar 27, 2018 · 4 min read</p>
+    </header>
+    <article class="post-content">
+
+<p><em>Disclaimer: I am not a MongoDB person. These steps may or may not be appropriate and proper. But they worked for me :) Feel free to post in comments if I&rsquo;m doing something wrong</em></p>
+
+<h2 id="mongodb-config-enabling-replica-sets">MongoDB config - enabling replica sets</h2>
+
+<p>For Debezium to be able to stream changes from MongoDB, Mongo needs to have replication configured:</p>
+
+<p>Docs: <a href="https://docs.mongodb.com/manual/replication/">Replication</a> / <a href="https://docs.mongodb.com/manual/tutorial/convert-standalone-to-replica-set/">Convert a Standalone to a Replica Set</a></p>
+
+<p>Stop Mongo:</p>
+
+<pre><code>rmoff@proxmox01 ~&gt; sudo service mongod stop
+</code></pre>
+
+<p>Add replica set config to <code>/etc/mongod.conf</code>:</p>
+
+<pre><code>[source,yaml]
+----
+replication:
+   replSetName: mongo01
+----
+</code></pre>
+
+<p>Optionally, also set the bindIp so that it listens on all IPs, not just loopback:</p>
+
+<pre><code>[source,yaml]
+----
+net:
+  bindIp: 0.0.0.0
+----
+</code></pre>
+
+<p>Start Mongo, and initiate the replica set:</p>
+
+<pre><code>rmoff@proxmox01 ~&gt; sudo service mongod start
+rmoff@proxmox01 ~&gt; mongo --host 127.0.0.1:27017
+MongoDB shell version v3.6.3
+connecting to: mongodb://127.0.0.1:27017/
+&gt; rs.initiate()
+{
+        &quot;info2&quot; : &quot;no configuration specified. Using a default configuration for the set&quot;,
+        &quot;me&quot; : &quot;127.0.0.1:27017&quot;,
+        &quot;ok&quot; : 1,
+        &quot;operationTime&quot; : Timestamp(1520428346, 1),
+        &quot;$clusterTime&quot; : {
+                &quot;clusterTime&quot; : Timestamp(1520428346, 1),
+                &quot;signature&quot; : {
+                        &quot;hash&quot; : BinData(0,&quot;AAAAAAAAAAAAAAAAAAAAAAAAAAA=&quot;),
+                        &quot;keyId&quot; : NumberLong(0)
+                }
+        }
+}
+mongo01:PRIMARY&gt;
+</code></pre>
+
+<p>Check <code>/var/log/mongodb/mongod.log</code>, should see replica set config success and oplog get created:</p>
+
+<pre><code>2018-03-07T13:12:26.007+0000 I REPL     [conn1] replSetInitiate admin command received from client
+2018-03-07T13:12:26.007+0000 I REPL     [conn1] creating replication oplog of size: 2864MB...
+2018-03-07T13:12:26.048+0000 I REPL     [conn1] New replica set config in use: { _id: &quot;mongo01&quot;, version: 1, protocolVersion: 1, members: [ { _id: 0, host: &quot;127.0.0.1:27017&quot;, arbiterOnly: false, buildIndexes: true, hidden: false, priority: 1.0, tags: {}, slaveDelay: 0, votes: 1 } ], settings: { chainingAllowed: true, heartbeatIntervalMillis: 2000, heartbeatTimeoutSecs: 10, electionTimeoutMillis: 10000, catchUpTimeoutMillis: -1, catchUpTakeoverDelayMillis: 30000, getLastErrorModes: {}, getLastErrorDefaults: { w: 1, wtimeout: 0 }, replicaSetId: ObjectId('5a9fe53ac81eed28a3bf207a') } }
+</code></pre>
+
+<h2 id="setting-up-debezium-to-stream-changes-from-mongodb-into-apache-kafka">Setting up Debezium to stream changes from MongoDB into Apache Kafka</h2>
+
+<p>There&rsquo;s a <a href="http://debezium.io/docs/connectors/mongodb/">detailed explanation of how Debezium CDC works with Debezium</a> on the Debezium doc site.</p>
+
+<h3 id="install-debezium-mongo-plugin">Install Debezium Mongo plugin</h3>
+
+<pre><code>mkdir ~/connect-jars
+cd ~/connect-jars/
+wget https://repo1.maven.org/maven2/io/debezium/debezium-connector-mongodb/0.7.4/debezium-connector-mongodb-0.7.4-plugin.tar.gz
+tar -xf debezium-connector-mongodb-0.7.4-plugin.tar.gz
+</code></pre>
+
+<p>Add the plugin folder (e.g. <code>/home/rmoff/connect-jars</code>) to the Connect worker config file (e.g. <code>./etc/schema-registry/connect-avro-distributed.properties</code>)</p>
+
+<pre><code>plugin.path=share/java,/home/rmoff/connect-jars
+</code></pre>
+
+<h3 id="configure-debezium-mongodb-connector">Configure Debezium MongoDB connector</h3>
+
+<p>Config file (<code>/home/rmoff/connect-config/mongodb.json</code>):</p>
+
+<pre><code>{
+  &quot;name&quot;: &quot;mongodb-connector&quot;,
+  &quot;config&quot;: {
+    &quot;connector.class&quot;: &quot;io.debezium.connector.mongodb.MongoDbConnector&quot;,
+    &quot;mongodb.hosts&quot;: &quot;rs0/localhost:27017&quot;,
+    &quot;mongodb.name&quot;: &quot;ubnt&quot;,
+    &quot;database.whitelist&quot;: &quot;ace&quot;
+  }
+}
+</code></pre>
+
+<p>Load connector:</p>
+
+<pre><code>curl -i -X POST -H &quot;Accept:application/json&quot; \
+    -H  &quot;Content-Type:application/json&quot; http://localhost:8084/connectors/ \
+    -d @/home/rmoff/connect-config/mongodb.json
+</code></pre>
+
+<p>Check Connect worker stdout:</p>
+
+<pre><code>[2018-03-07 13:33:35,303] INFO Beginning initial sync of 'mongo01' at {sec=1520429608, ord=1, h=-4885990198351632203} (io.debezium.connector.mongodb.Replicator:247)
+[2018-03-07 13:33:35,324] INFO Preparing to use 1 thread(s) to sync 39 collection(s): mongo01.ace.wlangroup, mongo01.ace.extension, mongo01.ace.stat, mongo01.ace.networkconf, mongo01.ace.voucher, mongo01.ace.hotspotpackage, mongo01.ace.hotspotop, mongo01.ace.alarm, mongo01.ace.heatmap, mongo01.ace.map, mongo01.ace.dpigroup, mongo01.ace.setting, mongo01.ace.usergroup, mongo01.ace.verification, mongo01.ace.payment, mongo01.ace.heatmappoint, mongo01.ace.scheduletask, mongo01.ace.guest, mongo01.ace.admin, mongo01.ace.radiusprofile, mongo01.ace.portalfile, mongo01.ace.mediafile, mongo01.ace.device, mongo01.ace.firewallgroup, mongo01.ace.site, mongo01.ace.task, mongo01.ace.dynamicdns, mongo01.ace.portconf, mongo01.ace.wlanconf, mongo01.ace.rogue, mongo01.ace.routing, mongo01.ace.firewallrule, mongo01.ace.event, mongo01.ace.hotspot2conf, mongo01.ace.broadcastgroup, mongo01.ace.portforward, mongo01.ace.privilege, mongo01.ace.account, mongo01.ace.user (io.debezium.connector.mongodb.Replicator:276)
+[2018-03-07 13:33:35,326] INFO Creating thread debezium-mongodbconnector-ubnt-copy-mongo01-0 (io.debezium.util.Threads:247)
+[2018-03-07 13:33:35,327] INFO Starting initial sync of 'mongo01.ace.wlangroup' (io.debezium.connector.mongodb.Replicator:286)
+</code></pre>
+
+<p>Check topics:</p>
+
+<pre><code>rmoff@proxmox01 ~/connect-jars&gt; kafka-topics --zookeeper localhost:2181 --list
+ubnt.ace.admin
+ubnt.ace.alarm
+ubnt.ace.broadcastgroup
+ubnt.ace.device
+ubnt.ace.dpigroup
+ubnt.ace.event
+ubnt.ace.guest
+ubnt.ace.map
+ubnt.ace.networkconf
+ubnt.ace.portconf
+ubnt.ace.portforward
+ubnt.ace.privilege
+ubnt.ace.rogue
+ubnt.ace.scheduletask
+ubnt.ace.setting
+ubnt.ace.site
+ubnt.ace.user
+ubnt.ace.usergroup
+ubnt.ace.wlanconf
+ubnt.ace.wlangroup
+</code></pre>
+
+<p>Check data</p>
+
+<pre><code class="language-$">{
+  &quot;after&quot;: {\&quot;_id\&quot; : {\&quot;$oid\&quot; : \&quot;58385328e4b001431e4e497a\&quot;},\&quot;adopted\&quot; : true,\&quot;board_rev\&quot; : 18,\&quot;cfgversion\&quot; : \&quot;xxxxxxxxxxxxx\&quot;,\&quot;config_network\&quot; : {\&quot;ip\&quot; : \&quot;192.168.10.12\&quot;,\&quot;type\&quot; : \&quot;dhcp\&quot;},\&quot;ethernet_table\&quot; : [{\&quot;mac\&quot; : \&quot;xx:xx:xx:xx:xx:xx\&quot;,\&quot;num_port\&quot; : 1,\&quot;name\&quot; : \&quot;eth0\&quot;}],\&quot;fw_caps\&quot; : 75,\&quot;has_eth1\&quot; : false,\&quot;has_speaker\&quot; : false,\&quot;inform_ip\&quot; : \&quot;192.168.10.172\&quot;,\&quot;inform_url\&quot; : \&quot;http://192.168.10.172:8080/inform\&quot;,\&quot;ip\&quot; : \&quot;192.168.10.68\&quot;,\&quot;led_override\&quot; : \&quot;on\&quot;,\&quot;mac\&quot; : \&quot;xx:xx:xx:xx:xx:xx\&quot;,\&quot;model\&quot; : \&quot;BZ2\&quot;,\&quot;name\&quot; : \&quot;Unifi AP - Study\&quot;,\&quot;port_table\&quot; : [],\&quot;radio_table\&quot; : [{\&quot;radio\&quot; : \&quot;ng\&quot;,\&quot;min_txpower\&quot; : 5,\&quot;max_txpower\&quot; : 23,\&quot;builtin_antenna\&quot; : true,\&quot;builtin_ant_gain\&quot; : 0,\&quot;nss\&quot; : 2,\&quot;name\&quot; : \&quot;wifi0\&quot;}],\&quot;serial\&quot; : \&quot;xxx\&quot;,\&quot;site_id\&quot; : \&quot;xxx\&quot;,\&quot;type\&quot; : \&quot;uap\&quot;,\&quot;version\&quot; : \&quot;3.7.40.6115\&quot;,\&quot;vwire_table\&quot; : [],\&quot;wifi_caps\&quot; : 117,\&quot;wlangroup_id_ng\&quot; : \&quot;xx\&quot;,\&quot;x_authkey\&quot; : \&quot;xx\&quot;,\&quot;x_fingerprint\&quot; : \&quot;xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:3e:39:08:45\&quot;,\&quot;x_ssh_hostkey\&quot; : \&quot;xx/xx=\&quot;,\&quot;x_ssh_hostkey_fingerprint\&quot; : \&quot;xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx\&quot;,\&quot;x_vwirekey\&quot; : \&quot;xx\&quot;,\&quot;map_id\&quot; : \&quot;xx\&quot;,\&quot;x\&quot; : 880.3939455186993,\&quot;y\&quot; : 966.2397514041841,\&quot;locked\&quot; : true,\&quot;wlan_overrides\&quot; : []}&quot;
+  },
+  &quot;patch&quot;: null,
+  &quot;source&quot;: {
+    &quot;version&quot;: {
+      &quot;string&quot;: &quot;0.7.4&quot;
+    },
+    &quot;name&quot;: &quot;ubnt&quot;,
+    &quot;rs&quot;: &quot;mongo01&quot;,
+    &quot;ns&quot;: &quot;ace.device&quot;,
+</code></pre>
+
+<p>Note that the MongoDB document is not as fields in the Kafka message, but instead everything is in the payload as a <code>string</code> field as escaped JSON.</p>
+
+<p>Debezium does provide a <a href="http://debezium.io/docs/configuration/mongodb-event-flattening/">Single Message Transform (SMT) to flatten the MongoDB record</a> out like this, but in using it I hit a bug (<a href="https://issues.jboss.org/browse/DBZ-649">DBZ-649</a>) that seems to be down to the MongoDB collection documents having different fields between documents. The reported error was <code>org.apache.kafka.connect.errors.DataException: &lt;field&gt; is not a valid field name</code>.</p>
+
+<p>However, using KSQL&rsquo;s <code>EXTRACTJSONFIELD</code> you can still work with the data as-is:</p>
+
+<pre><code class="language-sql">ksql&gt; CREATE STREAM DEVICE (after VARCHAR) WITH (KAFKA_TOPIC='ubnt.ace.device-07',VALUE_FORMAT='JSON');
+ksql&gt; select EXTRACTJSONFIELD(after,'$.name'),EXTRACTJSONFIELD(after,'$.ip') from device;
+Unifi AP - Study | 192.168.10.68
+Unifi AP - Attic | 192.168.10.67
+ubnt.moffatt.me | 77.102.5.159
+Unifi AP - Pantry | 192.168.10.71
+</code></pre>
+</article>
+    <footer class="post-footer">
+      
+      <ul class="post-tags">
+        
+          <li><a href="/tags/mongodb"><span class="tag">Mongodb</span></a></li>
+        
+          <li><a href="/tags/debezium"><span class="tag">Debezium</span></a></li>
+        
+          <li><a href="/tags/kafka-connect"><span class="tag">Kafka Connect</span></a></li>
+        
+          <li><a href="/tags/apache-kafka"><span class="tag">Apache Kafka</span></a></li>
+        
+          <li><a href="/tags/replica-set"><span class="tag">Replica Set</span></a></li>
+        
+      </ul>
+      
+      <p class="post-copyright">
+        This post was published <strong>263</strong> days ago, content in the post may be inaccurate, even wrong now, please take risk yourself.
+      </p>
+    </footer>
+    
+      <div id="disqus_thread"></div>
+<script type="application/javascript">
+    var disqus_config = function () {
+    
+    
+    
+    };
+    (function() {
+        if (["localhost", "127.0.0.1"].indexOf(window.location.hostname) != -1) {
+            document.getElementById('disqus_thread').innerHTML = 'Disqus comments not available by default when the website is previewed locally.';
+            return;
+        }
+        var d = document, s = d.createElement('script'); s.async = true;
+        s.src = '//' + "rmoff" + '.disqus.com/embed.js';
+        s.setAttribute('data-timestamp', +new Date());
+        (d.head || d.body).appendChild(s);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="https://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+      
+    
+  </section>
+  
+
+
+<footer class="site-footer">
+  <p>© 2017-2018 rmoff.net</p>
+  <p>Powered by <a href="https://gohugo.io/" target="_blank">Hugo</a> with theme <a href="https://github.com/laozhu/hugo-nuo" target="_blank">Nuo</a>.</p>
+  
+</footer>
+
+
+
+<script async src="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video.min.js"></script>
+
+
+
+
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [['$','$'], ['\\(','\\)']],
+      displayMath: [['$$','$$'], ['\\[','\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+      TeX: { equationNumbers: { autoNumber: "AMS" },
+      extensions: ["AMSmath.js", "AMSsymbols.js"] }
+    },
+  });
+</script>
+<script type="text/x-mathjax-config">
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  MathJax.Hub.Queue(() => {
+    MathJax.Hub.getAllJax().map(v => v.SourceElement().parentNode.className += ' has-jax');
+  });
+</script>
+
+
+
+<script src="/scripts/index.min.js"></script>
+
+
+
+
+
+
+
+
+  </body>
+</html>

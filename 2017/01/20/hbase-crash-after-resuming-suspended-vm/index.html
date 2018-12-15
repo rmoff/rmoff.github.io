@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+
+  <meta charset="utf-8" />
+
+  
+  <title>HBase crash after resuming suspended VM</title>
+
+  
+  
+  <link href="//cdn.jsdelivr.net" rel="dns-prefetch">
+  <link href="//cdnjs.cloudflare.com" rel="dns-prefetch">
+  <link href="//at.alicdn.com" rel="dns-prefetch">
+  <link href="//fonts.googleapis.com" rel="dns-prefetch">
+  <link href="//fonts.gstatic.com" rel="dns-prefetch">
+  <link href="///disqus.com" rel="dns-prefetch">
+  <link href="//c.disquscdn.com" rel="dns-prefetch">
+  
+  
+  
+
+  
+
+  
+  <meta name="author" content="Robin Moffatt">
+  <meta name="description" content="I use BigDataLite for a lot of my sandboxing work. This is a OVA provided by Oracle which can be run on VirtualBox, VMWare, etc and has the Cloudera Hadoop platform (CDH) along with all of Oracle&amp;rsquo;s Big Data goodies including Big Data Discovery and Big Data Spatial and Graph (BDSG).
+Something that kept tripping me up during my work with BDSG was that HBase would become unavailable. Not being an HBase expert and simply using it as a data store for my property graph data, I wrote it off as mistakes on my part.">
+
+  
+  
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@gohugoio">
+    <meta name="twitter:title" content="HBase crash after resuming suspended VM">
+    <meta name="twitter:description" content="I use BigDataLite for a lot of my sandboxing work. This is a OVA provided by Oracle which can be run on VirtualBox, VMWare, etc and has the Cloudera Hadoop platform (CDH) along with all of Oracle&amp;rsquo;s Big Data goodies including Big Data Discovery and Big Data Spatial and Graph (BDSG).
+Something that kept tripping me up during my work with BDSG was that HBase would become unavailable. Not being an HBase expert and simply using it as a data store for my property graph data, I wrote it off as mistakes on my part.">
+    <meta name="twitter:image" content="/images/avatar.jpg">
+  
+
+  
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="HBase crash after resuming suspended VM">
+  <meta property="og:description" content="I use BigDataLite for a lot of my sandboxing work. This is a OVA provided by Oracle which can be run on VirtualBox, VMWare, etc and has the Cloudera Hadoop platform (CDH) along with all of Oracle&amp;rsquo;s Big Data goodies including Big Data Discovery and Big Data Spatial and Graph (BDSG).
+Something that kept tripping me up during my work with BDSG was that HBase would become unavailable. Not being an HBase expert and simply using it as a data store for my property graph data, I wrote it off as mistakes on my part.">
+  <meta property="og:url" content="https://rmoff.github.io/2017/01/20/hbase-crash-after-resuming-suspended-vm/">
+  <meta property="og:image" content="/images/avatar.jpg">
+
+
+
+
+<meta name="generator" content="Hugo 0.52">
+
+
+<link rel="canonical" href="https://rmoff.github.io/2017/01/20/hbase-crash-after-resuming-suspended-vm/">
+
+<meta name="renderer" content="webkit">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="format-detection" content="telephone=no,email=no,adress=no">
+<meta http-equiv="Cache-Control" content="no-transform">
+
+
+<meta name="robots" content="index,follow">
+<meta name="referrer" content="origin-when-cross-origin">
+
+
+
+
+
+
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="rmoff.net">
+<meta name="msapplication-tooltip" content="rmoff.net">
+<meta name='msapplication-navbutton-color' content="#5fbf5e">
+<meta name="msapplication-TileColor" content="#5fbf5e">
+<meta name="msapplication-TileImage" content="/images/tile-image-windows.png">
+<link rel="icon" href="/images/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+<link rel="icon" sizes="192x192" href="/images/touch-icon-android.png">
+<link rel="apple-touch-icon" href="/images/touch-icon-apple.png">
+
+
+<link rel="preload" href="/styles/main.min.css" as="style">
+<link rel="preload" href="https://fonts.googleapis.com/css?family=Lobster" as="style">
+<link rel="preload" href="/images/avatar.jpg" as="image">
+<link rel="preload" href="/images/grey-prism.svg" as="image">
+
+
+<style>
+  body {
+    background: rgb(244, 243, 241) url('/images/grey-prism.svg') repeat fixed;
+  }
+</style>
+<link rel="stylesheet" href="/styles/main.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lobster">
+
+
+<script src="https://cdn.jsdelivr.net/npm/medium-zoom@1.0.2/dist/medium-zoom.min.js"></script>
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video-js.min.css">
+
+
+
+  
+  
+<!--[if lte IE 8]>
+  <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/videojs-ie8@1.1.2/dist/videojs-ie8.min.js"></script>
+<![endif]-->
+
+<!--[if lte IE 9]>
+  <script src="https://cdn.jsdelivr.net/npm/eligrey-classlist-js-polyfill@1.2.20180112/classList.min.js"></script>
+<![endif]-->
+
+
+<script src="https://cdn.jsdelivr.net/npm/smooth-scroll@14.2.1/dist/smooth-scroll.polyfills.min.js"></script>
+
+
+</head>
+  <body>
+    
+    <div class="suspension">
+      <a title="Go to top" class="to-top is-hide"><span class="icon icon-up"></span></a>
+      
+        
+        <a title="Go to comments" class="to-comment" href="#disqus_thread"><span class="icon icon-comment"></span></a>
+        
+      
+    </div>
+    
+    
+  <header class="site-header">
+  <img class="avatar" src="/images/avatar.jpg" alt="Avatar">
+  
+  <h2 class="title">rmoff.net</h2>
+  
+  <p class="subtitle"></p>
+  <button class="menu-toggle" type="button">
+    <span class="icon icon-menu"></span>
+  </button>
+  <nav class="site-menu collapsed">
+    <h2 class="offscreen">Main Menu</h2>
+    <ul class="menu-list">
+      
+      
+      
+      
+        <li class="menu-item
+            
+            
+            ">
+            <a href="/about-me/">about me</a>
+          </li>
+      
+        <li class="menu-item
+            
+            
+            ">
+            <a href="/presentations/">presentations</a>
+          </li>
+      
+    </ul>
+  </nav>
+  <nav class="social-menu collapsed">
+    <h2 class="offscreen">Social Networks</h2>
+    <ul class="social-list"></ul>
+  </nav>
+</header>
+
+  <section class="main post-detail">
+    <header class="post-header">
+      <h1 class="post-title">HBase crash after resuming suspended VM</h1>
+      <p class="post-meta">@Robin Moffatt · Jan 20, 2017 · 3 min read</p>
+    </header>
+    <article class="post-content"><p>I use <a href="http://www.oracle.com/technetwork/database/bigdata-appliance/oracle-bigdatalite-2104726.html">BigDataLite</a> for a lot of my sandboxing work. This is a <code>OVA</code> provided by Oracle which can be run on VirtualBox, VMWare, etc and has the Cloudera Hadoop platform (CDH) along with all of Oracle&rsquo;s Big Data goodies including Big Data Discovery and Big Data Spatial and Graph (BDSG).</p>
+
+<p>Something that kept tripping me up during my work with BDSG was that HBase would become unavailable. Not being an HBase expert and simply using it as a data store for my property graph data, I wrote it off as mistakes on my part. But, the issue kept reoccuring enough for me to dig into it.</p>
+
+<pre><code class="language-bash">[oracle@bigdatalite ~]$ sudo service hbase-master status;sudo service hbase-regionserver status;sudo service hbase-thrift status;sudo service zookeeper-server status
+HBase master daemon is not running                         [FAILED]
+hbase-regionserver is not running.
+HBase thrift daemon is running                             [  OK  ]
+zookeeper-server is running
+</code></pre>
+
+<p>Turns out that HBase throws its toys out when I suspend the VM. I don&rsquo;t know if it&rsquo;s the clock jumping too much, or simply a session expiring and it not exiting gracefully. I don&rsquo;t know if this is a VirtualBox fault, host machine (Mac), Hbase, or even Zookeeper; nor do I especially care now that I&rsquo;ve found the cause and know to look for it whilst doing sandbox work ;-)</p>
+
+<p>This is the log from the HBase master:</p>
+
+<pre><code>2017-01-20 09:19:05,430 ERROR [master/bigdatalite.localdomain/127.0.0.1:60000] zookeeper.ZooKeeperWatcher: master:60000-0x159b8f3800e0014, quorum=localhost:2181, baseZNode=/hbase Received unexpected KeeperException, re-throwing exception
+org.apache.zookeeper.KeeperException$SessionExpiredException: KeeperErrorCode = Session expired for /hbase/master
+        at org.apache.zookeeper.KeeperException.create(KeeperException.java:127)
+        at org.apache.zookeeper.KeeperException.create(KeeperException.java:51)
+        at org.apache.zookeeper.ZooKeeper.getData(ZooKeeper.java:1151)
+        at org.apache.hadoop.hbase.zookeeper.RecoverableZooKeeper.getData(RecoverableZooKeeper.java:359)
+        at org.apache.hadoop.hbase.zookeeper.ZKUtil.getData(ZKUtil.java:623)
+        at org.apache.hadoop.hbase.zookeeper.MasterAddressTracker.getMasterAddress(MasterAddressTracker.java:148)
+        at org.apache.hadoop.hbase.master.ActiveMasterManager.stop(ActiveMasterManager.java:267)
+        at org.apache.hadoop.hbase.master.HMaster.stopServiceThreads(HMaster.java:1150)
+        at org.apache.hadoop.hbase.regionserver.HRegionServer.run(HRegionServer.java:1092)
+        at java.lang.Thread.run(Thread.java:745)
+2017-01-20 09:19:05,431 ERROR [master/bigdatalite.localdomain/127.0.0.1:60000] master.ActiveMasterManager: master:60000-0x159b8f3800e0014, quorum=localhost:2181, baseZNode=/hbase Error deleting our own master address node
+org.apache.zookeeper.KeeperException$SessionExpiredException: KeeperErrorCode = Session expired for /hbase/master
+        at org.apache.zookeeper.KeeperException.create(KeeperException.java:127)
+        at org.apache.zookeeper.KeeperException.create(KeeperException.java:51)
+        at org.apache.zookeeper.ZooKeeper.getData(ZooKeeper.java:1151)
+        at org.apache.hadoop.hbase.zookeeper.RecoverableZooKeeper.getData(RecoverableZooKeeper.java:359)
+        at org.apache.hadoop.hbase.zookeeper.ZKUtil.getData(ZKUtil.java:623)
+        at org.apache.hadoop.hbase.zookeeper.MasterAddressTracker.getMasterAddress(MasterAddressTracker.java:148)
+        at org.apache.hadoop.hbase.master.ActiveMasterManager.stop(ActiveMasterManager.java:267)
+        at org.apache.hadoop.hbase.master.HMaster.stopServiceThreads(HMaster.java:1150)
+        at org.apache.hadoop.hbase.regionserver.HRegionServer.run(HRegionServer.java:1092)
+        at java.lang.Thread.run(Thread.java:745)
+2017-01-20 09:19:05,432 INFO  [master/bigdatalite.localdomain/127.0.0.1:60000] hbase.ChoreService: Chore service for: bigdatalite.localdomain,60000,1484898484413_splitLogManager_ had [] on shutdown
+2017-01-20 09:19:05,432 INFO  [master/bigdatalite.localdomain/127.0.0.1:60000] flush.MasterFlushTableProcedureManager: stop: server shutting down.
+2017-01-20 09:19:05,432 INFO  [master/bigdatalite.localdomain/127.0.0.1:60000] ipc.RpcServer: Stopping server on 60000
+2017-01-20 09:19:05,434 INFO  [RpcServer.listener,port=60000] ipc.RpcServer: RpcServer.listener,port=60000: stopping
+2017-01-20 09:19:05,440 INFO  [RpcServer.responder] ipc.RpcServer: RpcServer.responder: stopped
+2017-01-20 09:19:05,440 INFO  [RpcServer.responder] ipc.RpcServer: RpcServer.responder: stopping
+2017-01-20 09:19:20,449 ERROR [master/bigdatalite.localdomain/127.0.0.1:60000] zookeeper.RecoverableZooKeeper: ZooKeeper delete failed after 4 attempts
+2017-01-20 09:19:20,449 WARN  [master/bigdatalite.localdomain/127.0.0.1:60000] regionserver.HRegionServer: Failed deleting my ephemeral node
+org.apache.zookeeper.KeeperException$SessionExpiredException: KeeperErrorCode = Session expired for /hbase/rs/bigdatalite.localdomain,60000,1484898484413
+        at org.apache.zookeeper.KeeperException.create(KeeperException.java:127)
+        at org.apache.zookeeper.KeeperException.create(KeeperException.java:51)
+        at org.apache.zookeeper.ZooKeeper.delete(ZooKeeper.java:873)
+        at org.apache.hadoop.hbase.zookeeper.RecoverableZooKeeper.delete(RecoverableZooKeeper.java:178)
+        at org.apache.hadoop.hbase.zookeeper.ZKUtil.deleteNode(ZKUtil.java:1236)
+        at org.apache.hadoop.hbase.zookeeper.ZKUtil.deleteNode(ZKUtil.java:1225)
+        at org.apache.hadoop.hbase.regionserver.HRegionServer.deleteMyEphemeralNode(HRegionServer.java:1431)
+        at org.apache.hadoop.hbase.regionserver.HRegionServer.run(HRegionServer.java:1100)
+        at java.lang.Thread.run(Thread.java:745)
+2017-01-20 09:19:20,511 INFO  [master/bigdatalite.localdomain/127.0.0.1:60000] regionserver.HRegionServer: stopping server bigdatalite.localdomain,60000,1484898484413; zookeeper connection closed.
+2017-01-20 09:19:20,511 INFO  [master/bigdatalite.localdomain/127.0.0.1:60000] regionserver.HRegionServer: master/bigdatalite.localdomain/127.0.0.1:60000 exiting
+</code></pre>
+
+<p>The solution, crude as it is, is just to turn it off and on again - HBase, that is:</p>
+
+<pre><code>sudo service hbase-master restart;sudo service hbase-regionserver restart;sudo service hbase-thrift restart
+</code></pre>
+
+<p>Happy days.</p>
+
+<p>And if anyone can tell me the proper resolution to this (other than not suspending my VM), I&rsquo;m all ears!</p>
+</article>
+    <footer class="post-footer">
+      
+      <ul class="post-tags">
+        
+          <li><a href="/tags/hbase"><span class="tag">Hbase</span></a></li>
+        
+          <li><a href="/tags/bigdatalite"><span class="tag">Bigdatalite</span></a></li>
+        
+          <li><a href="/tags/virtualbox"><span class="tag">Virtualbox</span></a></li>
+        
+          <li><a href="/tags/ova"><span class="tag">Ova</span></a></li>
+        
+      </ul>
+      
+      <p class="post-copyright">
+        This post was published <strong>694</strong> days ago, content in the post may be inaccurate, even wrong now, please take risk yourself.
+      </p>
+    </footer>
+    
+      <div id="disqus_thread"></div>
+<script type="application/javascript">
+    var disqus_config = function () {
+    
+    
+    
+    };
+    (function() {
+        if (["localhost", "127.0.0.1"].indexOf(window.location.hostname) != -1) {
+            document.getElementById('disqus_thread').innerHTML = 'Disqus comments not available by default when the website is previewed locally.';
+            return;
+        }
+        var d = document, s = d.createElement('script'); s.async = true;
+        s.src = '//' + "rmoff" + '.disqus.com/embed.js';
+        s.setAttribute('data-timestamp', +new Date());
+        (d.head || d.body).appendChild(s);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="https://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+      
+    
+  </section>
+  
+
+
+<footer class="site-footer">
+  <p>© 2017-2018 rmoff.net</p>
+  <p>Powered by <a href="https://gohugo.io/" target="_blank">Hugo</a> with theme <a href="https://github.com/laozhu/hugo-nuo" target="_blank">Nuo</a>.</p>
+  
+</footer>
+
+
+
+<script async src="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video.min.js"></script>
+
+
+
+
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [['$','$'], ['\\(','\\)']],
+      displayMath: [['$$','$$'], ['\\[','\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+      TeX: { equationNumbers: { autoNumber: "AMS" },
+      extensions: ["AMSmath.js", "AMSsymbols.js"] }
+    },
+  });
+</script>
+<script type="text/x-mathjax-config">
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  MathJax.Hub.Queue(() => {
+    MathJax.Hub.getAllJax().map(v => v.SourceElement().parentNode.className += ' has-jax');
+  });
+</script>
+
+
+
+<script src="/scripts/index.min.js"></script>
+
+
+
+
+
+
+
+
+  </body>
+</html>

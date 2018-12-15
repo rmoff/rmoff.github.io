@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+
+  <meta charset="utf-8" />
+
+  
+  <title>Decoupling the Data Pipeline with Kafka - A (Very) Simple Real Life Example</title>
+
+  
+  
+  <link href="//cdn.jsdelivr.net" rel="dns-prefetch">
+  <link href="//cdnjs.cloudflare.com" rel="dns-prefetch">
+  <link href="//at.alicdn.com" rel="dns-prefetch">
+  <link href="//fonts.googleapis.com" rel="dns-prefetch">
+  <link href="//fonts.gstatic.com" rel="dns-prefetch">
+  <link href="///disqus.com" rel="dns-prefetch">
+  <link href="//c.disquscdn.com" rel="dns-prefetch">
+  
+  
+  
+
+  
+
+  
+  <meta name="author" content="Robin Moffatt">
+  <meta name="description" content="I&amp;rsquo;ve recently been playing around with the ELK stack (now officially known as the Elastic stack) collecting data from an IRC channel with Elastic&amp;rsquo;s Logstash, storing it in Elasticsearch and analysing it with Kibana. But, this isn&amp;rsquo;t an &amp;ldquo;ELK&amp;rdquo; post - this is a Kafka post! ELK is just some example data manipulation tooling that helps demonstrate the principles.
+As I wrote about last year, Apache Kafka provides a handy way to build flexible &amp;ldquo;pipelines&amp;rdquo;.">
+
+  
+  
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@gohugoio">
+    <meta name="twitter:title" content="Decoupling the Data Pipeline with Kafka - A (Very) Simple Real Life Example">
+    <meta name="twitter:description" content="I&amp;rsquo;ve recently been playing around with the ELK stack (now officially known as the Elastic stack) collecting data from an IRC channel with Elastic&amp;rsquo;s Logstash, storing it in Elasticsearch and analysing it with Kibana. But, this isn&amp;rsquo;t an &amp;ldquo;ELK&amp;rdquo; post - this is a Kafka post! ELK is just some example data manipulation tooling that helps demonstrate the principles.
+As I wrote about last year, Apache Kafka provides a handy way to build flexible &amp;ldquo;pipelines&amp;rdquo;.">
+    <meta name="twitter:image" content="/images/avatar.jpg">
+  
+
+  
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Decoupling the Data Pipeline with Kafka - A (Very) Simple Real Life Example">
+  <meta property="og:description" content="I&amp;rsquo;ve recently been playing around with the ELK stack (now officially known as the Elastic stack) collecting data from an IRC channel with Elastic&amp;rsquo;s Logstash, storing it in Elasticsearch and analysing it with Kibana. But, this isn&amp;rsquo;t an &amp;ldquo;ELK&amp;rdquo; post - this is a Kafka post! ELK is just some example data manipulation tooling that helps demonstrate the principles.
+As I wrote about last year, Apache Kafka provides a handy way to build flexible &amp;ldquo;pipelines&amp;rdquo;.">
+  <meta property="og:url" content="https://rmoff.github.io/2016/04/12/decoupling-the-data-pipeline-with-kafka-a-very-simple-real-life-example/">
+  <meta property="og:image" content="/images/avatar.jpg">
+
+
+
+
+<meta name="generator" content="Hugo 0.52">
+
+
+<link rel="canonical" href="https://rmoff.github.io/2016/04/12/decoupling-the-data-pipeline-with-kafka-a-very-simple-real-life-example/">
+
+<meta name="renderer" content="webkit">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="format-detection" content="telephone=no,email=no,adress=no">
+<meta http-equiv="Cache-Control" content="no-transform">
+
+
+<meta name="robots" content="index,follow">
+<meta name="referrer" content="origin-when-cross-origin">
+
+
+
+
+
+
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="rmoff.net">
+<meta name="msapplication-tooltip" content="rmoff.net">
+<meta name='msapplication-navbutton-color' content="#5fbf5e">
+<meta name="msapplication-TileColor" content="#5fbf5e">
+<meta name="msapplication-TileImage" content="/images/tile-image-windows.png">
+<link rel="icon" href="/images/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+<link rel="icon" sizes="192x192" href="/images/touch-icon-android.png">
+<link rel="apple-touch-icon" href="/images/touch-icon-apple.png">
+
+
+<link rel="preload" href="/styles/main.min.css" as="style">
+<link rel="preload" href="https://fonts.googleapis.com/css?family=Lobster" as="style">
+<link rel="preload" href="/images/avatar.jpg" as="image">
+<link rel="preload" href="/images/grey-prism.svg" as="image">
+
+
+<style>
+  body {
+    background: rgb(244, 243, 241) url('/images/grey-prism.svg') repeat fixed;
+  }
+</style>
+<link rel="stylesheet" href="/styles/main.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lobster">
+
+
+<script src="https://cdn.jsdelivr.net/npm/medium-zoom@1.0.2/dist/medium-zoom.min.js"></script>
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video-js.min.css">
+
+
+
+  
+  
+<!--[if lte IE 8]>
+  <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/videojs-ie8@1.1.2/dist/videojs-ie8.min.js"></script>
+<![endif]-->
+
+<!--[if lte IE 9]>
+  <script src="https://cdn.jsdelivr.net/npm/eligrey-classlist-js-polyfill@1.2.20180112/classList.min.js"></script>
+<![endif]-->
+
+
+<script src="https://cdn.jsdelivr.net/npm/smooth-scroll@14.2.1/dist/smooth-scroll.polyfills.min.js"></script>
+
+
+</head>
+  <body>
+    
+    <div class="suspension">
+      <a title="Go to top" class="to-top is-hide"><span class="icon icon-up"></span></a>
+      
+        
+        <a title="Go to comments" class="to-comment" href="#disqus_thread"><span class="icon icon-comment"></span></a>
+        
+      
+    </div>
+    
+    
+  <header class="site-header">
+  <img class="avatar" src="/images/avatar.jpg" alt="Avatar">
+  
+  <h2 class="title">rmoff.net</h2>
+  
+  <p class="subtitle"></p>
+  <button class="menu-toggle" type="button">
+    <span class="icon icon-menu"></span>
+  </button>
+  <nav class="site-menu collapsed">
+    <h2 class="offscreen">Main Menu</h2>
+    <ul class="menu-list">
+      
+      
+      
+      
+        <li class="menu-item
+            
+            
+            ">
+            <a href="/about-me/">about me</a>
+          </li>
+      
+        <li class="menu-item
+            
+            
+            ">
+            <a href="/presentations/">presentations</a>
+          </li>
+      
+    </ul>
+  </nav>
+  <nav class="social-menu collapsed">
+    <h2 class="offscreen">Social Networks</h2>
+    <ul class="social-list"></ul>
+  </nav>
+</header>
+
+  <section class="main post-detail">
+    <header class="post-header">
+      <h1 class="post-title">Decoupling the Data Pipeline with Kafka - A (Very) Simple Real Life Example</h1>
+      <p class="post-meta">@Robin Moffatt · Apr 12, 2016 · 7 min read</p>
+    </header>
+    <article class="post-content">
+
+<p>I&rsquo;ve recently been playing around with the ELK stack (<a href="https://www.elastic.co/blog/heya-elastic-stack-and-x-pack">now officially known as the Elastic stack</a>) collecting data from <a href="http://rmoff.net/2016/03/03/obihackers-irc-channel/">an IRC channel</a> with Elastic&rsquo;s Logstash, storing it in Elasticsearch and <a href="http://rmoff.net/2016/03/24/my-latest-irc-client-kibana/">analysing it with Kibana</a>. But, this isn&rsquo;t an &ldquo;ELK&rdquo; post - this is a Kafka post! ELK is just some example data manipulation tooling that helps demonstrate the principles.</p>
+
+<p>As I <a href="http://www.rittmanmead.com/2015/10/forays-into-kafka-enabling-flexible-data-pipelines/">wrote about last year</a>, Apache Kafka provides a handy way to build flexible &ldquo;pipelines&rdquo;. Today I&rsquo;m writing up a short real-world example of this in practice. There are three elements to the flexibility that I really want to highlight:</p>
+
+<ol>
+<li>Decoupling the consumption of data from its production at the previous stage</li>
+<li>Because the consumer is decoupled, being able to stop and start it and have it continue ingesting data from the point at which it previously stopped</li>
+<li>The ability to replay the ingest phase of a pipeline repeatedly into multiple consumers, with no change required to the configuration from source</li>
+</ol>
+
+<p>The simplest form of the pipeline I was using looks like this:</p>
+
+<p><img src="/content/images/2016/04/kd01.png" alt="" /></p>
+
+<p>A logstash configuration (<a href="https://gist.github.com/rmoff/862d0ceea223aa7283244b1b27594941#file-01-logstash-irc-conf"><code>logstash-irc.conf</code></a>) gets Logstash to connect to the IRC server and send messages received to Elasticsearch. From here they can be displayed and analysed within Kibana. <a href="http://rmoff.net/2016/03/24/my-latest-irc-client-kibana/">Read more about the details here</a> if you&rsquo;re interested.</p>
+
+<p>From a &ldquo;pipeline&rdquo; point of view this is a pretty typical pattern. A tool (Logstash here, but could be ODI, Informatica, etc) runs with a set of &ldquo;code&rdquo; (a very simple <code>.conf</code> here, elsewhere it could be mappings and load plans), reading data from a source. Obviously in full-blown system there&rsquo;s a dozen more moving parts than this simple example, but the point stands.</p>
+
+<p>Let&rsquo;s think a bit more about what a pipeline does, as this will give us the basis for understanding why and how Kafka fits in so nicely. Overlaying some labels onto the above diagram shows all the processing that we&rsquo;re doing:</p>
+
+<p><img src="/content/images/2016/04/kd01a-1.png" alt="" /></p>
+
+<p>If any of this needs reconfiguring, restarting, or rerunning, it&rsquo;s an all-or-nothing job. Given that we&rsquo;re streaming data in near-real-time (or conceptually, designing something that <em>could</em> if needed with minimal-to-no rework), shutting down the pipeline just to change one of these bits is a problem because we&rsquo;ll lose the data that the source system is spitting out whether we&rsquo;re there to gather it or not.</p>
+
+<p>Why would we need to change the pipeline configuration? Consider:</p>
+
+<ul>
+<li>Reconfiguring - Adding in additional enrichment functionality (eg GeoIP lookup), or filtering out duff records, or fixing a bug in the logic, or a dozen other easy examples - in all these cases it&rsquo;s great if we can reprocess the existing backlog of processed data and then continue processing data as it&rsquo;s available from the source system.</li>
+<li>Restarting - if the load fails, ideally we don&rsquo;t want to be hitting the source system again for our data if we&rsquo;ve extracted it once already. Similarly if the load process needs to be stopped, maybe for maintenance of the target load system, it&rsquo;s useful to be able to restart the processing exactly from where it left off.</li>
+</ul>
+
+<p>So I decoupled the source extract from any subsequent processing with a very simple Logstash configuration (<a href="https://gist.github.com/rmoff/862d0ceea223aa7283244b1b27594941#file-02-logstash-irc-kafka-conf"><code>logstash-irc-kafka.conf</code></a>) that pulls the data from IRC as before and <strong>just</strong> sends it straight to Kafka:</p>
+
+<p><img src="/content/images/2016/04/kd02a.png" alt="" /></p>
+
+<p>The data lands in Kafka, which becomes our &lsquo;staging&rsquo; area in effect, taking advantage of Kafka&rsquo;s &ldquo;durable buffer&rdquo; concept. The data extracted is ideally as raw as possible - because we don&rsquo;t know what subsequent processing we want to do with it, maybe now, or at some future date. Kafka can be configured to retain data based on age or volume - since the data I was working with was low volume I set the topic to retain it for 90 days:</p>
+
+<pre><code>./kafka-topics.sh --zookeeper localhost:2181 --topic irc --alter --config retention.ms=7776000000
+</code></pre>
+
+<p>With the data streaming into Kafka and building up there we can then set up one or more consumers of that data. <em>Note that I&rsquo;m using consumers in the logical sense, not the Kafka &ldquo;Consumer&rdquo; specific terminology</em>. My consumer here is Logstash using <a href="https://gist.github.com/rmoff/862d0ceea223aa7283244b1b27594941#file-03-logstash-kafka-es-conf"><code>logstash-kafka-es.conf</code></a>, which is a variant of the original configuration, this time pulling from Kafka instead of the live IRC feed. And since Kafka is so low-latency, a side-benefit of this setup is that I can both catch up on and replay past records, as well as stream live ones in near-real-time. Result!</p>
+
+<p><img src="/content/images/2016/04/kd03a.png" alt="" /></p>
+
+<p>At this point I&rsquo;m <a href="http://rmoff.net/2016/03/24/my-latest-irc-client-kibana/">where I was before</a>; streaming IRC content in near-real-time to Elasticsearch and analysing it with Kibana. The only difference is that I&rsquo;ve added in Kafka as a buffer, decoupling the reading messages from IRC with the processing and subsequent storage of them.</p>
+
+<p>Now here&rsquo;s the money shot &ndash; I can add new consumers of this data that&rsquo;s in Kafka, whenever I want, without needing to know about them at the time that I extracted the source data. I can pick up from the end of the feed, or I can reprocess the whole lot, <em>per consumer</em>. I&rsquo;ve used this in a couple of instances recently:</p>
+
+<ul>
+<li>Add and refine a GeoIP lookup step to the Logstash processing (see <a href="https://gist.github.com/rmoff/862d0ceea223aa7283244b1b27594941#file-04-logstash-kafka-es-02-conf">example config</a>), <em>without affecting the existing Logstash-&gt;Elasticsearch-&gt;Kibana flow</em></li>
+<li>Testing the <a href="https://www.elastic.co/blog/elasticsearch-5-0-0-alpha1-released">Elastic stack v5 alpha release</a> by processing the <strong>same source data again</strong> but with a different version of the downstream tools, enabling a proper like-for-like comparison of the pipeline. This is similar in concept to an idea that <a href="https://twitter.com/gwenshap">Gwen Shapira</a> wrote about <a href="http://radar.oreilly.com/2015/05/validating-data-models-with-kafka-based-pipelines.html">in an article in 2015</a>.</li>
+</ul>
+
+<p>In both of these cases <strong>the existing original consumer remains running and untouched</strong>. This kind of concurrent running is a great way to work with a single feed from the source system, keep the data pipeline running for subsequent analytics, whilst also developing and validating new functionality.</p>
+
+<p><img src="/content/images/2016/04/kd05a.png" alt="kd05a" /></p>
+
+<h2 id="consumer-groups-and-offsets">Consumer Groups and Offsets</h2>
+
+<p>One of the key concepts in all of this is that of the Kafka <strong>consumer group</strong>, which is a unique identifier for a given consumer (or group of consumers for the same logical entity if you want to parallelise the consumption). In Kafka 0.8 Zookeeper is used by default to keep track off the <strong>offset</strong> of the last record that a given consumer group received. So in my development environment I can look on my Kafka server at Zookeeper and see for each consumer group the latest offset: (<a href="https://cwiki.apache.org/confluence/display/KAFKA/System+Tools#SystemTools-ExportZookeeperOffsets">reference</a>)</p>
+
+<pre><code>$ bin/kafka-run-class.sh kafka.tools.ExportZkOffsets --zkconnect localhost:2181 --output-file &gt;(cat)
+
+/consumers/console-consumer-32467/offsets/irc/0:4145
+/consumers/kafka-ubuntu03/offsets/irc/0:1035
+/consumers/logstash/offsets/irc/0:4145
+/consumers/logstash-5-testing/offsets/irc/0:4143
+</code></pre>
+
+<p><em>A brief note on the command above - I&rsquo;m using <a href="http://tldp.org/LDP/abs/html/process-sub.html">bash process substitution</a> to send the output to stdout (via <code>cat</code>) instead of the asked-for output file.</em></p>
+
+<p>From the above output you can see that there are four consumer groups. Two are at the same offset (4145) which happens to be the latest, and therefore have consumed all the available messages. A third (<code>logstash-5-testing</code>) is almost caught up (4143, vs 4145), and the final one (<code>kafka-ubuntu03</code>) is way behind at 1035. By running the command periodically you can see if a consumer is actually reading records, or just offline (or maybe stuck).</p>
+
+<p>To see more information about a given consumer, including the lag (current vs maximum offset) use <code>ConsumerOffsetChecker</code> and specify the consumer group:</p>
+
+<pre><code>$ bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --zookeeper localhost:2181 --group logstash-5-testing
+Group           Topic                          Pid Offset          logSize         Lag             Owner
+logstash-5-testing irc                            0   4143            4148            5               none
+</code></pre>
+
+<h2 id="summary">Summary</h2>
+
+<p>Building a successful data pipeline requires that it is flexible to changing requirements, as well as unknown future ones. This is as true for little local PoCs such as this one as it is for large-scale implementations. The pipeline needs to be able to have minimal impact on source systems whilst being able to satisfy multiple destinations, some or all of which may want to batch process instead of stream the data. In addition, being able to re-stream the raw data repeatedly and on-demand into adhoc applications without affecting the primary &lsquo;productionised&rsquo; consumers is a powerful enabler of the &lsquo;data discovery lab&rsquo; concept, which I write about <a href="http://www.rittmanmead.com/2015/10/forays-into-kafka-enabling-flexible-data-pipelines/">in more detail here</a>.</p>
+
+<p>Kafka enables the above, summarised in the following benefits:</p>
+
+<ol>
+<li>Stream or batch the data from source <strong>once</strong>, consume by multiple hetrogenous applications <strong>many</strong> times.</li>
+<li>Offset tracking distinct for each consuming application</li>
+
+<li><p>Processing can be re-run, which is useful for:</p>
+
+<ul>
+<li>Development process - iterative improvements / bug fixing against the same streamed data set</li>
+<li>Production data - data discovery/advanced analytics</li>
+</ul></li>
+</ol>
+
+<p>You can read more about this in detail <a href="http://www.rittmanmead.com/2015/10/forays-into-kafka-enabling-flexible-data-pipelines/">over here</a>.</p>
+</article>
+    <footer class="post-footer">
+      
+      <ul class="post-tags">
+        
+          <li><a href="/tags/apache-kafka"><span class="tag">Apache Kafka</span></a></li>
+        
+          <li><a href="/tags/kafka"><span class="tag">Kafka</span></a></li>
+        
+          <li><a href="/tags/logstash"><span class="tag">Logstash</span></a></li>
+        
+          <li><a href="/tags/elastic"><span class="tag">Elastic</span></a></li>
+        
+          <li><a href="/tags/elasticsearch"><span class="tag">Elasticsearch</span></a></li>
+        
+          <li><a href="/tags/kibana"><span class="tag">Kibana</span></a></li>
+        
+          <li><a href="/tags/elastic-v5"><span class="tag">Elastic V5</span></a></li>
+        
+          <li><a href="/tags/zookeeper"><span class="tag">Zookeeper</span></a></li>
+        
+      </ul>
+      
+      <p class="post-copyright">
+        This post was published <strong>977</strong> days ago, content in the post may be inaccurate, even wrong now, please take risk yourself.
+      </p>
+    </footer>
+    
+      <div id="disqus_thread"></div>
+<script type="application/javascript">
+    var disqus_config = function () {
+    
+    
+    
+    };
+    (function() {
+        if (["localhost", "127.0.0.1"].indexOf(window.location.hostname) != -1) {
+            document.getElementById('disqus_thread').innerHTML = 'Disqus comments not available by default when the website is previewed locally.';
+            return;
+        }
+        var d = document, s = d.createElement('script'); s.async = true;
+        s.src = '//' + "rmoff" + '.disqus.com/embed.js';
+        s.setAttribute('data-timestamp', +new Date());
+        (d.head || d.body).appendChild(s);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="https://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+      
+    
+  </section>
+  
+
+
+<footer class="site-footer">
+  <p>© 2017-2018 rmoff.net</p>
+  <p>Powered by <a href="https://gohugo.io/" target="_blank">Hugo</a> with theme <a href="https://github.com/laozhu/hugo-nuo" target="_blank">Nuo</a>.</p>
+  
+</footer>
+
+
+
+<script async src="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video.min.js"></script>
+
+
+
+
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [['$','$'], ['\\(','\\)']],
+      displayMath: [['$$','$$'], ['\\[','\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+      TeX: { equationNumbers: { autoNumber: "AMS" },
+      extensions: ["AMSmath.js", "AMSsymbols.js"] }
+    },
+  });
+</script>
+<script type="text/x-mathjax-config">
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  MathJax.Hub.Queue(() => {
+    MathJax.Hub.getAllJax().map(v => v.SourceElement().parentNode.className += ' has-jax');
+  });
+</script>
+
+
+
+<script src="/scripts/index.min.js"></script>
+
+
+
+
+
+
+
+
+  </body>
+</html>
