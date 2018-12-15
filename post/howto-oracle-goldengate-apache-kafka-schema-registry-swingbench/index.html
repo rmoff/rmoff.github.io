@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+
+  <meta charset="utf-8" />
+
+  
+  <title>HOWTO: Oracle GoldenGate &#43; Apache Kafka &#43; Schema Registry &#43; Swingbench</title>
+
+  
+  
+  <link href="//cdn.jsdelivr.net" rel="dns-prefetch">
+  <link href="//cdnjs.cloudflare.com" rel="dns-prefetch">
+  <link href="//at.alicdn.com" rel="dns-prefetch">
+  <link href="//fonts.googleapis.com" rel="dns-prefetch">
+  <link href="//fonts.gstatic.com" rel="dns-prefetch">
+  
+  
+  
+  
+  
+
+  
+
+  
+  <meta name="author" content="Robin Moffatt">
+  <meta name="description" content="This is the detailed step-by-step if you want to recreate the process I describe in the Confluent blog here
+I used Oracle&amp;rsquo;s Oracle Developer Days VM, which comes preinstalled with Oracle 12cR2. You can see the notes on how to do this here. These notes take you through installing and configuring:
+ Swingbench, to create a sample &amp;ldquo;Order Entry&amp;rdquo; schema and simulate events on the Oracle database Oracle GoldenGate (OGG, forthwith) and Oracle GoldenGate for Big Data (OGG-BD, forthwith)  I&amp;rsquo;m using Oracle GoldenGate 12.">
+
+  
+  
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@gohugoio">
+    <meta name="twitter:title" content="HOWTO: Oracle GoldenGate &#43; Apache Kafka &#43; Schema Registry &#43; Swingbench">
+    <meta name="twitter:description" content="This is the detailed step-by-step if you want to recreate the process I describe in the Confluent blog here
+I used Oracle&amp;rsquo;s Oracle Developer Days VM, which comes preinstalled with Oracle 12cR2. You can see the notes on how to do this here. These notes take you through installing and configuring:
+ Swingbench, to create a sample &amp;ldquo;Order Entry&amp;rdquo; schema and simulate events on the Oracle database Oracle GoldenGate (OGG, forthwith) and Oracle GoldenGate for Big Data (OGG-BD, forthwith)  I&amp;rsquo;m using Oracle GoldenGate 12.">
+    <meta name="twitter:image" content="/images/avatar.jpg">
+  
+
+  
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="HOWTO: Oracle GoldenGate &#43; Apache Kafka &#43; Schema Registry &#43; Swingbench">
+  <meta property="og:description" content="This is the detailed step-by-step if you want to recreate the process I describe in the Confluent blog here
+I used Oracle&amp;rsquo;s Oracle Developer Days VM, which comes preinstalled with Oracle 12cR2. You can see the notes on how to do this here. These notes take you through installing and configuring:
+ Swingbench, to create a sample &amp;ldquo;Order Entry&amp;rdquo; schema and simulate events on the Oracle database Oracle GoldenGate (OGG, forthwith) and Oracle GoldenGate for Big Data (OGG-BD, forthwith)  I&amp;rsquo;m using Oracle GoldenGate 12.">
+  <meta property="og:url" content="https://rmoff.github.io/post/howto-oracle-goldengate-apache-kafka-schema-registry-swingbench/">
+  <meta property="og:image" content="/images/avatar.jpg">
+
+
+
+
+<meta name="generator" content="Hugo 0.52">
+
+
+<link rel="canonical" href="https://rmoff.github.io/post/howto-oracle-goldengate-apache-kafka-schema-registry-swingbench/">
+
+<meta name="renderer" content="webkit">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="format-detection" content="telephone=no,email=no,adress=no">
+<meta http-equiv="Cache-Control" content="no-transform">
+
+
+<meta name="robots" content="index,follow">
+<meta name="referrer" content="origin-when-cross-origin">
+
+
+
+
+
+
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="rmoff.net">
+<meta name="msapplication-tooltip" content="rmoff.net">
+<meta name='msapplication-navbutton-color' content="#5fbf5e">
+<meta name="msapplication-TileColor" content="#5fbf5e">
+<meta name="msapplication-TileImage" content="/images/tile-image-windows.png">
+<link rel="icon" href="/images/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+<link rel="icon" sizes="192x192" href="/images/touch-icon-android.png">
+<link rel="apple-touch-icon" href="/images/touch-icon-apple.png">
+
+
+<link rel="preload" href="/styles/main.min.css" as="style">
+<link rel="preload" href="https://fonts.googleapis.com/css?family=Lobster" as="style">
+<link rel="preload" href="/images/avatar.jpg" as="image">
+<link rel="preload" href="/images/grey-prism.svg" as="image">
+
+
+<style>
+  body {
+    background: rgb(244, 243, 241) url('/images/grey-prism.svg') repeat fixed;
+  }
+</style>
+<link rel="stylesheet" href="/styles/main.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lobster">
+
+
+<script src="https://cdn.jsdelivr.net/npm/medium-zoom@1.0.2/dist/medium-zoom.min.js"></script>
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video-js.min.css">
+
+
+
+  
+  
+<!--[if lte IE 8]>
+  <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/videojs-ie8@1.1.2/dist/videojs-ie8.min.js"></script>
+<![endif]-->
+
+<!--[if lte IE 9]>
+  <script src="https://cdn.jsdelivr.net/npm/eligrey-classlist-js-polyfill@1.2.20180112/classList.min.js"></script>
+<![endif]-->
+
+
+<script src="https://cdn.jsdelivr.net/npm/smooth-scroll@14.2.1/dist/smooth-scroll.polyfills.min.js"></script>
+
+
+</head>
+  <body>
+    
+    <div class="suspension">
+      <a title="Go to top" class="to-top is-hide"><span class="icon icon-up"></span></a>
+      
+        
+      
+    </div>
+    
+    
+  <header class="site-header">
+  <img class="avatar" src="/images/avatar.jpg" alt="Avatar">
+  
+  <h2 class="title">rmoff.net</h2>
+  
+  <p class="subtitle"></p>
+  <button class="menu-toggle" type="button">
+    <span class="icon icon-menu"></span>
+  </button>
+  <nav class="site-menu collapsed">
+    <h2 class="offscreen">Main Menu</h2>
+    <ul class="menu-list">
+      
+      
+      
+      
+    </ul>
+  </nav>
+  <nav class="social-menu collapsed">
+    <h2 class="offscreen">Social Networks</h2>
+    <ul class="social-list"></ul>
+  </nav>
+</header>
+
+  <section class="main post-detail">
+    <header class="post-header">
+      <h1 class="post-title">HOWTO: Oracle GoldenGate &#43; Apache Kafka &#43; Schema Registry &#43; Swingbench</h1>
+      <p class="post-meta">@Robin Moffatt · Feb 1, 2018 · 4 min read</p>
+    </header>
+    <article class="post-content">
+
+<p><em>This is the detailed step-by-step if you want to recreate the process I describe in the <a href="https://www.confluent.io/blog/ksql-in-action-real-time-streaming-etl-from-oracle-transactional-data">Confluent blog here</a></em></p>
+
+<hr />
+
+<p>I used Oracle&rsquo;s <a href="http://www.oracle.com/technetwork/database/enterprise-edition/databaseappdev-vm-161299.html">Oracle Developer Days VM</a>, which comes preinstalled with Oracle 12cR2. You can see the notes on <a href="https://rmoff.net/2017/11/21/installing-oracle-goldengate-for-big-data-12-3-1-with-kafka-connect-and-confluent-platform/">how to do this here</a>. These notes take you through installing and configuring:</p>
+
+<ul>
+<li>Swingbench, to create a sample &ldquo;Order Entry&rdquo; schema and simulate events on the Oracle database</li>
+<li>Oracle GoldenGate (OGG, forthwith) and Oracle GoldenGate for Big Data (OGG-BD, forthwith)
+
+<ul>
+<li>I&rsquo;m using Oracle GoldenGate 12.3.1 which includes the Kafka Connect handler as part of its distribution. A connector for earlier versions can be <a href="http://www.oracle.com/technetwork/middleware/goldengate/oracle-goldengate-exchange-3805527.html">found here</a>. Some of the syntax may differ in the configuration below - if you hit problems then check out [an article that I wrote]() with an earlier version of the tool.</li>
+</ul></li>
+<li>OGG <code>extract</code> from the Order Entry schema</li>
+<li>Confluent Platform</li>
+<li>KSQL</li>
+<li>Elasticsearch</li>
+</ul>
+
+<p>From this point, I&rsquo;ll now walk through configuring OGG-BD with the Kafka Connect handler</p>
+
+<h2 id="configuring-the-kafka-connect-replicat">Configuring the Kafka Connect replicat</h2>
+
+<p>The OGG-BD replicat takes the trail file of events written by the <code>extract</code> job, and replays those events to the target. In our case, the target is the Kafka Connect handler.</p>
+
+<p><img src="/content/images/2018/02/oggkaf01sm.jpg" alt="" /></p>
+
+<p>You can find full documentation for the OGG-BD replicat <a href="http://docs.oracle.com/goldengate/bd123110/gg-bd/GADBD/using-kafka-connect-handler.htm#GADBD-GUID-81730248-AC12-438E-AF82-48C7002178EC">here</a>. Each replicat has three configuration files:</p>
+
+<ul>
+<li>A <strong>parameter</strong> file, which can be used to specify configuration including the selection of specific tables or schemas from the Extract trail file. This file also points to the primary <strong>properties</strong> file</li>
+<li>The <strong>properties</strong> file is where we tell OGG-BD to use the Kafka Connect handler (<code>gg.handler.kafkaconnect.type=kafkaconnect</code>), as well as the <strong>topic name format</strong> and <strong>Kafka message key</strong>. These latter two items are new and improved in 12.3.1, and are template-driven. You can see the full syntax for them <a href="http://docs.oracle.com/goldengate/bd123110/gg-bd/GADBD/using-kafka-connect-handler.htm#GUID-A87CAFFA-DACF-43A0-8C6C-5C64B578D606">here</a>. Another useful configuration item in this file is <code>gg.log.level</code> which you can set to <code>DEBUG</code> if you need to dig into what&rsquo;s going on.</li>
+<li>The <strong>Kafka Connect configuration</strong> file, which points to the Kafka brokers, and the Converters that we want to use (Json or Avro). If we&rsquo;re using Avro, the URL for the Schema Registry is also defined here.</li>
+</ul>
+
+<p>In this article we&rsquo;re going to use OGG-BD to populate a topic for each table, using Avro encoding. <a href="https://gist.github.com/rmoff/221b4a1903a85568042e3a1b9b07ab95">Here are</a> the three configuration files you should put in <code>/u01/app/ogg-bd/dirprm</code>.</p>
+
+<p><strong>Be very careful with copying &amp; pasting these configuration files, as trailing whitespace can cause problems, <a href="https://rmoff.net/2017/09/12/oracle-goldengate-kafka-connect-handler-troubleshooting/">detailed here</a>.</strong></p>
+
+<h2 id="starting-the-replicat">Starting the replicat</h2>
+
+<p>From the bash shell, start the OGG-BD <code>ggsci</code> tool:</p>
+
+<pre><code># set to orcl12c when prompted
+. oraenv
+
+export LD_LIBRARY_PATH=$JAVA_HOME/jre/lib/amd64/server/
+
+cd /u01/app/ogg-bd
+rlwrap ./ggsci
+</code></pre>
+
+<p>and then from the <code>ggsci&gt;</code> prompt run the following to start each replicat:</p>
+
+<pre><code>add replicat rkafavro, exttrail /u01/app/ogg/dirdat/oe
+start rkafavro
+</code></pre>
+
+<p>Having done this, we&rsquo;ll want to do a little smoke test just to see that data modified in the SOE schema streams through via OGG-BD into Kafka.</p>
+
+<p>Insert row to an SOE table</p>
+
+<pre><code>[oracle@localhost ~]$ rlwrap sqlplus SYS/oracle@orcl as sysdba
+
+SQL*Plus: Release 12.2.0.1.0 Production on Mon Sep 11 10:14:28 2017
+
+Copyright (c) 1982, 2016, Oracle.  All rights reserved.
+
+
+Connected to:
+Oracle Database 12c Enterprise Edition Release 12.2.0.1.0 - 64bit Production
+
+SQL&gt; insert into soe.logon values(42,42,sysdate);
+
+1 row created.
+
+SQL&gt; commit;
+
+Commit complete.
+
+SQL&gt;
+</code></pre>
+
+<p>Check that the topics have been created:</p>
+
+<pre><code>$ kafka-topics --zookeeper localhost:2181 --list
+__confluent.support.metrics
+__consumer_offsets
+_schemas
+connect-configs
+connect-offsets
+connect-statuses
+ora-ogg-SOE-LOGON-avro
+</code></pre>
+
+<p>View the record</p>
+
+<pre><code>kafka-avro-console-consumer \
+--bootstrap-server localhost:9092 \
+--property schema.registry.url=http://localhost:8081 \
+--property print.key=true \
+--from-beginning \
+--topic ora-ogg-SOE-LOGON-avro | jq '.'
+</code></pre>
+
+<pre><code class="language-json">&quot;42_42_2017-09-11 10:14:30&quot;
+{
+  &quot;table&quot;: {
+    &quot;string&quot;: &quot;ORCL.SOE.LOGON&quot;
+  },
+  &quot;op_type&quot;: {
+    &quot;string&quot;: &quot;I&quot;
+  },
+  &quot;op_ts&quot;: {
+    &quot;string&quot;: &quot;2017-09-11 14:14:39.000000&quot;
+  },
+  &quot;current_ts&quot;: {
+    &quot;string&quot;: &quot;2017-09-11 10:14:43.164000&quot;
+  },
+  &quot;pos&quot;: {
+    &quot;string&quot;: &quot;00000000010000002172&quot;
+  },
+  &quot;LOGON_ID&quot;: {
+    &quot;double&quot;: 42
+  },
+  &quot;CUSTOMER_ID&quot;: {
+    &quot;double&quot;: 42
+  },
+  &quot;LOGON_DATE&quot;: {
+    &quot;string&quot;: &quot;2017-09-11 10:14:30&quot;
+  }
+}
+</code></pre>
+
+<p>Having confirmed that the replication is working, we can now run Swingbench to simulate some work on our source transactional system.</p>
+
+<pre><code>/opt/swingbench/bin/charbench -cs localhost:1521/orcl -u soe -p soe -v trans,users -c /opt/swingbench/configs/SOE_Client_Side.xml
+</code></pre>
+
+<p>Output:</p>
+
+<pre><code>Author  :        Dominic Giles
+Version :        2.6.0.1046
+
+Results will be written to results.xml.
+Hit Return to Terminate Run...
+
+Time            NCR     UCD     BP      OP      PO      BO      SQ      WQ      WA      Users
+09:01:04        0       0       0       0       0       0       0       0       0       [0/4]
+09:01:06        0       0       0       0       0       0       0       0       0       [0/4]
+09:01:08        15      7       68      28      3       12      1       0       0       [4/4]
+09:01:10        47      15      179     75      9       31      2       0       0       [4/4]
+09:01:12        74      20      248     119     11      45      3       2       0       [4/4]
+[...]
+</code></pre>
+
+<p>Hit Ctrl-C when you want to quit Swingbench. I&rsquo;ve shown the command line version (<code>charbench</code>) above; there is also a GUI version that you can use if you want to easily tweak the simulation characteristics.</p>
+
+<hr />
+
+<p><em>To read more about this, and see the awesome KSQL in action, head over to the <a href="https://www.confluent.io/blog/">Confluent blog</a></em></p>
+</article>
+    <footer class="post-footer">
+      
+      <ul class="post-tags">
+        
+          <li><a href="/tags/apache-kafka"><span class="tag">Apache Kafka</span></a></li>
+        
+          <li><a href="/tags/schema-registry"><span class="tag">Schema Registry</span></a></li>
+        
+          <li><a href="/tags/swingbench"><span class="tag">Swingbench</span></a></li>
+        
+          <li><a href="/tags/goldengate"><span class="tag">Goldengate</span></a></li>
+        
+          <li><a href="/tags/oracle"><span class="tag">Oracle</span></a></li>
+        
+      </ul>
+      
+      <p class="post-copyright">
+        This post was published <strong>316</strong> days ago, content in the post may be inaccurate, even wrong now, please take risk yourself.
+      </p>
+    </footer>
+    
+      
+    
+  </section>
+  
+
+
+<footer class="site-footer">
+  <p>© 2017-2018 rmoff.net</p>
+  <p>Powered by <a href="https://gohugo.io/" target="_blank">Hugo</a> with theme <a href="https://github.com/laozhu/hugo-nuo" target="_blank">Nuo</a>.</p>
+  
+</footer>
+
+
+
+<script async src="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video.min.js"></script>
+
+
+
+
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [['$','$'], ['\\(','\\)']],
+      displayMath: [['$$','$$'], ['\\[','\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+      TeX: { equationNumbers: { autoNumber: "AMS" },
+      extensions: ["AMSmath.js", "AMSsymbols.js"] }
+    },
+  });
+</script>
+<script type="text/x-mathjax-config">
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  MathJax.Hub.Queue(() => {
+    MathJax.Hub.getAllJax().map(v => v.SourceElement().parentNode.className += ' has-jax');
+  });
+</script>
+
+
+
+<script src="/scripts/index.min.js"></script>
+
+
+
+
+
+
+
+
+  </body>
+</html>

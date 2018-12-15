@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+
+  <meta charset="utf-8" />
+
+  
+  <title>Flatten CDC records in KSQL</title>
+
+  
+  
+  <link href="//cdn.jsdelivr.net" rel="dns-prefetch">
+  <link href="//cdnjs.cloudflare.com" rel="dns-prefetch">
+  <link href="//at.alicdn.com" rel="dns-prefetch">
+  <link href="//fonts.googleapis.com" rel="dns-prefetch">
+  <link href="//fonts.gstatic.com" rel="dns-prefetch">
+  
+  
+  
+  
+  
+
+  
+
+  
+  <meta name="author" content="Robin Moffatt">
+  <meta name="description" content="The problem - nested messages in Kafka Data comes into Kafka in many shapes and sizes. Sometimes it&amp;rsquo;s from CDC tools, and may be nested like this:
+{ &amp;quot;SCN&amp;quot;: 12206116841348, &amp;quot;SEG_OWNER&amp;quot;: &amp;quot;KFKUSER&amp;quot;, &amp;quot;TABLE_NAME&amp;quot;: &amp;quot;CDCTAB2&amp;quot;, &amp;quot;TIMESTAMP&amp;quot;: 1539162785000, &amp;quot;SQL_REDO&amp;quot;: &amp;quot;insert into \&amp;quot;KFKUSER\&amp;quot;.\&amp;quot;CDCTAB2\&amp;quot;(\&amp;quot;ID\&amp;quot;,\&amp;quot;CITY\&amp;quot;,\&amp;quot;NATIONALITY\&amp;quot;) values (634789,&#39;AHMEDABAD&#39;,&#39;INDIA&#39;)&amp;quot;, &amp;quot;OPERATION&amp;quot;: &amp;quot;INSERT&amp;quot;, &amp;quot;data&amp;quot;: { &amp;quot;value&amp;quot;: { &amp;quot;ID&amp;quot;: 634789, &amp;quot;CITY&amp;quot;: { &amp;quot;string&amp;quot;: &amp;quot;AHMEDABAD&amp;quot; }, &amp;quot;NATIONALITY&amp;quot;: { &amp;quot;string&amp;quot;: &amp;quot;INDIA&amp;quot; } } }, &amp;quot;before&amp;quot;: null }  Note that the &amp;lsquo;payload&amp;rsquo; is nested under data-&amp;gt;value.">
+
+  
+  
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@gohugoio">
+    <meta name="twitter:title" content="Flatten CDC records in KSQL">
+    <meta name="twitter:description" content="The problem - nested messages in Kafka Data comes into Kafka in many shapes and sizes. Sometimes it&amp;rsquo;s from CDC tools, and may be nested like this:
+{ &amp;quot;SCN&amp;quot;: 12206116841348, &amp;quot;SEG_OWNER&amp;quot;: &amp;quot;KFKUSER&amp;quot;, &amp;quot;TABLE_NAME&amp;quot;: &amp;quot;CDCTAB2&amp;quot;, &amp;quot;TIMESTAMP&amp;quot;: 1539162785000, &amp;quot;SQL_REDO&amp;quot;: &amp;quot;insert into \&amp;quot;KFKUSER\&amp;quot;.\&amp;quot;CDCTAB2\&amp;quot;(\&amp;quot;ID\&amp;quot;,\&amp;quot;CITY\&amp;quot;,\&amp;quot;NATIONALITY\&amp;quot;) values (634789,&#39;AHMEDABAD&#39;,&#39;INDIA&#39;)&amp;quot;, &amp;quot;OPERATION&amp;quot;: &amp;quot;INSERT&amp;quot;, &amp;quot;data&amp;quot;: { &amp;quot;value&amp;quot;: { &amp;quot;ID&amp;quot;: 634789, &amp;quot;CITY&amp;quot;: { &amp;quot;string&amp;quot;: &amp;quot;AHMEDABAD&amp;quot; }, &amp;quot;NATIONALITY&amp;quot;: { &amp;quot;string&amp;quot;: &amp;quot;INDIA&amp;quot; } } }, &amp;quot;before&amp;quot;: null }  Note that the &amp;lsquo;payload&amp;rsquo; is nested under data-&amp;gt;value.">
+    <meta name="twitter:image" content="/images/avatar.jpg">
+  
+
+  
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Flatten CDC records in KSQL">
+  <meta property="og:description" content="The problem - nested messages in Kafka Data comes into Kafka in many shapes and sizes. Sometimes it&amp;rsquo;s from CDC tools, and may be nested like this:
+{ &amp;quot;SCN&amp;quot;: 12206116841348, &amp;quot;SEG_OWNER&amp;quot;: &amp;quot;KFKUSER&amp;quot;, &amp;quot;TABLE_NAME&amp;quot;: &amp;quot;CDCTAB2&amp;quot;, &amp;quot;TIMESTAMP&amp;quot;: 1539162785000, &amp;quot;SQL_REDO&amp;quot;: &amp;quot;insert into \&amp;quot;KFKUSER\&amp;quot;.\&amp;quot;CDCTAB2\&amp;quot;(\&amp;quot;ID\&amp;quot;,\&amp;quot;CITY\&amp;quot;,\&amp;quot;NATIONALITY\&amp;quot;) values (634789,&#39;AHMEDABAD&#39;,&#39;INDIA&#39;)&amp;quot;, &amp;quot;OPERATION&amp;quot;: &amp;quot;INSERT&amp;quot;, &amp;quot;data&amp;quot;: { &amp;quot;value&amp;quot;: { &amp;quot;ID&amp;quot;: 634789, &amp;quot;CITY&amp;quot;: { &amp;quot;string&amp;quot;: &amp;quot;AHMEDABAD&amp;quot; }, &amp;quot;NATIONALITY&amp;quot;: { &amp;quot;string&amp;quot;: &amp;quot;INDIA&amp;quot; } } }, &amp;quot;before&amp;quot;: null }  Note that the &amp;lsquo;payload&amp;rsquo; is nested under data-&amp;gt;value.">
+  <meta property="og:url" content="https://rmoff.github.io/post/flatten-cdc-records-in-ksql/">
+  <meta property="og:image" content="/images/avatar.jpg">
+
+
+
+
+<meta name="generator" content="Hugo 0.52">
+
+
+<link rel="canonical" href="https://rmoff.github.io/post/flatten-cdc-records-in-ksql/">
+
+<meta name="renderer" content="webkit">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="format-detection" content="telephone=no,email=no,adress=no">
+<meta http-equiv="Cache-Control" content="no-transform">
+
+
+<meta name="robots" content="index,follow">
+<meta name="referrer" content="origin-when-cross-origin">
+
+
+
+
+
+
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="rmoff.net">
+<meta name="msapplication-tooltip" content="rmoff.net">
+<meta name='msapplication-navbutton-color' content="#5fbf5e">
+<meta name="msapplication-TileColor" content="#5fbf5e">
+<meta name="msapplication-TileImage" content="/images/tile-image-windows.png">
+<link rel="icon" href="/images/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+<link rel="icon" sizes="192x192" href="/images/touch-icon-android.png">
+<link rel="apple-touch-icon" href="/images/touch-icon-apple.png">
+
+
+<link rel="preload" href="/styles/main.min.css" as="style">
+<link rel="preload" href="https://fonts.googleapis.com/css?family=Lobster" as="style">
+<link rel="preload" href="/images/avatar.jpg" as="image">
+<link rel="preload" href="/images/grey-prism.svg" as="image">
+
+
+<style>
+  body {
+    background: rgb(244, 243, 241) url('/images/grey-prism.svg') repeat fixed;
+  }
+</style>
+<link rel="stylesheet" href="/styles/main.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lobster">
+
+
+<script src="https://cdn.jsdelivr.net/npm/medium-zoom@1.0.2/dist/medium-zoom.min.js"></script>
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video-js.min.css">
+
+
+
+  
+  
+<!--[if lte IE 8]>
+  <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/videojs-ie8@1.1.2/dist/videojs-ie8.min.js"></script>
+<![endif]-->
+
+<!--[if lte IE 9]>
+  <script src="https://cdn.jsdelivr.net/npm/eligrey-classlist-js-polyfill@1.2.20180112/classList.min.js"></script>
+<![endif]-->
+
+
+<script src="https://cdn.jsdelivr.net/npm/smooth-scroll@14.2.1/dist/smooth-scroll.polyfills.min.js"></script>
+
+
+</head>
+  <body>
+    
+    <div class="suspension">
+      <a title="Go to top" class="to-top is-hide"><span class="icon icon-up"></span></a>
+      
+        
+      
+    </div>
+    
+    
+  <header class="site-header">
+  <img class="avatar" src="/images/avatar.jpg" alt="Avatar">
+  
+  <h2 class="title">rmoff.net</h2>
+  
+  <p class="subtitle"></p>
+  <button class="menu-toggle" type="button">
+    <span class="icon icon-menu"></span>
+  </button>
+  <nav class="site-menu collapsed">
+    <h2 class="offscreen">Main Menu</h2>
+    <ul class="menu-list">
+      
+      
+      
+      
+    </ul>
+  </nav>
+  <nav class="social-menu collapsed">
+    <h2 class="offscreen">Social Networks</h2>
+    <ul class="social-list"></ul>
+  </nav>
+</header>
+
+  <section class="main post-detail">
+    <header class="post-header">
+      <h1 class="post-title">Flatten CDC records in KSQL</h1>
+      <p class="post-meta">@Robin Moffatt · Oct 11, 2018 · 3 min read</p>
+    </header>
+    <article class="post-content">
+
+<h2 id="the-problem-nested-messages-in-kafka">The problem - nested messages in Kafka</h2>
+
+<p>Data comes into Kafka in many shapes and sizes. Sometimes it&rsquo;s from CDC tools, and may be nested like this:</p>
+
+<pre><code>{
+  &quot;SCN&quot;: 12206116841348,
+  &quot;SEG_OWNER&quot;: &quot;KFKUSER&quot;,
+  &quot;TABLE_NAME&quot;: &quot;CDCTAB2&quot;,
+  &quot;TIMESTAMP&quot;: 1539162785000,
+  &quot;SQL_REDO&quot;: &quot;insert into \&quot;KFKUSER\&quot;.\&quot;CDCTAB2\&quot;(\&quot;ID\&quot;,\&quot;CITY\&quot;,\&quot;NATIONALITY\&quot;) values (634789,'AHMEDABAD','INDIA')&quot;,
+  &quot;OPERATION&quot;: &quot;INSERT&quot;,
+  &quot;data&quot;: {
+    &quot;value&quot;: {
+      &quot;ID&quot;: 634789,
+      &quot;CITY&quot;: {
+        &quot;string&quot;: &quot;AHMEDABAD&quot;
+      },
+      &quot;NATIONALITY&quot;: {
+        &quot;string&quot;: &quot;INDIA&quot;
+      }
+    }
+  },
+  &quot;before&quot;: null
+}
+</code></pre>
+
+<p>Note that the &lsquo;payload&rsquo; is nested under <code>data</code>-&gt;<code>value</code>. A user on the <a href="https://groups.google.com/forum/#!forum/confluent-platform">Confluent Community mailing list</a> recently posted <a href="https://groups.google.com/d/msg/confluent-platform/vWle1i3TibI/a9sgDWzAAgAJ">a question</a> in which they wanted to use the Kafka Connect JDBC Sink connector to stream this data to a target database. The problem was that the field they wanted to use as the primary key (<code>ID</code>) was nested (as you can see above). This caused the error:</p>
+
+<pre><code>Caused by: org.apache.kafka.connect.errors.ConnectException: PK mode for table 'CDCTAB2' is RECORD_VALUE with configured PK fields [ID], but record value schema does not contain field: ID
+</code></pre>
+
+<p>The key(!) thing here is <code>record value schema does not contain field ID</code>. The connector cannot find the field <code>ID</code> in the source message—because it&rsquo;s nested.</p>
+
+<h2 id="the-solution-ksql-to-flatten-messages">The solution - KSQL to flatten messages</h2>
+
+<p>You can use <a href="https://www.confluent.io/ksql">KSQL</a> to transform every record on the source topic as it arrives, writing to a new topic and using <em>that</em> topic as the source for the JDBC Sink.</p>
+
+<p>In KSQL, register the topic in KSQL:</p>
+
+<pre><code>CREATE STREAM CDC_SOURCE_DATA \
+    (SCN BIGINT, TABLE_NAME VARCHAR, OPERATION VARCHAR, \
+     DATA STRUCT&lt;VALUE STRUCT&lt;\
+       ID BIGINT, \
+       CITY STRUCT&lt;string VARCHAR&gt;, \
+       NATIONALITY STRUCT&lt;string VARCHAR&gt;&gt;&gt;\
+    ) \
+    WITH (KAFKA_TOPIC='asif_test2', VALUE_FORMAT='JSON');
+</code></pre>
+
+<p>Verify the schema—observe that it is nested</p>
+
+<pre><code>ksql&gt; describe CDC_SOURCE_DATA;
+
+Name                 : CDC_SOURCE_DATA
+ Field      | Type
+-------------------------------------------------------------------------------------------------------------------------------
+ ROWTIME    | BIGINT           (system)
+ ROWKEY     | VARCHAR(STRING)  (system)
+ SCN        | BIGINT
+ TABLE_NAME | VARCHAR(STRING)
+ OPERATION  | VARCHAR(STRING)
+ DATA       | STRUCT&lt;VALUE STRUCT&lt;ID BIGINT, CITY STRUCT&lt;STRING VARCHAR(STRING)&gt;, NATIONALITY STRUCT&lt;STRING VARCHAR(STRING)&gt;&gt;&gt;
+-------------------------------------------------------------------------------------------------------------------------------
+For runtime statistics and query details run: DESCRIBE EXTENDED &lt;Stream,Table&gt;;
+</code></pre>
+
+<p>Create a flattened topic:</p>
+
+<pre><code>CREATE STREAM FLATTENED_DATA AS \
+  SELECT SCN, TABLE_NAME, OPERATION, \
+          DATA-&gt;VALUE-&gt;ID AS ID, \
+          DATA-&gt;VALUE-&gt;CITY-&gt;string AS CITY, \
+          DATA-&gt;VALUE-&gt;NATIONALITY-&gt;string AS NATIONALITY \
+  FROM CDC_SOURCE_DATA;
+</code></pre>
+
+<p>Verify the new schema - note there are no nested fields</p>
+
+<pre><code>ksql&gt; DESCRIBE FLATTENED_DATA;
+
+Name                 : FLATTENED_DATA
+ Field       | Type
+-----------------------------------------
+ ROWTIME     | BIGINT           (system)
+ ROWKEY      | VARCHAR(STRING)  (system)
+ SCN         | BIGINT
+ TABLE_NAME  | VARCHAR(STRING)
+ OPERATION   | VARCHAR(STRING)
+ ID          | BIGINT
+ CITY        | VARCHAR(STRING)
+ NATIONALITY | VARCHAR(STRING)
+-----------------------------------------
+For runtime statistics and query details run: DESCRIBE EXTENDED &lt;Stream,Table&gt;;
+ksql&gt;
+</code></pre>
+
+<p>Query the new topic, e.g. using kafkacat:</p>
+
+<pre><code>kafkacat -b kafka:29092 -t FLATTENED_DATA -C
+
+{&quot;SCN&quot;:12206116841348,&quot;TABLE_NAME&quot;:&quot;CDCTAB2&quot;,&quot;OPERATION&quot;:&quot;INSERT&quot;,&quot;ID&quot;:634789,&quot;CITY&quot;:&quot;AHMEDABAD&quot;,&quot;NATIONALITY&quot;:&quot;INDIA&quot;}
+</code></pre>
+
+<p>Now you can use the target topic (<code>FLATTENED_DATA</code>) as the source for the JDBC sink, with <code>ID</code> and other columns exposed as top-level elements.</p>
+
+<p>KSQL is a continuous query language and so every new event on the source topic will automatically be processed and written to the target topic.</p>
+</article>
+    <footer class="post-footer">
+      
+      <ul class="post-tags">
+        
+          <li><a href="/tags/cdc"><span class="tag">Cdc</span></a></li>
+        
+          <li><a href="/tags/ksql"><span class="tag">Ksql</span></a></li>
+        
+          <li><a href="/tags/kafka"><span class="tag">Kafka</span></a></li>
+        
+          <li><a href="/tags/jdbc-sink"><span class="tag">Jdbc Sink</span></a></li>
+        
+      </ul>
+      
+      <p class="post-copyright">
+        
+      </p>
+    </footer>
+    
+      
+    
+  </section>
+  
+
+
+<footer class="site-footer">
+  <p>© 2017-2018 rmoff.net</p>
+  <p>Powered by <a href="https://gohugo.io/" target="_blank">Hugo</a> with theme <a href="https://github.com/laozhu/hugo-nuo" target="_blank">Nuo</a>.</p>
+  
+</footer>
+
+
+
+<script async src="https://cdn.jsdelivr.net/npm/video.js@7.3.0/dist/video.min.js"></script>
+
+
+
+
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [['$','$'], ['\\(','\\)']],
+      displayMath: [['$$','$$'], ['\\[','\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+      TeX: { equationNumbers: { autoNumber: "AMS" },
+      extensions: ["AMSmath.js", "AMSsymbols.js"] }
+    },
+  });
+</script>
+<script type="text/x-mathjax-config">
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  MathJax.Hub.Queue(() => {
+    MathJax.Hub.getAllJax().map(v => v.SourceElement().parentNode.className += ' has-jax');
+  });
+</script>
+
+
+
+<script src="/scripts/index.min.js"></script>
+
+
+
+
+
+
+
+
+  </body>
+</html>
