@@ -208,65 +208,65 @@ time                    value
 
 <p>So here&rsquo;s the basic chart:</p>
 
-<p><img src="/content/images/2016/05/lsir01.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir01.png" alt="" /></p>
 
 <p>I&rsquo;ve added a title, and values to the legend. Other than that, dead simple.</p>
 
 <p>Let&rsquo;s make it easier to see, at a glance, if things are bad (<a href="https://www.youtube.com/watch?v=Uh7l8dx-h8M">m&rsquo;kay</a>) or not:</p>
 
-<p><img src="/content/images/2016/05/lsir02-1.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir02-1.png" alt="" /></p>
 
 <p>Here I&rsquo;ve added a Singlestat panel. A very important thing to change from the default option if you&rsquo;re using it in this way, to show the current value - is to make sure you set it to that - current:</p>
 
-<p><img src="/content/images/2016/05/lsir03.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir03.png" alt="" /></p>
 
 <p>If you don&rsquo;t do this, you get the average across all values, which typically of less use.</p>
 
 <p>The Singlestat panel also supports thresholds, so you can be alerted visually if the ingest rate is less than you&rsquo;d want. Here it&rsquo;s up to you to know what rate you would expect. In this screenshot it&rsquo;s going to show green above 10, amber above 5, and red below 5:</p>
 
-<p><img src="/content/images/2016/05/lsir04.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir04.png" alt="" /></p>
 
 <p>In actuality, my ingest rate is pretty modest, at around 0.5 per second, so I&rsquo;ve set my thresholds at 0.1 and 0.5. Anything below 0.5 I want to be aware of, anything below 0.1 and it suggests there&rsquo;s a problem. Let&rsquo;s see how that pans out.</p>
 
 <p>To start with, everything&rsquo;s good. Rate is above 0.5, and we&rsquo;re ticking along nicely:</p>
 
-<p><img src="/content/images/2016/05/lsir05.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir05.png" alt="" /></p>
 
 <p>For some reason, the ingest rate slows - could be my source, could be the pipeline - but I want to be aware. The Singlestat colour highlights this for me, since it&rsquo;s below the threshold of 0.5 that I set:</p>
 
-<p><img src="/content/images/2016/05/lsir06.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir06.png" alt="" /></p>
 
 <p>Now, let&rsquo;s cut the pipeline and see what happens. We should get a nice big red alert background.</p>
 
-<p><img src="/content/images/2016/05/lsir07.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir07.png" alt="" /></p>
 
 <p>Oh. Not what we wanted. Even though the chart clearly shows there&rsquo;s been no data for ten minutes, the Singlestat is showing a current ingest rate of 0.4 (and in amber, not red), and if you look closely the &ldquo;Current&rdquo; value on the legend shows the same.</p>
 
 <p>This is where we need to get a bit deeper into Grafana. If you look closely at the Metrics configuration for both the Graph and Singlestat, you&rsquo;ll see that by default &ldquo;fill&rdquo; is set to null.</p>
 
-<p><img src="/content/images/2016/05/lsir08.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir08.png" alt="" /></p>
 
 <p>This is a time series chart, where time moves on whether you like it or not &ndash; and whether you have data or not. Grafana by default will &lsquo;fill&rsquo; any gaps with null. Null is most definitely <strong>not</strong> zero &ndash; it&rsquo;s null, it&rsquo;s an absence of data, it&rsquo;s &ldquo;we don&rsquo;t know&rdquo;. So when we ask Grafana to use &ldquo;current&rdquo; value (in the legend, in the singlestat), it ends up using the &ldquo;last known&rdquo; value of the data - which for our purposes is stale and basically wrong.</p>
 
 <p>So in this case, we&rsquo;re going to deliberately conflate &ldquo;no ingest rate from Logstash&rdquo; with &ldquo;Logstash isn&rsquo;t ingesting data&rdquo;. Technically, this could be untrue at times, but it&rsquo;s close enough for me. So now we will tell Grafana to use <strong>zero</strong> if it doesn&rsquo;t find any data for a given time period.</p>
 
-<p><img src="/content/images/2016/05/lsir09.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir09.png" alt="" /></p>
 
 <p>You&rsquo;ll notice the graph&rsquo;s rendering different now, because Grafana&rsquo;s plotting it at a resolution higher than we&rsquo;re sending data. Logstash emits the event data every five seconds or so, and Grafana&rsquo;s plotting at every second - so it&rsquo;s marking the chart as zero for every four of each five seconds. To solution to this is to set the time group by to <strong>at least five seconds</strong>:</p>
 
-<p><img src="/content/images/2016/05/lsir10.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir10.png" alt="" /></p>
 
 <p>Applying the same Metric configuration (fill=zero, group by &gt;=5s) to the Singlestat panel gives us a much better result now. When there&rsquo;s no data, we get a big fat red zero making it nice and clear that there&rsquo;s a problem.</p>
 
-<p><img src="/content/images/2016/05/lsir11.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir11.png" alt="" /></p>
 
 <p>For the final touch, let&rsquo;s give an indication on the chart of the threshold levels we&rsquo;re using for the Singlestat, using the <strong>Thresholds</strong> option:</p>
 
-<p><img src="/content/images/2016/05/lsir12.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir12.png" alt="" /></p>
 
 <p>This shows itself on the chart as a coloured background for each threshold level used:</p>
 
-<p><img src="/content/images/2016/05/lsir13.png" alt="" /></p>
+<p><img src="/images/2016/05/lsir13.png" alt="" /></p>
 
 <p><em>(From this we can see probably 0.5 is too high a threshold since the data seems to usually fall within that range - and there&rsquo;s nothing worse than a permanent &ldquo;warning&rdquo; that just becomes background noise.)</em></p>
 

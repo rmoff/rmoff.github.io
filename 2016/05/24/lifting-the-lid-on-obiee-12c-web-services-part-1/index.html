@@ -137,15 +137,15 @@ Cookie: JSESSIONID=ZzzePh4y0-JXAQqQZiSl9RyVKCeD2MFurbj-SQt3BdTLa-ThG3kW!-9460651
 
 <p>Which presumably drives this in the UI:</p>
 
-<p><img src="/content/images/2016/05/va_storage_01.png" alt="va_storage_01.png" /></p>
+<p><img src="/images/2016/05/va_storage_01.png" alt="va_storage_01.png" /></p>
 
 <p>So we&rsquo;ve got an endpoint (<code>/va/api/v1/dataset/limits</code>), but can we use it ourselves, just by requesting that address? Yep:</p>
 
-<p><img src="/content/images/2016/05/va_rest_01.png" alt="va_rest_01.png" /></p>
+<p><img src="/images/2016/05/va_rest_01.png" alt="va_rest_01.png" /></p>
 
 <p>But what happens if I try it on another machine, or from a clean browsing session? If I do that I just get dumped back to the VA login page. Using Chrome&rsquo;s Developer Tools I can see that I&rsquo;m getting served a <code>302 Moved Temporarily</code> which tells the browser that the document I&rsquo;ve asked for (<code>limits</code>) has moved somewhere else - or in plain speak, there&rsquo;s nothing to see here, move along now&hellip;</p>
 
-<p><img src="/content/images/2016/05/va_login_01.png" alt="va_login_01.png" /></p>
+<p><img src="/images/2016/05/va_login_01.png" alt="va_login_01.png" /></p>
 
 <p>So I&rsquo;m guessing my first attempt worked because I was in the same session as my &ldquo;real&rdquo; VA session, and had some cookies that identified me as such, whereas on my re-started browser session I didn&rsquo;t. This is obviously a Good Thing, because we don&rsquo;t want VA giving out information to non-authorised users.</p>
 
@@ -153,7 +153,7 @@ Cookie: JSESSIONID=ZzzePh4y0-JXAQqQZiSl9RyVKCeD2MFurbj-SQt3BdTLa-ThG3kW!-9460651
 
 <p>Looking at VA traffic in Chrome&rsquo;s dev tools again, we can see two cookies are submitted as part of a successful call to the <code>limits</code> API:</p>
 
-<p><img src="/content/images/2016/05/va_rest_02.png" alt="va_rest_02.png" /></p>
+<p><img src="/images/2016/05/va_rest_02.png" alt="va_rest_02.png" /></p>
 
 <p>There&rsquo;s also a bunch of other headers in here too, such as User Agent. We can&rsquo;t assume that just cookies alone will do the job - for example, from past hacking on OBIEE I&rsquo;ve seen Presentation Services behave differently based on User Agent (presumably to detect whether JavaScript was available?). So here we want to work out the minimum set of headers that we need to send across in order for the request to be valid. Enter <a href="https://luckymarmot.com/paw">Paw</a>.</p>
 
@@ -165,7 +165,7 @@ Cookie: JSESSIONID=ZzzePh4y0-JXAQqQZiSl9RyVKCeD2MFurbj-SQt3BdTLa-ThG3kW!-9460651
 <li><p>Right-click on the request and select <strong>Copy as cURL</strong></p></li>
 </ol>
 
-<p><img src="/content/images/2016/05/va_rest_03.png" alt="va_rest_03.png" /></p>
+<p><img src="/images/2016/05/va_rest_03.png" alt="va_rest_03.png" /></p>
 
 <pre><code>[cURL](https://curl.haxx.se/) is a tool in its own right for making HTTP (and other) requests from the command line, and we'll revisit it later on in this article. For our use here, cURL is sometimes used as a common format of HTTP requests across tools, enabling us to transport it from Chrome to Paw
 </code></pre>
@@ -176,40 +176,40 @@ Cookie: JSESSIONID=ZzzePh4y0-JXAQqQZiSl9RyVKCeD2MFurbj-SQt3BdTLa-ThG3kW!-9460651
 
 <p>Now you&rsquo;ve got the HTTP request in Paw you can work with it in a great more detail. First up, go to the <strong>Request</strong> menu and hit <strong>Send</strong>. You should get a successful response - because this is the same request as you fired from Chrome. That it&rsquo;s a different program sending it makes no difference - it&rsquo;s only the HTTP request headers and body that actually get sent to and parsed by the receiving web server. Note how Paw automagically presents the response as formatted JSON:</p>
 
-<p><img src="/content/images/2016/05/paw01.png" alt="paw01.png" /></p>
+<p><img src="/images/2016/05/paw01.png" alt="paw01.png" /></p>
 
 <p>Now we can start whittling down the base request that we can send in order for it still to be valid. Firstly untick <em>every header</em>, and resend the request. You&rsquo;ll see the HTML source code for the &ldquo;302 Moved Temporarily&rdquo; response, which if you followed the URL would give you the VA login page</p>
 
-<p><img src="/content/images/2016/05/paw02-1.png" alt="paw02.png" /></p>
+<p><img src="/images/2016/05/paw02-1.png" alt="paw02.png" /></p>
 
 <p>So, we definitely need some headers. Let&rsquo;s add back in the Cookie header; it still works. Now looking at the Cookies, there are two; <code>ADMINCONSOLESESSION</code> and <code>JSESSIONID</code>. Trying the request with just <code>JSESSIONID</code> still works. Bingo! So we&rsquo;ve got a minimum viable REST request - it just needs a valid <code>JSESSIONID</code> cookie.</p>
 
 <p>Now in Paw go to the <strong>View</strong> menu and select <strong>Show Code Generator</strong>. You might need to install another addin here, but you can then see the cURL equivalent for the current request:</p>
 
-<p><img src="/content/images/2016/05/paw03-1.png" alt="paw03.png" /></p>
+<p><img src="/images/2016/05/paw03-1.png" alt="paw03.png" /></p>
 
 <p>Taking this cURL and running it from the terminal gives&hellip;</p>
 
-<p><img src="/content/images/2016/05/rest01.png" alt="rest01.png" /></p>
+<p><img src="/images/2016/05/rest01.png" alt="rest01.png" /></p>
 
 <p>&hellip;an error?! Wat? And what&rsquo;s &ldquo;event not found&rdquo;? <a href="https://en.wikipedia.org/wiki/Representational_state_transfer">Bash quoting</a> fun times &hellip; replace the double quotes (which bash will parse the contents of and get upset at the <code>!</code>) with single quotes (bash <a href="https://www.youtube.com/watch?v=2eMkth8FWno">shall not pass</a>):</p>
 
-<p><img src="/content/images/2016/05/rest02.png" alt="rest02.png" /></p>
+<p><img src="/images/2016/05/rest02.png" alt="rest02.png" /></p>
 
 <p>Job&rsquo;s a good &lsquo;un. And for bonus points, let&rsquo;s use the excellent  <a href="https://stedolan.github.io/jq/"><code>jq</code></a> to format the JSON:</p>
 
-<p><img src="/content/images/2016/05/rest03-1.png" alt="rest03.png" /></p>
+<p><img src="/images/2016/05/rest03-1.png" alt="rest03.png" /></p>
 
 <p>or even parse out specific values from it (<em>use <a href="https://jqplay.org/">jqplay</a> to help figure out the syntax of filters</em>)</p>
 
-<p><img src="/content/images/2016/05/rest04.png" alt="rest04.png" /></p>
+<p><img src="/images/2016/05/rest04.png" alt="rest04.png" /></p>
 
 <p>And why&rsquo;s this useful? Because we can now programatically do things with the data that we can access. Like, check a user&rsquo;s remaining quota:</p>
 
 <pre><code>echo 'User has ' $(curl -s -X 'GET' 'http://192.168.56.101:7780/va/api/v1/dataset/limits' -H 'Cookie: JSESSIONID=Dp3h6i4FcuIfoTYAYsvb8Z8TYDOcnuxDl52KVdRREYlNfn8w1D49!-946065168' | jq '.limits.&quot;user-remaining-quota-kilobytes&quot;') ' KB remaining in their quota'
 </code></pre>
 
-<p><img src="/content/images/2016/05/rest05.png" alt="rest05.png" /></p>
+<p><img src="/images/2016/05/rest05.png" alt="rest05.png" /></p>
 
 <p>Sure, you need the user&rsquo;s session cookie to literally do this, but it still gives you an idea of what&rsquo;s possible. A final mention for now for Paw &ndash; as well as exporting to cURL, you can generate code to many formats, not least including Python:</p>
 
@@ -251,7 +251,7 @@ def send_request():
 
 <p>We&rsquo;ve got to assume that it gets set as part of the authentication process when we login to VA. Let&rsquo;s stick Chrome Dev Tools on and see what we get:</p>
 
-<p><img src="/content/images/2016/05/va_login_02.png" alt="va_login_02.png" /></p>
+<p><img src="/images/2016/05/va_login_02.png" alt="va_login_02.png" /></p>
 
 <p>You can see from this the URL that gets called, how it&rsquo;s called (HTTP <code>POST</code>), the format of the body with the username/password we&rsquo;re logging in as &ndash; and the all-important response header that gives us our <code>JSESSIONID</code> value.</p>
 
@@ -259,11 +259,11 @@ def send_request():
 
 <p>Using the same trick as above (Copy as cURL from Chrome, import to Paw), I can run the same request in Paw:</p>
 
-<p><img src="/content/images/2016/05/paw04.png" alt="paw04.png" /></p>
+<p><img src="/images/2016/05/paw04.png" alt="paw04.png" /></p>
 
 <p>Clicking on the <strong>Headers</strong> option in the response pane shows the cookie being set:</p>
 
-<p><img src="/content/images/2016/05/paw05-2.png" alt="paw05.png" /></p>
+<p><img src="/images/2016/05/paw05-2.png" alt="paw05.png" /></p>
 
 <p>Using the Paw Code Generator, I can run this as a cURL command - but by default cURL won&rsquo;t give me the cookie:</p>
 
