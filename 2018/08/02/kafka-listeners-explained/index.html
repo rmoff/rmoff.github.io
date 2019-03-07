@@ -84,17 +84,21 @@
 		<main role="main">
 		
 <article class="center bg-white br-3 pv1 ph4 nested-copy-line-height lh-copy f4 nested-links mw-100 measure-wide">
-	
-
-<p>This question comes up on StackOverflow and such places a <strong>lot</strong>, so here&rsquo;s something to try and help.</p>
+	<p>This question comes up on StackOverflow and such places a <strong>lot</strong>, so here&rsquo;s something to try and help.</p>
 
 <p><strong>tl;dr</strong> : You need to set <code>advertised.listeners</code> (or <code>KAFKA_ADVERTISED_LISTENERS</code> if you&rsquo;re using Docker images) to the external address (host/IP) so that clients can correctly connect to it. Otherwise they&rsquo;ll try to connect to the internal host address–and if that&rsquo;s not reachable then problems ensue.</p>
+
+<p>Put another way, courtesy of Spencer Ruport:</p>
+
+<blockquote>
+<p><code>LISTENERS</code> are what interfaces Kafka binds to. <code>ADVERTISED_LISTENERS</code>  are how clients can connect.</p>
+</blockquote>
 
 <p><img src="/images/2018/08/docker01.png" alt="images/docker01.png" /></p>
 
 <p>In this post I&rsquo;ll talk about <em>why</em> this is necessary, and then show <em>how</em> to do it, based on a couple of scenarios - Docker, and AWS.</p>
 
-<h4 id="is-anyone-listening">Is anyone listening?</h4>
+<h3 id="is-anyone-listening">Is anyone listening?</h3>
 
 <p>Kafka is a distributed system. Data is read from &amp; written to the <em>Leader</em> for a given partition, which could be on any of the brokers in a cluster. When a client (producer/consumer) starts, it will request metadata about which broker is the leader for a partition—and it can do this from <em>any</em> broker. The metadata returned will include the endpoints available for the Leader broker for that partition, and the client will then use those endpoints to connect to the broker to read/write data as required.</p>
 
@@ -180,7 +184,7 @@ Metadata for all topics (from broker 0: kafka0:29092/0):
 
 <p>You can also use <code>tcpdump</code> to examine the traffic from a client connecting to the broker, and spot the hostname that&rsquo;s returned from the broker.</p>
 
-<h4 id="why-can-i-connect-to-the-broker-but-the-client-still-fails">Why can I connect to the broker, but the client still fails?</h4>
+<h3 id="why-can-i-connect-to-the-broker-but-the-client-still-fails">Why can I connect to the broker, but the client still fails?</h3>
 
 <p><em>tl;dr</em> Even if you can make the initial connection to the broker, the address returned in the metadata may still be for a hostname that is not accessible from your client.</p>
 
@@ -247,7 +251,7 @@ Metadata for all topics (from broker -1: ec2-54-191-84-122.us-west-2.compute.ama
 <p>Here we&rsquo;re using <code>kafkacat</code> in producer mode (<code>-C</code>) from our local machine to try and read from the topic. As before, because we&rsquo;re getting the <em>internal</em> listener hostname back from the broker in the metadata, the client cannot resolve that hostname to read/write from.</p></li>
 </ol>
 
-<h4 id="i-saw-a-stackoverflow-answer-suggesting-to-just-update-my-hosts-file-isn-t-that-easier">I saw a StackOverflow answer suggesting to just update my hosts file…isn&rsquo;t that easier?</h4>
+<h3 id="i-saw-a-stackoverflow-answer-suggesting-to-just-update-my-hosts-file-isn-t-that-easier">I saw a StackOverflow answer suggesting to just update my hosts file…isn&rsquo;t that easier?</h3>
 
 <p>This is nothing more than a hack to workaround a mis-configuration, instead of actually fixing it.</p>
 
@@ -255,7 +259,7 @@ Metadata for all topics (from broker -1: ec2-54-191-84-122.us-west-2.compute.ama
 
 <p>Much better is to understand and actually fix the <code>advertised.listeners</code> setting for your network.</p>
 
-<h4 id="howto-connecting-to-kafka-on-docker">HOWTO: Connecting to Kafka on Docker</h4>
+<h3 id="howto-connecting-to-kafka-on-docker">HOWTO: Connecting to Kafka on Docker</h3>
 
 <p><img src="/images/2018/08/docker01.png" alt="images/docker01.png" /></p>
 
@@ -289,7 +293,7 @@ Metadata for all topics (from broker -1: ec2-54-191-84-122.us-west-2.compute.ama
 <li>The above configuration would <em>not</em> handle the scenario in which a client external to Docker <em>and</em> external to the host machine wants to connect. This is because neither <code>kafka0</code> (the internal Docker hostname) <em>or</em> <code>localhost</code> (the loopback address for the Docker host machine) would be resolvable.</li>
 </ul>
 
-<h4 id="howto-connecting-to-kafka-on-aws-iaas">HOWTO: Connecting to Kafka on AWS/IaaS</h4>
+<h3 id="howto-connecting-to-kafka-on-aws-iaas">HOWTO: Connecting to Kafka on AWS/IaaS</h3>
 
 <p><em>I&rsquo;m naming AWS because it&rsquo;s what the majority of people use, but this applies to any IaaS/Cloud solution.</em></p>
 
@@ -299,7 +303,7 @@ Metadata for all topics (from broker -1: ec2-54-191-84-122.us-west-2.compute.ama
 
 <p>There are two approaches, depending on whether the external address through which you&rsquo;re going to connect to the broker is also resolvable locally to all of the brokers on the network (e.g VPC).</p>
 
-<h5 id="option-1-external-address-is-resolvable-locally">Option 1 - external address IS resolvable locally</h5>
+<h4 id="option-1-external-address-is-resolvable-locally">Option 1 - external address IS resolvable locally</h4>
 
 <p><img src="/images/2018/08/aws01-1.png" alt="images/aws01.png" /></p>
 
@@ -310,7 +314,7 @@ Metadata for all topics (from broker -1: ec2-54-191-84-122.us-west-2.compute.ama
 
 <p>Now connections both internally and externally will use <code>ec2-54-191-84-122.us-west-2.compute.amazonaws.com</code> for connecting. Because <code>ec2-54-191-84-122.us-west-2.compute.amazonaws.com</code> can be resolved both locally and externally, things work fine.</p>
 
-<h5 id="option-2-external-address-is-not-resolvable-locally">Option 2 - external address is NOT resolvable locally</h5>
+<h4 id="option-2-external-address-is-not-resolvable-locally">Option 2 - external address is NOT resolvable locally</h4>
 
 <p>You will need to configure two listeners for Kafka:</p>
 
@@ -332,7 +336,7 @@ advertised.listeners=INTERNAL://ip-172-31-18-160.us-west-2.compute.internal:1909
 inter.broker.listener.name=INTERNAL
 </code></pre>
 
-<h4 id="exploring-listeners-with-docker">Exploring listeners with Docker</h4>
+<h3 id="exploring-listeners-with-docker">Exploring listeners with Docker</h3>
 
 <p>Take a look at <a href="https://github.com/rmoff/kafka-listeners">https://github.com/rmoff/kafka-listeners</a>. This includes a docker-compose to bring up a Zookeeper instance along with Kafka broker configured with several listeners.</p>
 
@@ -371,11 +375,11 @@ Metadata for all topics (from broker -1: kafka0:29094/bootstrap):
 </code></pre></li>
 </ul>
 
-<h4 id="redux">Redux</h4>
+<h3 id="redux">Redux</h3>
 
 <p>I recently referenced this post in <a href="https://stackoverflow.com/questions/52438822/docker-kafka-dockerized-python-application/52440056#52440056">a StackOverflow answer I gave</a>, and re-articulated the solution. If you&rsquo;re still not quite following, check it out and maybe second time around I&rsquo;ll have explained it better:)</p>
 
-<h4 id="references">References</h4>
+<h3 id="references">References</h3>
 
 <ul>
 <li><a href="https://kafka.apache.org/documentation/#brokerconfigs">https://kafka.apache.org/documentation/#brokerconfigs</a></li>
@@ -385,10 +389,9 @@ Metadata for all topics (from broker -1: kafka0:29094/bootstrap):
 <li><a href="https://stackoverflow.com/questions/42998859/kafka-server-configuration-listeners-vs-advertised-listeners">https://stackoverflow.com/questions/42998859/kafka-server-configuration-listeners-vs-advertised-listeners</a></li>
 </ul>
 
-<h4 id="still-not-sure">Still not sure?</h4>
+<h3 id="still-not-sure">Still not sure?</h3>
 
 <p>Check out the <a href="http://cnfl.io/slack">Confluent Community Slack group</a> or <a href="https://lists.apache.org/list.html?users@kafka.apache.org">Apache Kafka user mailing list</a> for more help.</p>
-
 </article>
 
 		</main>
