@@ -7,7 +7,437 @@
 		<language>en-us</language>
 		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2019</rights>
-		<updated>2019-03-25 16:45:40 &#43;0000 UTC</updated>
+		<updated>2019-03-28 14:46:24 &#43;0000 UTC</updated>
+		
+		<item>
+			<title>Exploring KSQL Stream-Stream Joins</title>
+			<link>https://rmoff.github.io/2019/03/28/exploring-ksql-stream-stream-joins/</link>
+			<pubDate>Thu, 28 Mar 2019 14:46:24 UTC</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/2019/03/28/exploring-ksql-stream-stream-joins/</guid>
+			<description>&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_introduction&#34;&gt;Introduction&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What can you use stream-stream joins for? Can you use them to join between a stream of orders and stream of related shipments to do useful things? What&amp;#8217;s not supported in KSQL, where are the cracks?&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_test_data&#34;&gt;Test data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;via &lt;a href=&#34;http://mockaroo.com&#34;&gt;Mockaroo&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;https://api.mockaroo.com/api/bf24ebf0?count=500&amp;amp;key=ff7856d0&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  kafkacat -P -b localhost -t orders
+
+curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;https://api.mockaroo.com/api/b410d0b0?count=500&amp;amp;key=ff7856d0&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  kafkacat -P -b localhost -t shipments&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_model_the_streams_in_ksql&#34;&gt;Model the streams in KSQL&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Note setting the timestamp to reflect the time of the event (&lt;code&gt;ORDER_TS&lt;/code&gt; and &lt;code&gt;SHIPMENT_TS&lt;/code&gt; respectively)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt; STREAM ORDERS (ORDER_ID &lt;span style=&#34;color:#008000&#34;&gt;INT&lt;/span&gt;, 
+                      CUSTOMER_ID &lt;span style=&#34;color:#008000&#34;&gt;INT&lt;/span&gt;, 
+                      ORDER_TS &lt;span style=&#34;color:#008000&#34;&gt;VARCHAR&lt;/span&gt;, 
+                      ORDER_TOTAL_USD DOUBLE, 
+                      MAKE &lt;span style=&#34;color:#008000&#34;&gt;VARCHAR&lt;/span&gt;) 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WITH&lt;/span&gt; (KAFKA_TOPIC&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;orders&amp;#39;&lt;/span&gt;, VALUE_FORMAT&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;JSON&amp;#39;&lt;/span&gt;, 
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;ORDER_TS&amp;#39;&lt;/span&gt;, TIMESTAMP_FORMAT&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd&amp;#39;&amp;#39;T&amp;#39;&amp;#39;HH:mm:ssX&amp;#39;&lt;/span&gt;);
+
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt; STREAM SHIPMENTS (SHIPMENT_ID &lt;span style=&#34;color:#008000&#34;&gt;VARCHAR&lt;/span&gt;, 
+                         ORDER_ID &lt;span style=&#34;color:#008000&#34;&gt;INT&lt;/span&gt;, 
+                         SHIPMENT_PROVIDER &lt;span style=&#34;color:#008000&#34;&gt;VARCHAR&lt;/span&gt;, 
+                         SHIPMENT_TS &lt;span style=&#34;color:#008000&#34;&gt;VARCHAR&lt;/span&gt;) 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WITH&lt;/span&gt; (KAFKA_TOPIC&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;shipments&amp;#39;&lt;/span&gt;, VALUE_FORMAT&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;JSON&amp;#39;&lt;/span&gt;, 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;SHIPMENT_TS&amp;#39;&lt;/span&gt;, TIMESTAMP_FORMAT&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd&amp;#39;&amp;#39;T&amp;#39;&amp;#39;HH:mm:ssX&amp;#39;&lt;/span&gt;);
+
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;auto.offset.reset&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;earliest&amp;#39;&lt;/span&gt;;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_simple_aggregations_no_joins_yet&#34;&gt;Simple aggregations (no joins yet)&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;How many orders have been placed per hour? What was the maximum and average order value?&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TABLE&lt;/span&gt; ORDERS_AGG &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; WINDOWSTART() &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; WINDOW_START_TS, 
+         MAKE, 
+         &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;COUNT&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; ORDER_COUNT, 
+         &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;MAX&lt;/span&gt;(ORDER_TOTAL_USD) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; MAX_ORDER_VALUE_USD,
+         &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(ORDER_TOTAL_USD) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; TOTAL_ORDER_VALUE_USD,
+         &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(ORDER_TOTAL_USD)&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;COUNT&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; AVG_ORDER_VALUE_USD
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDERS 
+           WINDOW TUMBLING (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SIZE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; HOUR) 
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt; MAKE;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(WINDOW_START_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;), 
+       MAKE, 
+       ORDER_COUNT,
+       MAX_ORDER_VALUE_USD 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDERS_AGG;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;16&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Ford &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;193828&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;28&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Ford &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;7&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;171296&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Ford &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;181811&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;96&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;04&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Audi &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;9&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;184161&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;05&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;130305&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;35&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;200194&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;86&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;How many shipments per hour?&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TABLE&lt;/span&gt; SHIPMENTS_AGG &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; WINDOWSTART() &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; WINDOW_START_TS, 
+         SHIPMENT_PROVIDER, 
+         &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;COUNT&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; SHIPMENT_COUNT
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; SHIPMENTS 
+           WINDOW TUMBLING (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SIZE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; HOUR) 
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt; SHIPMENT_PROVIDER;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(WINDOW_START_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;), 
+       SHIPMENT_PROVIDER, 
+       SHIPMENT_COUNT 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; SHIPMENTS_AGG;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;26&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;01&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; ups &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;26&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;04&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; dhl &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;26&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; dhl &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;6&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;26&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; ups &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;26&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;16&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; dhl &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_match_orders_to_shipments&#34;&gt;Match orders to shipments&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Notes about the SQL:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;olist arabic&#34;&gt;
+&lt;ol class=&#34;arabic&#34;&gt;
+&lt;li&gt;
+&lt;p&gt;The timestamp of the generated message is set to that of the &lt;em&gt;order&lt;/em&gt;. By default KSQL will set the timestamp to that of the &lt;em&gt;message that triggers the join&lt;/em&gt;, which here could be an order &lt;em&gt;or&lt;/em&gt; shipment.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The data is written as Avro, rather than the source JSON&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;A column is created using &lt;code&gt;CASE&lt;/code&gt; that denotes if the order has shipped, which can be useful for subsequent filtering or aggregations&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The time difference between order and shipment is calculated and stored as a minutes value&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The join is a &lt;code&gt;LEFT OUTER&lt;/code&gt;, meaning that records &lt;em&gt;must&lt;/em&gt; exist on the left of the join (&lt;code&gt;ORDERS&lt;/code&gt;) and if no matching record on the right (&lt;code&gt;SHIPMENTS&lt;/code&gt;) is found the value will be returned as &lt;code&gt;NULL&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Because this is a stream-stream join it needs to specify a time window across which to evaluate the condition. By setting it to &lt;code&gt;(0 SECONDS, 7 DAYS)&lt;/code&gt; any shipment up to seven days after the order will be matched. No shipments occurring &lt;em&gt;before&lt;/em&gt; the order will be matched.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt; STREAM ORDER_SHIPMENTS &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WITH&lt;/span&gt; (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;ORDER_TS&amp;#39;&lt;/span&gt;, VALUE_FORMAT&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;AVRO&amp;#39;&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; O.ROWTIME &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; ORDER_TS, 
+         S.ROWTIME &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; SHIPMENT_TS, 
+         O.ORDER_ID &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; ORDER_ID, 
+         O.MAKE &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; MAKE,
+         O.ORDER_TOTAL_USD &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; ORDER_TOTAL_USD,
+         S.SHIPMENT_ID &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; SHIPMENT_ID, 
+         S.SHIPMENT_PROVIDER &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; SHIPMENT_PROVIDER, 
+         (S.ROWTIME &lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt; O.ROWTIME)&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1000&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;60&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; LEADTIME_MINUTES, 
+         &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CASE&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHEN&lt;/span&gt; S.SHIPMENT_ID &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;IS&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;NULL&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;THEN&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;ELSE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;END&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; SHIPPED_IND
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDERS O 
+          &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;LEFT&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;OUTER&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;JOIN&lt;/span&gt; SHIPMENTS S 
+            WITHIN (&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; SECONDS, &lt;span style=&#34;color:#666&#34;&gt;7&lt;/span&gt; DAYS) 
+            &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;ON&lt;/span&gt; O.ORDER_ID&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;S.ORDER_ID;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;From this new stream we can answer questions such as &lt;em&gt;what was the lead time?&lt;/em&gt; That is, the time difference between the order being placed and it shipping.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(ORDER_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;), 
+       TIMESTAMPTOSTRING(SHIPMENT_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;), 
+       ORDER_ID, 
+       MAKE, 
+       SHIPMENT_PROVIDER, 
+       LEADTIME_MINUTES 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS 
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt;  ORDER_ID&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt;
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AND&lt;/span&gt;  SHIPPED_IND&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;41&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;26&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;05&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;42&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; ups &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2641&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;(2641 minutes = 44 hours, 1 minute)&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What we can&amp;#8217;t answer yet from this stream is &#34;Has an order shipped?&#34;. It may seem obvious to simply query it for where no match to a shipment was made (e.g. &lt;code&gt;WHERE SHIPMENT_ID IS NULL&lt;/code&gt;) or use the derived &lt;code&gt;SHIPPED_IND&lt;/code&gt; column (which uses the same logic), but this won&amp;#8217;t work. Why? Because we are working with a stream of events. Consider the order above, ID 329:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(ORDER_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt;  ORDER_ID&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt;;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;41&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;null&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;41&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; ship&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;wv85258&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There are two events:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;olist arabic&#34;&gt;
+&lt;ol class=&#34;arabic&#34;&gt;
+&lt;li&gt;
+&lt;p&gt;The order is placed. No shipment matches&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The shipment is made. It matches to the order and a new event is written.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So if we simply query the stream for a &#34;not shipped&#34; condition we&amp;#8217;ll just pull back the initial Order record:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(ORDER_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS
+ &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt; ORDER_ID&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt; 
+   &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AND&lt;/span&gt; SHIPPED_IND&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;41&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;null&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_streamtable_duality_in_action&#34;&gt;Stream/Table duality in action&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let&amp;#8217;s take the stream of events relating to a given key (&lt;code&gt;ORDER_ID&lt;/code&gt;) and treat it as a table—what&amp;#8217;s the current &lt;em&gt;state&lt;/em&gt; for the given &lt;em&gt;key&lt;/em&gt;? Here we register a KSQL table on top of the Kafka topic to which the previous join query is writing.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TABLE&lt;/span&gt; ORDER_SHIPMENTS_T 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WITH&lt;/span&gt; (KAFKA_TOPIC&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;ORDER_SHIPMENTS&amp;#39;&lt;/span&gt;, 
+        VALUE_FORMAT&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;AVRO&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;KEY&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;ORDER_ID&amp;#39;&lt;/span&gt;); &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now we can run the same query as above, but this time we get the current state for any order:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(ORDER_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS_T
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt;  ORDER_ID&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt;;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;41&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; ship&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;wv85258&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Just one row returned; the current state of the record. Since the table maintains the &lt;em&gt;current state&lt;/em&gt; it means that we &lt;em&gt;can&lt;/em&gt; accurately query it for orders that have not shipped:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(ORDER_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS_T
+ &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt; SHIPPED_IND&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;16&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;27&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;56&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;7&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Audi &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;null&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;05&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;54&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;39&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Audi &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;null&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;23&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;53&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Audi &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;null&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_build_an_aggregate_on_a_table_not_yet&#34;&gt;Build an aggregate on a table? Not yet.&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Taking the above &lt;em&gt;state&lt;/em&gt; provided by the KSQL table, we&amp;#8217;d like to know things like :&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;By hour, how many orders are there outstanding (that have not shipped)?&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;However, doing an aggregation on a table is not currently possible in KSQL:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(WINDOWSTART(),&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;),
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;        MAKE,
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;COUNT&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; ORDERS_PLACED,
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(SHIPPED_IND) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; SHIPPED_ORDERS,
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;COUNT&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;) &lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(SHIPPED_IND) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; OUTSTANDING_ORDERS
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS_T
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;        WINDOW TUMBLING (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SIZE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; HOUR) 
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt; MAKE;
+Windowing &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;not&lt;/span&gt; supported &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;table&lt;/span&gt; aggregations.&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/confluentinc/ksql/issues/778&#34; class=&#34;bare&#34;&gt;https://github.com/confluentinc/ksql/issues/778&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But what about the order count? It would also be useful to have it in the same query as the count of shipments, rather than individual queries against &lt;code&gt;ORDERS_AGG&lt;/code&gt; and &lt;code&gt;SHIPMENTS_AGG&lt;/code&gt; we saw earlier. Can&amp;#8217;t we just get that from the &lt;code&gt;ORDER_SHIPMENTS&lt;/code&gt; stream?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let&amp;#8217;s try the aggregate just for &lt;code&gt;ORDER_ID=329&lt;/code&gt;, so that we know there is only a single order:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(WINDOWSTART(),&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;), 
+        MAKE, 
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;COUNT&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; ORDERS_PLACED, 
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(SHIPPED_IND) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; SHIPPED_ORDERS
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS
+        WINDOW TUMBLING (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SIZE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; HOUR)
+ &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt; ORDER_ID&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt;
+ &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt; MAKE;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Why&amp;#8217;s &lt;code&gt;ORDERS_PLACED==2&lt;/code&gt;? Because it&amp;#8217;s a &lt;code&gt;COUNT(*)&lt;/code&gt; of all matching rows, which is indeed 2:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(ORDER_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt;  ORDER_ID&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt;;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;41&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;null&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;41&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;329&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; ship&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;wv85258&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_useful_aggregations_that_we_can_do&#34;&gt;Useful aggregations that we can do&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Even though we can&amp;#8217;t do an aggregate against the state, we can still do some very useful stream processing against the stream of events themselves.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TABLE&lt;/span&gt; SHIPPED_ORDERS_AGG &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; WINDOWSTART() &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; WINDOW_START_TS, 
+         MAKE, 
+         &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;COUNT&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; SHIPPED_ORDERS, 
+         &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;MAX&lt;/span&gt;(LEADTIME_MINUTES) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; MAX_LEADTIME_MINUTES, 
+         &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(LEADTIME_MINUTES) &lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;COUNT&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; AVG_LEADTIME_MINUTES 
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS 
+           WINDOW TUMBLING (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SIZE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; HOUR) 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt; SHIPPED_IND&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; 
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt; MAKE;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;By hour, how many orders have shipped&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;By hour, what was the max leadtime?&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;By hour, what was the average leadtime?&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(WINDOW_START_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;), 
+       MAKE, 
+       SHIPPED_ORDERS, 
+       MAX_LEADTIME_MINUTES, 
+       AVG_LEADTIME_MINUTES 
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; SHIPPED_ORDERS_AGG;
+
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Audi &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;3397&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2939&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Audi &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;9&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;3022&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2266&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2317&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2317&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; BMW  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2534&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2121&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_alert_we_breached_our_sla&#34;&gt;ALERT! We breached our SLA 😫&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As well as creating aggregates, we can set thresholds and monitor for any orders that breach an SLA in terms of the leadtime.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt; STREAM ORDERS_BREACHED_LEADTIME_SLA &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt;
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; ORDER_ID,
+         SHIPMENT_ID, 
+         MAKE, 
+         SHIPMENT_PROVIDER, 
+         ORDER_TS,
+         SHIPMENT_TS,
+         LEADTIME_MINUTES
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDER_SHIPMENTS
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt;  LEADTIME_MINUTES &lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;4100&lt;/span&gt;;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now we have a KSQL stream (and thus Kafka topic) which lists an orders that took longer than the defined threshold to ship. This topic can be used for driving both dashboards and applications directly that need to respond to this breach.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; ORDER_ID,
+        SHIPMENT_ID, 
+        MAKE, 
+        SHIPMENT_PROVIDER, 
+        TIMESTAMPTOSTRING(ORDER_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;), 
+        TIMESTAMPTOSTRING(SHIPMENT_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;), 
+        LEADTIME_MINUTES
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; ORDERS_BREACHED_LEADTIME_SLA;
+
+&lt;span style=&#34;color:#666&#34;&gt;14&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; ship&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;og22112 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Audi &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; hermes &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;15&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;52&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;26&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;23&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;46&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;4110&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;315&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; ship&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;yp90671 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; Ford &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; dhl &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;42&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;26&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;4132&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_try_it_out&#34;&gt;Try it out?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Use this &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/community-components-only/docker-compose.yml&#34;&gt;Docker Compose&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+		</item>
 		
 		<item>
 			<title>Terminate All KSQL Queries</title>

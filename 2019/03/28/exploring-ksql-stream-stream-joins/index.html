@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Exploring KSQL Stream-Stream Joins</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.github.io/index.xml">
+		<link rel="canonical" href="https://rmoff.github.io/2019/03/28/exploring-ksql-stream-stream-joins/">
+		
+		<link rel="shortcut icon" type="image/png" href="https://rmoff.github.io/apple-touch-icon-precomposed.png">
+		
+		
+		<meta name="generator" content="Hugo 0.54.0" />
+
+		
+		<meta name="og:title" content="Exploring KSQL Stream-Stream Joins" />
+		<meta name="og:type" content="article" />
+		<meta name="og:image" content="https://rmoff.github.io/images/2019/03/IMG_8910.jpg" />
+		<meta name="og:description" content="" />
+		<meta name="og:url" content="https://rmoff.github.io/2019/03/28/exploring-ksql-stream-stream-joins/" />
+		<meta name="og:site_name" content="Exploring KSQL Stream-Stream Joins" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.github.io/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.github.io/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.github.io/images/2019/03/IMG_8910.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.github.io" title="Home">
+						<img src="https://rmoff.github.io/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="/talks/">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.github.io/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.github.io/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Exploring KSQL Stream-Stream Joins</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2019-03-28T14:46:24Z">Mar 28, 2019</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.github.io/categories//ksql" class="no-underline category near-white dim">KSQL</a>, <a href="https://rmoff.github.io/categories//stream-processing" class="no-underline category near-white dim">Stream Processing</a>
+								<span class="display-print">at https://rmoff.github.io/2019/03/28/exploring-ksql-stream-stream-joins/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 nested-copy-line-height lh-copy f4 nested-links mw-100 measure-wide">
+	<div class="sect1">
+<h2 id="_introduction">Introduction</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>What can you use stream-stream joins for? Can you use them to join between a stream of orders and stream of related shipments to do useful things? What&#8217;s not supported in KSQL, where are the cracks?</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_test_data">Test data</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>via <a href="http://mockaroo.com">Mockaroo</a>:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -s <span style="color:#ba2121">&#34;https://api.mockaroo.com/api/bf24ebf0?count=500&amp;key=ff7856d0&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  kafkacat -P -b localhost -t orders
+
+curl -s <span style="color:#ba2121">&#34;https://api.mockaroo.com/api/b410d0b0?count=500&amp;key=ff7856d0&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  kafkacat -P -b localhost -t shipments</code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_model_the_streams_in_ksql">Model the streams in KSQL</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Note setting the timestamp to reflect the time of the event (<code>ORDER_TS</code> and <code>SHIPMENT_TS</code> respectively)</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM ORDERS (ORDER_ID <span style="color:#008000">INT</span>, 
+                      CUSTOMER_ID <span style="color:#008000">INT</span>, 
+                      ORDER_TS <span style="color:#008000">VARCHAR</span>, 
+                      ORDER_TOTAL_USD DOUBLE, 
+                      MAKE <span style="color:#008000">VARCHAR</span>) 
+  <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;orders&#39;</span>, VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;JSON&#39;</span>, 
+        <span style="color:#008000;font-weight:bold">TIMESTAMP</span><span style="color:#666">=</span><span style="color:#ba2121">&#39;ORDER_TS&#39;</span>, TIMESTAMP_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;yyyy-MM-dd&#39;&#39;T&#39;&#39;HH:mm:ssX&#39;</span>);
+
+<span style="color:#008000;font-weight:bold">CREATE</span> STREAM SHIPMENTS (SHIPMENT_ID <span style="color:#008000">VARCHAR</span>, 
+                         ORDER_ID <span style="color:#008000">INT</span>, 
+                         SHIPMENT_PROVIDER <span style="color:#008000">VARCHAR</span>, 
+                         SHIPMENT_TS <span style="color:#008000">VARCHAR</span>) 
+  <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;shipments&#39;</span>, VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;JSON&#39;</span>, 
+  <span style="color:#008000;font-weight:bold">TIMESTAMP</span><span style="color:#666">=</span><span style="color:#ba2121">&#39;SHIPMENT_TS&#39;</span>, TIMESTAMP_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;yyyy-MM-dd&#39;&#39;T&#39;&#39;HH:mm:ssX&#39;</span>);
+
+<span style="color:#008000;font-weight:bold">SET</span> <span style="color:#ba2121">&#39;auto.offset.reset&#39;</span> <span style="color:#666">=</span> <span style="color:#ba2121">&#39;earliest&#39;</span>;</code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_simple_aggregations_no_joins_yet">Simple aggregations (no joins yet)</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>How many orders have been placed per hour? What was the maximum and average order value?</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> <span style="color:#008000;font-weight:bold">TABLE</span> ORDERS_AGG <span style="color:#008000;font-weight:bold">AS</span> 
+  <span style="color:#008000;font-weight:bold">SELECT</span> WINDOWSTART() <span style="color:#008000;font-weight:bold">AS</span> WINDOW_START_TS, 
+         MAKE, 
+         <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> ORDER_COUNT, 
+         <span style="color:#008000;font-weight:bold">MAX</span>(ORDER_TOTAL_USD) <span style="color:#008000;font-weight:bold">AS</span> MAX_ORDER_VALUE_USD,
+         <span style="color:#008000;font-weight:bold">SUM</span>(ORDER_TOTAL_USD) <span style="color:#008000;font-weight:bold">AS</span> TOTAL_ORDER_VALUE_USD,
+         <span style="color:#008000;font-weight:bold">SUM</span>(ORDER_TOTAL_USD)<span style="color:#666">/</span><span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> AVG_ORDER_VALUE_USD
+    <span style="color:#008000;font-weight:bold">FROM</span> ORDERS 
+           WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">1</span> HOUR) 
+<span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> MAKE;</code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOW_START_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>), 
+       MAKE, 
+       ORDER_COUNT,
+       MAX_ORDER_VALUE_USD 
+  <span style="color:#008000;font-weight:bold">FROM</span> ORDERS_AGG;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">16</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> Ford <span style="color:#666">|</span> <span style="color:#666">8</span> <span style="color:#666">|</span> <span style="color:#666">193828</span>.<span style="color:#666">28</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">12</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> Ford <span style="color:#666">|</span> <span style="color:#666">7</span> <span style="color:#666">|</span> <span style="color:#666">171296</span>.<span style="color:#666">8</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> Ford <span style="color:#666">|</span> <span style="color:#666">4</span> <span style="color:#666">|</span> <span style="color:#666">181811</span>.<span style="color:#666">96</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">04</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> Audi <span style="color:#666">|</span> <span style="color:#666">9</span> <span style="color:#666">|</span> <span style="color:#666">184161</span>.<span style="color:#666">1</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">05</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> <span style="color:#666">1</span> <span style="color:#666">|</span> <span style="color:#666">130305</span>.<span style="color:#666">35</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">19</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> <span style="color:#666">1</span> <span style="color:#666">|</span> <span style="color:#666">200194</span>.<span style="color:#666">86</span></code></pre></div>
+</div>
+</li>
+<li>
+<p>How many shipments per hour?</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> <span style="color:#008000;font-weight:bold">TABLE</span> SHIPMENTS_AGG <span style="color:#008000;font-weight:bold">AS</span> 
+  <span style="color:#008000;font-weight:bold">SELECT</span> WINDOWSTART() <span style="color:#008000;font-weight:bold">AS</span> WINDOW_START_TS, 
+         SHIPMENT_PROVIDER, 
+         <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> SHIPMENT_COUNT
+    <span style="color:#008000;font-weight:bold">FROM</span> SHIPMENTS 
+           WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">1</span> HOUR) 
+<span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> SHIPMENT_PROVIDER;</code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOW_START_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>), 
+       SHIPMENT_PROVIDER, 
+       SHIPMENT_COUNT 
+  <span style="color:#008000;font-weight:bold">FROM</span> SHIPMENTS_AGG;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">26</span> <span style="color:#666">01</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> ups <span style="color:#666">|</span> <span style="color:#666">2</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">26</span> <span style="color:#666">04</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> dhl <span style="color:#666">|</span> <span style="color:#666">1</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">26</span> <span style="color:#666">13</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> dhl <span style="color:#666">|</span> <span style="color:#666">6</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">26</span> <span style="color:#666">11</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> ups <span style="color:#666">|</span> <span style="color:#666">3</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">26</span> <span style="color:#666">16</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> dhl <span style="color:#666">|</span> <span style="color:#666">1</span></code></pre></div>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_match_orders_to_shipments">Match orders to shipments</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Notes about the SQL:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The timestamp of the generated message is set to that of the <em>order</em>. By default KSQL will set the timestamp to that of the <em>message that triggers the join</em>, which here could be an order <em>or</em> shipment.</p>
+</li>
+<li>
+<p>The data is written as Avro, rather than the source JSON</p>
+</li>
+<li>
+<p>A column is created using <code>CASE</code> that denotes if the order has shipped, which can be useful for subsequent filtering or aggregations</p>
+</li>
+<li>
+<p>The time difference between order and shipment is calculated and stored as a minutes value</p>
+</li>
+<li>
+<p>The join is a <code>LEFT OUTER</code>, meaning that records <em>must</em> exist on the left of the join (<code>ORDERS</code>) and if no matching record on the right (<code>SHIPMENTS</code>) is found the value will be returned as <code>NULL</code>.</p>
+</li>
+<li>
+<p>Because this is a stream-stream join it needs to specify a time window across which to evaluate the condition. By setting it to <code>(0 SECONDS, 7 DAYS)</code> any shipment up to seven days after the order will be matched. No shipments occurring <em>before</em> the order will be matched.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM ORDER_SHIPMENTS <span style="color:#008000;font-weight:bold">WITH</span> (<span style="color:#008000;font-weight:bold">TIMESTAMP</span><span style="color:#666">=</span><span style="color:#ba2121">&#39;ORDER_TS&#39;</span>, VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;AVRO&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> 
+  <span style="color:#008000;font-weight:bold">SELECT</span> O.ROWTIME <span style="color:#008000;font-weight:bold">AS</span> ORDER_TS, 
+         S.ROWTIME <span style="color:#008000;font-weight:bold">AS</span> SHIPMENT_TS, 
+         O.ORDER_ID <span style="color:#008000;font-weight:bold">AS</span> ORDER_ID, 
+         O.MAKE <span style="color:#008000;font-weight:bold">AS</span> MAKE,
+         O.ORDER_TOTAL_USD <span style="color:#008000;font-weight:bold">AS</span> ORDER_TOTAL_USD,
+         S.SHIPMENT_ID <span style="color:#008000;font-weight:bold">AS</span> SHIPMENT_ID, 
+         S.SHIPMENT_PROVIDER <span style="color:#008000;font-weight:bold">AS</span> SHIPMENT_PROVIDER, 
+         (S.ROWTIME <span style="color:#666">-</span> O.ROWTIME)<span style="color:#666">/</span><span style="color:#666">1000</span><span style="color:#666">/</span><span style="color:#666">60</span> <span style="color:#008000;font-weight:bold">AS</span> LEADTIME_MINUTES, 
+         <span style="color:#008000;font-weight:bold">CASE</span> <span style="color:#008000;font-weight:bold">WHEN</span> S.SHIPMENT_ID <span style="color:#008000;font-weight:bold">IS</span> <span style="color:#008000;font-weight:bold">NULL</span> <span style="color:#008000;font-weight:bold">THEN</span> <span style="color:#666">0</span> <span style="color:#008000;font-weight:bold">ELSE</span> <span style="color:#666">1</span> <span style="color:#008000;font-weight:bold">END</span> <span style="color:#008000;font-weight:bold">AS</span> SHIPPED_IND
+    <span style="color:#008000;font-weight:bold">FROM</span> ORDERS O 
+          <span style="color:#008000;font-weight:bold">LEFT</span> <span style="color:#008000;font-weight:bold">OUTER</span> <span style="color:#008000;font-weight:bold">JOIN</span> SHIPMENTS S 
+            WITHIN (<span style="color:#666">0</span> SECONDS, <span style="color:#666">7</span> DAYS) 
+            <span style="color:#008000;font-weight:bold">ON</span> O.ORDER_ID<span style="color:#666">=</span>S.ORDER_ID;</code></pre></div>
+</div>
+<div class="paragraph">
+<p>From this new stream we can answer questions such as <em>what was the lead time?</em> That is, the time difference between the order being placed and it shipping.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ORDER_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>), 
+       TIMESTAMPTOSTRING(SHIPMENT_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>), 
+       ORDER_ID, 
+       MAKE, 
+       SHIPMENT_PROVIDER, 
+       LEADTIME_MINUTES 
+  <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS 
+<span style="color:#008000;font-weight:bold">WHERE</span>  ORDER_ID<span style="color:#666">=</span><span style="color:#666">329</span>
+  <span style="color:#008000;font-weight:bold">AND</span>  SHIPPED_IND<span style="color:#666">=</span><span style="color:#666">1</span>;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">41</span>:<span style="color:#666">13</span> <span style="color:#666">|</span> <span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">26</span> <span style="color:#666">05</span>:<span style="color:#666">42</span>:<span style="color:#666">37</span> <span style="color:#666">|</span> <span style="color:#666">329</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> ups <span style="color:#666">|</span> <span style="color:#666">2641</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p><em>(2641 minutes = 44 hours, 1 minute)</em></p>
+</div>
+<div class="paragraph">
+<p>What we can&#8217;t answer yet from this stream is "Has an order shipped?". It may seem obvious to simply query it for where no match to a shipment was made (e.g. <code>WHERE SHIPMENT_ID IS NULL</code>) or use the derived <code>SHIPPED_IND</code> column (which uses the same logic), but this won&#8217;t work. Why? Because we are working with a stream of events. Consider the order above, ID 329:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ORDER_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID 
+  <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS
+<span style="color:#008000;font-weight:bold">WHERE</span>  ORDER_ID<span style="color:#666">=</span><span style="color:#666">329</span>;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">41</span>:<span style="color:#666">13</span> <span style="color:#666">|</span> <span style="color:#666">329</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> <span style="color:#666">0</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">41</span>:<span style="color:#666">13</span> <span style="color:#666">|</span> <span style="color:#666">329</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> <span style="color:#666">1</span> <span style="color:#666">|</span> ship<span style="color:#666">-</span>wv85258</code></pre></div>
+</div>
+<div class="paragraph">
+<p>There are two events:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The order is placed. No shipment matches</p>
+</li>
+<li>
+<p>The shipment is made. It matches to the order and a new event is written.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>So if we simply query the stream for a "not shipped" condition we&#8217;ll just pull back the initial Order record:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ORDER_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID
+  <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS
+ <span style="color:#008000;font-weight:bold">WHERE</span> ORDER_ID<span style="color:#666">=</span><span style="color:#666">329</span> 
+   <span style="color:#008000;font-weight:bold">AND</span> SHIPPED_IND<span style="color:#666">=</span><span style="color:#666">0</span>;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">41</span>:<span style="color:#666">13</span> <span style="color:#666">|</span> <span style="color:#666">329</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> <span style="color:#666">0</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_streamtable_duality_in_action">Stream/Table duality in action</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Let&#8217;s take the stream of events relating to a given key (<code>ORDER_ID</code>) and treat it as a table—what&#8217;s the current <em>state</em> for the given <em>key</em>? Here we register a KSQL table on top of the Kafka topic to which the previous join query is writing.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> <span style="color:#008000;font-weight:bold">TABLE</span> ORDER_SHIPMENTS_T 
+  <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;ORDER_SHIPMENTS&#39;</span>, 
+        VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;AVRO&#39;</span>,
+        <span style="color:#008000;font-weight:bold">KEY</span><span style="color:#666">=</span><span style="color:#ba2121">&#39;ORDER_ID&#39;</span>); </code></pre></div>
+</div>
+<div class="paragraph">
+<p>Now we can run the same query as above, but this time we get the current state for any order:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ORDER_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID 
+  <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS_T
+<span style="color:#008000;font-weight:bold">WHERE</span>  ORDER_ID<span style="color:#666">=</span><span style="color:#666">329</span>;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">41</span>:<span style="color:#666">13</span> <span style="color:#666">|</span> <span style="color:#666">329</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> <span style="color:#666">1</span> <span style="color:#666">|</span> ship<span style="color:#666">-</span>wv85258</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Just one row returned; the current state of the record. Since the table maintains the <em>current state</em> it means that we <em>can</em> accurately query it for orders that have not shipped:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ORDER_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID
+  <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS_T
+ <span style="color:#008000;font-weight:bold">WHERE</span> SHIPPED_IND<span style="color:#666">=</span><span style="color:#666">0</span>;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">16</span>:<span style="color:#666">27</span>:<span style="color:#666">56</span> <span style="color:#666">|</span> <span style="color:#666">7</span> <span style="color:#666">|</span> Audi <span style="color:#666">|</span> <span style="color:#666">0</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">05</span>:<span style="color:#666">54</span>:<span style="color:#666">43</span> <span style="color:#666">|</span> <span style="color:#666">39</span> <span style="color:#666">|</span> Audi <span style="color:#666">|</span> <span style="color:#666">0</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">23</span>:<span style="color:#666">20</span>:<span style="color:#666">37</span> <span style="color:#666">|</span> <span style="color:#666">53</span> <span style="color:#666">|</span> Audi <span style="color:#666">|</span> <span style="color:#666">0</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_build_an_aggregate_on_a_table_not_yet">Build an aggregate on a table? Not yet.</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Taking the above <em>state</em> provided by the KSQL table, we&#8217;d like to know things like :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>By hour, how many orders are there outstanding (that have not shipped)?</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>However, doing an aggregation on a table is not currently possible in KSQL:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOWSTART(),<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>),
+<span style="color:#666">&gt;</span>        MAKE,
+<span style="color:#666">&gt;</span>        <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> ORDERS_PLACED,
+<span style="color:#666">&gt;</span>        <span style="color:#008000;font-weight:bold">SUM</span>(SHIPPED_IND) <span style="color:#008000;font-weight:bold">AS</span> SHIPPED_ORDERS,
+<span style="color:#666">&gt;</span>        <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#666">-</span> <span style="color:#008000;font-weight:bold">SUM</span>(SHIPPED_IND) <span style="color:#008000;font-weight:bold">AS</span> OUTSTANDING_ORDERS
+<span style="color:#666">&gt;</span>  <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS_T
+<span style="color:#666">&gt;</span>        WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">1</span> HOUR) 
+<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> MAKE;
+Windowing <span style="color:#008000;font-weight:bold">not</span> supported <span style="color:#008000;font-weight:bold">for</span> <span style="color:#008000;font-weight:bold">table</span> aggregations.</code></pre></div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://github.com/confluentinc/ksql/issues/778" class="bare">https://github.com/confluentinc/ksql/issues/778</a></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>But what about the order count? It would also be useful to have it in the same query as the count of shipments, rather than individual queries against <code>ORDERS_AGG</code> and <code>SHIPMENTS_AGG</code> we saw earlier. Can&#8217;t we just get that from the <code>ORDER_SHIPMENTS</code> stream?</p>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s try the aggregate just for <code>ORDER_ID=329</code>, so that we know there is only a single order:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOWSTART(),<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>), 
+        MAKE, 
+        <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> ORDERS_PLACED, 
+        <span style="color:#008000;font-weight:bold">SUM</span>(SHIPPED_IND) <span style="color:#008000;font-weight:bold">AS</span> SHIPPED_ORDERS
+  <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS
+        WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">1</span> HOUR)
+ <span style="color:#008000;font-weight:bold">WHERE</span> ORDER_ID<span style="color:#666">=</span><span style="color:#666">329</span>
+ <span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> MAKE;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> <span style="color:#666">2</span> <span style="color:#666">|</span> <span style="color:#666">1</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Why&#8217;s <code>ORDERS_PLACED==2</code>? Because it&#8217;s a <code>COUNT(*)</code> of all matching rows, which is indeed 2:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ORDER_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>),
+       ORDER_ID,
+       MAKE,
+       SHIPPED_IND,
+       SHIPMENT_ID 
+  <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS
+<span style="color:#008000;font-weight:bold">WHERE</span>  ORDER_ID<span style="color:#666">=</span><span style="color:#666">329</span>;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">41</span>:<span style="color:#666">13</span> <span style="color:#666">|</span> <span style="color:#666">329</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> <span style="color:#666">0</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">41</span>:<span style="color:#666">13</span> <span style="color:#666">|</span> <span style="color:#666">329</span> <span style="color:#666">|</span> BMW <span style="color:#666">|</span> <span style="color:#666">1</span> <span style="color:#666">|</span> ship<span style="color:#666">-</span>wv85258</code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_useful_aggregations_that_we_can_do">Useful aggregations that we can do</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Even though we can&#8217;t do an aggregate against the state, we can still do some very useful stream processing against the stream of events themselves.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> <span style="color:#008000;font-weight:bold">TABLE</span> SHIPPED_ORDERS_AGG <span style="color:#008000;font-weight:bold">AS</span> 
+  <span style="color:#008000;font-weight:bold">SELECT</span> WINDOWSTART() <span style="color:#008000;font-weight:bold">AS</span> WINDOW_START_TS, 
+         MAKE, 
+         <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> SHIPPED_ORDERS, 
+         <span style="color:#008000;font-weight:bold">MAX</span>(LEADTIME_MINUTES) <span style="color:#008000;font-weight:bold">AS</span> MAX_LEADTIME_MINUTES, 
+         <span style="color:#008000;font-weight:bold">SUM</span>(LEADTIME_MINUTES) <span style="color:#666">/</span> <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> AVG_LEADTIME_MINUTES 
+    <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS 
+           WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">1</span> HOUR) 
+  <span style="color:#008000;font-weight:bold">WHERE</span> SHIPPED_IND<span style="color:#666">=</span><span style="color:#666">1</span> 
+<span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> MAKE;</code></pre></div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>By hour, how many orders have shipped</p>
+</li>
+<li>
+<p>By hour, what was the max leadtime?</p>
+</li>
+<li>
+<p>By hour, what was the average leadtime?</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOW_START_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>), 
+       MAKE, 
+       SHIPPED_ORDERS, 
+       MAX_LEADTIME_MINUTES, 
+       AVG_LEADTIME_MINUTES 
+  <span style="color:#008000;font-weight:bold">FROM</span> SHIPPED_ORDERS_AGG;
+
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">09</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> Audi <span style="color:#666">|</span> <span style="color:#666">8</span> <span style="color:#666">|</span> <span style="color:#666">3397</span> <span style="color:#666">|</span> <span style="color:#666">2939</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">20</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> Audi <span style="color:#666">|</span> <span style="color:#666">9</span> <span style="color:#666">|</span> <span style="color:#666">3022</span> <span style="color:#666">|</span> <span style="color:#666">2266</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">22</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> BMW  <span style="color:#666">|</span> <span style="color:#666">1</span> <span style="color:#666">|</span> <span style="color:#666">2317</span> <span style="color:#666">|</span> <span style="color:#666">2317</span>
+<span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">21</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span> <span style="color:#666">|</span> BMW  <span style="color:#666">|</span> <span style="color:#666">3</span> <span style="color:#666">|</span> <span style="color:#666">2534</span> <span style="color:#666">|</span> <span style="color:#666">2121</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_alert_we_breached_our_sla">ALERT! We breached our SLA 😫</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>As well as creating aggregates, we can set thresholds and monitor for any orders that breach an SLA in terms of the leadtime.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM ORDERS_BREACHED_LEADTIME_SLA <span style="color:#008000;font-weight:bold">AS</span>
+  <span style="color:#008000;font-weight:bold">SELECT</span> ORDER_ID,
+         SHIPMENT_ID, 
+         MAKE, 
+         SHIPMENT_PROVIDER, 
+         ORDER_TS,
+         SHIPMENT_TS,
+         LEADTIME_MINUTES
+    <span style="color:#008000;font-weight:bold">FROM</span> ORDER_SHIPMENTS
+  <span style="color:#008000;font-weight:bold">WHERE</span>  LEADTIME_MINUTES <span style="color:#666">&gt;</span> <span style="color:#666">4100</span>;</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Now we have a KSQL stream (and thus Kafka topic) which lists an orders that took longer than the defined threshold to ship. This topic can be used for driving both dashboards and applications directly that need to respond to this breach.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">SELECT</span> ORDER_ID,
+        SHIPMENT_ID, 
+        MAKE, 
+        SHIPMENT_PROVIDER, 
+        TIMESTAMPTOSTRING(ORDER_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>), 
+        TIMESTAMPTOSTRING(SHIPMENT_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>), 
+        LEADTIME_MINUTES
+  <span style="color:#008000;font-weight:bold">FROM</span> ORDERS_BREACHED_LEADTIME_SLA;
+
+<span style="color:#666">14</span> <span style="color:#666">|</span> ship<span style="color:#666">-</span>og22112 <span style="color:#666">|</span> Audi <span style="color:#666">|</span> hermes <span style="color:#666">|</span> <span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">03</span>:<span style="color:#666">15</span>:<span style="color:#666">52</span> <span style="color:#666">|</span> <span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">26</span> <span style="color:#666">23</span>:<span style="color:#666">46</span>:<span style="color:#666">19</span> <span style="color:#666">|</span> <span style="color:#666">4110</span>
+<span style="color:#666">315</span> <span style="color:#666">|</span> ship<span style="color:#666">-</span>yp90671 <span style="color:#666">|</span> Ford <span style="color:#666">|</span> dhl <span style="color:#666">|</span> <span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">24</span> <span style="color:#666">00</span>:<span style="color:#666">11</span>:<span style="color:#666">42</span> <span style="color:#666">|</span> <span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">26</span> <span style="color:#666">21</span>:<span style="color:#666">03</span>:<span style="color:#666">43</span> <span style="color:#666">|</span> <span style="color:#666">4132</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_try_it_out">Try it out?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Use this <a href="https://github.com/confluentinc/demo-scene/blob/master/community-components-only/docker-compose.yml">Docker Compose</a>.</p>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.github.io/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2019 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
