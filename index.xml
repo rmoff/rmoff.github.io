@@ -7,7 +7,260 @@
 		<language>en-us</language>
 		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2019</rights>
-		<updated>2019-04-12 12:59:33 &#43;0100 BST</updated>
+		<updated>2019-04-17 15:42:56 &#43;0100 BST</updated>
+		
+		<item>
+			<title>Pivoting Aggregates in Ksql</title>
+			<link>https://rmoff.github.io/2019/04/17/pivoting-aggregates-in-ksql/</link>
+			<pubDate>Wed, 17 Apr 2019 15:42:56 BST</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/2019/04/17/pivoting-aggregates-in-ksql/</guid>
+			<description>&lt;p&gt;Prompted by &lt;a href=&#34;https://stackoverflow.com/questions/55680719/aggregating-by-multiple-fields-and-map-to-one-result&#34;&gt;a question on StackOverflow&lt;/a&gt;, the requirement is to take a series of events related to a common key and for each key output a series of aggregates derived from a changing value in the events. I&amp;rsquo;ll use the data from the question, based on ticket statuses. Each ticket can go through various stages, and the requirement was to show, per customer, how many tickets are currently at each stage.&lt;/p&gt;
+
+&lt;p&gt;Here&amp;rsquo;s the source data:&lt;/p&gt;
+
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Customer&lt;/th&gt;
+&lt;th&gt;Ticket ID&lt;/th&gt;
+&lt;th&gt;Ticket Status&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;2216&lt;/td&gt;
+&lt;td&gt;1472&lt;/td&gt;
+&lt;td&gt;closed&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;8945&lt;/td&gt;
+&lt;td&gt;1472&lt;/td&gt;
+&lt;td&gt;waiting&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;8945&lt;/td&gt;
+&lt;td&gt;1472&lt;/td&gt;
+&lt;td&gt;processing&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;8945&lt;/td&gt;
+&lt;td&gt;1472&lt;/td&gt;
+&lt;td&gt;waiting&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;8952&lt;/td&gt;
+&lt;td&gt;1472&lt;/td&gt;
+&lt;td&gt;new&lt;/td&gt;
+&lt;/tr&gt;
+
+&lt;tr&gt;
+&lt;td&gt;8952&lt;/td&gt;
+&lt;td&gt;1472&lt;/td&gt;
+&lt;td&gt;close-request&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;By eyeballing the data we can see that for this one customer there are three tickets, in state &lt;strong&gt;closed, waiting, close-request&lt;/strong&gt; and so the desired output is:&lt;/p&gt;
+
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Customer&lt;/th&gt;
+&lt;th&gt;Tickets closed&lt;/th&gt;
+&lt;th&gt;Tickets waiting&lt;/th&gt;
+&lt;th&gt;Tickets processing&lt;/th&gt;
+&lt;th&gt;Tickets waiting&lt;/th&gt;
+&lt;th&gt;Tickets new&lt;/th&gt;
+&lt;th&gt;Tickets close request&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;1472&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;In RDBMS SQL this would be a fairly trivial PIVOT operation. In KSQL we can achieve the same using the &lt;code&gt;CASE&lt;/code&gt; statement which was added in 5.2. Along the way we also need to reason about state vs event stream.&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;It&amp;rsquo;s possible to do this by building a table (for state) and then an aggregate on that table.&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;&lt;p&gt;Set up the test data&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;kafkacat -b localhost -t tickets -P &amp;lt;&amp;lt;EOF
+{&amp;quot;ID&amp;quot;:2216,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;Test Bodenbach&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;closed&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2012-11-08 10:34:30.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8945,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;sync-test&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;waiting&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:07:01.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8945,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;sync-test&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;processing&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:52:08.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8945,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;sync-test&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;waiting&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-17 00:10:38.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8952,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;another sync ticket&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;new&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-17 00:11:23.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8952,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;another sync ticket&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;close-request&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-17 00:12:04.000&amp;quot;}
+EOF
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Preview the topic data&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ksql&amp;gt; PRINT &#39;tickets&#39; FROM BEGINNING;
+Format:JSON
+{&amp;quot;ROWTIME&amp;quot;:1555511270573,&amp;quot;ROWKEY&amp;quot;:&amp;quot;null&amp;quot;,&amp;quot;ID&amp;quot;:2216,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;Test Bodenbach&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;closed&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2012-11-08 10:34:30.000&amp;quot;}
+{&amp;quot;ROWTIME&amp;quot;:1555511270573,&amp;quot;ROWKEY&amp;quot;:&amp;quot;null&amp;quot;,&amp;quot;ID&amp;quot;:8945,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;sync-test&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;waiting&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:07:01.000&amp;quot;}
+{&amp;quot;ROWTIME&amp;quot;:1555511270573,&amp;quot;ROWKEY&amp;quot;:&amp;quot;null&amp;quot;,&amp;quot;ID&amp;quot;:8945,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;sync-test&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;processing&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:52:08.000&amp;quot;}
+{&amp;quot;ROWTIME&amp;quot;:1555511270573,&amp;quot;ROWKEY&amp;quot;:&amp;quot;null&amp;quot;,&amp;quot;ID&amp;quot;:8945,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;sync-test&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;waiting&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-17 00:10:38.000&amp;quot;}
+{&amp;quot;ROWTIME&amp;quot;:1555511270573,&amp;quot;ROWKEY&amp;quot;:&amp;quot;null&amp;quot;,&amp;quot;ID&amp;quot;:8952,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;another sync ticket&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;new&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-17 00:11:23.000&amp;quot;}
+{&amp;quot;ROWTIME&amp;quot;:1555511270573,&amp;quot;ROWKEY&amp;quot;:&amp;quot;null&amp;quot;,&amp;quot;ID&amp;quot;:8952,&amp;quot;CONTACT_ID&amp;quot;:1472,&amp;quot;SUBJECT&amp;quot;:&amp;quot;another sync ticket&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;close-request&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-17 00:12:04.000&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Register the stream&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CREATE STREAM TICKETS (ID INT, 
+                      CONTACT_ID VARCHAR, 
+                      SUBJECT VARCHAR, 
+                      STATUS VARCHAR, 
+                      TIMESTRING VARCHAR) 
+        WITH (KAFKA_TOPIC=&#39;tickets&#39;, 
+        VALUE_FORMAT=&#39;JSON&#39;);
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Query the data&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ksql&amp;gt; SET &#39;auto.offset.reset&#39; = &#39;earliest&#39;;
+ksql&amp;gt; SELECT * FROM TICKETS;
+1555502643806 | null | 2216 | 1472 | Test Bodenbach | closed | 2012-11-08 10:34:30.000
+1555502643806 | null | 8945 | 1472 | sync-test | waiting | 2019-04-16 23:07:01.000
+1555502643806 | null | 8945 | 1472 | sync-test | processing | 2019-04-16 23:52:08.000
+1555502643806 | null | 8945 | 1472 | sync-test | waiting | 2019-04-17 00:10:38.000
+1555502643806 | null | 8952 | 1472 | another sync ticket | new | 2019-04-17 00:11:23.000
+1555502643806 | null | 8952 | 1472 | another sync ticket | close-request | 2019-04-17 00:12:04.000
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;At this point we can use &lt;code&gt;CASE&lt;/code&gt; to pivot the aggregates:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SELECT CONTACT_ID, 
+      SUM(CASE WHEN STATUS=&#39;new&#39; THEN 1 ELSE 0 END) AS TICKETS_NEW, 
+      SUM(CASE WHEN STATUS=&#39;processing&#39; THEN 1 ELSE 0 END) AS TICKETS_PROCESSING, 
+      SUM(CASE WHEN STATUS=&#39;waiting&#39; THEN 1 ELSE 0 END) AS TICKETS_WAITING, 
+      SUM(CASE WHEN STATUS=&#39;close-request&#39; THEN 1 ELSE 0 END) AS TICKETS_CLOSEREQUEST ,
+      SUM(CASE WHEN STATUS=&#39;closed&#39; THEN 1 ELSE 0 END) AS TICKETS_CLOSED
+  FROM TICKETS 
+  GROUP BY CONTACT_ID;
+
+  1472 | 1 | 1 | 2 | 1 | 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;But, you&amp;rsquo;ll notice that the answer isn&amp;rsquo;t as expected. This is because we&amp;rsquo;re counting all six input &lt;strong&gt;events&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;Let&amp;rsquo;s look at a single ticket, ID &lt;code&gt;8945&lt;/code&gt;—this goes through three state changes (&lt;code&gt;waiting&lt;/code&gt; -&amp;gt; &lt;code&gt;processing&lt;/code&gt; -&amp;gt; &lt;code&gt;waiting&lt;/code&gt;) which each get included in the aggregate. We can validate this as follows with a simple predicate:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SELECT CONTACT_ID, 
+      SUM(CASE WHEN STATUS=&#39;new&#39; THEN 1 ELSE 0 END) AS TICKETS_NEW, 
+      SUM(CASE WHEN STATUS=&#39;processing&#39; THEN 1 ELSE 0 END) AS TICKETS_PROCESSING, 
+      SUM(CASE WHEN STATUS=&#39;waiting&#39; THEN 1 ELSE 0 END) AS TICKETS_WAITING, 
+      SUM(CASE WHEN STATUS=&#39;close-request&#39; THEN 1 ELSE 0 END) AS TICKETS_CLOSEREQUEST ,
+      SUM(CASE WHEN STATUS=&#39;closed&#39; THEN 1 ELSE 0 END) AS TICKETS_CLOSED
+  FROM TICKETS 
+  WHERE ID=8945
+  GROUP BY CONTACT_ID;
+
+1472 | 0 | 1 | 2 | 0 | 0
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;What we actually want is the &lt;em&gt;current state&lt;/em&gt; for each ticket. So repartition the data on ticket ID:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CREATE STREAM TICKETS_BY_ID AS SELECT * FROM TICKETS PARTITION BY ID;
+
+CREATE TABLE TICKETS_TABLE (ID INT, 
+                      CONTACT_ID INT, 
+                      SUBJECT VARCHAR, 
+                      STATUS VARCHAR, 
+                      TIMESTRING VARCHAR) 
+        WITH (KAFKA_TOPIC=&#39;TICKETS_BY_ID&#39;, 
+        VALUE_FORMAT=&#39;JSON&#39;,
+        KEY=&#39;ID&#39;);
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Compare &lt;em&gt;event stream&lt;/em&gt; vs &lt;em&gt;current state&lt;/em&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;p&gt;Event stream (KSQL Stream)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ksql&amp;gt; SELECT ID, TIMESTRING, STATUS FROM TICKETS;
+2216 | 2012-11-08 10:34:30.000 | closed
+8945 | 2019-04-16 23:07:01.000 | waiting
+8945 | 2019-04-16 23:52:08.000 | processing
+8945 | 2019-04-17 00:10:38.000 | waiting
+8952 | 2019-04-17 00:11:23.000 | new
+8952 | 2019-04-17 00:12:04.000 | close-request
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Current state (KSQL Table)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ksql&amp;gt; SELECT ID, TIMESTRING, STATUS FROM TICKETS_TABLE;
+2216 | 2012-11-08 10:34:30.000 | closed
+8945 | 2019-04-17 00:10:38.000 | waiting
+8952 | 2019-04-17 00:12:04.000 | close-request
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;We want an aggregate of the table—we want to run the same &lt;code&gt;SUM(CASE…)…GROUP BY&lt;/code&gt; trick that we did above, but based on the &lt;em&gt;current state&lt;/em&gt; of each ticket, rather than each event:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;  SELECT CONTACT_ID, 
+      SUM(CASE WHEN STATUS=&#39;new&#39; THEN 1 ELSE 0 END) AS TICKETS_NEW, 
+      SUM(CASE WHEN STATUS=&#39;processing&#39; THEN 1 ELSE 0 END) AS TICKETS_PROCESSING, 
+      SUM(CASE WHEN STATUS=&#39;waiting&#39; THEN 1 ELSE 0 END) AS TICKETS_WAITING, 
+      SUM(CASE WHEN STATUS=&#39;close-request&#39; THEN 1 ELSE 0 END) AS TICKETS_CLOSEREQUEST ,
+      SUM(CASE WHEN STATUS=&#39;closed&#39; THEN 1 ELSE 0 END) AS TICKETS_CLOSED
+  FROM TICKETS_TABLE 
+  GROUP BY CONTACT_ID;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;This gives us what we want:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;  1472 | 0 | 0 | 1 | 1 | 1
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Let&amp;rsquo;s feed another ticket&amp;rsquo;s events into the topic and observe how the table&amp;rsquo;s state changes. &lt;em&gt;Rows from a table are re-emitted when the state changes; you can also cancel the &lt;code&gt;SELECT&lt;/code&gt; and rerun it to see the current state only.&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://rmoff.github.io/images/2019/04/ksql_pivot.gif&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Sample data to try it for yourself:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{&amp;quot;ID&amp;quot;:8946,&amp;quot;CONTACT_ID&amp;quot;:42,&amp;quot;SUBJECT&amp;quot;:&amp;quot;&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;new&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:07:01.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8946,&amp;quot;CONTACT_ID&amp;quot;:42,&amp;quot;SUBJECT&amp;quot;:&amp;quot;&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;processing&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:07:01.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8946,&amp;quot;CONTACT_ID&amp;quot;:42,&amp;quot;SUBJECT&amp;quot;:&amp;quot;&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;waiting&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:07:01.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8946,&amp;quot;CONTACT_ID&amp;quot;:42,&amp;quot;SUBJECT&amp;quot;:&amp;quot;&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;processing&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:07:01.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8946,&amp;quot;CONTACT_ID&amp;quot;:42,&amp;quot;SUBJECT&amp;quot;:&amp;quot;&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;waiting&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:07:01.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8946,&amp;quot;CONTACT_ID&amp;quot;:42,&amp;quot;SUBJECT&amp;quot;:&amp;quot;&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;closed&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:07:01.000&amp;quot;}
+{&amp;quot;ID&amp;quot;:8946,&amp;quot;CONTACT_ID&amp;quot;:42,&amp;quot;SUBJECT&amp;quot;:&amp;quot;&amp;quot;,&amp;quot;STATUS&amp;quot;:&amp;quot;close-request&amp;quot;,&amp;quot;TIMESTRING&amp;quot;:&amp;quot;2019-04-16 23:07:01.000&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;If you want to try this out further you can generate an stream of additional dummy data with this from &lt;a href=&#34;https://rmoff.net/2018/05/10/quick-n-easy-population-of-realistic-test-data-into-kafka/&#34;&gt;Mockaroo&lt;/a&gt;, piped through &lt;code&gt;awk&lt;/code&gt; to slow it down so you can see the effect on the generated aggregates as each message arrives:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;while [ 1 -eq 1 ]
+  do curl -s &amp;quot;https://api.mockaroo.com/api/f2d6c8a0?count=1000&amp;amp;key=ff7856d0&amp;quot; | \
+      awk &#39;{print $0;system(&amp;quot;sleep 2&amp;quot;);}&#39; | \
+      kafkacat -b localhost -t tickets -P
+  done
+&lt;/code&gt;&lt;/pre&gt;</description>
+		</item>
 		
 		<item>
 			<title>Connecting KSQL to a Secured Schema Registry</title>
@@ -167,7 +420,7 @@ Caused by: Unexpected character &lt;span style=&#34;color:#666&#34;&gt;(&lt;/spa
 &lt;p&gt;via &lt;a href=&#34;http://mockaroo.com&#34;&gt;Mockaroo&lt;/a&gt;:&lt;/p&gt;
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;https://api.mockaroo.com/api/bf24ebf0?count=500&amp;amp;key=ff7856d0&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;https://api.mockaroo.com/api/86f89de0?count=500&amp;amp;key=ff7856d0&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
 &lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  kafkacat -P -b localhost -t orders
 
 curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;https://api.mockaroo.com/api/b410d0b0?count=500&amp;amp;key=ff7856d0&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
