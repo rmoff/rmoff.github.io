@@ -7,7 +7,83 @@
 		<language>en-us</language>
 		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2019</rights>
-		<updated>2019-04-17 15:42:56 &#43;0100 BST</updated>
+		<updated>2019-05-02 10:58:27 &#43;0100 BST</updated>
+		
+		<item>
+			<title>Reading Kafka Connect Offsets via the REST Proxy</title>
+			<link>https://rmoff.github.io/post/reading-kafka-connect-offsets-via-the-rest-proxy/</link>
+			<pubDate>Thu, 02 May 2019 10:58:27 BST</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/post/reading-kafka-connect-offsets-via-the-rest-proxy/</guid>
+			<description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;When you run Kafka Connect in distributed mode it uses a Kafka topic to store the offset information for each connector.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;It may be that you want to query this information. You can use a CLI tool like kafkacat:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ kafkacat -b localhost:9092 -t docker-kafka-connect-offsets -C -K:
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;source-debezium-orders-00&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;server&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;asgard&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}]&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;file&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mysql-bin.000003&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;pos&amp;#34;&lt;/span&gt;:154&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;source-debezium-orders-00&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;server&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;asgard&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}]&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;ts_sec&amp;#34;&lt;/span&gt;:1556791017,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;file&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mysql-bin.000003&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;pos&amp;#34;&lt;/span&gt;:9041,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;row&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;server_id&amp;#34;&lt;/span&gt;:223344,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;event&amp;#34;&lt;/span&gt;:2&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You may want to access this information over HTTP though. Here&amp;#8217;s how, using the &lt;a href=&#34;https://docs.confluent.io/current/kafka-rest/index.html&#34;&gt;Confluent REST Proxy&lt;/a&gt;. For more cheat-sheet of the REST proxy &lt;a href=&#34;https://rmoff.net/2019/03/08/using-httpie-with-the-kafka-rest-proxy/&#34;&gt;see here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Create a consumer&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;name&amp;#34;: &amp;#34;rmoff_consumer_instance&amp;#34;, &amp;#34;format&amp;#34;: &amp;#34;json&amp;#34;, &amp;#34;auto.offset.reset&amp;#34;: &amp;#34;earliest&amp;#34;}&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  http POST http://localhost:8082/consumers/rmoff_consumer_group &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  Content-Type:application/vnd.kafka.v2+json&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Create a subscription to the offset topic for the consumer. Make sure you put the correct topic name here&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;topics&amp;#34;:[&amp;#34;docker-kafka-connect-offsets&amp;#34;]}&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  http POST http://localhost:8082/consumers/rmoff_consumer_group/instances/rmoff_consumer_instance/subscription &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  Content-Type:application/vnd.kafka.v2+json&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Read any new messages from the topic&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;http http://localhost:8082/consumers/rmoff_consumer_group/instances/rmoff_consumer_instance/records &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  Accept:application/vnd.kafka.json.v2+json&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;HTTP/1.1 &lt;span style=&#34;color:#666&#34;&gt;200&lt;/span&gt; OK
+Content-Encoding: gzip
+Content-Length: &lt;span style=&#34;color:#666&#34;&gt;154&lt;/span&gt;
+Content-Type: application/vnd.kafka.json.v2+json
+Date: Thu, &lt;span style=&#34;color:#666&#34;&gt;02&lt;/span&gt; May &lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:50:27 GMT
+Server: Jetty&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;9&lt;/span&gt;.4.14.v20181114&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+Vary: Accept-Encoding, User-Agent
+
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;
+    &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;key&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;
+            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;source-debezium-orders-00&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+                &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;server&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;asgard&amp;#34;&lt;/span&gt;
+            &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+        &lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;offset&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;,
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;partition&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt;,
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;topic&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;docker-kafka-connect-offsets&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;value&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;file&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mysql-bin.000003&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;pos&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;154&lt;/span&gt;
+        &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+    &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;</description>
+		</item>
 		
 		<item>
 			<title>Pivoting Aggregates in Ksql</title>
