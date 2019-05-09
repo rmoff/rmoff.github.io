@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>A poor man&rsquo;s KSQL EXPLODE/UNNEST technique</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.github.io/index.xml">
+		<link rel="canonical" href="https://rmoff.github.io/2019/05/09/a-poor-mans-ksql-explode/unnest-technique/">
+		
+		<link rel="shortcut icon" type="image/png" href="https://rmoff.github.io/apple-touch-icon-precomposed.png">
+		
+		
+		<meta name="generator" content="Hugo 0.54.0" />
+
+		
+		<meta name="og:title" content="A poor man&rsquo;s KSQL EXPLODE/UNNEST technique" />
+		<meta name="og:type" content="article" />
+		<meta name="og:image" content="https://rmoff.github.io/images/2019/05/P1090619.jpg" />
+		<meta name="og:description" content="" />
+		<meta name="og:url" content="https://rmoff.github.io/2019/05/09/a-poor-mans-ksql-explode/unnest-technique/" />
+		<meta name="og:site_name" content="A poor man&rsquo;s KSQL EXPLODE/UNNEST technique" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.github.io/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.github.io/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.github.io/images/2019/05/P1090619.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.github.io" title="Home">
+						<img src="https://rmoff.github.io/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="/talks/">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.github.io/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.github.io/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">A poor man&rsquo;s KSQL EXPLODE/UNNEST technique</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2019-05-09T10:01:50&#43;01:00">May 9, 2019</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.github.io/categories//ksql" class="no-underline category near-white dim">KSQL</a>
+								<span class="display-print">at https://rmoff.github.io/2019/05/09/a-poor-mans-ksql-explode/unnest-technique/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 nested-copy-line-height lh-copy f4 nested-links mw-100 measure-wide">
+	<div class="paragraph">
+<p>There is an <a href="https://github.com/confluentinc/ksql/issues/527">open issue for support of <code>EXPLODE</code>/<code>UNNEST</code> functionality in KSQL</a>, and if you need it then do up-vote the issue. Here I detail a hacky, but effective, workaround for exploding arrays into multiple messages—so long as you know the upper-bound on your array.</p>
+</div>
+<div class="paragraph">
+<p>Populate some test data into a Kafka topic</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ curl <span style="color:#ba2121">&#34;https://api.mockaroo.com/api/440970e0?count=5&amp;key=ff7856d0&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    kafkacat -P -b localhost -t car_data_01</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Examine the data in KSQL:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> PRINT <span style="color:#ba2121">&#39;car_data_01&#39;</span> <span style="color:#008000;font-weight:bold">FROM</span> BEGINNING;
+Format:JSON
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1557392065409</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;timestamp&#34;</span>:<span style="color:#ba2121">&#34;1533200557&#34;</span>,<span style="color:#ba2121">&#34;car&#34;</span>:<span style="color:#ba2121">&#34;Oldsmobile&#34;</span>,<span style="color:#ba2121">&#34;value&#34;</span>:[<span style="color:#666">68</span>.<span style="color:#666">93</span>,<span style="color:#666">53</span>.<span style="color:#666">58</span>]<span style="">}</span>
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1557392065409</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;timestamp&#34;</span>:<span style="color:#ba2121">&#34;1548442477&#34;</span>,<span style="color:#ba2121">&#34;car&#34;</span>:<span style="color:#ba2121">&#34;Mercury&#34;</span>,<span style="color:#ba2121">&#34;value&#34;</span>:[<span style="color:#666">60</span>.<span style="color:#666">09</span>,<span style="color:#666">69</span>.<span style="color:#666">07</span>,<span style="color:#666">63</span>.<span style="color:#666">77</span>,<span style="color:#666">63</span>.<span style="color:#666">13</span>]<span style="">}</span>
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1557392065409</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;timestamp&#34;</span>:<span style="color:#ba2121">&#34;1544928225&#34;</span>,<span style="color:#ba2121">&#34;car&#34;</span>:<span style="color:#ba2121">&#34;Volkswagen&#34;</span>,<span style="color:#ba2121">&#34;value&#34;</span>:[<span style="color:#666">59</span>.<span style="color:#666">77</span>,<span style="color:#666">6</span>.<span style="color:#666">94</span>,<span style="color:#666">97</span>.<span style="color:#666">7</span>,<span style="color:#666">30</span>.<span style="color:#666">86</span>,<span style="color:#666">16</span>.<span style="color:#666">9</span>]<span style="">}</span>
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1557392065409</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;timestamp&#34;</span>:<span style="color:#ba2121">&#34;1545383393&#34;</span>,<span style="color:#ba2121">&#34;car&#34;</span>:<span style="color:#ba2121">&#34;Nissan&#34;</span>,<span style="color:#ba2121">&#34;value&#34;</span>:[<span style="color:#666">13</span>.<span style="color:#666">32</span>]<span style="">}</span>
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1557392065412</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;timestamp&#34;</span>:<span style="color:#ba2121">&#34;1552825010&#34;</span>,<span style="color:#ba2121">&#34;car&#34;</span>:<span style="color:#ba2121">&#34;Hyundai&#34;</span>,<span style="color:#ba2121">&#34;value&#34;</span>:[<span style="color:#666">12</span>.<span style="color:#666">92</span>]<span style="">}</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Note the <code>value</code> element is an array:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#ba2121">&#34;value&#34;</span>:<span style="color:#666">[</span><span style="color:#666">68</span>.93,53.58<span style="color:#666">]</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Create a stream over the data:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM CAR_DATA (<span style="color:#008000;font-weight:bold">timestamp</span> <span style="color:#008000">BIGINT</span>, CAR <span style="color:#008000">VARCHAR</span>, VALUE <span style="color:#008000">ARRAY</span><span style="color:#666">&lt;</span>DOUBLE<span style="color:#666">&gt;</span>) <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;car_data_01&#39;</span>, VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;JSON&#39;</span>);</code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">TIMESTAMP</span>, CAR, VALUE[<span style="color:#666">0</span>], VALUE[<span style="color:#666">1</span>], VALUE[<span style="color:#666">2</span>] <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA;
+<span style="color:#666">1533200557</span> <span style="color:#666">|</span> Oldsmobile <span style="color:#666">|</span> <span style="color:#666">68</span>.<span style="color:#666">93</span> <span style="color:#666">|</span> <span style="color:#666">53</span>.<span style="color:#666">58</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span>
+<span style="color:#666">1548442477</span> <span style="color:#666">|</span> Mercury <span style="color:#666">|</span> <span style="color:#666">60</span>.<span style="color:#666">09</span> <span style="color:#666">|</span> <span style="color:#666">69</span>.<span style="color:#666">07</span> <span style="color:#666">|</span> <span style="color:#666">63</span>.<span style="color:#666">77</span>
+<span style="color:#666">1544928225</span> <span style="color:#666">|</span> Volkswagen <span style="color:#666">|</span> <span style="color:#666">59</span>.<span style="color:#666">77</span> <span style="color:#666">|</span> <span style="color:#666">6</span>.<span style="color:#666">94</span> <span style="color:#666">|</span> <span style="color:#666">97</span>.<span style="color:#666">7</span>
+<span style="color:#666">1545383393</span> <span style="color:#666">|</span> Nissan <span style="color:#666">|</span> <span style="color:#666">13</span>.<span style="color:#666">32</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span>
+<span style="color:#666">1552825010</span> <span style="color:#666">|</span> Hyundai <span style="color:#666">|</span> <span style="color:#666">12</span>.<span style="color:#666">92</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Create the output stream, to start with just containing the zero-index elements of the array:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM CAR_DATA_EXPLODED <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">TIMESTAMP</span>, CAR, <span style="color:#ba2121">&#39;Sensor 00&#39;</span> <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000;font-weight:bold">SOURCE</span>, VALUE[<span style="color:#666">0</span>] <span style="color:#008000;font-weight:bold">AS</span> VALUE <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA <span style="color:#008000;font-weight:bold">WHERE</span> VALUE[<span style="color:#666">0</span>] <span style="color:#008000;font-weight:bold">IS</span> <span style="color:#008000;font-weight:bold">NOT</span> <span style="color:#008000;font-weight:bold">NULL</span>;</code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#666">*</span> <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA_EXPLODED;
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1544928225</span> <span style="color:#666">|</span> Volkswagen <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">59</span>.<span style="color:#666">77</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1545383393</span> <span style="color:#666">|</span> Nissan <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">13</span>.<span style="color:#666">32</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1533200557</span> <span style="color:#666">|</span> Oldsmobile <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">68</span>.<span style="color:#666">93</span>
+<span style="color:#666">1557392065412</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1552825010</span> <span style="color:#666">|</span> Hyundai <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">12</span>.<span style="color:#666">92</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1548442477</span> <span style="color:#666">|</span> Mercury <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">60</span>.<span style="color:#666">09</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Insert the remaining array indices to the new stream:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM CAR_DATA_EXPLODED_00 <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">TIMESTAMP</span>, CAR, <span style="color:#ba2121">&#39;Sensor 00&#39;</span> <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000;font-weight:bold">SOURCE</span>, VALUE[<span style="color:#666">0</span>] <span style="color:#008000;font-weight:bold">AS</span> VALUE <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> CAR_DATA_EXPLODED_00 <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">TIMESTAMP</span>, CAR, <span style="color:#ba2121">&#39;Sensor 01&#39;</span> <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000;font-weight:bold">SOURCE</span>, VALUE[<span style="color:#666">1</span>] <span style="color:#008000;font-weight:bold">AS</span> VALUE <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA <span style="color:#008000;font-weight:bold">WHERE</span>  VALUE[<span style="color:#666">1</span>] <span style="color:#008000;font-weight:bold">IS</span> <span style="color:#008000;font-weight:bold">NOT</span> <span style="color:#008000;font-weight:bold">NULL</span>;
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> CAR_DATA_EXPLODED_00 <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">TIMESTAMP</span>, CAR, <span style="color:#ba2121">&#39;Sensor 02&#39;</span> <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000;font-weight:bold">SOURCE</span>, VALUE[<span style="color:#666">2</span>] <span style="color:#008000;font-weight:bold">AS</span> VALUE <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA <span style="color:#008000;font-weight:bold">WHERE</span>  VALUE[<span style="color:#666">2</span>] <span style="color:#008000;font-weight:bold">IS</span> <span style="color:#008000;font-weight:bold">NOT</span> <span style="color:#008000;font-weight:bold">NULL</span>;
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> CAR_DATA_EXPLODED_00 <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">TIMESTAMP</span>, CAR, <span style="color:#ba2121">&#39;Sensor 03&#39;</span> <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000;font-weight:bold">SOURCE</span>, VALUE[<span style="color:#666">3</span>] <span style="color:#008000;font-weight:bold">AS</span> VALUE <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA <span style="color:#008000;font-weight:bold">WHERE</span>  VALUE[<span style="color:#666">3</span>] <span style="color:#008000;font-weight:bold">IS</span> <span style="color:#008000;font-weight:bold">NOT</span> <span style="color:#008000;font-weight:bold">NULL</span>;
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> CAR_DATA_EXPLODED_00 <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">TIMESTAMP</span>, CAR, <span style="color:#ba2121">&#39;Sensor 04&#39;</span> <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000;font-weight:bold">SOURCE</span>, VALUE[<span style="color:#666">4</span>] <span style="color:#008000;font-weight:bold">AS</span> VALUE <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA <span style="color:#008000;font-weight:bold">WHERE</span>  VALUE[<span style="color:#666">4</span>] <span style="color:#008000;font-weight:bold">IS</span> <span style="color:#008000;font-weight:bold">NOT</span> <span style="color:#008000;font-weight:bold">NULL</span>;
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> CAR_DATA_EXPLODED_00 <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">TIMESTAMP</span>, CAR, <span style="color:#ba2121">&#39;Sensor 05&#39;</span> <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000;font-weight:bold">SOURCE</span>, VALUE[<span style="color:#666">5</span>] <span style="color:#008000;font-weight:bold">AS</span> VALUE <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA <span style="color:#008000;font-weight:bold">WHERE</span>  VALUE[<span style="color:#666">5</span>] <span style="color:#008000;font-weight:bold">IS</span> <span style="color:#008000;font-weight:bold">NOT</span> <span style="color:#008000;font-weight:bold">NULL</span>;</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Examine the exploded data:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#666">*</span> <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA_EXPLODED_00;
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1533200557</span> <span style="color:#666">|</span> Oldsmobile <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">68</span>.<span style="color:#666">93</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1545383393</span> <span style="color:#666">|</span> Nissan <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">13</span>.<span style="color:#666">32</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1544928225</span> <span style="color:#666">|</span> Volkswagen <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">59</span>.<span style="color:#666">77</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1548442477</span> <span style="color:#666">|</span> Mercury <span style="color:#666">|</span> Sensor <span style="color:#666">02</span> <span style="color:#666">|</span> <span style="color:#666">63</span>.<span style="color:#666">77</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1544928225</span> <span style="color:#666">|</span> Volkswagen <span style="color:#666">|</span> Sensor <span style="color:#666">03</span> <span style="color:#666">|</span> <span style="color:#666">30</span>.<span style="color:#666">86</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1544928225</span> <span style="color:#666">|</span> Volkswagen <span style="color:#666">|</span> Sensor <span style="color:#666">04</span> <span style="color:#666">|</span> <span style="color:#666">16</span>.<span style="color:#666">9</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1533200557</span> <span style="color:#666">|</span> Oldsmobile <span style="color:#666">|</span> Sensor <span style="color:#666">01</span> <span style="color:#666">|</span> <span style="color:#666">53</span>.<span style="color:#666">58</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1544928225</span> <span style="color:#666">|</span> Volkswagen <span style="color:#666">|</span> Sensor <span style="color:#666">02</span> <span style="color:#666">|</span> <span style="color:#666">97</span>.<span style="color:#666">7</span>
+<span style="color:#666">1557392065412</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1552825010</span> <span style="color:#666">|</span> Hyundai <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">12</span>.<span style="color:#666">92</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1548442477</span> <span style="color:#666">|</span> Mercury <span style="color:#666">|</span> Sensor <span style="color:#666">01</span> <span style="color:#666">|</span> <span style="color:#666">69</span>.<span style="color:#666">07</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1548442477</span> <span style="color:#666">|</span> Mercury <span style="color:#666">|</span> Sensor <span style="color:#666">00</span> <span style="color:#666">|</span> <span style="color:#666">60</span>.<span style="color:#666">09</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1544928225</span> <span style="color:#666">|</span> Volkswagen <span style="color:#666">|</span> Sensor <span style="color:#666">01</span> <span style="color:#666">|</span> <span style="color:#666">6</span>.<span style="color:#666">94</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1548442477</span> <span style="color:#666">|</span> Mercury <span style="color:#666">|</span> Sensor <span style="color:#666">03</span> <span style="color:#666">|</span> <span style="color:#666">63</span>.<span style="color:#666">13</span></code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#666">*</span> <span style="color:#008000;font-weight:bold">FROM</span> CAR_DATA_EXPLODED_00 <span style="color:#008000;font-weight:bold">WHERE</span> <span style="color:#008000;font-weight:bold">SOURCE</span><span style="color:#666">=</span><span style="color:#ba2121">&#39;Sensor 03&#39;</span>;
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1544928225</span> <span style="color:#666">|</span> Volkswagen <span style="color:#666">|</span> Sensor <span style="color:#666">03</span> <span style="color:#666">|</span> <span style="color:#666">30</span>.<span style="color:#666">86</span>
+<span style="color:#666">1557392065409</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span> <span style="color:#666">1548442477</span> <span style="color:#666">|</span> Mercury <span style="color:#666">|</span> Sensor <span style="color:#666">03</span> <span style="color:#666">|</span> <span style="color:#666">63</span>.<span style="color:#666">13</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Remember that this is a <em>workaround</em> - if you actually need this functionality then do be sure to upvote the <a href="https://github.com/confluentinc/ksql/issues/527">open issue for support of <code>EXPLODE</code>/<code>UNNEST</code> functionality in KSQL</a>.</p>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.github.io/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2019 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
