@@ -7,7 +7,93 @@
 		<language>en-us</language>
 		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2019</rights>
-		<updated>2019-05-09 10:01:50 &#43;0100 BST</updated>
+		<updated>2019-05-22 10:32:10 &#43;0100 BST</updated>
+		
+		<item>
+			<title>Deleting a Connector in Kafka Connect without the REST API</title>
+			<link>https://rmoff.github.io/2019/05/22/deleting-a-connector-in-kafka-connect-without-the-rest-api/</link>
+			<pubDate>Wed, 22 May 2019 10:32:10 BST</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/2019/05/22/deleting-a-connector-in-kafka-connect-without-the-rest-api/</guid>
+			<description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Kafka Connect exposes a &lt;a href=&#34;https://docs.confluent.io/current/connect/references/restapi.html&#34;&gt;REST interface&lt;/a&gt; through which all config and monitoring operations can be done. You can create connectors, delete them, restart them, check their status, and so on. But, I found a situation recently in which I needed to delete a connector and couldn&amp;#8217;t do so with the REST API. Here&amp;#8217;s another way to do it, by amending the configuration Kafka topic that Kafka Connect in distributed mode uses to persist configuration information for connectors. Note that this is not a recommended way of working with Kafka Connect—the REST API is there for a good reason :)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let&amp;#8217;s imagine we&amp;#8217;ve got three connectors running, and we want to get rid of one of them. You can see what&amp;#8217;s running using the REST API and some nifty bash work:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors&amp;#34;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.[]&amp;#39;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  xargs -I&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors/&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;/status&amp;#34;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  jq -c -M &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;[.name,.connector.state,.tasks[].state]|join(&amp;#34;:|:&amp;#34;)&amp;#39;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  column -s : -t| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;//g&amp;#39;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  sort&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;mongodb-connector                    |  RUNNING  |  RUNNING
+source-rest-weather_york             |  RUNNING  |  RUNNING
+twitter_source_json_01               |  RUNNING  |  RUNNING&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;When you configure Kafka Connect you&amp;#8217;ll set three Kafka topics for it to use to persist data across the Connect cluster. This will include a topic that holds configurations:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;config.storage.topic&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;docker-connect-configs&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So having identified the topic, examine its contents with &lt;code&gt;kafkacat&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kafkacat -b localhost:9092 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;         -t docker-connect-configs &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;         -C &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;         -K: &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;         -f &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;\nKey (%K bytes): %k\t\nValue (%S bytes): %s\nTimestamp: %T\tPartition: %p\tOffset: %o\n--\n&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Identify the connector you want to remove, e.g.:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;Key &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;27&lt;/span&gt; bytes&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: connector-mongodb-connector
+Value &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;195&lt;/span&gt; bytes&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;properties&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;connector.class&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.debezium.connector.mongodb.MongoDbConnector&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mongodb.hosts&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;rs0/mongodb:27017&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mongodb.name&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;ubnt&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;database.whitelist&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;ace&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;name&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mongodb-connector&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
+Timestamp: &lt;span style=&#34;color:#666&#34;&gt;1528723016429&lt;/span&gt;        Partition: &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;    Offset: &lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Note the key value.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Shutdown Kafka Connect and make sure it&amp;#8217;s fully stopped before proceeding.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now send a tombstone message (&lt;code&gt;NULL&lt;/code&gt; value) for this key&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;connector-mongodb-connector:&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;kafkacat -b localhost -t docker-connect-configs -P -Z -K:&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you examine the topic again for this particular key you&amp;#8217;ll notice that there are now &lt;strong&gt;two&lt;/strong&gt; messages:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;Key &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;27&lt;/span&gt; bytes&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: connector-mongodb-connector
+Value &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;195&lt;/span&gt; bytes&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;properties&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;connector.class&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.debezium.connector.mongodb.MongoDbConnector&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mongodb.hosts&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;rs0/mongodb:27017&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mongodb.name&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;ubnt&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;database.whitelist&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;ace&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;name&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mongodb-connector&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
+Timestamp: &lt;span style=&#34;color:#666&#34;&gt;1528723016429&lt;/span&gt;        Partition: &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;    Offset: &lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt;
+--
+Key &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;27&lt;/span&gt; bytes&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: connector-mongodb-connector
+Value &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;-1 bytes&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;:&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Because this is a &lt;a href=&#34;https://kafka.apache.org/documentation/#compaction&#34;&gt;compacted topic&lt;/a&gt; (&lt;code&gt;cleanup.policy=compact&lt;/code&gt;) the &lt;em&gt;latest&lt;/em&gt; value for this key is what will be retained when compaction runs—and will be retained &lt;em&gt;for ever&lt;/em&gt;. Kafka acts as the &lt;a href=&#34;https://www.confluent.io/blog/okay-store-data-apache-kafka/&#34;&gt;permanent store of data&lt;/a&gt;. Cool huh.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Start Kafka Connect back up and you will see that the connector is now gone:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;source-rest-weather_york             |  RUNNING  |  RUNNING
+twitter_source_json_01               |  RUNNING  |  RUNNING&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;</description>
+		</item>
 		
 		<item>
 			<title>A poor man&#39;s KSQL EXPLODE/UNNEST technique</title>
@@ -1467,6 +1553,18 @@ Windowing &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;not&lt;/spa
 &lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  xargs -Ifoo curl -X &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;POST&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8088/ksql&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
 &lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type: application/vnd.ksql.v1+json; charset=utf-8&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
 &lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;ksql&amp;#34;: &amp;#34;TERMINATE &amp;#39;&lt;/span&gt;foo&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;;&amp;#34;}&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can use a similar technique to drop all streams:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s -X &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;POST&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8088/ksql&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type: application/vnd.ksql.v1+json; charset=utf-8&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;ksql&amp;#34;: &amp;#34;SHOW STREAMS;&amp;#34;}&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.[].streams[].name&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    xargs -Ifoo curl -X &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;POST&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8088/ksql&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;             -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type: application/vnd.ksql.v1+json; charset=utf-8&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;             -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;ksql&amp;#34;: &amp;#34;DROP STREAM &amp;#39;&lt;/span&gt;foo&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;;&amp;#34;}&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;For more notes on the KSQL REST API see &lt;a href=&#34;https://docs.confluent.io/current/ksql/docs/developer-guide/api.html&#34;&gt;the docs&lt;/a&gt; and &lt;a href=&#34;https://rmoff.github.io/2019/01/17/ksql-rest-api-cheatsheet/&#34;&gt;this cheatsheet&lt;/a&gt;.&lt;/p&gt;
@@ -14036,7 +14134,7 @@ done
 			<guid>https://rmoff.github.io/talks/</guid>
 			<description>
 
-&lt;p&gt;You can find all my recent talks at &lt;a href=&#34;https://talks.rmoff.net/&#34;&gt;https://talks.rmoff.net/&lt;/a&gt;. Older ones are on &lt;a href=&#34;https://speakerdeck.com/rmoff/&#34;&gt;Speaker Deck&lt;/a&gt;. Below are links to particular talks I&amp;rsquo;ve done recently, along with recordings where available.&lt;/p&gt;
+&lt;p&gt;You can find all my recent talks on Notist at &lt;a href=&#34;https://talks.rmoff.net/&#34;&gt;https://talks.rmoff.net/&lt;/a&gt;. Older ones are on &lt;a href=&#34;https://speakerdeck.com/rmoff/&#34;&gt;Speaker Deck&lt;/a&gt;. Below are links to particular talks I&amp;rsquo;ve done recently, along with recordings where available.&lt;/p&gt;
 
 &lt;hr /&gt;
 
@@ -14048,11 +14146,18 @@ done
 &lt;li&gt;📽 Recording : soon.&lt;/li&gt;
 &lt;/ul&gt;
 
+&lt;hr /&gt;
+
 &lt;h3 id=&#34;the-changing-face-of-etl-event-driven-architectures-for-data-engineers&#34;&gt;The Changing Face of ETL: Event-Driven Architectures for Data Engineers&lt;/h3&gt;
 
 &lt;ul&gt;
 &lt;li&gt;📖 &lt;a href=&#34;http://go.rmoff.net/strata19-the-changing-face-of-etl&#34;&gt;Slides&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;📽 &lt;a href=&#34;https://videos.confluent.io/watch/JPAnk3i2enPodLh5UhZ2Xf?&#34;&gt;Recording&lt;/a&gt; (Paris Apache Kafka Meetup @ DataDog)&lt;/li&gt;
+&lt;li&gt;📽 Recording
+
+&lt;ul&gt;
+&lt;li&gt;Strata London 2019 (available soon)&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://videos.confluent.io/watch/JPAnk3i2enPodLh5UhZ2Xf?&#34;&gt;Paris Apache Kafka Meetup @ DataDog&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
 &lt;/ul&gt;
 
 &lt;hr /&gt;
@@ -14091,6 +14196,7 @@ done
 &lt;li&gt;📽 Recording
 
 &lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=Z8_O0wEIafw&#34;&gt;Devoxx UK&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=bapHWhtf6fE&#34;&gt;Devoxx Belgium&lt;/a&gt;
 
 &lt;ul&gt;

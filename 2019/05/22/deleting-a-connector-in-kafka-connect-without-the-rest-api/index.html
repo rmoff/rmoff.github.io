@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Deleting a Connector in Kafka Connect without the REST API</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.github.io/index.xml">
+		<link rel="canonical" href="https://rmoff.github.io/2019/05/22/deleting-a-connector-in-kafka-connect-without-the-rest-api/">
+		
+		<link rel="shortcut icon" type="image/png" href="https://rmoff.github.io/apple-touch-icon-precomposed.png">
+		
+		
+		<meta name="generator" content="Hugo 0.54.0" />
+
+		
+		<meta name="og:title" content="Deleting a Connector in Kafka Connect without the REST API" />
+		<meta name="og:type" content="article" />
+		<meta name="og:image" content="https://rmoff.github.io/images/2019/05/IMG_0089.jpg" />
+		<meta name="og:description" content="" />
+		<meta name="og:url" content="https://rmoff.github.io/2019/05/22/deleting-a-connector-in-kafka-connect-without-the-rest-api/" />
+		<meta name="og:site_name" content="Deleting a Connector in Kafka Connect without the REST API" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.github.io/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.github.io/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.github.io/images/2019/05/IMG_0089.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.github.io" title="Home">
+						<img src="https://rmoff.github.io/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="/talks/">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.github.io/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.github.io/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Deleting a Connector in Kafka Connect without the REST API</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2019-05-22T10:32:10&#43;01:00">May 22, 2019</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.github.io/categories//kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>, <a href="https://rmoff.github.io/categories//rest" class="no-underline category near-white dim">REST</a>, <a href="https://rmoff.github.io/categories//kafkacat" class="no-underline category near-white dim">Kafkacat</a>
+								<span class="display-print">at https://rmoff.github.io/2019/05/22/deleting-a-connector-in-kafka-connect-without-the-rest-api/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 nested-copy-line-height lh-copy f4 nested-links mw-100 measure-wide">
+	<div class="paragraph">
+<p>Kafka Connect exposes a <a href="https://docs.confluent.io/current/connect/references/restapi.html">REST interface</a> through which all config and monitoring operations can be done. You can create connectors, delete them, restart them, check their status, and so on. But, I found a situation recently in which I needed to delete a connector and couldn&#8217;t do so with the REST API. Here&#8217;s another way to do it, by amending the configuration Kafka topic that Kafka Connect in distributed mode uses to persist configuration information for connectors. Note that this is not a recommended way of working with Kafka Connect—the REST API is there for a good reason :)</p>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s imagine we&#8217;ve got three connectors running, and we want to get rid of one of them. You can see what&#8217;s running using the REST API and some nifty bash work:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors&#34;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  jq <span style="color:#ba2121">&#39;.[]&#39;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  xargs -I<span style="color:#666">{</span>connector_name<span style="color:#666">}</span> curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors/&#34;</span><span style="color:#666">{</span>connector_name<span style="color:#666">}</span><span style="color:#ba2121">&#34;/status&#34;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  jq -c -M <span style="color:#ba2121">&#39;[.name,.connector.state,.tasks[].state]|join(&#34;:|:&#34;)&#39;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  column -s : -t| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  sort</code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">mongodb-connector                    |  RUNNING  |  RUNNING
+source-rest-weather_york             |  RUNNING  |  RUNNING
+twitter_source_json_01               |  RUNNING  |  RUNNING</code></pre></div>
+</div>
+<div class="paragraph">
+<p>When you configure Kafka Connect you&#8217;ll set three Kafka topics for it to use to persist data across the Connect cluster. This will include a topic that holds configurations:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">config.storage.topic<span style="color:#666">=</span>docker-connect-configs</code></pre></div>
+</div>
+<div class="paragraph">
+<p>So having identified the topic, examine its contents with <code>kafkacat</code>:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kafkacat -b localhost:9092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -t docker-connect-configs <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -C <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -K: <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -f <span style="color:#ba2121">&#39;\nKey (%K bytes): %k\t\nValue (%S bytes): %s\nTimestamp: %T\tPartition: %p\tOffset: %o\n--\n&#39;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Identify the connector you want to remove, e.g.:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">Key <span style="color:#666">(</span><span style="color:#666">27</span> bytes<span style="color:#666">)</span>: connector-mongodb-connector
+Value <span style="color:#666">(</span><span style="color:#666">195</span> bytes<span style="color:#666">)</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;properties&#34;</span>:<span style="color:#666">{</span><span style="color:#ba2121">&#34;connector.class&#34;</span>:<span style="color:#ba2121">&#34;io.debezium.connector.mongodb.MongoDbConnector&#34;</span>,<span style="color:#ba2121">&#34;mongodb.hosts&#34;</span>:<span style="color:#ba2121">&#34;rs0/mongodb:27017&#34;</span>,<span style="color:#ba2121">&#34;mongodb.name&#34;</span>:<span style="color:#ba2121">&#34;ubnt&#34;</span>,<span style="color:#ba2121">&#34;database.whitelist&#34;</span>:<span style="color:#ba2121">&#34;ace&#34;</span>,<span style="color:#ba2121">&#34;name&#34;</span>:<span style="color:#ba2121">&#34;mongodb-connector&#34;</span><span style="color:#666">}}</span>
+Timestamp: <span style="color:#666">1528723016429</span>        Partition: <span style="color:#666">0</span>    Offset: <span style="color:#666">20</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Note the key value.</p>
+</div>
+<div class="paragraph">
+<p>Shutdown Kafka Connect and make sure it&#8217;s fully stopped before proceeding.</p>
+</div>
+<div class="paragraph">
+<p>Now send a tombstone message (<code>NULL</code> value) for this key</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#008000">echo</span> <span style="color:#ba2121">&#34;connector-mongodb-connector:&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>kafkacat -b localhost -t docker-connect-configs -P -Z -K:</code></pre></div>
+</div>
+<div class="paragraph">
+<p>If you examine the topic again for this particular key you&#8217;ll notice that there are now <strong>two</strong> messages:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">Key <span style="color:#666">(</span><span style="color:#666">27</span> bytes<span style="color:#666">)</span>: connector-mongodb-connector
+Value <span style="color:#666">(</span><span style="color:#666">195</span> bytes<span style="color:#666">)</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;properties&#34;</span>:<span style="color:#666">{</span><span style="color:#ba2121">&#34;connector.class&#34;</span>:<span style="color:#ba2121">&#34;io.debezium.connector.mongodb.MongoDbConnector&#34;</span>,<span style="color:#ba2121">&#34;mongodb.hosts&#34;</span>:<span style="color:#ba2121">&#34;rs0/mongodb:27017&#34;</span>,<span style="color:#ba2121">&#34;mongodb.name&#34;</span>:<span style="color:#ba2121">&#34;ubnt&#34;</span>,<span style="color:#ba2121">&#34;database.whitelist&#34;</span>:<span style="color:#ba2121">&#34;ace&#34;</span>,<span style="color:#ba2121">&#34;name&#34;</span>:<span style="color:#ba2121">&#34;mongodb-connector&#34;</span><span style="color:#666">}}</span>
+Timestamp: <span style="color:#666">1528723016429</span>        Partition: <span style="color:#666">0</span>    Offset: <span style="color:#666">20</span>
+--
+Key <span style="color:#666">(</span><span style="color:#666">27</span> bytes<span style="color:#666">)</span>: connector-mongodb-connector
+Value <span style="color:#666">(</span>-1 bytes<span style="color:#666">)</span>:</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Because this is a <a href="https://kafka.apache.org/documentation/#compaction">compacted topic</a> (<code>cleanup.policy=compact</code>) the <em>latest</em> value for this key is what will be retained when compaction runs—and will be retained <em>for ever</em>. Kafka acts as the <a href="https://www.confluent.io/blog/okay-store-data-apache-kafka/">permanent store of data</a>. Cool huh.</p>
+</div>
+<div class="paragraph">
+<p>Start Kafka Connect back up and you will see that the connector is now gone:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">source-rest-weather_york             |  RUNNING  |  RUNNING
+twitter_source_json_01               |  RUNNING  |  RUNNING</code></pre></div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.github.io/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2019 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
