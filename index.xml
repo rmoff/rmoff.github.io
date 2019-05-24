@@ -7,7 +7,78 @@
 		<language>en-us</language>
 		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2019</rights>
-		<updated>2019-05-22 10:32:10 &#43;0100 BST</updated>
+		<updated>2019-05-24 17:30:57 &#43;0100 BST</updated>
+		
+		<item>
+			<title>Putting Kafka Connect passwords in a separate file / externalising secrets</title>
+			<link>https://rmoff.github.io/2019/05/24/putting-kafka-connect-passwords-in-a-separate-file-/-externalising-secrets/</link>
+			<pubDate>Fri, 24 May 2019 17:30:57 BST</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/2019/05/24/putting-kafka-connect-passwords-in-a-separate-file-/-externalising-secrets/</guid>
+			<description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Kafka Connect configuration is easy - you just write some JSON! But what if you&amp;#8217;ve got credentials that you need to pass? Embedding those in a config file is not always such a smart idea. Fortunately with &lt;a href=&#34;https://cwiki.apache.org/confluence/display/KAFKA/KIP-297%3A+Externalizing+Secrets+for+Connect+Configurations&#34;&gt;KIP-297&lt;/a&gt; which was released in Apache Kafka 2.0 there is support for external secrets. It&amp;#8217;s extendable to use your own &lt;code&gt;ConfigProvider&lt;/code&gt;, and ships with its own for just putting credentials in a file - which I&amp;#8217;ll show here. You can &lt;a href=&#34;https://docs.confluent.io/current/connect/security.html#externalizing-secrets&#34;&gt;read more here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;olist arabic&#34;&gt;
+&lt;ol class=&#34;arabic&#34;&gt;
+&lt;li&gt;
+&lt;p&gt;Set up your credentials file, e.g. &lt;code&gt;data/foo_credentials.properties&lt;/code&gt;&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#19177c&#34;&gt;FOO_USERNAME&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;rick&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color:#19177c&#34;&gt;FOO_PASSWORD&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;n3v3r_g0nn4_g1ve_y0u_up&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Add the &lt;code&gt;ConfigProvider&lt;/code&gt; to your Kafka Connect worker. I run mine with Docker Compose so the config looks like this. I&amp;#8217;m also mounting the credentials file folder to the container&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;  kafka-connect:
+    image: confluentinc/cp-kafka-connect:5.2.1
+    &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;…&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+    environment:
+    &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;…&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+      &lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# External secrets config&lt;/span&gt;
+      &lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# See https://docs.confluent.io/current/connect/security.html#externalizing-secrets&lt;/span&gt;
+&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;      CONNECT_CONFIG_PROVIDERS: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;file&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;      CONNECT_CONFIG_PROVIDERS_FILE_CLASS: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;org.apache.kafka.common.config.provider.FileConfigProvider&amp;#39;&lt;/span&gt;
+&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;…&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;  volumes:
+&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;    - ./data:/data&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Restart your Kafka Connect worker&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Now simply replace the credentials in your connector config with placeholders for the values:&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Before:&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;&lt;span style=&#34;&#34;&gt;&amp;#39;&lt;/span&gt;{&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;name&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;source-activemq-01&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;config&amp;#34;&lt;/span&gt;: {
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;connector.class&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.confluent.connect.activemq.ActiveMQSourceConnector&amp;#34;&lt;/span&gt;,
+&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;activemq.username&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;rick&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;activemq.password&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;n3v3r_g0nn4_g1ve_y0u_up&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;    &lt;span style=&#34;&#34;&gt;[…]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;After:&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;&lt;span style=&#34;&#34;&gt;&amp;#39;&lt;/span&gt;{&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;name&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;source-activemq-01&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;config&amp;#34;&lt;/span&gt;: {
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;connector.class&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.confluent.connect.activemq.ActiveMQSourceConnector&amp;#34;&lt;/span&gt;,
+&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;activemq.username&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;${file:/data/foo_credentials.properties:FOO_USERNAME}&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;activemq.password&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;${file:/data/foo_credentials.properties:FOO_PASSWORD}&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;    &lt;span style=&#34;&#34;&gt;[…]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;</description>
+		</item>
 		
 		<item>
 			<title>Deleting a Connector in Kafka Connect without the REST API</title>
