@@ -7,7 +7,85 @@
 		<language>en-us</language>
 		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2019</rights>
-		<updated>2019-05-24 17:30:57 &#43;0100 BST</updated>
+		<updated>2019-06-06 17:51:44 &#43;0100 BST</updated>
+		
+		<item>
+			<title>Automatically restarting failed Kafka Connect tasks</title>
+			<link>https://rmoff.github.io/2019/06/06/automatically-restarting-failed-kafka-connect-tasks/</link>
+			<pubDate>Thu, 06 Jun 2019 17:51:44 BST</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/2019/06/06/automatically-restarting-failed-kafka-connect-tasks/</guid>
+			<description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here&amp;#8217;s a hacky way to automatically restart Kafka Connect connectors if they fail. Restarting automatically only makes sense if it&amp;#8217;s a transient failure; if there&amp;#8217;s a problem with your pipeline (e.g. bad records or a mis-configured server) then you don&amp;#8217;t gain anything from this. You might want to check out &lt;a href=&#34;https://www.confluent.io/blog/kafka-connect-deep-dive-error-handling-dead-letter-queues&#34;&gt;Kafka Connect&amp;#8217;s error handling and dead letter queues&lt;/a&gt; too.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let&amp;#8217;s say you&amp;#8217;ve got a couple of connectors set up, pulling data from MySQL with Debezium and streaming it to Elasticsearch. The MySQL source is a bit flaky and goes offline periodically. You can view the status of all your connectors and tasks:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors&amp;#34;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.[]&amp;#39;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  xargs -I&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors/&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;/status&amp;#34;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  jq -c -M &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;[.name,.connector.state,.tasks[].state]|join(&amp;#34;:|:&amp;#34;)&amp;#39;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  column -s : -t| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;//g&amp;#39;&lt;/span&gt;| sort
+
+sink-elastic-orders-00     |  RUNNING  |  RUNNING
+source-debezium-orders-00  |  RUNNING  |  FAILED&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If a connector&amp;#8217;s task(s) are failed you can restart them using the &lt;a href=&#34;https://docs.confluent.io/current/connect/references/restapi.html#post&amp;#8212;&amp;#8203;connectors-(string-name)-tasks-(int-taskid)-restart&#34;&gt;REST API&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -X POST http://localhost:8083/connectors/source-debezium-orders-00/tasks/0/restart&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;after which it comes back&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors&amp;#34;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.[]&amp;#39;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  xargs -I&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors/&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;/status&amp;#34;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  jq -c -M &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;[.name,.connector.state,.tasks[].state]|join(&amp;#34;:|:&amp;#34;)&amp;#39;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  column -s : -t| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;//g&amp;#39;&lt;/span&gt;| sort
+
+sink-elastic-orders-00     |  RUNNING  |  RUNNING
+source-debezium-orders-00  |  RUNNING  |  RUNNING&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But, manually watching and restarting tasks isn&amp;#8217;t fun, so let&amp;#8217;s automate it. Here&amp;#8217;s a bit of bash that will restart any failed tasks. It&amp;#8217;s the same pattern as above for iterating through the connectors on Kafka Connect&amp;#8217;s REST API, coupled with &lt;code&gt;jq&lt;/code&gt; &#39;s ability to filter data (&lt;code&gt;select(.tasks[].state==&#34;FAILED&#34;)&lt;/code&gt;)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#bc7a00&#34;&gt;#!/usr/bin/env bash
+&lt;/span&gt;&lt;span style=&#34;color:#bc7a00&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# @rmoff / June 6, 2019&lt;/span&gt;
+
+&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;----&amp;#39;&lt;/span&gt;
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Set the path so cron can find jq, necessary for cron depending on your default PATH&lt;/span&gt;
+&lt;span style=&#34;color:#008000&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;PATH&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$PATH&lt;/span&gt;:/usr/local/bin/
+
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# What time is it Mr Wolf?&lt;/span&gt; 
+date 
+
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# List current connectors and status&lt;/span&gt;
+curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors&amp;#34;&lt;/span&gt;| jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.[]&amp;#39;&lt;/span&gt;| xargs -I&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors/&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;/status&amp;#34;&lt;/span&gt;| jq -c -M &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;[.name,.connector.state,.tasks[].state]|join(&amp;#34;:|:&amp;#34;)&amp;#39;&lt;/span&gt;| column -s : -t| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;//g&amp;#39;&lt;/span&gt;| sort
+
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Restart any connector tasks that are FAILED&lt;/span&gt;
+curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.[]&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  xargs -I&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors/&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_name&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;/status&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  jq -c -M &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;[select(.tasks[].state==&amp;#34;FAILED&amp;#34;) | .name,&amp;#34;§±§&amp;#34;,.tasks[].id]&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  grep -v &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;\[\]&amp;#34;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  sed -e &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/^\[\&amp;#34;//g&amp;#39;&lt;/span&gt;| sed -e &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;,\&amp;#34;§±§\&amp;#34;,/\/tasks\//g&amp;#39;&lt;/span&gt;|sed -e &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\]$//g&amp;#39;&lt;/span&gt;| &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  xargs -I&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_and_task&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; curl -v -X POST &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors/&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;connector_and_task&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;/restart&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Which as any hacky admin will know can be scheduled to run with a crontab such as this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;*/5 * * * * /u01/connectors/restart_failed_connector_tasks.sh &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&amp;gt;&amp;amp;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; &amp;gt;&amp;gt; /u01/connectors/connect_monitor.log&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now every five minutes the script will look for any &lt;code&gt;FAILED&lt;/code&gt; tasks and send a REST call to restart them.&lt;/p&gt;
+&lt;/div&gt;</description>
+		</item>
 		
 		<item>
 			<title>Putting Kafka Connect passwords in a separate file / externalising secrets</title>
