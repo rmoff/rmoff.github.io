@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Copying data between Kafka clusters with Kafkacat</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.github.io/index.xml">
+		<link rel="canonical" href="https://rmoff.github.io/2019/09/29/copying-data-between-kafka-clusters-with-kafkacat/">
+		
+		<link rel="shortcut icon" type="image/png" href="https://rmoff.github.io/apple-touch-icon-precomposed.png">
+		
+		
+		<meta name="generator" content="Hugo 0.56.3" />
+
+		
+		<meta property="og:title" content="Copying data between Kafka clusters with Kafkacat" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.github.io/images/2019/09/IMG_2653.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.github.io/2019/09/29/copying-data-between-kafka-clusters-with-kafkacat/" />
+		<meta property="og:site_name" content="Copying data between Kafka clusters with Kafkacat" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.github.io/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.github.io/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.github.io/images/2019/09/IMG_2653.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.github.io" title="Home">
+						<img src="https://rmoff.github.io/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.github.io/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.github.io/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Copying data between Kafka clusters with Kafkacat</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2019-09-29T10:43:45&#43;02:00">Sep 29, 2019</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.github.io/categories/kafkacat" class="no-underline category near-white dim">Kafkacat</a>, <a href="https://rmoff.github.io/categories/confluent-cloud" class="no-underline category near-white dim">Confluent Cloud</a>
+								<span class="display-print">at https://rmoff.github.io/2019/09/29/copying-data-between-kafka-clusters-with-kafkacat/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="sect1">
+<h2 id="_kafkacat_gives_you_kafka_super_powers">kafkacat gives you Kafka super powers 😎</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>I&#8217;ve <a href="https://rmoff.net/categories/kafkacat/">written before</a> about <a href="https://github.com/edenhill/kafkacat">kafkacat</a> and what a great tool it is for doing lots of useful things as a developer with Kafka. I used it too in <a href="https://talks.rmoff.net/8Oruwt/on-track-with-apache-kafka-building-a-streaming-etl-solution-with-rail-data#s9tMEWG">a recent demo</a> that I built in which data needed manipulating in a way that I couldn&#8217;t easily elsewhere. Today I want share a very simple but powerful use for kafkacat as both a consumer and producer: copying data from one Kafka cluster to another. In this instance it&#8217;s getting data from <a href="https://confluent.cloud/">Confluent Cloud</a> down to a local cluster.</p>
+</div>
+<div class="paragraph">
+<p>Why would I want to copy data from one Kafka cluster to another? In this instance it was because I had set up a pipeline streaming data into one cluster (on Confluent Cloud) and I needed that data locally so that I could work on building code around it whilst offline. Offline happens less and less often nowadays but it still happens—on many flights, and often at conferences/hotels with "WiFi" that isn&#8217;t.</p>
+</div>
+<div class="paragraph">
+<p>There are several proper ways to replicate data from one Kafka cluster to another, including MirrorMaker (part of Apache Kafka) and <a href="https://docs.confluent.io/current/connect/kafka-connect-replicator/index.html">Replicator</a> (part of Confluent Platform). If what I needed was a proper solution then obviously I&#8217;d reach for Replicator—but here I just needed quick &amp; dirty, didn&#8217;t care about replicating consumer offsets etc.</p>
+</div>
+<div class="paragraph">
+<p><a href="https://en.wikipedia.org/wiki/Pipeline_(Unix)">Unix pipelines</a> are a beautiful thing, because they enable you to build fantastically powerful processing out of individual components that each focus on doing their own thing particularly well. kafkacat fully supports the pipelines concept, which means that you can stream data out of a Kafka topic (using kafkacat as a consumer) into any tool that accepts <code>stdin</code>, and you can also take data from any tool that produces <code>stdout</code> and write it to a Kafka topic (using kafkacat as a producer).</p>
+</div>
+<div class="paragraph">
+<p>Guess what happens when you hook up two kafkacat instances, one consuming and one producing? A delightful thing happens; you read from one topic and write to another!</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2019/09/kafkacat-copy-between-clusters.png" alt="kafkacat copy between clusters">
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This is a hack—I have not tried it (and suspect it wouldn&#8217;t work) with binary data; that&#8217;s exactly what <a href="https://docs.confluent.io/current/connect/kafka-connect-replicator/index.html">Replicator</a> and its support for Byte arrays is for :)
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>At a very simply level you can do this:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kafkacat -b localhost:9092 -C -t source-topic -K: -e -o beginning | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>kafkacat -b localhost:9092 -P -t target-topic -K: </code></pre></div>
+</div>
+<div class="paragraph">
+<p>That will take every message on <code>source-topic</code> and write it to <code>target-topic</code> on the same cluster. Some flags:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>-K</code> output/parse keys separated by <code>:</code></p>
+</li>
+<li>
+<p><code>-e</code> exit once at the end of the topic</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The above will run once, and you get a copy of that topic at the point in time at which the script runs. If you re-run it you&#8217;ll get another full copy of the data.</p>
+</div>
+<div class="paragraph">
+<p>What about if you want to resume consumption after each execution, or even scale it out? kafkacat supports consumer groups!</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kafkacat -b localhost:9092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -X auto.offset.reset<span style="color:#666">=</span>earliest <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -K: <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -G cg01 source-topic | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>kafkacat -b localhost:9092 -t target-topic -K: -P</code></pre></div>
+</div>
+<div class="paragraph">
+<p>The arguments are a bit different this time. We replace <code>-C</code> (consumer) and specifying the topic with <code>-t</code></p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>-C -t source-topic</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>with <code>-G</code> to specify using the balanced consumer, its name, and which topic(s) to subscribe to</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>-G cg01 source-topic</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We also change <code>-o beginning</code> for <code>-X auto.offset.reset=earliest</code>. When this is run we see the partitions of the six-partition topic that have been assigned to it:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">% Group cg01 rebalanced <span style="color:#666">(</span>memberid rdkafka-894c0f84-9464-42dd-b76a-885420b6c557<span style="color:#666">)</span>: assigned: source-topic <span style="color:#666">[</span><span style="color:#666">0</span><span style="color:#666">]</span>, source-topic <span style="color:#666">[</span><span style="color:#666">1</span><span style="color:#666">]</span>, source-topic <span style="color:#666">[</span><span style="color:#666">2</span><span style="color:#666">]</span>, source-topic <span style="color:#666">[</span><span style="color:#666">3</span><span style="color:#666">]</span>, source-topic <span style="color:#666">[</span><span style="color:#666">4</span><span style="color:#666">]</span>, source-topic <span style="color:#666">[</span><span style="color:#666">5</span><span style="color:#666">]</span>
+% Reached end of topic source-topic <span style="color:#666">[</span><span style="color:#666">2</span><span style="color:#666">]</span> at offset <span style="color:#666">11</span>
+% Reached end of topic source-topic <span style="color:#666">[</span><span style="color:#666">0</span><span style="color:#666">]</span> at offset <span style="color:#666">0</span>
+% Reached end of topic source-topic <span style="color:#666">[</span><span style="color:#666">1</span><span style="color:#666">]</span> at offset <span style="color:#666">0</span>
+% Reached end of topic source-topic <span style="color:#666">[</span><span style="color:#666">5</span><span style="color:#666">]</span> at offset <span style="color:#666">0</span>
+% Reached end of topic source-topic <span style="color:#666">[</span><span style="color:#666">3</span><span style="color:#666">]</span> at offset <span style="color:#666">0</span>
+% Reached end of topic source-topic <span style="color:#666">[</span><span style="color:#666">4</span><span style="color:#666">]</span> at offset <span style="color:#666">0</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>and if we run a second instance of it with the same consumer group id both rebalance:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Instance 1</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">% Group cg01 rebalanced <span style="color:#666">(</span>memberid rdkafka-894c0f84-9464-42dd-b76a-885420b6c557<span style="color:#666">)</span>: assigned: source-topic <span style="color:#666">[</span><span style="color:#666">3</span><span style="color:#666">]</span>, source-topic <span style="color:#666">[</span><span style="color:#666">4</span><span style="color:#666">]</span>, source-topic <span style="color:#666">[</span><span style="color:#666">5</span><span style="color:#666">]</span></code></pre></div>
+</div>
+</li>
+<li>
+<p>Instance 2</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">% Group cg01 rebalanced <span style="color:#666">(</span>memberid rdkafka-2416395f-7232-4fc0-8fbc-121d3bbc3758<span style="color:#666">)</span>: assigned: source-topic <span style="color:#666">[</span><span style="color:#666">0</span><span style="color:#666">]</span>, source-topic <span style="color:#666">[</span><span style="color:#666">1</span><span style="color:#666">]</span>, source-topic <span style="color:#666">[</span><span style="color:#666">2</span><span style="color:#666">]</span></code></pre></div>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_copying_data_from_confluent_cloud_to_a_local_kafka_cluster">Copying data from Confluent Cloud to a local Kafka cluster</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Now let&#8217;s add Confluent Cloud into the mix—or any other secured Kafka cluster for that matter. We just need a few extra parameters in our call :</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kafkacat -b <span style="color:#19177c">$CCLOUD_BROKER_HOST</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -X security.protocol<span style="color:#666">=</span>SASL_SSL -X sasl.mechanisms<span style="color:#666">=</span>PLAIN <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -X sasl.username<span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#19177c">$CCLOUD_API_KEY</span><span style="color:#ba2121">&#34;</span> -X sasl.password<span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#19177c">$CCLOUD_API_SECRET</span><span style="color:#ba2121">&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -X ssl.ca.location<span style="color:#666">=</span>/usr/local/etc/openssl/cert.pem -X api.version.request<span style="color:#666">=</span><span style="color:#008000">true</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -X auto.offset.reset<span style="color:#666">=</span>earliest <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -K: <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -G copy_to_local_00 source-topic  | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>kafkacat -b localhost:9092,localhost:19092,localhost:29092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -t target-topic <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -K: -P </code></pre></div>
+</div>
+<div class="paragraph">
+<p>And off we go. How can we check it&#8217;s worked? kafkacat of course! We can sample some records:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b localhost:9092 -t source-topic -o beginning -e -C -c <span style="color:#666">5</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;batt&#34;</span>:97,,<span style="color:#ba2121">&#34;acc&#34;</span>:200,<span style="color:#ba2121">&#34;p&#34;</span>:98.689468383789062,<span style="color:#ba2121">&#34;bs&#34;</span>:1,<span style="color:#ba2121">&#34;vel&#34;</span>:0,<span style="color:#ba2121">&#34;vac&#34;</span>:93,<span style="color:#ba2121">&#34;t&#34;</span>:<span style="color:#ba2121">&#34;u&#34;</span>,<span style="color:#ba2121">&#34;conn&#34;</span>:<span style="color:#ba2121">&#34;w&#34;</span>,<span style="color:#ba2121">&#34;tst&#34;</span>:1569316069,<span style="color:#ba2121">&#34;alt&#34;</span>:97,<span style="color:#ba2121">&#34;_type&#34;</span>:<span style="color:#ba2121">&#34;location&#34;</span>,<span style="color:#ba2121">&#34;tid&#34;</span>:<span style="color:#ba2121">&#34;FF&#34;</span><span style="color:#666">}</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;cog&#34;</span>:193,<span style="color:#ba2121">&#34;batt&#34;</span>:45,<span style="color:#ba2121">&#34;acc&#34;</span>:16,<span style="color:#ba2121">&#34;p&#34;</span>:100.14543914794922,<span style="color:#ba2121">&#34;bs&#34;</span>:1,<span style="color:#ba2121">&#34;vel&#34;</span>:0,<span style="color:#ba2121">&#34;vac&#34;</span>:3,<span style="color:#ba2121">&#34;conn&#34;</span>:<span style="color:#ba2121">&#34;w&#34;</span>,<span style="color:#ba2121">&#34;tst&#34;</span>:1569330854,<span style="color:#ba2121">&#34;tid&#34;</span>:<span style="color:#ba2121">&#34;RM&#34;</span>,<span style="color:#ba2121">&#34;_type&#34;</span>:<span style="color:#ba2121">&#34;location&#34;</span>,<span style="color:#ba2121">&#34;alt&#34;</span>:104<span style="color:#666">}</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;batt&#34;</span>:97,,<span style="color:#ba2121">&#34;acc&#34;</span>:200,<span style="color:#ba2121">&#34;p&#34;</span>:98.689468383789062,<span style="color:#ba2121">&#34;bs&#34;</span>:1,<span style="color:#ba2121">&#34;vel&#34;</span>:0,<span style="color:#ba2121">&#34;vac&#34;</span>:93,<span style="color:#ba2121">&#34;t&#34;</span>:<span style="color:#ba2121">&#34;u&#34;</span>,<span style="color:#ba2121">&#34;conn&#34;</span>:<span style="color:#ba2121">&#34;w&#34;</span>,<span style="color:#ba2121">&#34;tst&#34;</span>:1569316069,<span style="color:#ba2121">&#34;alt&#34;</span>:97,<span style="color:#ba2121">&#34;_type&#34;</span>:<span style="color:#ba2121">&#34;location&#34;</span>,<span style="color:#ba2121">&#34;tid&#34;</span>:<span style="color:#ba2121">&#34;FF&#34;</span><span style="color:#666">}</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;cog&#34;</span>:193,<span style="color:#ba2121">&#34;batt&#34;</span>:45,<span style="color:#ba2121">&#34;acc&#34;</span>:16,<span style="color:#ba2121">&#34;p&#34;</span>:100.14543914794922,<span style="color:#ba2121">&#34;bs&#34;</span>:1,<span style="color:#ba2121">&#34;vel&#34;</span>:0,<span style="color:#ba2121">&#34;vac&#34;</span>:3,<span style="color:#ba2121">&#34;conn&#34;</span>:<span style="color:#ba2121">&#34;w&#34;</span>,<span style="color:#ba2121">&#34;tst&#34;</span>:1569330854,<span style="color:#ba2121">&#34;tid&#34;</span>:<span style="color:#ba2121">&#34;RM&#34;</span>,<span style="color:#ba2121">&#34;_type&#34;</span>:<span style="color:#ba2121">&#34;location&#34;</span>,<span style="color:#ba2121">&#34;alt&#34;</span>:104<span style="color:#666">}</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;batt&#34;</span>:97,,<span style="color:#ba2121">&#34;acc&#34;</span>:200,<span style="color:#ba2121">&#34;p&#34;</span>:98.689468383789062,<span style="color:#ba2121">&#34;bs&#34;</span>:1,<span style="color:#ba2121">&#34;vel&#34;</span>:0,<span style="color:#ba2121">&#34;vac&#34;</span>:93,<span style="color:#ba2121">&#34;t&#34;</span>:<span style="color:#ba2121">&#34;u&#34;</span>,<span style="color:#ba2121">&#34;conn&#34;</span>:<span style="color:#ba2121">&#34;w&#34;</span>,<span style="color:#ba2121">&#34;tst&#34;</span>:1569316069,<span style="color:#ba2121">&#34;alt&#34;</span>:97,<span style="color:#ba2121">&#34;_type&#34;</span>:<span style="color:#ba2121">&#34;location&#34;</span>,<span style="color:#ba2121">&#34;tid&#34;</span>:<span style="color:#ba2121">&#34;FF&#34;</span><span style="color:#666">}</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>and we can count how many are currently in the topic:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b localhost:9092 -t target-topic -o beginning -e|wc -l
+% Auto-selecting Consumer mode <span style="color:#666">(</span>use -P or -C to override<span style="color:#666">)</span>
+% Reached end of topic target-topic <span style="color:#666">[</span><span style="color:#666">0</span><span style="color:#666">]</span> at offset <span style="color:#666">1668</span>: exiting
+    <span style="color:#666">1668</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>We can see the consumer group in Confluent Cloud (with similar views in Confluent Control Center if you&#8217;re running Apache Kafka for yourself), showing any lag in each consumer:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2019/09/kafka–consumer-lag.png" alt="kafka–consumer lag">
+</div>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.github.io/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2019 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>

@@ -6,12 +6,186 @@
 		<language>en-us</language>
 		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2019</rights>
-		<updated>2019-09-23 10:55:23 &#43;0100 BST</updated>
+		<updated>2019-09-29 10:43:45 &#43;0200 CEST</updated>
+		
+		<item>
+			<title>Copying data between Kafka clusters with Kafkacat</title>
+			<link>https://rmoff.github.io/2019/09/29/copying-data-between-kafka-clusters-with-kafkacat/</link>
+			<pubDate>Sun, 29 Sep 2019 10:43:45 CEST</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/2019/09/29/copying-data-between-kafka-clusters-with-kafkacat/</guid>
+			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/09/IMG_2657.jpg" medium="image" type="image/jpg" width="100" height="100" />
+			<description>&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_kafkacat_gives_you_kafka_super_powers&#34;&gt;kafkacat gives you Kafka super powers 😎&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I&amp;#8217;ve &lt;a href=&#34;https://rmoff.net/categories/kafkacat/&#34;&gt;written before&lt;/a&gt; about &lt;a href=&#34;https://github.com/edenhill/kafkacat&#34;&gt;kafkacat&lt;/a&gt; and what a great tool it is for doing lots of useful things as a developer with Kafka. I used it too in &lt;a href=&#34;https://talks.rmoff.net/8Oruwt/on-track-with-apache-kafka-building-a-streaming-etl-solution-with-rail-data#s9tMEWG&#34;&gt;a recent demo&lt;/a&gt; that I built in which data needed manipulating in a way that I couldn&amp;#8217;t easily elsewhere. Today I want share a very simple but powerful use for kafkacat as both a consumer and producer: copying data from one Kafka cluster to another. In this instance it&amp;#8217;s getting data from &lt;a href=&#34;https://confluent.cloud/&#34;&gt;Confluent Cloud&lt;/a&gt; down to a local cluster.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Why would I want to copy data from one Kafka cluster to another? In this instance it was because I had set up a pipeline streaming data into one cluster (on Confluent Cloud) and I needed that data locally so that I could work on building code around it whilst offline. Offline happens less and less often nowadays but it still happens—on many flights, and often at conferences/hotels with &#34;WiFi&#34; that isn&amp;#8217;t.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There are several proper ways to replicate data from one Kafka cluster to another, including MirrorMaker (part of Apache Kafka) and &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-replicator/index.html&#34;&gt;Replicator&lt;/a&gt; (part of Confluent Platform). If what I needed was a proper solution then obviously I&amp;#8217;d reach for Replicator—but here I just needed quick &amp;amp; dirty, didn&amp;#8217;t care about replicating consumer offsets etc.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Pipeline_(Unix)&#34;&gt;Unix pipelines&lt;/a&gt; are a beautiful thing, because they enable you to build fantastically powerful processing out of individual components that each focus on doing their own thing particularly well. kafkacat fully supports the pipelines concept, which means that you can stream data out of a Kafka topic (using kafkacat as a consumer) into any tool that accepts &lt;code&gt;stdin&lt;/code&gt;, and you can also take data from any tool that produces &lt;code&gt;stdout&lt;/code&gt; and write it to a Kafka topic (using kafkacat as a producer).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Guess what happens when you hook up two kafkacat instances, one consuming and one producing? A delightful thing happens; you read from one topic and write to another!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.github.io/images/2019/09/kafkacat-copy-between-clusters.png&#34; alt=&#34;kafkacat copy between clusters&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+This is a hack—I have not tried it (and suspect it wouldn&amp;#8217;t work) with binary data; that&amp;#8217;s exactly what &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-replicator/index.html&#34;&gt;Replicator&lt;/a&gt; and its support for Byte arrays is for :)
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;At a very simply level you can do this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kafkacat -b localhost:9092 -C -t source-topic -K: -e -o beginning | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;kafkacat -b localhost:9092 -P -t target-topic -K: &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;That will take every message on &lt;code&gt;source-topic&lt;/code&gt; and write it to &lt;code&gt;target-topic&lt;/code&gt; on the same cluster. Some flags:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;-K&lt;/code&gt; output/parse keys separated by &lt;code&gt;:&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;-e&lt;/code&gt; exit once at the end of the topic&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The above will run once, and you get a copy of that topic at the point in time at which the script runs. If you re-run it you&amp;#8217;ll get another full copy of the data.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What about if you want to resume consumption after each execution, or even scale it out? kafkacat supports consumer groups!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kafkacat -b localhost:9092 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X auto.offset.reset&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;earliest &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -K: &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -G cg01 source-topic | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;kafkacat -b localhost:9092 -t target-topic -K: -P&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The arguments are a bit different this time. We replace &lt;code&gt;-C&lt;/code&gt; (consumer) and specifying the topic with &lt;code&gt;-t&lt;/code&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;-C -t source-topic&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;with &lt;code&gt;-G&lt;/code&gt; to specify using the balanced consumer, its name, and which topic(s) to subscribe to&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;-G cg01 source-topic&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We also change &lt;code&gt;-o beginning&lt;/code&gt; for &lt;code&gt;-X auto.offset.reset=earliest&lt;/code&gt;. When this is run we see the partitions of the six-partition topic that have been assigned to it:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;% Group cg01 rebalanced &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;memberid rdkafka-894c0f84-9464-42dd-b76a-885420b6c557&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: assigned: source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;
+% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
+% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
+% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
+% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
+% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and if we run a second instance of it with the same consumer group id both rebalance:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Instance 1&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;% Group cg01 rebalanced &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;memberid rdkafka-894c0f84-9464-42dd-b76a-885420b6c557&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: assigned: source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Instance 2&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;% Group cg01 rebalanced &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;memberid rdkafka-2416395f-7232-4fc0-8fbc-121d3bbc3758&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: assigned: source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_copying_data_from_confluent_cloud_to_a_local_kafka_cluster&#34;&gt;Copying data from Confluent Cloud to a local Kafka cluster&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now let&amp;#8217;s add Confluent Cloud into the mix—or any other secured Kafka cluster for that matter. We just need a few extra parameters in our call :&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kafkacat -b &lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_BROKER_HOST&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X ssl.ca.location&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;/usr/local/etc/openssl/cert.pem -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X auto.offset.reset&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;earliest &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -K: &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -G copy_to_local_00 source-topic  | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;kafkacat -b localhost:9092,localhost:19092,localhost:29092 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -t target-topic &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -K: -P &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;And off we go. How can we check it&amp;#8217;s worked? kafkacat of course! We can sample some records:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ kafkacat -b localhost:9092 -t source-topic -o beginning -e -C -c &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:97,,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:200,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:98.689468383789062,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:93,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;t&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;u&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569316069,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:97,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;FF&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;cog&amp;#34;&lt;/span&gt;:193,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:45,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:16,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:100.14543914794922,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:3,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569330854,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;RM&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:104&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:97,,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:200,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:98.689468383789062,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:93,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;t&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;u&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569316069,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:97,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;FF&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;cog&amp;#34;&lt;/span&gt;:193,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:45,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:16,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:100.14543914794922,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:3,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569330854,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;RM&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:104&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:97,,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:200,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:98.689468383789062,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:93,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;t&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;u&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569316069,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:97,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;FF&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and we can count how many are currently in the topic:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ kafkacat -b localhost:9092 -t target-topic -o beginning -e|wc -l
+% Auto-selecting Consumer mode &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;use -P or -C to override&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+% Reached end of topic target-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;1668&lt;/span&gt;: exiting
+    &lt;span style=&#34;color:#666&#34;&gt;1668&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We can see the consumer group in Confluent Cloud (with similar views in Confluent Control Center if you&amp;#8217;re running Apache Kafka for yourself), showing any lag in each consumer:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.github.io/images/2019/09/kafka–consumer-lag.png&#34; alt=&#34;kafka–consumer lag&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+		</item>
 		
 		<item>
 			<title>Kafka Summit GoldenGate bridge run/walk</title>
 			<link>https://rmoff.github.io/2019/09/23/kafka-summit-goldengate-bridge-run/walk/</link>
-			<pubDate>Mon, 23 Sep 2019 10:55:23 BST</pubDate>
+			<pubDate>Mon, 23 Sep 2019 10:55:23 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/09/23/kafka-summit-goldengate-bridge-run/walk/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/09/IMG_6357.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -51,55 +225,9 @@
 		</item>
 		
 		<item>
-			<title>Kafka Summit GoldenGate bridge run/walk - MQTT test</title>
-			<link>https://rmoff.github.io/2019/09/23/kafka-summit-goldengate-bridge-run/walk-mqtt-test/</link>
-			<pubDate>Mon, 23 Sep 2019 10:55:23 BST</pubDate>
-			<author>Robin Moffatt</author>
-			<guid>https://rmoff.github.io/2019/09/23/kafka-summit-goldengate-bridge-run/walk-mqtt-test/</guid>
-			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/09/IMG_6357.jpg" medium="image" type="image/jpg" width="100" height="100" />
-			<description>&lt;hr&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;BONUS: I&amp;#8217;m planning to setup &lt;a href=&#34;https://github.com/confluentinc/demo-scene/tree/race-tracker/mqtt-tracker&#34;&gt;a demo&lt;/a&gt; based on Simon Aubury&amp;#8217;s excellent &lt;a href=&#34;https://github.com/saubury/race-mapper&#34;&gt;race-mapper&lt;/a&gt;. Each person shares their location from their phone during the run to an MQTT server which is then streamed to Kafka and KSQL for some funky viz in Kibana.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/09/racemapper01.png&#34; alt=&#34;racemapper01&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;⚠️️️️️️⚠️ &lt;strong&gt;This involves sharing your personal location. You can do the run/walk without signing up for this app! It&amp;#8217;s a purely optional exercise if you want to join in with it. Don&amp;#8217;t take part unless you want to do that! No guarantees made around data security etc!&lt;/strong&gt; ⚠️⚠️&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;If you want to participate, here are the instructions:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;olist arabic&#34;&gt;
-&lt;ol class=&#34;arabic&#34;&gt;
-&lt;li&gt;
-&lt;p&gt;Download OwnTracks (&lt;a href=&#34;https://apps.apple.com/gb/app/owntracks/id692424691&#34;&gt;iOS&lt;/a&gt; / &lt;a href=&#34;https://play.google.com/store/apps/details?id=org.owntracks.android&amp;amp;hl=en_GB&#34;&gt;Android&lt;/a&gt;)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Download &lt;a href=&#34;https://www.dropbox.com/s/06mrdqdaznazw0c/owntracks.otrc?dl=1&#34;&gt;this configuration file&lt;/a&gt; on your phone and open it in OwnTracks&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Once set up go to the Info screen (top-left icon) and you should see &lt;strong&gt;Status&lt;/strong&gt; as &lt;code&gt;connected&lt;/code&gt;. From the main Map screen set the mode to &lt;strong&gt;Move&lt;/strong&gt;.&lt;/p&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/09/IMG_FC45959D6978-1.jpeg&#34; alt=&#34;IMG FC45959D6978 1&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;strong&gt;What about my data?&lt;/strong&gt; The data&amp;#8217;s uploaded to an MQTT server running on &lt;a href=&#34;https://www.cloudmqtt.com&#34;&gt;CloudMQTT&lt;/a&gt;. The user writing the data has write-only access. I have a Kafka Connect worker pulling that data into a Kafka cluster, from which I&amp;#8217;ll show Kibana visualisations of the run as people do it. If you don&amp;#8217;t want to share your data, that is absolutely fine. This is just a fun experiment :)&lt;/p&gt;
-&lt;/div&gt;
-</description>
-		</item>
-		
-		<item>
 			<title>Staying sane on the road as a Developer Advocate</title>
 			<link>https://rmoff.github.io/2019/09/19/staying-sane-on-the-road-as-a-developer-advocate/</link>
-			<pubDate>Thu, 19 Sep 2019 23:38:42 BST</pubDate>
+			<pubDate>Thu, 19 Sep 2019 23:38:42 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/09/19/staying-sane-on-the-road-as-a-developer-advocate/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/09/IMG_2476.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -192,7 +320,7 @@
 		<item>
 			<title>Where I&#39;ll be on the road for the remainder of 2019</title>
 			<link>https://rmoff.github.io/2019/09/02/where-ill-be-on-the-road-for-the-remainder-of-2019/</link>
-			<pubDate>Mon, 02 Sep 2019 17:36:01 BST</pubDate>
+			<pubDate>Mon, 02 Sep 2019 17:36:01 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/09/02/where-ill-be-on-the-road-for-the-remainder-of-2019/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/09/DSCF4696.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -306,7 +434,7 @@
 		<item>
 			<title>Reset Kafka Connect Source Connector Offsets</title>
 			<link>https://rmoff.github.io/2019/08/15/reset-kafka-connect-source-connector-offsets/</link>
-			<pubDate>Thu, 15 Aug 2019 10:42:34 BST</pubDate>
+			<pubDate>Thu, 15 Aug 2019 10:42:34 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/08/15/reset-kafka-connect-source-connector-offsets/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/08/IMG_9079.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -461,7 +589,7 @@ If this doesn&amp;#8217;t work for you, make sure you&amp;#8217;ve got the parti
 		<item>
 			<title>Starting a Kafka Connect sink connector at the end of a topic</title>
 			<link>https://rmoff.github.io/2019/08/09/starting-a-kafka-connect-sink-connector-at-the-end-of-a-topic/</link>
-			<pubDate>Fri, 09 Aug 2019 17:11:06 &#43;0200</pubDate>
+			<pubDate>Fri, 09 Aug 2019 17:11:06 CEST</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/08/09/starting-a-kafka-connect-sink-connector-at-the-end-of-a-topic/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/08/IMG_1248.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -562,7 +690,7 @@ The &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;None&amp;#39;&lt;/span&gt
 		<item>
 			<title>Resetting a Consumer Group in Kafka</title>
 			<link>https://rmoff.github.io/2019/08/09/resetting-a-consumer-group-in-kafka/</link>
-			<pubDate>Fri, 09 Aug 2019 16:32:46 &#43;0200</pubDate>
+			<pubDate>Fri, 09 Aug 2019 16:32:46 CEST</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/08/09/resetting-a-consumer-group-in-kafka/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/08/IMG_1492.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -726,7 +854,7 @@ This was a one-time migration; I don&amp;#8217;t know if it works bi-directional
 		<item>
 			<title>So how DO you make those cool diagrams? July 2019 update</title>
 			<link>https://rmoff.github.io/2019/07/11/so-how-do-you-make-those-cool-diagrams-july-2019-update/</link>
-			<pubDate>Thu, 11 Jul 2019 11:12:26 &#43;0200</pubDate>
+			<pubDate>Thu, 11 Jul 2019 11:12:26 CEST</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/07/11/so-how-do-you-make-those-cool-diagrams-july-2019-update/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/07/concepts01.png" medium="image" type="image/jpg" width="100" height="100" />
@@ -786,7 +914,7 @@ This was a one-time migration; I don&amp;#8217;t know if it works bi-directional
 		<item>
 			<title>Taking the Vienna-Munich sleeper train</title>
 			<link>https://rmoff.github.io/2019/07/03/taking-the-vienna-munich-sleeper-train/</link>
-			<pubDate>Wed, 03 Jul 2019 07:17:12 &#43;0200</pubDate>
+			<pubDate>Wed, 03 Jul 2019 07:17:12 CEST</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/07/03/taking-the-vienna-munich-sleeper-train/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/07/vienna01.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -831,7 +959,7 @@ This was a one-time migration; I don&amp;#8217;t know if it works bi-directional
 		<item>
 			<title>Manually delete a connector from Kafka Connect</title>
 			<link>https://rmoff.github.io/2019/06/23/manually-delete-a-connector-from-kafka-connect/</link>
-			<pubDate>Sun, 23 Jun 2019 11:39:46 &#43;0200</pubDate>
+			<pubDate>Sun, 23 Jun 2019 11:39:46 CEST</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/06/23/manually-delete-a-connector-from-kafka-connect/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/06/IMG_0644.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -879,7 +1007,7 @@ This was a one-time migration; I don&amp;#8217;t know if it works bi-directional
 		<item>
 			<title>Automatically restarting failed Kafka Connect tasks</title>
 			<link>https://rmoff.github.io/2019/06/06/automatically-restarting-failed-kafka-connect-tasks/</link>
-			<pubDate>Thu, 06 Jun 2019 17:51:44 BST</pubDate>
+			<pubDate>Thu, 06 Jun 2019 17:51:44 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/06/06/automatically-restarting-failed-kafka-connect-tasks/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/06/DSCF3132.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -958,7 +1086,7 @@ curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083
 		<item>
 			<title>Putting Kafka Connect passwords in a separate file / externalising secrets</title>
 			<link>https://rmoff.github.io/2019/05/24/putting-kafka-connect-passwords-in-a-separate-file-/-externalising-secrets/</link>
-			<pubDate>Fri, 24 May 2019 17:30:57 BST</pubDate>
+			<pubDate>Fri, 24 May 2019 17:30:57 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/05/24/putting-kafka-connect-passwords-in-a-separate-file-/-externalising-secrets/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/05/IMG_9720.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -1030,7 +1158,7 @@ curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083
 		<item>
 			<title>Deleting a Connector in Kafka Connect without the REST API</title>
 			<link>https://rmoff.github.io/2019/05/22/deleting-a-connector-in-kafka-connect-without-the-rest-api/</link>
-			<pubDate>Wed, 22 May 2019 10:32:10 BST</pubDate>
+			<pubDate>Wed, 22 May 2019 10:32:10 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/05/22/deleting-a-connector-in-kafka-connect-without-the-rest-api/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/05/IMG_9954.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -1117,7 +1245,7 @@ twitter_source_json_01               |  RUNNING  |  RUNNING&lt;/code&gt;&lt;/pre
 		<item>
 			<title>A poor man&#39;s KSQL EXPLODE/UNNEST technique</title>
 			<link>https://rmoff.github.io/2019/05/09/a-poor-mans-ksql-explode/unnest-technique/</link>
-			<pubDate>Thu, 09 May 2019 10:01:50 BST</pubDate>
+			<pubDate>Thu, 09 May 2019 10:01:50 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/05/09/a-poor-mans-ksql-explode/unnest-technique/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/05/IMG_3778.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -1220,7 +1348,7 @@ Format:JSON
 		<item>
 			<title>When a Kafka Connect converter is not a _converter_</title>
 			<link>https://rmoff.github.io/2019/05/08/when-a-kafka-connect-converter-is-not-a-_converter_/</link>
-			<pubDate>Wed, 08 May 2019 10:06:50 BST</pubDate>
+			<pubDate>Wed, 08 May 2019 10:06:50 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/05/08/when-a-kafka-connect-converter-is-not-a-_converter_/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/05/IMG_9567.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -1652,7 +1780,7 @@ OrangeBrazilian tapir&lt;/code&gt;&lt;/pre&gt;
 		<item>
 			<title>Reading Kafka Connect Offsets via the REST Proxy</title>
 			<link>https://rmoff.github.io/2019/05/02/reading-kafka-connect-offsets-via-the-rest-proxy/</link>
-			<pubDate>Thu, 02 May 2019 10:58:27 BST</pubDate>
+			<pubDate>Thu, 02 May 2019 10:58:27 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/05/02/reading-kafka-connect-offsets-via-the-rest-proxy/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/05/IMG_9571.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -1729,7 +1857,7 @@ Vary: Accept-Encoding, User-Agent
 		<item>
 			<title>Pivoting Aggregates in Ksql</title>
 			<link>https://rmoff.github.io/2019/04/17/pivoting-aggregates-in-ksql/</link>
-			<pubDate>Wed, 17 Apr 2019 15:42:56 BST</pubDate>
+			<pubDate>Wed, 17 Apr 2019 15:42:56 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/04/17/pivoting-aggregates-in-ksql/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/04/DSCF2902.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -1983,7 +2111,7 @@ CREATE TABLE TICKETS_TABLE (ID INT,
 		<item>
 			<title>Connecting KSQL to a Secured Schema Registry</title>
 			<link>https://rmoff.github.io/2019/04/12/connecting-ksql-to-a-secured-schema-registry/</link>
-			<pubDate>Fri, 12 Apr 2019 12:59:33 BST</pubDate>
+			<pubDate>Fri, 12 Apr 2019 12:59:33 &#43;0100</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/04/12/connecting-ksql-to-a-secured-schema-registry/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/img/default-header-img.tn-500x500.jpg" medium="image" type="image/jpg" width="100" height="100" />
@@ -2929,7 +3057,7 @@ Server: Jetty&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style
 		<item>
 			<title>Preparing a New Talk</title>
 			<link>https://rmoff.github.io/2019/03/01/preparing-a-new-talk/</link>
-			<pubDate>Fri, 01 Mar 2019 11:00:26 &#43;0100</pubDate>
+			<pubDate>Fri, 01 Mar 2019 11:00:26 CET</pubDate>
 			<author>Robin Moffatt</author>
 			<guid>https://rmoff.github.io/2019/03/01/preparing-a-new-talk/</guid>
 			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/03/DSCF2708.jpg" medium="image" type="image/jpg" width="100" height="100" />
