@@ -6,7 +6,471 @@
 		<language>en-us</language>
 		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2019</rights>
-		<updated>2019-09-29 10:43:45 &#43;0200 CEST</updated>
+		<updated>2019-10-07 15:44:59 &#43;0100 &#43;0100</updated>
+		
+		<item>
+			<title>Kafka Connect and Elasticsearch</title>
+			<link>https://rmoff.github.io/2019/10/07/kafka-connect-and-elasticsearch/</link>
+			<pubDate>Mon, 07 Oct 2019 15:44:59 &#43;0100</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/2019/10/07/kafka-connect-and-elasticsearch/</guid>
+			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/10/IMG_0143.jpg" medium="image" type="image/jpg" width="100" height="100" />
+			<description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I use the Elastic stack for a lot of my &lt;a href=&#34;https://talks.rmoff.net/&#34;&gt;talks&lt;/a&gt; and &lt;a href=&#34;https://github.com/confluentinc/demo-scene/&#34;&gt;demos&lt;/a&gt; because it complements Kafka brilliantly. A few things have changed in recent releases and this blog is a quick note on some of the errors that you might hit and how to resolve them. It was inspired by a lot of the comments and discussion &lt;a href=&#34;https://github.com/confluentinc/kafka-connect-elasticsearch/issues/314&#34;&gt;here&lt;/a&gt; and &lt;a href=&#34;https://github.com/confluentinc/kafka-connect-elasticsearch/issues/342&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_tldr_how_do_i_stream_data_from_kafka_to_elasticsearch&#34;&gt;tl;dr How do I stream data from Kafka to Elasticsearch?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Use Kafka Connect! Not sure what Kafka Connect is or why you should use it instead of something like Logstash? Check out &lt;a href=&#34;http://rmoff.dev/ksldn19-kafka-connect&#34;&gt;the talk I did at Kafka Summit in London&lt;/a&gt; earlier this year.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Kafka Connect&amp;#8217;s Elasticsearch sink connector has been improved in 5.3.1 to fully support Elasticsearch 7.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To stream data from a Kafka topic to Elasticsearch create a connector using the Kafka Connect REST API. The parameters vary slightly between releases of Elasticsearch.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Some notes in general:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;This assumes your data is serialised based on the defaults specified in your Kafka Connect workers (e.g. Avro). If it&amp;#8217;s not then you will need to add overrides—see &lt;a href=&#34;https://www.confluent.io/blog/kafka-connect-deep-dive-converters-serialization-explained&#34;&gt;this article&lt;/a&gt; for a detailed explanation of why and how.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;If you&amp;#8217;re streaming data to Elasticsearch from KSQL you will need to set the Key converter to STRING since this is currently (October 2019 / 5.4.0-beta1) all that is supported for keys:&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;key.converter&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The connector will automagically change upper-case topic names to lower-case index names in Elasticsearch; unlike in previous versions you don&amp;#8217;t need to manually map this.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;You can use a regex to match multiple topics; just specify &lt;code&gt;topics.regex&lt;/code&gt; in place of &lt;code&gt;topics&lt;/code&gt; configuration.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For the full reference guide to the Kafka Connect Elasticsearch connector, including all its capabilities (including exactly-once) and configuration options &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-elasticsearch/index.html&#34;&gt;see here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_to_schema_or_not_to_schema&#34;&gt;To schema or not to schema?&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;schema.ignore=true&lt;/code&gt;: You want to just chuck a JSON document at Elasticsearch and have it figure out the field mapping types automagically (which it does pretty well, or you can force using dynamic mapping templates). Also applicable if you &lt;em&gt;don&amp;#8217;t have an explicit schema in your data&lt;/em&gt; such as schema-less JSON (most JSON is schema-less) or CSV etc. If you are using Avro, you have a schema 🙌.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;schema.ignore=false&lt;/code&gt;: Your data has a schema (Avro, or JSON with embedded schema) and you want Kafka Connect to create the mapping explicitly in Elasticsearch when it pushes the data over&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Still not sure? Just wanna get data into Elasticsearch without really getting into the weeds of detail? Start off with &lt;code&gt;schema.ignore=true&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_kafka_to_elasticsearch_7&#34;&gt;Kafka to Elasticsearch 7&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This works with Kafka Connect Elasticsearch sink connector &amp;gt;=5.3.0&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s -i -X PUT -H  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/connectors/sink-elastic-01/config &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;connector.class&amp;#34;: &amp;#34;io.confluent.connect.elasticsearch.ElasticsearchSinkConnector&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;connection.url&amp;#34;: &amp;#34;http://elasticsearch7:9200&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;type.name&amp;#34;: &amp;#34;_doc_&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;topics&amp;#34;: &amp;#34;sample_topic&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;key.ignore&amp;#34;: &amp;#34;true&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;schema.ignore&amp;#34;: &amp;#34;true&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+&lt;strong&gt;The &lt;code&gt;type.name&lt;/code&gt; is &lt;code&gt;_doc&lt;/code&gt; - other values may cause problems in some configuration permutations. You can also leave it blank in some situations&lt;/strong&gt;.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_kafka_to_elasticsearch_6_and_earlier&#34;&gt;Kafka to Elasticsearch 6 and earlier&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The only difference from above is that you can specify any type name. Unless you&amp;#8217;re using a specific type in your target index by design then you can use any value here; but you can&amp;#8217;t leave it blank.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s -i -X PUT -H  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/connectors/sink-elastic-01/config &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;connector.class&amp;#34;: &amp;#34;io.confluent.connect.elasticsearch.ElasticsearchSinkConnector&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;connection.url&amp;#34;: &amp;#34;http://elasticsearch6:9200&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;type.name&amp;#34;: &amp;#34;foobarwibble&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;topics&amp;#34;: &amp;#34;sample_topic&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;key.ignore&amp;#34;: &amp;#34;true&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;schema.ignore&amp;#34;: &amp;#34;true&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_templates_in_elasticsearch_7&#34;&gt;Templates in Elasticsearch 7&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Sometime you&amp;#8217;ll want to use templates with Elasticsearch for things such as defining the field types to be used in the document mapping. This has changed a bit in recent versions and caught me out.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you copy and paste template definitions that you&amp;#8217;ve found lying around on t&amp;#8217;internet such as this one:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -XPUT &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:9200/_template/kafkaconnect/&amp;#34;&lt;/span&gt; -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Content-Type: application/json&amp;#39;&lt;/span&gt; -d&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        {
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;          &amp;#34;template&amp;#34;: &amp;#34;*&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;          &amp;#34;settings&amp;#34;: { &amp;#34;number_of_shards&amp;#34;: 1, &amp;#34;number_of_replicas&amp;#34;: 0 }, 
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;          &amp;#34;mappings&amp;#34;: { &amp;#34;_default_&amp;#34;: { &amp;#34;dynamic_templates&amp;#34;: [ { &amp;#34;dates&amp;#34;: { &amp;#34;match&amp;#34;: &amp;#34;*_TS&amp;#34;, &amp;#34;mapping&amp;#34;: { &amp;#34;type&amp;#34;: &amp;#34;date&amp;#34; } } } ] } }
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You&amp;#8217;ll now get this error, which &lt;a href=&#34;https://www.elastic.co/guide/en/elasticsearch/reference/current/removal-of-types.html&#34;&gt;is deliberate&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;error&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;root_cause&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;
+            &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+                &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mapper_parsing_exception&amp;#34;&lt;/span&gt;,
+                &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;reason&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Root mapping definition has unsupported parameters:  [_default_ : {dynamic_templates=[{dates={mapping={type=date}, match=*_TS}}]}]&amp;#34;&lt;/span&gt;
+            &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+        &lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mapper_parsing_exception&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;reason&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Failed to parse mapping [_doc]: Root mapping definition has unsupported parameters:  [_default_ : {dynamic_templates=[{dates={mapping={type=date}, match=*_TS}}]}]&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;caused_by&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mapper_parsing_exception&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;reason&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Root mapping definition has unsupported parameters:  [_default_ : {dynamic_templates=[{dates={mapping={type=date}, match=*_TS}}]}]&amp;#34;&lt;/span&gt;
+        &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+    &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;,
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;400&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To get this to work just remove the type name (&lt;code&gt;_default_&lt;/code&gt;) from the &lt;code&gt;mappings&lt;/code&gt; element entirely:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -XPUT &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:9200/_template/kafkaconnect/&amp;#34;&lt;/span&gt; -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Content-Type: application/json&amp;#39;&lt;/span&gt; -d&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;          {
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;template&amp;#34;: &amp;#34;*&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;settings&amp;#34;: { &amp;#34;number_of_shards&amp;#34;: 1, &amp;#34;number_of_replicas&amp;#34;: 0 },
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;mappings&amp;#34;: { &amp;#34;dynamic_templates&amp;#34;: [ { &amp;#34;dates&amp;#34;: { &amp;#34;match&amp;#34;: &amp;#34;*_TS&amp;#34;, &amp;#34;mapping&amp;#34;: { &amp;#34;type&amp;#34;: &amp;#34;date&amp;#34; } } } ]  }
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;          }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;HOWEVER this only works for Elasticsearch 7; on Elasticsearch 6 and earlier you will get &lt;code&gt;Malformed [mappings] section for type [dynamic_templates], should include an inner object describing the mapping&#34;}]&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;If you&amp;#8217;re using a template with Elasticsearch 7 then you &lt;strong&gt;must&lt;/strong&gt; specify &lt;code&gt;&#34;type.name&#34;: &#34;_doc&#34;&lt;/code&gt; in your &lt;em&gt;connector&lt;/em&gt; configuration. A blank or other value will cause the connector to fail.&lt;/strong&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_dealing_with_errors&#34;&gt;Dealing with errors&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Both the Elasticsearch sink connector, and Kafka Connect itself, have error handling support. See &lt;a href=&#34;https://www.confluent.io/blog/kafka-connect-deep-dive-error-handling-dead-letter-queues&#34;&gt;this article&lt;/a&gt; for details of how Kafka Connect does it. By default the connector will abort as soon as it hits a problem, but you may not want this—to enable it in your connector you can set:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;errors.tolerance&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;all&amp;#34;&lt;/span&gt;,
+&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;errors.log.enable&amp;#34;&lt;/span&gt;:true,
+&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;errors.log.include.messages&amp;#34;&lt;/span&gt;:true,
+&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;behavior.on.malformed.documents&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;warn&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This is the most permissive configuration; &lt;code&gt;behavior.on.malformed.documents&lt;/code&gt; is a connector property which when set to &lt;code&gt;warn&lt;/code&gt; (or &lt;code&gt;ignore&lt;/code&gt;) will make the connector continue rather than abort, which is it&amp;#8217;s default setting. The remaining configuration items are for Kafka Connect itself and will deal with errors in the deserialisation process and any Single Message Transforms that have been configured.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_common_errors&#34;&gt;Common errors&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_field_is_a_metadata_field&#34;&gt;Field … is a metadata field&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;org.apache.kafka.connect.errors.ConnectException: Bulk request failed: [{&#34;type&#34;:&#34;mapper_parsing_exception&#34;,&#34;reason&#34;:&#34;Field [_type] is a metadata field and cannot be added inside a document. Use the index API request parameters.&#34;}]&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause: You&amp;#8217;ve got a field called &lt;code&gt;_type&lt;/code&gt; in your Kafka message that you&amp;#8217;re sending to Elasticsearch&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: Drop or rename the field e.g. with Single Message Transform or at source&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_rejecting_mapping_update_as_the_final_mapping_would_have_more_than_1_type&#34;&gt;Rejecting mapping update […] as the final mapping would have more than 1 type&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;WARN Encountered an illegal document error when executing batch 4 of 1 records. Ignoring and will not index record. Error was [{&#34;type&#34;:&#34;illegal_argument_exception&#34;,&#34;reason&#34;:&#34;Rejecting mapping update to [sample_topic] as the final mapping would have more than 1 type: [_doc, foo]&#34;}] (io.confluent.connect.elasticsearch.bulk.BulkProcessor)`&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause 1: Elasticsearch index already exists with a different type in the mapping&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause 2: Template with dynamic mapping exists and &lt;code&gt;type.name&lt;/code&gt; has been specified&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: Unset &lt;code&gt;type.name&lt;/code&gt; (i.e. &lt;code&gt;`&#34;type.name&#34;: &#34;&#34;&lt;/code&gt;), or use the type that already exists (in the above example it&amp;#8217;s &lt;code&gt;_doc&lt;/code&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_validation_failed_type_is_missing&#34;&gt;Validation Failed […] type is missing&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;`org.apache.kafka.connect.errors.ConnectException: Bulk request failed: {&#34;root_cause&#34;:[{&#34;type&#34;:&#34;action_request_validation_exception&#34;,&#34;reason&#34;:&#34;Validation Failed: 1: type is missing;2: type is missing;3: type is missing;4: type is missing;5: type is missing;&#34;}],&#34;type&#34;:&#34;action_request_validation_exception&#34;,&#34;reason&#34;:&#34;Validation Failed: 1: type is missing;2: type is missing;3: type is missing;4: type is missing;5: type is missing;&#34;}`&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause 1: Using a blank &lt;code&gt;type.name&lt;/code&gt; in the Kafka Connect connector configuration when indexing against Elasticsearch 7 with &lt;code&gt;schemas.ignore=false&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause 2: Using a blank &lt;code&gt;type.name&lt;/code&gt; in the Kafka Connect connector configuration when indexing against Elasticsearch versions prior to 7&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: Specify a non-blank &lt;code&gt;type.name&lt;/code&gt; in the Kafka Connect connector configuration&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_task_is_being_killed_and_will_not_recover_until_manually_restarted&#34;&gt;Task is being killed and will not recover until manually restarted&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;Task threw an uncaught and unrecoverable exception
+org.apache.kafka.connect.errors.ConnectException: Tolerance exceeded in error handler
+Task is being killed and will not recover until manually restarted&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause: This is the Kafka Connect framework logging that a connector has failed&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: Inspect the Kafka Connect worker log more closely to find the actual error logged by the connector task&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_java_io_charconversionexception_invalid_utf_32_character&#34;&gt;java.io.CharConversionException: Invalid UTF-32 character&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;org.apache.kafka.connect.errors.DataException: Converting byte[] to Kafka Connect data failed due to serialization error:
+org.apache.kafka.common.errors.SerializationException: java.io.CharConversionException: Invalid UTF-32 character 0x1010443 (above 0x0010ffff) at char #
+1, byte #7)
+java.io.CharConversionException: Invalid UTF-32 character 0x1010443 (above 0x0010ffff) at char #1, byte #7)&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause: Using the JSON converter (&lt;code&gt;org.apache.kafka.connect.json.JsonConverter&lt;/code&gt;) to read Avro data&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: Use the Avro converter (&lt;code&gt;io.confluent.connect.avro.AvroConverter&lt;/code&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+Kafka Connect has &lt;strong&gt;two&lt;/strong&gt; deserialisers: the &lt;strong&gt;key&lt;/strong&gt; and the &lt;strong&gt;value&lt;/strong&gt;. It is not uncommon to have different serialisation formats used for each. For example, data from KSQL may have a String key and an Avro key.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_error_deserializing_avro_message_for_id_1_unknown_magic_byte&#34;&gt;Error deserializing Avro message for id -1 Unknown magic byte!&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;org.apache.kafka.connect.errors.DataException: Failed to deserialize data for topic sample_topic to Avro:
+org.apache.kafka.common.errors.SerializationException: Error deserializing Avro message for id -1
+org.apache.kafka.common.errors.SerializationException: Unknown magic byte!&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause: Using the Avro converter (&lt;code&gt;io.confluent.connect.avro.AvroConverter&lt;/code&gt;) to read JSON data&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: Use the JSON converter (&lt;code&gt;org.apache.kafka.connect.json.JsonConverter&lt;/code&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+Kafka Connect has &lt;strong&gt;two&lt;/strong&gt; deserialisers: the &lt;strong&gt;key&lt;/strong&gt; and the &lt;strong&gt;value&lt;/strong&gt;. It is not uncommon to have different serialisation formats used for each. For example, data from KSQL may have a String key and an Avro key.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_cannot_infer_mapping_without_schema&#34;&gt;Cannot infer mapping without schema&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;org.apache.kafka.connect.errors.DataException: Cannot infer mapping without schema.&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause: If you have set &lt;code&gt;schemas.ignore=false&lt;/code&gt; then the connector will create the mapping in the target index for you, based on the schema of your data. &lt;em&gt;BUT&lt;/em&gt;, for it to obtain the schema, there has to be a schema! Which means either using Avro, or using &lt;a href=&#34;https://rmoff.net/2017/09/06/kafka-connect-jsondeserializer-with-schemas.enable-requires-schema-and-payload-fields/&#34;&gt;JSON with the schema-embedded&lt;/a&gt; and the connector&amp;#8217;s converter configured to expect it.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: Use Avro! It will save you tears and time and money. If you can&amp;#8217;t change how you produce the data, consider using KSQL to reserialise the topic into Avro. Or, write JSON in the &lt;a href=&#34;https://rmoff.net/2017/09/06/kafka-connect-jsondeserializer-with-schemas.enable-requires-schema-and-payload-fields/&#34;&gt;required structure&lt;/a&gt; and set &lt;code&gt;value.converter.schemas.enable=true&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_jsonconverter_with_schemas_enable_requires_schema_and_payload_fields&#34;&gt;JsonConverter with schemas.enable requires &#34;schema&#34; and &#34;payload&#34; fields&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;Caused by: org.apache.kafka.connect.errors.DataException: JsonConverter with schemas.enable requires &#34;schema&#34; and &#34;payload&#34; fields and may not contain additional fields. If you are trying to deserialize plain JSON data, set schemas.enable=false in your converter configuration.&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause: You&amp;#8217;ve set &lt;code&gt;schemas.enable=true&lt;/code&gt; for your converter, but the JSON is not in the correct structure. See &lt;a href=&#34;https://rmoff.net/2017/09/06/kafka-connect-jsondeserializer-with-schemas.enable-requires-schema-and-payload-fields/&#34;&gt;here for details&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: Depending on what you&amp;#8217;re trying to do either (a) use Avro, (b) produce your JSON with the schema/payload in the correct structure (c) set &lt;code&gt;value.converter.schemas.enable=false&lt;/code&gt; (if you don&amp;#8217;t care about the schema and want to set &lt;code&gt;schema.ignore=true&lt;/code&gt; for the Elasticsearch connector).&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+&lt;code&gt;schemas.enable&lt;/code&gt; is a &lt;a href=&#34;https://www.confluent.io/blog/kafka-connect-deep-dive-converters-serialization-explained&#34;&gt;converter&lt;/a&gt; configuration, so can be set for both &lt;code&gt;value.converter&lt;/code&gt; and &lt;code&gt;key.converter&lt;/code&gt;, and you can hit this error against both fields.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_compressor_detection_can_only_be_called_on_some_xcontent_bytes&#34;&gt;Compressor detection can only be called on some xcontent bytes&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;Bulk request failed: [{&#34;type&#34;:&#34;mapper_parsing_exception&#34;,&#34;reason&#34;:&#34;failed to parse&#34;,&#34;caused_by&#34;:{&#34;type&#34;:&#34;not_x_content_exception&#34;,&#34;reason&#34;:&#34;Compressor detection can only be called on some xcontent bytes or compressed xcontent bytes&#34;}}] (io.confluent.connect.elasticsearch.bulk.BulkProcessor:393)&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause: This can come about if you try to read JSON data from a topic using the String converter (&lt;code&gt;org.apache.kafka.connect.storage.StringConverter&lt;/code&gt;) and have &lt;strong&gt;&lt;code&gt;&#34;schema.ignore&#34;: &#34;true&#34;&lt;/code&gt;&lt;/strong&gt;, because you end up with a single field of data. This in turn causes Elasticsearch to throw this error when Kafka Connect tries to index the data into it.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: If it&amp;#8217;s JSON data in the topic, use the &lt;code&gt;org.apache.kafka.connect.json.JsonConverter&lt;/code&gt;, i.e.&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&#34;value.converter&#34;:&#34;org.apache.kafka.connect.json.JsonConverter&#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_root_mapping_definition_has_unsupported_parameters_type_text&#34;&gt;Root mapping definition has unsupported parameters:  [type : text]&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Error:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;org.apache.kafka.connect.errors.ConnectException: Cannot create mapping {&#34;_doc&#34;:{&#34;type&#34;:&#34;text&#34;,&#34;fields&#34;:{&#34;keyword&#34;:{&#34;type&#34;:&#34;keyword&#34;,&#34;ignore_above&#34;:256}}}} -- {&#34;root_cause&#34;:[{&#34;type&#34;:&#34;mapper_parsing_exception&#34;,&#34;reason&#34;:&#34;Root mapping definition has unsupported parameters:  [type : text] [fields : {keyword={ignore_above=256, type=keyword}}]&#34;}],&#34;type&#34;:&#34;mapper_parsing_exception&#34;,&#34;reason&#34;:&#34;Root mapping definition has unsupported parameters:  [type : text] [fields : {keyword={ignore_above=256, type=keyword}}]&#34;}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cause: This is an error from Elasticsearch and could be from various reasons. One is if you try to read JSON data from a topic using the String converter (&lt;code&gt;org.apache.kafka.connect.storage.StringConverter&lt;/code&gt;) and have &lt;strong&gt;&lt;code&gt;&#34;schema.ignore&#34;: &#34;false&#34;&lt;/code&gt;&lt;/strong&gt;, because you end up with a single field of data. This in turn causes Elasticsearch to throw this error when Kafka Connect tries to index the data into it.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Solution: If it&amp;#8217;s JSON data in the topic, use the &lt;code&gt;org.apache.kafka.connect.json.JsonConverter&lt;/code&gt;, i.e.&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&#34;value.converter&#34;:&#34;org.apache.kafka.connect.json.JsonConverter&#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+		</item>
 		
 		<item>
 			<title>Copying data between Kafka clusters with Kafkacat</title>
