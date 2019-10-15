@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Skipping bad records with the Kafka Connect JDBC sink connector</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.github.io/index.xml">
+		<link rel="canonical" href="https://rmoff.github.io/2019/10/15/skipping-bad-records-with-the-kafka-connect-jdbc-sink-connector/">
+		
+		<link rel="shortcut icon" type="image/png" href="https://rmoff.github.io/apple-touch-icon-precomposed.png">
+		
+		
+		<meta name="generator" content="Hugo 0.56.3" />
+
+		
+		<meta property="og:title" content="Skipping bad records with the Kafka Connect JDBC sink connector" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.github.io/images/2019/10/IMG_0113.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.github.io/2019/10/15/skipping-bad-records-with-the-kafka-connect-jdbc-sink-connector/" />
+		<meta property="og:site_name" content="Skipping bad records with the Kafka Connect JDBC sink connector" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.github.io/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.github.io/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.github.io/images/2019/10/IMG_0113.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.github.io" title="Home">
+						<img src="https://rmoff.github.io/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.github.io/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.github.io/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Skipping bad records with the Kafka Connect JDBC sink connector</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2019-10-15T09:58:38&#43;01:00">Oct 15, 2019</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.github.io/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>, <a href="https://rmoff.github.io/categories/jdbc-sink" class="no-underline category near-white dim">JDBC Sink</a>, <a href="https://rmoff.github.io/categories/consumer-group" class="no-underline category near-white dim">Consumer Group</a>, <a href="https://rmoff.github.io/categories/kafkacat" class="no-underline category near-white dim">Kafkacat</a>
+								<span class="display-print">at https://rmoff.github.io/2019/10/15/skipping-bad-records-with-the-kafka-connect-jdbc-sink-connector/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div id="preamble">
+<div class="sectionbody">
+<div class="paragraph">
+<p>The Kafka Connect framework provides generic <a href="https://www.confluent.io/blog/kafka-connect-deep-dive-error-handling-dead-letter-queues">error handling and dead-letter queue capabilities</a> which are available for problems with [de]serialisation and Single Message Transforms. When it comes to errors that a connector may encounter doing the actual <code>pull</code> or <code>put</code> of data from the source/target system, it&#8217;s down to the connector itself to implement logic around that. For example, the Elasticsearch sink connector provides configuration (<code>behavior.on.malformed.documents</code>) that can be set so that a single bad record won&#8217;t halt the pipeline. Others, such as the JDBC Sink connector, don&#8217;t provide this <a href="https://github.com/confluentinc/kafka-connect-jdbc/issues/721">yet</a>. That means that if you hit this problem, you need to manually unblock it yourself. One way is to manually move the offset of the consumer on past the bad message.</p>
+</div>
+<div class="paragraph">
+<p><strong>TL;DR</strong> : You can use <code>kafka-consumer-groups --reset-offsets --to-offset &lt;x&gt;</code> to manually move the connector past a bad message</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_try_it_out">Try it out!</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Create the connector</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -X PUT http://localhost:8083/connectors/sink_postgres_foo_00/config -H <span style="color:#ba2121">&#34;Content-Type: application/json&#34;</span> -d <span style="color:#ba2121">&#39;{
+</span><span style="color:#ba2121">      &#34;connector.class&#34;: &#34;io.confluent.connect.jdbc.JdbcSinkConnector&#34;,
+</span><span style="color:#ba2121">      &#34;connection.url&#34;: &#34;jdbc:postgresql://postgres:5432/&#34;,
+</span><span style="color:#ba2121">      &#34;connection.user&#34;: &#34;postgres&#34;,
+</span><span style="color:#ba2121">      &#34;connection.password&#34;: &#34;postgres&#34;,
+</span><span style="color:#ba2121">      &#34;value.converter&#34;: &#34;org.apache.kafka.connect.json.JsonConverter&#34;,
+</span><span style="color:#ba2121">      &#34;value.converter.schemas.enable&#34;: &#34;true&#34;,
+</span><span style="color:#ba2121">      &#34;tasks.max&#34;: &#34;1&#34;,
+</span><span style="color:#ba2121">      &#34;topics&#34;: &#34;foo&#34;,
+</span><span style="color:#ba2121">      &#34;auto.create&#34;: &#34;true&#34;,
+</span><span style="color:#ba2121">      &#34;auto.evolve&#34;:&#34;true&#34;,
+</span><span style="color:#ba2121">      &#34;pk.mode&#34;:&#34;none&#34;          
+</span><span style="color:#ba2121">    }&#39;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Send a message to the topic</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kafkacat -b localhost:9092 -t foo -P <span style="color:#ba2121">&lt;&lt;EOF
+</span><span style="color:#ba2121">{ &#34;schema&#34;: { &#34;type&#34;: &#34;struct&#34;, &#34;fields&#34;: [{ &#34;type&#34;: &#34;int32&#34;, &#34;optional&#34;: false, &#34;field&#34;: &#34;c1&#34; }, { &#34;type&#34;: &#34;string&#34;, &#34;optional&#34;: false, &#34;field&#34;: &#34;c2&#34; }, { &#34;type&#34;: &#34;int64&#34;, &#34;optional&#34;: false, &#34;name&#34;: &#34;org.apache.kafka.connect.data.Timestamp&#34;, &#34;version&#34;: 1, &#34;field&#34;: &#34;create_ts&#34; }, { &#34;type&#34;: &#34;int64&#34;, &#34;optional&#34;: false, &#34;name&#34;: &#34;org.apache.kafka.connect.data.Timestamp&#34;, &#34;version&#34;: 1, &#34;field&#34;: &#34;update_ts&#34; }], &#34;optional&#34;: false, &#34;name&#34;: &#34;foobar&#34; }, &#34;payload&#34;: { &#34;c1&#34;: 10000, &#34;c2&#34;: &#34;bar&#34;, &#34;create_ts&#34;: 1501834166000, &#34;update_ts&#34;: 1501834166000 } }
+</span><span style="color:#ba2121">EOF</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Confirm that the data&#8217;s on the topic:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b localhost:9092 -t foo -C -f <span style="color:#ba2121">&#39;Topic: %t\nPartition: %p\nOffset: %o\nKey: %k\nPayload: %S bytes: %s\n--\n&#39;</span>
+
+Topic: foo
+Partition: <span style="color:#666">0</span>
+Offset: <span style="color:#666">0</span>
+Key:
+Payload: <span style="color:#666">543</span> bytes: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;schema&#34;</span>: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;struct&#34;</span>, <span style="color:#ba2121">&#34;fields&#34;</span>: <span style="color:#666">[{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int32&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;c1&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;string&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;c2&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int64&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;org.apache.kafka.connect.data.Timestamp&#34;</span>, <span style="color:#ba2121">&#34;version&#34;</span>: <span style="color:#666">1</span>, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;create_ts&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int64&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;org.apache.kafka.connect.data.Timestamp&#34;</span>, <span style="color:#ba2121">&#34;version&#34;</span>: <span style="color:#666">1</span>, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;update_ts&#34;</span> <span style="color:#666">}]</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;foobar&#34;</span> <span style="color:#666">}</span>, <span style="color:#ba2121">&#34;payload&#34;</span>: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;c1&#34;</span>: <span style="color:#666">10000</span>, <span style="color:#ba2121">&#34;c2&#34;</span>: <span style="color:#ba2121">&#34;bar&#34;</span>, <span style="color:#ba2121">&#34;create_ts&#34;</span>: <span style="color:#666">1501834166000</span>, <span style="color:#ba2121">&#34;update_ts&#34;</span>: <span style="color:#666">1501834166000</span> <span style="color:#666">}</span> <span style="color:#666">}</span>
+--</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Check the connector status:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=info&amp;expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             jq <span style="color:#ba2121">&#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&#34;connector.class&#34;]|join(&#34;:|:&#34;)&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+sink    |  sink_postgres_foo_00         |  RUNNING  |  RUNNING  |  io.confluent.connect.jdbc.JdbcSinkConnector</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Confirm there&#8217;s data in the target DB:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">postgres<span style="color:#666">=#</span> <span style="">\</span>dt
+        List <span style="color:#008000;font-weight:bold">of</span> relations
+ <span style="color:#008000;font-weight:bold">Schema</span> <span style="color:#666">|</span> Name <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">Type</span>  <span style="color:#666">|</span>  <span style="color:#008000;font-weight:bold">Owner</span>
+<span style="color:#408080;font-style:italic">--------+------+-------+----------
+</span><span style="color:#408080;font-style:italic"></span> <span style="color:#008000;font-weight:bold">public</span> <span style="color:#666">|</span> foo <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">table</span> <span style="color:#666">|</span> postgres
+(<span style="color:#666">1</span> <span style="color:#008000;font-weight:bold">row</span>)
+
+postgres<span style="color:#666">-#</span> <span style="">\</span>d foo
+                            <span style="color:#008000;font-weight:bold">Table</span> <span style="color:#ba2121">&#34;public.foo&#34;</span>
+  <span style="color:#008000;font-weight:bold">Column</span>   <span style="color:#666">|</span>            <span style="color:#008000;font-weight:bold">Type</span>             <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">Collation</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">Nullable</span> <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">Default</span>
+<span style="color:#408080;font-style:italic">-----------+-----------------------------+-----------+----------+---------
+</span><span style="color:#408080;font-style:italic"></span> update_ts <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">timestamp</span> <span style="color:#008000;font-weight:bold">without</span> time <span style="color:#008000;font-weight:bold">zone</span> <span style="color:#666">|</span>           <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">not</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span>
+ create_ts <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">timestamp</span> <span style="color:#008000;font-weight:bold">without</span> time <span style="color:#008000;font-weight:bold">zone</span> <span style="color:#666">|</span>           <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">not</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span>
+ c1        <span style="color:#666">|</span> <span style="color:#008000">integer</span>                     <span style="color:#666">|</span>           <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">not</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span>
+ c2        <span style="color:#666">|</span> <span style="color:#008000">text</span>                        <span style="color:#666">|</span>           <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">not</span> <span style="color:#008000;font-weight:bold">null</span> <span style="color:#666">|</span>
+
+postgres<span style="color:#666">=#</span> <span style="color:#008000;font-weight:bold">select</span> <span style="color:#666">*</span> <span style="color:#008000;font-weight:bold">from</span> <span style="color:#ba2121">&#34;foo&#34;</span>;
+      update_ts      <span style="color:#666">|</span>      create_ts      <span style="color:#666">|</span>  c1   <span style="color:#666">|</span> c2
+<span style="color:#408080;font-style:italic">---------------------+---------------------+-------+-----
+</span><span style="color:#408080;font-style:italic"></span> <span style="color:#666">2017</span><span style="color:#666">-</span><span style="color:#666">08</span><span style="color:#666">-</span><span style="color:#666">04</span> <span style="color:#666">08</span>:<span style="color:#666">09</span>:<span style="color:#666">26</span> <span style="color:#666">|</span> <span style="color:#666">2017</span><span style="color:#666">-</span><span style="color:#666">08</span><span style="color:#666">-</span><span style="color:#666">04</span> <span style="color:#666">08</span>:<span style="color:#666">09</span>:<span style="color:#666">26</span> <span style="color:#666">|</span> <span style="color:#666">10000</span> <span style="color:#666">|</span> bar
+(<span style="color:#666">1</span> <span style="color:#008000;font-weight:bold">row</span>)</code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_here_comes_the_problem">Here comes the problem</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Let&#8217;s send another message to the topic, but omit one of the fields (<code>c2</code>):</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kafkacat -b localhost:9092 -t foo -P <span style="color:#ba2121">&lt;&lt;EOF
+</span><span style="color:#ba2121">{ &#34;schema&#34;: { &#34;type&#34;: &#34;struct&#34;, &#34;fields&#34;: [{ &#34;type&#34;: &#34;int32&#34;, &#34;optional&#34;: false, &#34;field&#34;: &#34;c1&#34; }, { &#34;type&#34;: &#34;int64&#34;, &#34;optional&#34;: false, &#34;name&#34;: &#34;org.apache.kafka.connect.data.Timestamp&#34;, &#34;version&#34;: 1, &#34;field&#34;: &#34;create_ts&#34; }, { &#34;type&#34;: &#34;int64&#34;, &#34;optional&#34;: false, &#34;name&#34;: &#34;org.apache.kafka.connect.data.Timestamp&#34;, &#34;version&#34;: 1, &#34;field&#34;: &#34;update_ts&#34; }], &#34;optional&#34;: false, &#34;name&#34;: &#34;foobar&#34; }, &#34;payload&#34;: { &#34;c1&#34;: 10000,  &#34;create_ts&#34;: 1501834166000, &#34;update_ts&#34;: 1501834166000 } }
+</span><span style="color:#ba2121">EOF</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>If we look at the status of the connector we can see that the task has <code>FAILED</code>:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=info&amp;expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             jq <span style="color:#ba2121">&#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&#34;connector.class&#34;]|join(&#34;:|:&#34;)&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+sink  |  sink_postgres_foo_00  |  RUNNING  |  FAILED  |  io.confluent.connect.jdbc.JdbcSinkConnector</code></pre></div>
+</div>
+<div class="paragraph">
+<p>And the Kafka Connect worker log shows a problem:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#666">[</span><span style="color:#666">2019</span>-10-15 <span style="color:#666">08</span>:30:34,412<span style="color:#666">]</span> ERROR <span style="color:#666">[</span>sink_postgres_foo_00|task-0<span style="color:#666">]</span> WorkerSinkTask<span style="color:#666">{</span><span style="color:#19177c">id</span><span style="color:#666">=</span>sink_postgres_foo_00-0<span style="color:#666">}</span> Task threw an uncaught and unrecoverable exception <span style="color:#666">(</span>org.apache.kafka.connect.runtime.WorkerTask:179<span style="color:#666">)</span>
+org.apache.kafka.connect.errors.ConnectException: Exiting WorkerSinkTask due to unrecoverable exception.
+   at org.apache.kafka.connect.runtime.WorkerSinkTask.deliverMessages<span style="color:#666">(</span>WorkerSinkTask.java:560<span style="color:#666">)</span>
+   at org.apache.kafka.connect.runtime.WorkerSinkTask.poll<span style="color:#666">(</span>WorkerSinkTask.java:321<span style="color:#666">)</span>
+   at org.apache.kafka.connect.runtime.WorkerSinkTask.iteration<span style="color:#666">(</span>WorkerSinkTask.java:224<span style="color:#666">)</span>
+   at org.apache.kafka.connect.runtime.WorkerSinkTask.execute<span style="color:#666">(</span>WorkerSinkTask.java:192<span style="color:#666">)</span>
+   at org.apache.kafka.connect.runtime.WorkerTask.doRun<span style="color:#666">(</span>WorkerTask.java:177<span style="color:#666">)</span>
+   at org.apache.kafka.connect.runtime.WorkerTask.run<span style="color:#666">(</span>WorkerTask.java:227<span style="color:#666">)</span>
+   at java.util.concurrent.Executors<span style="color:#19177c">$RunnableAdapter</span>.call<span style="color:#666">(</span>Executors.java:511<span style="color:#666">)</span>
+   at java.util.concurrent.FutureTask.run<span style="color:#666">(</span>FutureTask.java:266<span style="color:#666">)</span>
+   at java.util.concurrent.ThreadPoolExecutor.runWorker<span style="color:#666">(</span>ThreadPoolExecutor.java:1149<span style="color:#666">)</span>
+   at java.util.concurrent.ThreadPoolExecutor<span style="color:#19177c">$Worker</span>.run<span style="color:#666">(</span>ThreadPoolExecutor.java:624<span style="color:#666">)</span>
+   at java.lang.Thread.run<span style="color:#666">(</span>Thread.java:748<span style="color:#666">)</span>
+Caused by: org.apache.kafka.connect.errors.ConnectException: java.sql.SQLException: java.sql.BatchUpdateException: Batch entry <span style="color:#666">0</span> INSERT INTO <span style="color:#ba2121">&#34;foo&#34;</span><span style="color:#666">(</span><span style="color:#ba2121">&#34;c1&#34;</span>,<span style="color:#ba2121">&#34;create_ts&#34;</span>,<span style="color:#ba2121">&#34;update_ts&#34;</span><span style="color:#666">)</span> VALUES<span style="color:#666">(</span><span style="color:#666">10000</span>,<span style="color:#ba2121">&#39;2017-08-04 08:09:26+00&#39;</span>,<span style="color:#ba2121">&#39;2017-08-04 08:09:26+00&#39;</span><span style="color:#666">)</span> was aborted: ERROR: null value in column <span style="color:#ba2121">&#34;c2&#34;</span> violates not-null constraint
+  Detail: Failing row contains <span style="color:#666">(</span><span style="color:#666">2017</span>-08-04 <span style="color:#666">08</span>:09:26, <span style="color:#666">2017</span>-08-04 <span style="color:#666">08</span>:09:26, <span style="color:#666">10000</span>, null<span style="color:#666">)</span>.  Call getNextException to see other errors in the batch.
+org.postgresql.util.PSQLException: ERROR: null value in column <span style="color:#ba2121">&#34;c2&#34;</span> violates not-null constraint
+  Detail: Failing row contains <span style="color:#666">(</span><span style="color:#666">2017</span>-08-04 <span style="color:#666">08</span>:09:26, <span style="color:#666">2017</span>-08-04 <span style="color:#666">08</span>:09:26, <span style="color:#666">10000</span>, null<span style="color:#666">)</span>.
+org.postgresql.util.PSQLException: ERROR: null value in column <span style="color:#ba2121">&#34;c2&#34;</span> violates not-null constraint
+  Detail: Failing row contains <span style="color:#666">(</span><span style="color:#666">2017</span>-08-04 <span style="color:#666">08</span>:09:26, <span style="color:#666">2017</span>-08-04 <span style="color:#666">08</span>:09:26, <span style="color:#666">10000</span>, null<span style="color:#666">)</span>.
+   at io.confluent.connect.jdbc.sink.JdbcSinkTask.put<span style="color:#666">(</span>JdbcSinkTask.java:87<span style="color:#666">)</span>
+   at org.apache.kafka.connect.runtime.WorkerSinkTask.deliverMessages<span style="color:#666">(</span>WorkerSinkTask.java:538<span style="color:#666">)</span>
+   ... <span style="color:#666">10</span> more
+<span style="color:#666">[</span><span style="color:#666">2019</span>-10-15 <span style="color:#666">08</span>:30:34,413<span style="color:#666">]</span> ERROR <span style="color:#666">[</span>sink_postgres_foo_00|task-0<span style="color:#666">]</span> WorkerSinkTask<span style="color:#666">{</span><span style="color:#19177c">id</span><span style="color:#666">=</span>sink_postgres_foo_00-0<span style="color:#666">}</span> Task is being killed and will not recover <span style="color:#008000;font-weight:bold">until</span> manually restarted <span style="color:#666">(</span>org.apache.kafka.connect.runtime.WorkerTask:180<span style="color:#666">)</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Distilling this down gives us:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">Batch entry <span style="color:#666">0</span> INSERT INTO <span style="color:#ba2121">&#34;foo&#34;</span><span style="color:#666">(</span><span style="color:#ba2121">&#34;c1&#34;</span>,<span style="color:#ba2121">&#34;create_ts&#34;</span>,<span style="color:#ba2121">&#34;update_ts&#34;</span><span style="color:#666">)</span> VALUES<span style="color:#666">(</span><span style="color:#666">10000</span>,<span style="color:#ba2121">&#39;2017-08-04 08:09:26+00&#39;</span>,<span style="color:#ba2121">&#39;2017-08-04 08:09:26+00&#39;</span><span style="color:#666">)</span> was aborted: 
+ERROR: null value in column <span style="color:#ba2121">&#34;c2&#34;</span> violates not-null constraint</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Because we omitted field <code>c2</code> from our payload, and it&#8217;s <code>NOT NULL</code> in the target schema, the message cannot be written, and the Connect sink task aborts.</p>
+</div>
+<div class="paragraph">
+<p>What about if we send another, valid, message to the topic:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kafkacat -b localhost:9092 -t foo -P <span style="color:#ba2121">&lt;&lt;EOF
+</span><span style="color:#ba2121">{ &#34;schema&#34;: { &#34;type&#34;: &#34;struct&#34;, &#34;fields&#34;: [{ &#34;type&#34;: &#34;int32&#34;, &#34;optional&#34;: false, &#34;field&#34;: &#34;c1&#34; }, { &#34;type&#34;: &#34;string&#34;, &#34;optional&#34;: false, &#34;field&#34;: &#34;c2&#34; }, { &#34;type&#34;: &#34;int64&#34;, &#34;optional&#34;: false, &#34;name&#34;: &#34;org.apache.kafka.connect.data.Timestamp&#34;, &#34;version&#34;: 1, &#34;field&#34;: &#34;create_ts&#34; }, { &#34;type&#34;: &#34;int64&#34;, &#34;optional&#34;: false, &#34;name&#34;: &#34;org.apache.kafka.connect.data.Timestamp&#34;, &#34;version&#34;: 1, &#34;field&#34;: &#34;update_ts&#34; }], &#34;optional&#34;: false, &#34;name&#34;: &#34;foobar&#34; }, &#34;payload&#34;: { &#34;c1&#34;: 10001, &#34;c2&#34;: &#34;bar2&#34;, &#34;create_ts&#34;: 1501834166000, &#34;update_ts&#34;: 1501834166000 } }
+</span><span style="color:#ba2121">EOF</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Restart the connector&#8217;s failed task:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -X POST http://localhost:8083/connectors/sink_postgres_foo_00/tasks/0/restart</code></pre></div>
+</div>
+<div class="paragraph">
+<p>It&#8217;s up…</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=info&amp;expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             jq <span style="color:#ba2121">&#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&#34;connector.class&#34;]|join(&#34;:|:&#34;)&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+sink  |  sink_postgres_foo_00  |  RUNNING  |  RUNNING  |  io.confluent.connect.jdbc.JdbcSinkConnector</code></pre></div>
+</div>
+<div class="paragraph">
+<p>but soon…it&#8217;s down</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=info&amp;expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             jq <span style="color:#ba2121">&#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&#34;connector.class&#34;]|join(&#34;:|:&#34;)&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+sink  |  sink_postgres_foo_00  |  RUNNING  |  FAILED  |  io.confluent.connect.jdbc.JdbcSinkConnector</code></pre></div>
+</div>
+<div class="paragraph">
+<p>The worker log shows the same error as before - <code>ERROR: null value in column "c2" violates not-null constraint</code>.</p>
+</div>
+<div class="paragraph">
+<p>Of the three messages on the topic, we&#8217;ve got a 'poison pill' which has broken our pipeline 😿. Each time we restart the connector, it will start from where it got to last time and so fall over again—regardless of how many 'good' messages may come after it. The connector will only consider a message actually read once it has successfully written it to the target, which makes sense if you think about it from a data integrity point of view—but does land us with this problem here.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_to_do">What to do?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>There are a few options:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>If we were using Avro then it would be harder to break things, because schema compatibility can be enforced and bad messages would be rejected when being produced <em>on</em> to the topic.</p>
+</li>
+<li>
+<p>We could write a stream processing job to take the source topic <code>foo</code> and write all valid messages from it to a new topic (e.g. <code>foo_good</code>) and hook our JDBC sink up to that instead.</p>
+</li>
+<li>
+<p>Use the consumer group mechanism to just skip the bad message for the connector</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Which you use depends on how the problem arose. For example, one-off problems could be addressed by option #3, but it&#8217;s very manual and could be error-prone if you&#8217;re not careful. Option #2 is appropriate if you&#8217;re dealing with third-parties and you have on-going data quality issues. #1, using Avro, is <strong>always</strong> a good idea, regardless!</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_manually_skipping_bad_messages">Manually skipping bad messages</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Each sink connector in Kafka Connect has its own consumer group, with the offset persisted in Kafka itself (pretty clever, right). This is also why if you delete a connector and recreate it <em>with the same name</em> you&#8217;ll find it starts from where the previous instance got to.</p>
+</div>
+<div class="paragraph">
+<p>You can view consumer groups using the <code>kafka-consumer-groups</code> command:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafka-consumer-groups <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --bootstrap-server kafka:29092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --list
+connect-sink_postgres_00
+_confluent-ksql-confluent_rmoff_01query_CSAS_JDBC_POSTGRES_TRANSACTIONS_GBP_2
+_confluent-ksql-confluent_rmoff_01query_CSAS_JDBC_POSTGRES_TRANSACTIONS_NO_CUSTOMERID_1
+connect-sink_postgres_foo_00
+connect-SINK_ES_04
+_confluent-ksql-confluent_rmoff_01transient_2925897355317205962_1571058964212
+_confluent-controlcenter-5-4-0-1
+connect-SINK_ES_03
+_confluent-controlcenter-5-4-0-1-command
+connect-SINK_ES_02
+connect-SINK_ES_01</code></pre></div>
+</div>
+<div class="paragraph">
+<p>There are various ones there, but we&#8217;re interested in the one with a <code>connect-</code> prefix that matches our connector name, <code>connect-sink_postgres_foo_00</code></p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafka-consumer-groups <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --bootstrap-server kafka:29092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --describe <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --group connect-sink_postgres_foo_00
+
+Consumer group <span style="color:#ba2121">&#39;connect-sink_postgres_foo_00&#39;</span> has no active members.
+
+GROUP                        TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID     HOST            CLIENT-ID
+connect-sink_postgres_foo_00 foo             <span style="color:#666">0</span>          <span style="color:#666">1</span>               <span style="color:#666">3</span>               <span style="color:#666">2</span>               -               -               -</code></pre></div>
+</div>
+<div class="paragraph">
+<p>You can see from this that the current offset is 1, and there are two more messages to be read (one of which is the 'poison-pill').</p>
+</div>
+<div class="paragraph">
+<p><code>kafkacat</code> is a fantastic tool for this kind of debugging, because we can directly relate offsets with the messages themselves:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b localhost:9092 -t foo -C -f <span style="color:#ba2121">&#39;Offset: %o\nPayload: %s\n--\n&#39;</span>
+Offset: <span style="color:#666">0</span>
+Payload: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;schema&#34;</span>: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;struct&#34;</span>, <span style="color:#ba2121">&#34;fields&#34;</span>: <span style="color:#666">[{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int32&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;c1&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;string&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;c2&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int64&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;org.apache.kafka.connect.data.Timestamp&#34;</span>, <span style="color:#ba2121">&#34;version&#34;</span>: <span style="color:#666">1</span>, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;create_ts&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int64&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;org.apache.kafka.connect.data.Timestamp&#34;</span>, <span style="color:#ba2121">&#34;version&#34;</span>: <span style="color:#666">1</span>, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;update_ts&#34;</span> <span style="color:#666">}]</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;foobar&#34;</span> <span style="color:#666">}</span>, <span style="color:#ba2121">&#34;payload&#34;</span>: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;c1&#34;</span>: <span style="color:#666">10000</span>, <span style="color:#ba2121">&#34;c2&#34;</span>: <span style="color:#ba2121">&#34;bar&#34;</span>, <span style="color:#ba2121">&#34;create_ts&#34;</span>: <span style="color:#666">1501834166000</span>, <span style="color:#ba2121">&#34;update_ts&#34;</span>: <span style="color:#666">1501834166000</span> <span style="color:#666">}</span> <span style="color:#666">}</span>
+--
+Offset: <span style="color:#666">1</span>
+Payload: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;schema&#34;</span>: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;struct&#34;</span>, <span style="color:#ba2121">&#34;fields&#34;</span>: <span style="color:#666">[{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int32&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;c1&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int64&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;org.apache.kafka.connect.data.Timestamp&#34;</span>, <span style="color:#ba2121">&#34;version&#34;</span>: <span style="color:#666">1</span>, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;create_ts&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int64&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;org.apache.kafka.connect.data.Timestamp&#34;</span>, <span style="color:#ba2121">&#34;version&#34;</span>: <span style="color:#666">1</span>, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;update_ts&#34;</span> <span style="color:#666">}]</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;foobar&#34;</span> <span style="color:#666">}</span>, <span style="color:#ba2121">&#34;payload&#34;</span>: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;c1&#34;</span>: <span style="color:#666">10000</span>,  <span style="color:#ba2121">&#34;create_ts&#34;</span>: <span style="color:#666">1501834166000</span>, <span style="color:#ba2121">&#34;update_ts&#34;</span>: <span style="color:#666">1501834166000</span> <span style="color:#666">}</span> <span style="color:#666">}</span>
+--
+Offset: <span style="color:#666">2</span>
+Payload: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;schema&#34;</span>: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;struct&#34;</span>, <span style="color:#ba2121">&#34;fields&#34;</span>: <span style="color:#666">[{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int32&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;c1&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;string&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;c2&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int64&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;org.apache.kafka.connect.data.Timestamp&#34;</span>, <span style="color:#ba2121">&#34;version&#34;</span>: <span style="color:#666">1</span>, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;create_ts&#34;</span> <span style="color:#666">}</span>, <span style="color:#666">{</span> <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;int64&#34;</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;org.apache.kafka.connect.data.Timestamp&#34;</span>, <span style="color:#ba2121">&#34;version&#34;</span>: <span style="color:#666">1</span>, <span style="color:#ba2121">&#34;field&#34;</span>: <span style="color:#ba2121">&#34;update_ts&#34;</span> <span style="color:#666">}]</span>, <span style="color:#ba2121">&#34;optional&#34;</span>: false, <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;foobar&#34;</span> <span style="color:#666">}</span>, <span style="color:#ba2121">&#34;payload&#34;</span>: <span style="color:#666">{</span> <span style="color:#ba2121">&#34;c1&#34;</span>: <span style="color:#666">10001</span>, <span style="color:#ba2121">&#34;c2&#34;</span>: <span style="color:#ba2121">&#34;bar2&#34;</span>, <span style="color:#ba2121">&#34;create_ts&#34;</span>: <span style="color:#666">1501834166000</span>, <span style="color:#ba2121">&#34;update_ts&#34;</span>: <span style="color:#666">1501834166000</span> <span style="color:#666">}</span> <span style="color:#666">}</span>
+--
+% Reached end of topic foo <span style="color:#666">[</span><span style="color:#666">0</span><span style="color:#666">]</span> at offset <span style="color:#666">3</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>So at offset 0 is the good message which Connect read, thus the current offset is 1. When the connector restarts from its failure it will be at offset 1, which is the 'bad' message. The end of the topic currently is offset 3, i.e. the position after the third message which is at offset 2 (zero-based offsets).</p>
+</div>
+<div class="paragraph">
+<p>What we want to do is tell Kafka Connect to resume from the next-good message, which we can see from <code>kafkacat</code> above is at offset 2.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kafka-consumer-groups <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --bootstrap-server kafka:29092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --group connect-sink_postgres_foo_00 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --reset-offsets <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --topic foo <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --to-offset <span style="color:#666">2</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    --execute</code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">GROUP                          TOPIC                          PARTITION  NEW-OFFSET
+connect-sink_postgres_foo_00   foo                            <span style="color:#666">0</span>          <span style="color:#666">2</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Now we can restart the failed task:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -X POST http://localhost:8083/connectors/sink_postgres_foo_00/tasks/0/restart</code></pre></div>
+</div>
+<div class="paragraph">
+<p>and this time the connector stays running:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=info&amp;expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             jq <span style="color:#ba2121">&#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&#34;connector.class&#34;]|join(&#34;:|:&#34;)&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>             column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+sink  |  sink_postgres_foo_00  |  RUNNING  |  RUNNING  |  io.confluent.connect.jdbc.JdbcSinkConnector</code></pre></div>
+</div>
+<div class="paragraph">
+<p>and in Postgres we get the new rows of data (except for the bad one, which is lost to us):</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">postgres<span style="color:#666">=#</span> <span style="color:#008000;font-weight:bold">select</span> <span style="color:#666">*</span> <span style="color:#008000;font-weight:bold">from</span> <span style="color:#ba2121">&#34;foo&#34;</span>;
+      update_ts      <span style="color:#666">|</span>      create_ts      <span style="color:#666">|</span>  c1   <span style="color:#666">|</span>  c2
+<span style="color:#408080;font-style:italic">---------------------+---------------------+-------+------
+</span><span style="color:#408080;font-style:italic"></span> <span style="color:#666">2017</span><span style="color:#666">-</span><span style="color:#666">08</span><span style="color:#666">-</span><span style="color:#666">04</span> <span style="color:#666">08</span>:<span style="color:#666">09</span>:<span style="color:#666">26</span> <span style="color:#666">|</span> <span style="color:#666">2017</span><span style="color:#666">-</span><span style="color:#666">08</span><span style="color:#666">-</span><span style="color:#666">04</span> <span style="color:#666">08</span>:<span style="color:#666">09</span>:<span style="color:#666">26</span> <span style="color:#666">|</span> <span style="color:#666">10000</span> <span style="color:#666">|</span> bar
+ <span style="color:#666">2017</span><span style="color:#666">-</span><span style="color:#666">08</span><span style="color:#666">-</span><span style="color:#666">04</span> <span style="color:#666">08</span>:<span style="color:#666">09</span>:<span style="color:#666">26</span> <span style="color:#666">|</span> <span style="color:#666">2017</span><span style="color:#666">-</span><span style="color:#666">08</span><span style="color:#666">-</span><span style="color:#666">04</span> <span style="color:#666">08</span>:<span style="color:#666">09</span>:<span style="color:#666">26</span> <span style="color:#666">|</span> <span style="color:#666">10001</span> <span style="color:#666">|</span> bar2
+(<span style="color:#666">2</span> <span style="color:#008000;font-weight:bold">rows</span>)</code></pre></div>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.github.io/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2019 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
