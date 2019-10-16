@@ -6,7 +6,213 @@
 		<language>en-us</language>
 		<author>Robin Moffatt</author>
 		<rights>Copyright (c) 2019</rights>
-		<updated>2019-10-15 09:58:38 &#43;0100 BST</updated>
+		<updated>2019-10-16 16:29:34 &#43;0100 BST</updated>
+		
+		<item>
+			<title>Using Kafka Connect and Debezium with Confluent Cloud</title>
+			<link>https://rmoff.github.io/2019/10/16/using-kafka-connect-and-debezium-with-confluent-cloud/</link>
+			<pubDate>Wed, 16 Oct 2019 16:29:34 BST</pubDate>
+			<author>Robin Moffatt</author>
+			<guid>https://rmoff.github.io/2019/10/16/using-kafka-connect-and-debezium-with-confluent-cloud/</guid>
+			<media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/10/IMG_2849.jpg" medium="image" type="image/jpg" width="100" height="100" />
+			<description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This is based on using &lt;a href=&#34;https://confluent.cloud&#34;&gt;Confluent Cloud&lt;/a&gt; to provide your managed Kafka and Schema Registry. All that you run yourself is the Kafka Connect worker.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Optionally, you can use this &lt;a href=&#34;https://github.com/rmoff/debezium-ccloud/blob/master/docker-compose.yml&#34;&gt;Docker Compose&lt;/a&gt; to run the worker and a sample MySQL database.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_what_you_need&#34;&gt;What you need&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;A &lt;a href=&#34;https://confluent.cloud&#34;&gt;Confluent Cloud&lt;/a&gt; account with a Kafka and Schema Registry API host names and keys. Write these to a &lt;code&gt;.env&lt;/code&gt; file:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_URL&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_install_debezium_connector&#34;&gt;Install Debezium connector&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This article assumes that you&amp;#8217;re running your own Kafka Connect worker with the &lt;a href=&#34;https://docs.confluent.io/current/cloud/connect/connect-cloud-config.html&#34;&gt;appropriate configuration&lt;/a&gt; done to hook it up to Confluent Cloud&amp;#8217;s brokers and Schema Registry.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You need to install the Debezium connector on the Kafka Connect worker:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;confluent-hub install --no-prompt debezium/debezium-connector-mysql:0.10.0&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can also do this as part of your &lt;a href=&#34;https://github.com/rmoff/debezium-ccloud/blob/master/docker-compose.yml&#34;&gt;Docker Compose&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;    command: 
+      - bash 
+      - -c 
+      - |
+        &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Installing connector plugins&amp;#34;&lt;/span&gt;
+        confluent-hub install --no-prompt debezium/debezium-connector-mysql:0.10.0
+        #
+        &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Launching Kafka Connect worker&amp;#34;&lt;/span&gt;
+        /etc/confluent/docker/run &amp;amp; 
+        #
+        sleep infinity&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_pre_create_the_topics_to_which_youll_be_writing&#34;&gt;Pre-create the topics to which you&amp;#8217;ll be writing&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Make sure your &lt;code&gt;ccloud&lt;/code&gt; environment is using the correct Confluent Cloud cluster&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ ccloud kafka cluster list
+      Id      |       Name        | Provider |  Region   | Durability | Status
++-------------+-------------------+----------+-----------+------------+--------+
+    lkc-42p8m | pipeline-to-cloud | aws      | us-east-1 | HIGH       | UP
+  * lkc-43xgj | race-mapper       | aws      | us-east-1 | LOW        | UP
+
+$ ccloud kafka cluster use lkc-42p8m&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Create the topics - one for the DDL, plus one per source table.&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The topic name is defined by :&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;an optional Single Message Transform used in the example which prepends a &lt;code&gt;mysql-01-&lt;/code&gt; prefix&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;the &lt;code&gt;database.server.name&lt;/code&gt; (&lt;code&gt;asgard&lt;/code&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;the database name (&lt;code&gt;demo&lt;/code&gt;) plus table name&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Schema DDL goes in this topic&lt;/span&gt;
+ccloud kafka topic create mysql-01-asgard
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Table-specific topics:&lt;/span&gt; 
+ccloud kafka topic create mysql-01-asgard.demo.customers
+ccloud kafka topic create mysql-01-asgard.demo.transactions&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you don&amp;#8217;t do this, you&amp;#8217;ll get repeating errors in your Kafka Connect worker log:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;Error &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;while&lt;/span&gt; fetching metadata with correlation id … : &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&amp;lt;…topic…&amp;gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;UNKNOWN_TOPIC_OR_PARTITION&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can create the topics afterwards if you forget, but it&amp;#8217;s easier up-front&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_create_the_connector&#34;&gt;Create the connector&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now create the connector itself, substituting your MySQL details below as indicated. The Confluent Cloud details and credentials will be picked up from the file &lt;code&gt;/data/credentials.properties&lt;/code&gt; which if you&amp;#8217;re using Docker can be mapped from the same &lt;code&gt;.env&lt;/code&gt; file as above. Or, just hardcode the values if you&amp;#8217;d prefer 🤷‍.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The configuration is the same as a normal Debezium connector except the additional details for the connector to be able to connect to Confluent Cloud for writing and reading the &lt;a href=&#34;https://debezium.io/documentation/reference/0.10/connectors/mysql.html#database-schema-history&#34;&gt;database schema history topic&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -i -X PUT -H  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/connectors/source-debezium-mysql-01/config &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;connector.class&amp;#34;: &amp;#34;io.debezium.connector.mysql.MySqlConnector&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.hostname&amp;#34;: &amp;#34;mysql&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.port&amp;#34;: &amp;#34;3306&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.user&amp;#34;: &amp;#34;debezium&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.password&amp;#34;: &amp;#34;dbz&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.server.name&amp;#34;: &amp;#34;asgard&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.kafka.bootstrap.servers&amp;#34;: &amp;#34;${file:/data/credentials.properties:CCLOUD_BROKER_HOST}&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.kafka.topic&amp;#34;: &amp;#34;dbz_dbhistory.asgard-01&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.security.protocol&amp;#34;: &amp;#34;SASL_SSL&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.ssl.endpoint.identification.algorithm&amp;#34;: &amp;#34;https&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.sasl.mechanism&amp;#34;: &amp;#34;PLAIN&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.sasl.jaas.config&amp;#34;: &amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_KEY}\&amp;#34; password=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_SECRET}\&amp;#34;;&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.security.protocol&amp;#34;: &amp;#34;SASL_SSL&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.ssl.endpoint.identification.algorithm&amp;#34;: &amp;#34;https&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.sasl.mechanism&amp;#34;: &amp;#34;PLAIN&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.sasl.jaas.config&amp;#34;: &amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_KEY}\&amp;#34; password=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_SECRET}\&amp;#34;;&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;table.whitelist&amp;#34;:&amp;#34;demo.transactions,demo.customers&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;decimal.handling.mode&amp;#34;:&amp;#34;double&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms&amp;#34;: &amp;#34;unwrap,addTopicPrefix&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.unwrap.type&amp;#34;: &amp;#34;io.debezium.transforms.ExtractNewRecordState&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.addTopicPrefix.type&amp;#34;:&amp;#34;org.apache.kafka.connect.transforms.RegexRouter&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.addTopicPrefix.regex&amp;#34;:&amp;#34;(.*)&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.addTopicPrefix.replacement&amp;#34;:&amp;#34;mysql-01-$1&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Check that the connector is running:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors?expand=info&amp;amp;expand=status&amp;#34;&lt;/span&gt; | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&amp;#34;connector.class&amp;#34;]|join(&amp;#34;:|:&amp;#34;)&amp;#39;&lt;/span&gt; | column -s : -t| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;//g&amp;#39;&lt;/span&gt;| sort
+
+&lt;span style=&#34;color:#008000&#34;&gt;source&lt;/span&gt;  |  source-debezium-mysql-01  |  RUNNING  |  RUNNING  |  io.debezium.connector.mysql.MySqlConnector&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_consume_the_data&#34;&gt;Consume the data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_confluent_cloud_gui&#34;&gt;Confluent Cloud GUI&lt;/h3&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.github.io/images/2019/10/ccloud-debezium-01.png&#34; alt=&#34;Confluent Cloud screenshot&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_kafkacat&#34;&gt;kafkacat&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Set the variables, either from this script or manually&lt;/span&gt;
+&lt;span style=&#34;color:#008000&#34;&gt;source&lt;/span&gt; .env
+
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Use kafkacat to pull Avro messages from Confluent Cloud&lt;/span&gt; 
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;#  deserialised using the Schema Registry hosted on Confluent Cloud&lt;/span&gt;
+
+docker run --rm edenhill/kafkacat:1.5.0 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -X ssl.ca.location&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;./etc/ssl/cert.pem -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -b &lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -r https://&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;@&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_URL&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -s avro &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -t mysql-01-asgard.demo.transactions &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -C -o beginning
+
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;996&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;69&lt;/span&gt;.819999999999993&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;CNY&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-04-10T10:23:41Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;997&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;74&lt;/span&gt;.170000000000002&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;PEN&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-11-19T15:29:14Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;998&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: -92.920000000000002&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;JPY&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-05-25T19:43:48Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;999&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;71&lt;/span&gt;.159999999999997&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;EUR&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-11-15T07:24:44Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;1000&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;28&lt;/span&gt;.149999999999999&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;IRR&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-01-12T14:53:49Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;603&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: -85.510000000000005&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;CNY&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-11-08T22:06:49Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+		</item>
 		
 		<item>
 			<title>Skipping bad records with the Kafka Connect JDBC sink connector</title>
