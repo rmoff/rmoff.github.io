@@ -5,9 +5,145 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2019-11-29</lastBuildDate>
+    <lastBuildDate>2019-12-17</lastBuildDate>
     
         <atom:link href="https://rmoff.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Copy MongoDB collections from remote to local instance</title>
+      <link>https://rmoff.github.io/2019/12/17/copy-mongodb-collections-from-remote-to-local-instance/</link>
+      <pubDate>2019-12-17</pubDate>
+      
+      <guid>https://rmoff.github.io/2019/12/17/copy-mongodb-collections-from-remote-to-local-instance/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/12/IMG_1581.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This is revisiting &lt;a href=&#34;https://rmoff.net/2018/03/27/cloning-ubiquitis-mongodb-instance-to-a-separate-server/&#34;&gt;the blog I wrote a while back&lt;/a&gt;, which showed using &lt;code&gt;mongodump&lt;/code&gt; and &lt;code&gt;mongorestore&lt;/code&gt; to copy a MongoDB database from one machine (a Unifi CloudKey) to another. This time instead of a manual lift and shift, I wanted a simple way to automate the update of the target with changes made on the source.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The source is as before, &lt;a href=&#34;https://www.ui.com/unifi/unifi-cloud-key/&#34;&gt;Unifi&amp;#8217;s CloudKey&lt;/a&gt;, which runs MongoDB to store its data about the network - devices, access points, events, and so on.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_why&#34;&gt;Why?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So that I can get this interesting data from somewhere that I cannot mess with into a place from which I can easily stream it into Kafka.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_constraints&#34;&gt;The constraints&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Unifi uses MongoDB &lt;strong&gt;v2.4.10&lt;/strong&gt; which is pretty darn old&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;I must not break the source - it runs my home network and my kids will be mad if it stops working just so that I can hack around on it. I want the least-impact option, and I definitely don&amp;#8217;t want to start reconfiguring MongoDB with replicas and stuff like that&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;My target MongoDB is running in Docker&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_solution&#34;&gt;The solution&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;It&amp;#8217;s as hacky as they come. Instead of &lt;code&gt;mongodump&lt;/code&gt; to a file which I then copy to the target and repopulate with &lt;code&gt;mongorestore&lt;/code&gt;, I use Linux pipes and remote command execution with SSH to stream the dump from the source directly into the target.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;First bring up a MongoDB container:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;docker run --rm &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           --publish &lt;span style=&#34;color:#666&#34;&gt;27017&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           --name mongodb &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           mongo:4.2.2&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Then copy across the data:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;ssh robin@unifi &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    mongodump --port &lt;span style=&#34;color:#666&#34;&gt;27117&lt;/span&gt; --db&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;ace --collection&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;device --out&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;- | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;docker &lt;span style=&#34;color:#008000&#34;&gt;exec&lt;/span&gt; mongodb &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    mongorestore --dir&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;- --db&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;ace --collection&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;device&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In detail:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;ssh robin@unifi&lt;/code&gt; connects remotely to the Unifi cloudkey server (using existing &lt;a href=&#34;https://www.rittmanmead.com/blog/2014/12/linux-cluster-sysadmin-ssh-keys/&#34;&gt;SSH keys&lt;/a&gt; for password-less authentication)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;\&lt;/code&gt; is the line continuation character just to make all of this easier to read&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;mongodump&lt;/code&gt; is called and the important point here is that I specify &lt;code&gt;--out=-&lt;/code&gt; which instead of dumping to file dumps to &lt;code&gt;stdout&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;|&lt;/code&gt; the magic pipe! This routes the &lt;code&gt;stdout&lt;/code&gt; from &lt;code&gt;mongodump&lt;/code&gt; into…&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;docker exec&lt;/code&gt; runs the following command on the MongoDB container. Because I specify the &lt;code&gt;--interactive&lt;/code&gt; argument it passes the stdout of the previous step as &lt;code&gt;stdin&lt;/code&gt; into…&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;mongorestore&lt;/code&gt; which reads from &lt;code&gt;stdin&lt;/code&gt; because I&amp;#8217;ve specified &lt;code&gt;--dir=-&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The rest of the parameters are just specifying the database and collection that I want to copy. When this runs you can see the documents get created:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;…&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:10:51.609+0000    restoring ace.device from -
+connected to: &lt;span style=&#34;color:#666&#34;&gt;127&lt;/span&gt;.0.0.1:27117
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:10:51.807+0000    no indexes to restore
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:10:51.807+0000    finished restoring ace.device &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt; documents, &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; failures&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:10:51.807+0000    &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt; document&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;s&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; restored successfully. &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; document&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;s&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; failed to restore.&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you re-run it you just get duplicate key violations, which is to be expected, and means that in theory I can just rerun this process on a timed loop and pick up any new documents whilst ignoring existing ones. Not very efficient, but fairly effective :)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:12:18.253+0000    continuing through error: E11000 duplicate key error collection: ace.device index: _id_ dup key: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt; _id: ObjectId&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;583854cde4b001431e4e4982&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:12:18.253+0000    continuing through error: E11000 duplicate key error collection: ace.device index: _id_ dup key: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt; _id: ObjectId&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;5d77b7a8cf2b2b01c42811b5&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:12:18.253+0000    continuing through error: E11000 duplicate key error collection: ace.device index: _id_ dup key: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt; _id: ObjectId&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;58385328e4b001431e4e497a&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:12:18.254+0000    continuing through error: E11000 duplicate key error collection: ace.device index: _id_ dup key: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt; _id: ObjectId&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;58b3fb48e4b0b79e50242621&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:12:18.254+0000    continuing through error: E11000 duplicate key error collection: ace.device index: _id_ dup key: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt; _id: ObjectId&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;58b406f1e4b0e334d74c46e4&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:12:18.254+0000    no indexes to restore
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:12:18.254+0000    finished restoring ace.device &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; documents, &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt; failures&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;-12-17T22:12:18.254+0000    &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; document&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;s&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; restored successfully. &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt; document&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;s&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; failed to restore.&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_iterating_across_collections&#34;&gt;Iterating across collections&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Because we&amp;#8217;re using stdout/stdin we have to specify the database and collection. To loop over them you can just use a &lt;a href=&#34;https://www.cyberciti.biz/faq/bash-for-loop/&#34;&gt;for loop in bash&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; c in collection_foo collection_bar
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;do&lt;/span&gt;
+    ssh robin@unifi &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;        mongodump --port &lt;span style=&#34;color:#666&#34;&gt;27117&lt;/span&gt; --db&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;ace --collection&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$c&lt;/span&gt; --out&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;- | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    docker &lt;span style=&#34;color:#008000&#34;&gt;exec&lt;/span&gt; --interactive mongodb &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;        mongorestore --dir&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;- --db&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;ace --collection&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$c&lt;/span&gt;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;done&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This will run the same import/export for &lt;code&gt;collection_foo&lt;/code&gt; and &lt;code&gt;collection_bar&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</description>
+    </item>
     <item>
       <title>Kafka Connect - Request timed out</title>
       <link>https://rmoff.github.io/2019/11/29/kafka-connect-request-timed-out/</link>
@@ -2169,202 +2305,6 @@ Kafka Connect has &lt;strong&gt;two&lt;/strong&gt; deserialisers: the &lt;strong
 &lt;div class=&#34;sectionbody&#34;&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;You can find my test rig &lt;a href=&#34;https://github.com/rmoff/kafka-elasticsearch&#34;&gt;on github here&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Copying data between Kafka clusters with Kafkacat</title>
-      <link>https://rmoff.github.io/2019/09/29/copying-data-between-kafka-clusters-with-kafkacat/</link>
-      <pubDate>2019-09-29</pubDate>
-      
-      <guid>https://rmoff.github.io/2019/09/29/copying-data-between-kafka-clusters-with-kafkacat/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/09/IMG_2657.jpg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_kafkacat_gives_you_kafka_super_powers&#34;&gt;kafkacat gives you Kafka super powers 😎&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I&amp;#8217;ve &lt;a href=&#34;https://rmoff.net/categories/kafkacat/&#34;&gt;written before&lt;/a&gt; about &lt;a href=&#34;https://github.com/edenhill/kafkacat&#34;&gt;kafkacat&lt;/a&gt; and what a great tool it is for doing lots of useful things as a developer with Kafka. I used it too in &lt;a href=&#34;https://talks.rmoff.net/8Oruwt/on-track-with-apache-kafka-building-a-streaming-etl-solution-with-rail-data#s9tMEWG&#34;&gt;a recent demo&lt;/a&gt; that I built in which data needed manipulating in a way that I couldn&amp;#8217;t easily elsewhere. Today I want share a very simple but powerful use for kafkacat as both a consumer and producer: copying data from one Kafka cluster to another. In this instance it&amp;#8217;s getting data from &lt;a href=&#34;https://confluent.cloud/&#34;&gt;Confluent Cloud&lt;/a&gt; down to a local cluster.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Why would I want to copy data from one Kafka cluster to another? In this instance it was because I had set up a pipeline streaming data into one cluster (on Confluent Cloud) and I needed that data locally so that I could work on building code around it whilst offline. Offline happens less and less often nowadays but it still happens—on many flights, and often at conferences/hotels with &#34;WiFi&#34; that isn&amp;#8217;t.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;There are several proper ways to replicate data from one Kafka cluster to another, including MirrorMaker (part of Apache Kafka) and &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-replicator/index.html&#34;&gt;Replicator&lt;/a&gt; (part of Confluent Platform). If what I needed was a proper solution then obviously I&amp;#8217;d reach for Replicator—but here I just needed quick &amp;amp; dirty, didn&amp;#8217;t care about replicating consumer offsets etc.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Pipeline_(Unix)&#34;&gt;Unix pipelines&lt;/a&gt; are a beautiful thing, because they enable you to build fantastically powerful processing out of individual components that each focus on doing their own thing particularly well. kafkacat fully supports the pipelines concept, which means that you can stream data out of a Kafka topic (using kafkacat as a consumer) into any tool that accepts &lt;code&gt;stdin&lt;/code&gt;, and you can also take data from any tool that produces &lt;code&gt;stdout&lt;/code&gt; and write it to a Kafka topic (using kafkacat as a producer).&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Guess what happens when you hook up two kafkacat instances, one consuming and one producing? A delightful thing happens; you read from one topic and write to another!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/09/kafkacat-copy-between-clusters.png&#34; alt=&#34;kafkacat copy between clusters&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;admonitionblock note&#34;&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-This is a hack—I have not tried it (and suspect it wouldn&amp;#8217;t work) with binary data; that&amp;#8217;s exactly what &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-replicator/index.html&#34;&gt;Replicator&lt;/a&gt; and its support for Byte arrays is for :)
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;At a very simply level you can do this:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kafkacat -b localhost:9092 -C -t source-topic -K: -e -o beginning | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;kafkacat -b localhost:9092 -P -t target-topic -K: &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;That will take every message on &lt;code&gt;source-topic&lt;/code&gt; and write it to &lt;code&gt;target-topic&lt;/code&gt; on the same cluster. Some flags:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;-K&lt;/code&gt; output/parse keys separated by &lt;code&gt;:&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;-e&lt;/code&gt; exit once at the end of the topic&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The above will run once, and you get a copy of that topic at the point in time at which the script runs. If you re-run it you&amp;#8217;ll get another full copy of the data.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;What about if you want to resume consumption after each execution, or even scale it out? kafkacat supports consumer groups!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kafkacat -b localhost:9092 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X auto.offset.reset&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;earliest &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -K: &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -G cg01 source-topic | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;kafkacat -b localhost:9092 -t target-topic -K: -P&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The arguments are a bit different this time. We replace &lt;code&gt;-C&lt;/code&gt; (consumer) and specifying the topic with &lt;code&gt;-t&lt;/code&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;literalblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre&gt;-C -t source-topic&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;with &lt;code&gt;-G&lt;/code&gt; to specify using the balanced consumer, its name, and which topic(s) to subscribe to&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;literalblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre&gt;-G cg01 source-topic&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;We also change &lt;code&gt;-o beginning&lt;/code&gt; for &lt;code&gt;-X auto.offset.reset=earliest&lt;/code&gt;. When this is run we see the partitions of the six-partition topic that have been assigned to it:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;% Group cg01 rebalanced &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;memberid rdkafka-894c0f84-9464-42dd-b76a-885420b6c557&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: assigned: source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
-% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;
-% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-% Reached end of topic source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;and if we run a second instance of it with the same consumer group id both rebalance:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Instance 1&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;% Group cg01 rebalanced &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;memberid rdkafka-894c0f84-9464-42dd-b76a-885420b6c557&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: assigned: source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Instance 2&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;% Group cg01 rebalanced &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;memberid rdkafka-2416395f-7232-4fc0-8fbc-121d3bbc3758&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;: assigned: source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, source-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_copying_data_from_confluent_cloud_to_a_local_kafka_cluster&#34;&gt;Copying data from Confluent Cloud to a local Kafka cluster&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now let&amp;#8217;s add Confluent Cloud into the mix—or any other secured Kafka cluster for that matter. We just need a few extra parameters in our call :&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kafkacat -b &lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_BROKER_HOST&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X ssl.ca.location&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;/usr/local/etc/openssl/cert.pem -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X auto.offset.reset&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;earliest &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -K: &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -G copy_to_local_00 source-topic  | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;kafkacat -b localhost:9092,localhost:19092,localhost:29092 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -t target-topic &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -K: -P &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;And off we go. How can we check it&amp;#8217;s worked? kafkacat of course! We can sample some records:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ kafkacat -b localhost:9092 -t source-topic -o beginning -e -C -c &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:97,,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:200,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:98.689468383789062,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:93,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;t&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;u&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569316069,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:97,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;FF&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;cog&amp;#34;&lt;/span&gt;:193,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:45,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:16,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:100.14543914794922,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:3,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569330854,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;RM&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:104&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:97,,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:200,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:98.689468383789062,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:93,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;t&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;u&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569316069,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:97,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;FF&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;cog&amp;#34;&lt;/span&gt;:193,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:45,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:16,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:100.14543914794922,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:3,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569330854,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;RM&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:104&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;batt&amp;#34;&lt;/span&gt;:97,,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;acc&amp;#34;&lt;/span&gt;:200,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;p&amp;#34;&lt;/span&gt;:98.689468383789062,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bs&amp;#34;&lt;/span&gt;:1,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vel&amp;#34;&lt;/span&gt;:0,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;vac&amp;#34;&lt;/span&gt;:93,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;t&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;u&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;conn&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;w&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tst&amp;#34;&lt;/span&gt;:1569316069,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;alt&amp;#34;&lt;/span&gt;:97,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;location&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tid&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;FF&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;and we can count how many are currently in the topic:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ kafkacat -b localhost:9092 -t target-topic -o beginning -e|wc -l
-% Auto-selecting Consumer mode &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;use -P or -C to override&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-% Reached end of topic target-topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;1668&lt;/span&gt;: exiting
-    &lt;span style=&#34;color:#666&#34;&gt;1668&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;We can see the consumer group in Confluent Cloud (with similar views in Confluent Control Center if you&amp;#8217;re running Apache Kafka for yourself), showing any lag in each consumer:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/09/kafka–consumer-lag.png&#34; alt=&#34;kafka–consumer lag&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;hr&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Like I said above, there are dozens of reasons why you would &lt;strong&gt;not&lt;/strong&gt; want to use this method for getting data from one Kafka cluster to another, including:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;No copying of offsets from source to target cluster&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Probably mangles binary data&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Doesn&amp;#8217;t copy topic properties (partition count, replication factor) from source to target&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Doesn&amp;#8217;t copy headers&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Hacky as hell!&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
