@@ -5,9 +5,371 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2019-12-20</lastBuildDate>
+    <lastBuildDate>2020-01-08</lastBuildDate>
     
         <atom:link href="https://rmoff.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Streaming messages from RabbitMQ into Kafka with Kafka Connect</title>
+      <link>https://rmoff.github.io/2020/01/08/streaming-messages-from-rabbitmq-into-kafka-with-kafka-connect/</link>
+      <pubDate>2020-01-08</pubDate>
+      
+      <guid>https://rmoff.github.io/2020/01/08/streaming-messages-from-rabbitmq-into-kafka-with-kafka-connect/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2020/01/IMG_2114.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This was prompted by &lt;a href=&#34;https://stackoverflow.com/questions/59632068/kafka-connect-is-sending-a-malformed-json&#34;&gt;a question&lt;/a&gt; on StackOverflow to which I thought the answer would be straightforward, but turned out not to be so. And then I got a bit carried away and ended up with a nice example of how you can handle schema-less data coming from a system such as RabbitMQ and apply a schema to it.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_setup&#34;&gt;Setup&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;olist arabic&#34;&gt;
+&lt;ol class=&#34;arabic&#34;&gt;
+&lt;li&gt;
+&lt;p&gt;Clone the repo&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;git clone https://github.com/confluentinc/demo-scene.git
+cd demo-scene/rabbitmq-into-kafka&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Bring up the test environment&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;docker-compose up -d&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_create_queue_and_test_message_on_rabbitmq&#34;&gt;Create queue and test message on RabbitMQ&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;This uses the &lt;a href=&#34;https://www.rabbitmq.com/management.html&#34;&gt;Management API&lt;/a&gt; which has been enabled on the Docker container automagically.&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;olist arabic&#34;&gt;
+&lt;ol class=&#34;arabic&#34;&gt;
+&lt;li&gt;
+&lt;p&gt;Create the queue&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;curl --user guest:guest \
+      -X PUT -H &#39;content-type: application/json&#39; \
+      --data-binary &#39;{&#34;vhost&#34;:&#34;/&#34;,&#34;name&#34;:&#34;test-queue-01&#34;,&#34;durable&#34;:&#34;true&#34;,&#34;auto_delete&#34;:&#34;false&#34;,&#34;arguments&#34;:{&#34;x-queue-type&#34;:&#34;classic&#34;}}&#39; \
+      &#39;http://localhost:15672/api/queues/%2F/test-queue-01&#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Confirm that the queue has been created&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;curl -s --user guest:guest \
+        -X GET -H &#39;content-type: application/json&#39; \
+        &#39;http://localhost:15672/api/queues/%2F/&#39; | jq &#39;.[].name&#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&#34;test-queue-01&#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Send a test message&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;echo &#39;{&#34;vhost&#34;:&#34;/&#34;,&#34;name&#34;:&#34;amq.default&#34;,&#34;properties&#34;:{&#34;delivery_mode&#34;:1,&#34;headers&#34;:{}},&#34;routing_key&#34;:&#34;test-queue-01&#34;,&#34;delivery_mode&#34;:&#34;1&#34;,&#34;payload&#34;:&#34;{\&#34;transaction\&#34;: \&#34;PAYMENT\&#34;, \&#34;amount\&#34;: \&#34;$125.0\&#34;, \&#34;timestamp\&#34;: \&#34;&#39;$(date)&#39;\&#34; }&#34;,&#34;headers&#34;:{},&#34;props&#34;:{},&#34;payload_encoding&#34;:&#34;string&#34;}&#39; |
+curl --user guest:guest \
+      -X POST -H &#39;content-type: application/json&#39; \
+      --data-binary @-  \
+      &#39;http://localhost:15672/api/exchanges/%2F/amq.default/publish&#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Test consuming messages from the queue&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;curl --silent --user guest:guest \
+        -X POST -H &#39;content-type: application/json&#39; \
+        --data-binary &#39;{&#34;ackmode&#34;:&#34;ack_requeue_true&#34;,&#34;encoding&#34;:&#34;auto&#34;,&#34;count&#34;:&#34;10&#34;}&#39; \
+        &#39;http://localhost:15672/api/queues/%2F/test-queue-01/get&#39; | jq &#39;.[].payload|fromjson&#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
+  &#34;transaction&#34;: &#34;PAYMENT&#34;,
+  &#34;amount&#34;: &#34;$125.0&#34;,
+  &#34;timestamp&#34;: &#34;Wed 8 Jan 2020 10:41:45 GMT&#34;
+}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can see the RabbitMQ Web UI (login &lt;code&gt;guest&lt;/code&gt;/&lt;code&gt;guest&lt;/code&gt;) at &lt;a href=&#34;http://localhost:15672/#/&#34; class=&#34;bare&#34;&gt;http://localhost:15672/#/&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_create_the_kafka_connect_connector&#34;&gt;Create the Kafka Connect connector&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;This uses the &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-rabbitmq/index.html&#34;&gt;RabbitMQ plugin for Kafka Connect&lt;/a&gt;, which has been installed in the Docker container already. You can install it yourself from &lt;a href=&#34;http://hub.confluent.io/&#34;&gt;Confluent Hub&lt;/a&gt;&lt;/em&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;curl -i -X PUT -H  &#34;Content-Type:application/json&#34; \
+    http://localhost:8083/connectors/source-rabbitmq-00/config \
+    -d &#39;{
+        &#34;connector.class&#34; : &#34;io.confluent.connect.rabbitmq.RabbitMQSourceConnector&#34;,
+        &#34;kafka.topic&#34; : &#34;rabbit-test-00&#34;,
+        &#34;rabbitmq.queue&#34; : &#34;test-queue-01&#34;,
+        &#34;rabbitmq.username&#34;: &#34;guest&#34;,
+        &#34;rabbitmq.password&#34;: &#34;guest&#34;,
+        &#34;rabbitmq.host&#34;: &#34;rabbitmq&#34;,
+        &#34;rabbitmq.port&#34;: &#34;5672&#34;,
+        &#34;rabbitmq.virtual.host&#34;: &#34;/&#34;,
+        &#34;confluent.license&#34;:&#34;&#34;,
+        &#34;confluent.topic.bootstrap.servers&#34;:&#34;kafka:29092&#34;,
+        &#34;confluent.topic.replication.factor&#34;:1,
+        &#34;value.converter&#34;: &#34;org.apache.kafka.connect.converters.ByteArrayConverter&#34;,
+        &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;
+    } &#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With the connector created we check that it&amp;#8217;s running:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;curl -s &#34;http://localhost:8083/connectors?expand=info&amp;amp;expand=status&#34; | \
+           jq &#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&#34;connector.class&#34;]|join(&#34;:|:&#34;)&#39; | \
+           column -s : -t| sed &#39;s/\&#34;//g&#39;| sort&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;source  |  source-rabbitmq-00  |  RUNNING  |  RUNNING  |  io.confluent.connect.rabbitmq.RabbitMQSourceConnector&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;And then we can check the topic that&amp;#8217;s being written to. Here I&amp;#8217;m using kafkacat but you can use any Kafka consumer:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;docker exec kafkacat \
+  kafkacat -b kafka:29092 \
+           -t rabbit-test-00
+           -C -u&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The message we sent to RabbitMQ shows up in Kafka:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;{&#34;transaction&#34;: &#34;PAYMENT&#34;, &#34;amount&#34;: &#34;$125.0&#34;, &#34;timestamp&#34;: &#34;Wed 8 Jan 2020 10:41:45 GMT&#34;}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you open another window and use the same &lt;code&gt;curl&lt;/code&gt; statement (bottom pane) above to send more messages to RabbitMQ, you&amp;#8217;ll see them appear in the Kafka topic (top pane) straight away:&lt;/p&gt;
+&lt;/div&gt;
+&lt;script id=&#34;asciicast-A0dpWpN7WVs1UVnf0BjLNqqnv&#34; src=&#34;https://asciinema.org/a/A0dpWpN7WVs1UVnf0BjLNqqnv.js&#34; async&gt;&lt;/script&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;One of the important things to note in the configuration of the connector is that we&amp;#8217;re using the &lt;a href=&#34;https://cwiki.apache.org/confluence/display/KAFKA/KIP-128%3A+Add+ByteArrayConverter+for+Kafka+Connect&#34;&gt;&lt;code&gt;ByteArrayConverter&lt;/code&gt;&lt;/a&gt; for the value of the message, which just takes whatever bytes are on the RabbitMQ message and writes them to the Kafka message. Whilst on first look it appears that we&amp;#8217;ve got a JSON message on RabbitMQ and so would evidently use the JsonConverter, this is not the case. If we do that, the converter will try to encode the bytes as JSON, and we&amp;#8217;ll end up with this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&#34;eyJ0cmFuc2FjdGlvbiI6ICJQQVlNRU5UIiwgImFtb3VudCI6ICIkNDcuMyIsICJ0aW1lc3RhbXAiOiAiV2VkIDggSmFuIDIwMjAgMTM6MDE6MjEgR01UIiB9&#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To understand more about converters and serialisation see this article: &lt;a href=&#34;https://www.confluent.io/blog/kafka-connect-deep-dive-converters-serialization-explained/&#34;&gt;Kafka Connect Deep Dive – Converters and Serialization Explained&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We can dig into the payload further with kafkacat to examine the headers etc:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;docker exec kafkacat \
+  kafkacat -b kafka:29092 -t rabbit-test-00 -C -u -q \
+  -f &#39;Topic %t / Partition %p / Offset: %o / Timestamp: %T\nHeaders: %h\nKey (%K bytes): %k\nPayload (%S bytes): %s\n--\n&#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The output looks like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;Topic rabbit-test-00 / Partition 0 / Offset: 48 / Timestamp: 1578480718010
+Headers: rabbitmq.consumer.tag=amq.ctag--gWoke550mjIPbeJhquS9g,rabbitmq.content.type=NULL,rabbitmq.content.encoding=NULL,rabbitmq.delivery.mode=1,rabbitmq.priority=0,rabbitmq.correlation.id=NULL,rabbitmq.reply.to=NULL,rabbitmq.expiration=NULL,rabbitmq.message.id=NULL,rabbitmq.timestamp=NULL,rabbitmq.type=NULL,rabbitmq.user.id=NULL,rabbitmq.app.id=NULL,rabbitmq.delivery.tag=45,rabbitmq.redeliver=false,rabbitmq.exchange=,rabbitmq.routing.key=test-queue-01
+Key (-1 bytes):
+Payload (91 bytes): {&#34;transaction&#34;: &#34;PAYMENT&#34;, &#34;amount&#34;: &#34;$125.0&#34;, &#34;timestamp&#34;: &#34;Wed 8 Jan 2020 10:51:57 GMT&#34; }&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_apply_a_schema_and_manipulate_the_data_in_ksqldb&#34;&gt;Apply a schema and manipulate the data in ksqlDB&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So far we&amp;#8217;ve got the message (which happens to be JSON) from RabbitMQ into a Kafka topic. Now let&amp;#8217;s actually declare the schema so that we can work with the data. For that we&amp;#8217;re going to use ksqlDB to do a little bit of stream processing.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Fire up the ksqlDB CLI:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;docker exec -it ksqldb-cli ksql http://ksqldb-server:8088&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Inspect the raw topic contents:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&amp;gt; PRINT &#39;rabbit-test-00&#39; FROM BEGINNING;
+Format:JSON
+{&#34;ROWTIME&#34;:1578477403591,&#34;ROWKEY&#34;:&#34;null&#34;,&#34;transaction&#34;:&#34;PAYMENT&#34;,&#34;amount&#34;:&#34;$125.0&#34;}
+{&#34;ROWTIME&#34;:1578477598555,&#34;ROWKEY&#34;:&#34;null&#34;,&#34;transaction&#34;:&#34;PAYMENT&#34;,&#34;amount&#34;:&#34;$125.0&#34;}
+{&#34;ROWTIME&#34;:1578478171540,&#34;ROWKEY&#34;:&#34;null&#34;,&#34;transaction&#34;:&#34;PAYMENT&#34;,&#34;amount&#34;:&#34;$125.0&#34;}
+{&#34;ROWTIME&#34;:1578480036859,&#34;ROWKEY&#34;:&#34;null&#34;,&#34;transaction&#34;:&#34;PAYMENT&#34;,&#34;amount&#34;:&#34;$125.0&#34;,&#34;timestamp&#34;:&#34;Wed 8 Jan 2020 10:40:36 GMT&#34;}
+{&#34;ROWTIME&#34;:1578480105771,&#34;ROWKEY&#34;:&#34;null&#34;,&#34;transaction&#34;:&#34;PAYMENT&#34;,&#34;amount&#34;:&#34;$125.0&#34;,&#34;timestamp&#34;:&#34;Wed 8 Jan 2020 10:41:45 GMT&#34;}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Declare the stream (which is just the existing Kafka topic with an explicit schema):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;CREATE STREAM rabbit (transaction VARCHAR,
+                      amount VARCHAR,
+                      timestamp VARCHAR)
+  WITH (KAFKA_TOPIC=&#39;rabbit-test-00&#39;,
+        VALUE_FORMAT=&#39;JSON&#39;);&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now we can query the stream of data, starting at the beginning:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&amp;gt; SET &#39;auto.offset.reset&#39; = &#39;earliest&#39;;
+Successfully changed local property &#39;auto.offset.reset&#39; to &#39;earliest&#39;. Use the UNSET command to revert your change.
+
+ksql&amp;gt; SELECT transaction, amount, timestamp FROM rabbit EMIT CHANGES;
++------------+---------+----------------------------+
+|TRANSACTION |AMOUNT   |TIMESTAMP                   |
++------------+---------+----------------------------+
+|PAYMENT     |$125.0   |null                        |
+|PAYMENT     |$125.0   |null                        |
+|PAYMENT     |$125.0   |null                        |
+|PAYMENT     |$125.0   |Wed 8 Jan 2020 10:40:36 GMT |
+|PAYMENT     |$125.0   |Wed 8 Jan 2020 10:41:45 GMT |&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;code&gt;AMOUNT&lt;/code&gt; column is clearly a currency, but the source data is a character string (&lt;code&gt;$125.0&lt;/code&gt;). Let&amp;#8217;s write a stream processor to split these into more appropriate columns, and also drop messages with no timestamp (that we&amp;#8217;ll class as invalid data for this example):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;CREATE STREAM TRANSACTIONS WITH (VALUE_FORMAT=&#39;AVRO&#39;) AS
+  SELECT TRANSACTION AS TX_TYPE,
+         SUBSTRING(AMOUNT,1,1) AS CURRENCY,
+         CAST(SUBSTRING(AMOUNT,2,LEN(AMOUNT)-1) AS DECIMAL(9,2)) AS TX_AMOUNT,
+         TIMESTAMP AS TX_TIMESTAMP
+    FROM rabbit
+   WHERE TIMESTAMP IS NOT NULL
+    EMIT CHANGES;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This creates a new Kafka topic, populated by the transformed data driven by the original Kafka topic populated from RabbitMQ:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&amp;gt; SELECT TX_TYPE, CURRENCY, TX_AMOUNT, TX_TIMESTAMP FROM TRANSACTIONS EMIT CHANGES;
++--------+----------+----------+----------------------------+
+|TX_TYPE |CURRENCY  |TX_AMOUNT |TX_TIMESTAMP                |
++--------+----------+----------+----------------------------+
+|PAYMENT |$         |125.00    |Wed 8 Jan 2020 10:40:36 GMT |
+|PAYMENT |$         |125.00    |Wed 8 Jan 2020 10:41:45 GMT |&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Note that the messages without a timestamp are not present in the new stream.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Compare our source schema:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&amp;gt; DESCRIBE rabbit;
+
+Name                 : RABBIT
+ Field       | Type
+-----------------------------------------
+ ROWTIME     | BIGINT           (system)
+ ROWKEY      | VARCHAR(STRING)  (system)
+ TRANSACTION | VARCHAR(STRING)
+ AMOUNT      | VARCHAR(STRING)
+ TIMESTAMP   | VARCHAR(STRING)
+-----------------------------------------&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;with the transformed schema&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&amp;gt; DESCRIBE TRANSACTIONS;
+
+Name                 : TRANSACTIONS
+ Field        | Type
+------------------------------------------
+ ROWTIME      | BIGINT           (system)
+ ROWKEY       | VARCHAR(STRING)  (system)
+ TX_TYPE      | VARCHAR(STRING)
+ CURRENCY     | VARCHAR(STRING)
+ TX_AMOUNT    | DECIMAL
+ TX_TIMESTAMP | VARCHAR(STRING)
+------------------------------------------&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Because we&amp;#8217;ve applied a schema to the data we can now make better sense of it, as well as do useful things like write it to a database. Since we have a proper schema for the data (stored for us in the Schema Registry because we&amp;#8217;re using Avro) Kafka Connect can actually build the target database table that it&amp;#8217;s going to write data to:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;CREATE SINK CONNECTOR SINK_POSTGRES WITH (
+    &#39;connector.class&#39;     = &#39;io.confluent.connect.jdbc.JdbcSinkConnector&#39;,
+    &#39;connection.url&#39;      = &#39;jdbc:postgresql://postgres:5432/&#39;,
+    &#39;connection.user&#39;     = &#39;postgres&#39;,
+    &#39;connection.password&#39; = &#39;postgres&#39;,
+    &#39;topics&#39;              = &#39;TRANSACTIONS&#39;,
+    &#39;key.converter&#39;       = &#39;org.apache.kafka.connect.storage.StringConverter&#39;,
+    &#39;auto.create&#39;         = &#39;true&#39;,
+    &#39;transforms&#39;          = &#39;dropSysCols&#39;,
+    &#39;transforms.dropSysCols.type&#39; = &#39;org.apache.kafka.connect.transforms.ReplaceField$Value&#39;,
+    &#39;transforms.dropSysCols.blacklist&#39; = &#39;ROWKEY,ROWTIME&#39;
+  );&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now in Postgres we have the data almost as soon as it&amp;#8217;s written to RabbitMQ, with the light transformation applied to it:&lt;/p&gt;
+&lt;/div&gt;
+&lt;script id=&#34;asciicast-292407&#34; src=&#34;https://asciinema.org/a/292407.js&#34; async&gt;&lt;/script&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</description>
+    </item>
     <item>
       <title>Analysing network behaviour with ksqlDB and MongoDB</title>
       <link>https://rmoff.github.io/2019/12/20/analysing-network-behaviour-with-ksqldb-and-mongodb/</link>
@@ -2589,240 +2951,6 @@ com.github.shyiko.mysql.binlog.network.AuthenticationException: Client does not 
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;After that, the connector ran successfully 👍&lt;/p&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Using Kafka Connect and Debezium with Confluent Cloud</title>
-      <link>https://rmoff.github.io/2019/10/16/using-kafka-connect-and-debezium-with-confluent-cloud/</link>
-      <pubDate>2019-10-16</pubDate>
-      
-      <guid>https://rmoff.github.io/2019/10/16/using-kafka-connect-and-debezium-with-confluent-cloud/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/10/IMG_2849.jpg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is based on using &lt;a href=&#34;https://confluent.cloud&#34;&gt;Confluent Cloud&lt;/a&gt; to provide your managed Kafka and Schema Registry. All that you run yourself is the Kafka Connect worker.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Optionally, you can use this &lt;a href=&#34;https://github.com/rmoff/debezium-ccloud/blob/master/docker-compose.yml&#34;&gt;Docker Compose&lt;/a&gt; to run the worker and a sample MySQL database.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_what_you_need&#34;&gt;What you need&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;A &lt;a href=&#34;https://confluent.cloud&#34;&gt;Confluent Cloud&lt;/a&gt; account with a Kafka and Schema Registry API host names and keys. Write these to a &lt;code&gt;.env&lt;/code&gt; file:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
-&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
-&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
-&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_URL&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
-&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
-&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_install_debezium_connector&#34;&gt;Install Debezium connector&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This article assumes that you&amp;#8217;re running your own Kafka Connect worker with the &lt;a href=&#34;https://docs.confluent.io/current/cloud/connect/connect-cloud-config.html&#34;&gt;appropriate configuration&lt;/a&gt; done to hook it up to Confluent Cloud&amp;#8217;s brokers and Schema Registry.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You need to install the Debezium connector on the Kafka Connect worker:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;confluent-hub install --no-prompt debezium/debezium-connector-mysql:0.10.0&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can also do this as part of your &lt;a href=&#34;https://github.com/rmoff/debezium-ccloud/blob/master/docker-compose.yml&#34;&gt;Docker Compose&lt;/a&gt;:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;    command: 
-      - bash 
-      - -c 
-      - |
-        &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Installing connector plugins&amp;#34;&lt;/span&gt;
-        confluent-hub install --no-prompt debezium/debezium-connector-mysql:0.10.0
-        #
-        &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Launching Kafka Connect worker&amp;#34;&lt;/span&gt;
-        /etc/confluent/docker/run &amp;amp; 
-        #
-        sleep infinity&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_pre_create_the_topics_to_which_youll_be_writing&#34;&gt;Pre-create the topics to which you&amp;#8217;ll be writing&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Make sure your &lt;code&gt;ccloud&lt;/code&gt; environment is using the correct Confluent Cloud cluster&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ ccloud kafka cluster list
-      Id      |       Name        | Provider |  Region   | Durability | Status
-+-------------+-------------------+----------+-----------+------------+--------+
-    lkc-42p8m | pipeline-to-cloud | aws      | us-east-1 | HIGH       | UP
-  * lkc-43xgj | race-mapper       | aws      | us-east-1 | LOW        | UP
-
-$ ccloud kafka cluster use lkc-42p8m&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Create the required topics:&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;&lt;a href=&#34;https://debezium.io/documentation/reference/0.10/connectors/mysql.html#database-schema-history&#34;&gt;Database history&lt;/a&gt;&lt;/strong&gt;.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Name is set in the configuration property &lt;code&gt;database.history.kafka.topic&lt;/code&gt;. Must not be partitioned.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;ccloud kafka topic create --partitions &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; dbz_dbhistory.asgard-01&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;If you don&amp;#8217;t create this topic in advance, Debezium will do so for you, but with a hardcoded timeout of 3 seconds which is often not long enough in a Cloud environment—hence it&amp;#8217;s best to create it in advance.&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;&lt;a href=&#34;https://debezium.io/documentation/reference/0.10/connectors/mysql.html#schema-change-topic&#34;&gt;Schema changes&lt;/a&gt;&lt;/strong&gt;.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Enabled by default, set &lt;code&gt;include.schema.changes&lt;/code&gt; to false if not required.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Name is taken from the configuration property &lt;code&gt;database.server.name&lt;/code&gt; (&lt;code&gt;asgard&lt;/code&gt;). In this example I&amp;#8217;m using the &lt;code&gt;RegexRouter&lt;/code&gt; Single Message Transform which prepends a &lt;code&gt;mysql-01-&lt;/code&gt; prefix to the topic name too. This is optional.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;Note that this topic must not be partitioned - Thanks to Terry Franklin for this 👍&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;ccloud kafka topic create --partitions &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; mysql-01-asgard&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;One topic per table ingested. The topic name is made up by the &lt;code&gt;database.server.name&lt;/code&gt; (&lt;code&gt;asgard&lt;/code&gt;), the database name (&lt;code&gt;demo&lt;/code&gt;), and the table name.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;In this example I&amp;#8217;m using the &lt;code&gt;RegexRouter&lt;/code&gt; Single Message Transform which prepends a &lt;code&gt;mysql-01-&lt;/code&gt; prefix to the topic name too. This is optional.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;ccloud kafka topic create mysql-01-asgard.demo.customers
-ccloud kafka topic create mysql-01-asgard.demo.transactions&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;admonitionblock note&#34;&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;If you don&amp;#8217;t pre-create your topics, you&amp;#8217;ll get repeating errors in your Kafka Connect worker log:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;Error &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;while&lt;/span&gt; fetching metadata with correlation id … : &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&amp;lt;…topic…&amp;gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;UNKNOWN_TOPIC_OR_PARTITION&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can create the topics afterwards if you forget, but it&amp;#8217;s easier up-front.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_create_the_connector&#34;&gt;Create the connector&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now create the connector itself, substituting your MySQL details below as indicated. The Confluent Cloud details and credentials will be picked up from the file &lt;code&gt;/data/credentials.properties&lt;/code&gt; local to the Kafka Connect worker—which if you&amp;#8217;re using Docker can be mapped from the same &lt;code&gt;.env&lt;/code&gt; file as above. Or, just hardcode the values if you&amp;#8217;d prefer 🤷‍.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The configuration is the same as a normal Debezium connector except the additional details for the connector to be able to connect to Confluent Cloud for writing and reading the &lt;a href=&#34;https://debezium.io/documentation/reference/0.10/connectors/mysql.html#database-schema-history&#34;&gt;database schema history topic&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -i -X PUT -H  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/connectors/source-debezium-mysql-01/config &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;connector.class&amp;#34;: &amp;#34;io.debezium.connector.mysql.MySqlConnector&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.hostname&amp;#34;: &amp;#34;mysql&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.port&amp;#34;: &amp;#34;3306&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.user&amp;#34;: &amp;#34;debezium&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.password&amp;#34;: &amp;#34;dbz&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.server.name&amp;#34;: &amp;#34;asgard&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.kafka.bootstrap.servers&amp;#34;: &amp;#34;${file:/data/credentials.properties:CCLOUD_BROKER_HOST}&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.kafka.topic&amp;#34;: &amp;#34;dbz_dbhistory.asgard-01&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.security.protocol&amp;#34;: &amp;#34;SASL_SSL&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.ssl.endpoint.identification.algorithm&amp;#34;: &amp;#34;https&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.sasl.mechanism&amp;#34;: &amp;#34;PLAIN&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.sasl.jaas.config&amp;#34;: &amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_KEY}\&amp;#34; password=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_SECRET}\&amp;#34;;&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.security.protocol&amp;#34;: &amp;#34;SASL_SSL&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.ssl.endpoint.identification.algorithm&amp;#34;: &amp;#34;https&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.sasl.mechanism&amp;#34;: &amp;#34;PLAIN&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.sasl.jaas.config&amp;#34;: &amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_KEY}\&amp;#34; password=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_SECRET}\&amp;#34;;&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;table.whitelist&amp;#34;:&amp;#34;demo.transactions,demo.customers&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;decimal.handling.mode&amp;#34;:&amp;#34;double&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms&amp;#34;: &amp;#34;unwrap,addTopicPrefix&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.unwrap.type&amp;#34;: &amp;#34;io.debezium.transforms.ExtractNewRecordState&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.addTopicPrefix.type&amp;#34;:&amp;#34;org.apache.kafka.connect.transforms.RegexRouter&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.addTopicPrefix.regex&amp;#34;:&amp;#34;(.*)&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.addTopicPrefix.replacement&amp;#34;:&amp;#34;mysql-01-$1&amp;#34;
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Check that the connector is running:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors?expand=info&amp;amp;expand=status&amp;#34;&lt;/span&gt; | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&amp;#34;connector.class&amp;#34;]|join(&amp;#34;:|:&amp;#34;)&amp;#39;&lt;/span&gt; | column -s : -t| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;//g&amp;#39;&lt;/span&gt;| sort
-
-&lt;span style=&#34;color:#008000&#34;&gt;source&lt;/span&gt;  |  source-debezium-mysql-01  |  RUNNING  |  RUNNING  |  io.debezium.connector.mysql.MySqlConnector&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_consume_the_data&#34;&gt;Consume the data&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_confluent_cloud_gui&#34;&gt;Confluent Cloud GUI&lt;/h3&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/10/ccloud-debezium-01.png&#34; alt=&#34;Confluent Cloud screenshot&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_kafkacat&#34;&gt;kafkacat&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Set the variables, either from this script or manually&lt;/span&gt;
-&lt;span style=&#34;color:#008000&#34;&gt;source&lt;/span&gt; .env
-
-&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Use kafkacat to pull Avro messages from Confluent Cloud&lt;/span&gt; 
-&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;#  deserialised using the Schema Registry hosted on Confluent Cloud&lt;/span&gt;
-
-docker run --rm edenhill/kafkacat:1.5.0 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -X ssl.ca.location&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;./etc/ssl/cert.pem -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -b &lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -r https://&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;@&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_URL&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -s avro &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -t mysql-01-asgard.demo.transactions &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;      -C -o beginning
-
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;996&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;69&lt;/span&gt;.819999999999993&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;CNY&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-04-10T10:23:41Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;997&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;74&lt;/span&gt;.170000000000002&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;PEN&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-11-19T15:29:14Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;998&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: -92.920000000000002&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;JPY&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-05-25T19:43:48Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;999&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;71&lt;/span&gt;.159999999999997&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;EUR&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-11-15T07:24:44Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;1000&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;28&lt;/span&gt;.149999999999999&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;IRR&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-01-12T14:53:49Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;603&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;amount&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: -85.510000000000005&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;currency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;CNY&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;txn_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2018-11-08T22:06:49Z&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
 &lt;/div&gt;</description>
     </item>
     
