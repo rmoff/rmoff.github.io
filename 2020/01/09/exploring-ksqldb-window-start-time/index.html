@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Exploring ksqlDB window start time</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.github.io/index.xml">
+		<link rel="canonical" href="https://rmoff.github.io/2020/01/09/exploring-ksqldb-window-start-time/">
+		
+		<link rel="shortcut icon" type="image/png" href="https://rmoff.github.io/apple-touch-icon-precomposed.png">
+		
+		
+		<meta name="generator" content="Hugo 0.59.1" />
+
+		
+		<meta property="og:title" content="Exploring ksqlDB window start time" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.github.io/images/2020/01/IMG_2001.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.github.io/2020/01/09/exploring-ksqldb-window-start-time/" />
+		<meta property="og:site_name" content="Exploring ksqlDB window start time" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.github.io/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.github.io/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.github.io/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.github.io/images/2020/01/IMG_2001.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.github.io" title="Home">
+						<img src="https://rmoff.github.io/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.github.io/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.github.io/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Exploring ksqlDB window start time</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-01-09T14:25:01Z">Jan 9, 2020</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.github.io/categories/ksqldb" class="no-underline category near-white dim">KsqlDB</a>, <a href="https://rmoff.github.io/categories/windowing" class="no-underline category near-white dim">Windowing</a>, <a href="https://rmoff.github.io/categories/aggregation" class="no-underline category near-white dim">Aggregation</a>
+								<span class="display-print">at https://rmoff.github.io/2020/01/09/exploring-ksqldb-window-start-time/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>Prompted by <a href="https://stackoverflow.com/questions/59629748/ksql-aggregating-data-based-on-last-1-year-365-days">a question on StackOverflow</a> I had a bit of a dig into how windows behave in ksqlDB, specifically with regards to their start time. This article shows also how to create test data in ksqlDB and create data to be handled with a timestamp in the past.</p>
+</div>
+<div class="paragraph">
+<p>For a general background to windowing in ksqlDB see <a href="https://docs.ksqldb.io/en/latest/concepts/time-and-windows-in-ksqldb-queries/">the excellent docs</a>.</p>
+</div>
+<div class="paragraph">
+<p>The nice thing about recent releases of ksqlDB/KSQL is that you can create and populate streams directly with <code>CREATE STREAM</code> and <code>INSERT INTO</code> respectively. Much as I love kafkacat, being able to build a whole example within the ksqlDB CLI is very useful.</p>
+</div>
+<div class="sect1">
+<h2 id="_create_the_stream">Create the stream</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This creates the stream as well as the underlying topic. Since the topic doesn&#8217;t exist already I&#8217;ve specified its name and also <code>PARITIONS</code> - without these ksqlDB won&#8217;t create it for me.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM SOURCE_DATA (OP_TS <span style="color:#008000">BIGINT</span>, CUSTOMER <span style="color:#008000">VARCHAR</span>, COST <span style="color:#008000">INT</span>) 
+  <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;MY_DATA&#39;</span>, 
+        VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;AVRO&#39;</span>, 
+        PARTITIONS<span style="color:#666">=</span><span style="color:#666">1</span>, 
+        <span style="color:#008000;font-weight:bold">TIMESTAMP</span><span style="color:#666">=</span><span style="color:#ba2121">&#39;OP_TS&#39;</span>);</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Note that I&#8217;ve created <code>OP_TS</code> to hold the timestamp as an epoch (hence <code>BIGINT</code>) and indicated to ksqlDB that this column is to be used as the timestamp for the records when doing any time-based processing. By default ksqlDB will use the timestamp of the Kafka message.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_populate_the_stream">Populate the stream</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Using <a href="https://www.epochconverter.com/" class="bare">https://www.epochconverter.com/</a> for ease I came up with a handful of times within the past year, and inserted messages into the stream for these:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> SOURCE_DATA (OP_TS, CUSTOMER, COST) <span style="color:#008000;font-weight:bold">VALUES</span> (<span style="color:#666">1549715863000</span>, <span style="color:#ba2121">&#39;A&#39;</span>,<span style="color:#666">1</span>);
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> SOURCE_DATA (OP_TS, CUSTOMER, COST) <span style="color:#008000;font-weight:bold">VALUES</span> (<span style="color:#666">1560083863000</span>, <span style="color:#ba2121">&#39;A&#39;</span>,<span style="color:#666">1</span>);
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> SOURCE_DATA (OP_TS, CUSTOMER, COST) <span style="color:#008000;font-weight:bold">VALUES</span> (<span style="color:#666">1574339863000</span>, <span style="color:#ba2121">&#39;A&#39;</span>,<span style="color:#666">1</span>);
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> SOURCE_DATA (OP_TS, CUSTOMER, COST) <span style="color:#008000;font-weight:bold">VALUES</span> (<span style="color:#666">1575981463000</span>, <span style="color:#ba2121">&#39;A&#39;</span>,<span style="color:#666">1</span>);
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> SOURCE_DATA (OP_TS, CUSTOMER, COST) <span style="color:#008000;font-weight:bold">VALUES</span> (<span style="color:#666">1576931863000</span>, <span style="color:#ba2121">&#39;A&#39;</span>,<span style="color:#666">1</span>);
+<span style="color:#008000;font-weight:bold">INSERT</span> <span style="color:#008000;font-weight:bold">INTO</span> SOURCE_DATA (OP_TS, CUSTOMER, COST) <span style="color:#008000;font-weight:bold">VALUES</span> (<span style="color:#666">1578573463000</span>, <span style="color:#ba2121">&#39;A&#39;</span>,<span style="color:#666">1</span>);</code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_query_the_stream">Query the stream</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Here&#8217;s how the data looks. Note a few things:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The use of <code>TIMESTAMPTOSTRING</code> to make the milliseconds-since-epoch more readable</p>
+</li>
+<li>
+<p>The <code>UNIX_TIMESTAMP</code> function is used to do some date maths to show how long ago from now the timestamp is.</p>
+</li>
+<li>
+<p><code>ROWTIME</code> and <code>OP_TS</code> match, because that&#8217;s what we told ksqlDB with the <code>WITH TIMESTAMP</code> clause in the <code>CREATE STREAM</code>. If we hadn&#8217;t, then the <code>ROWTIME</code> would just be the time at which the rows were `INSERT`ed above.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ROWTIME,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> ROWTIME_STR,
+             TIMESTAMPTOSTRING(OP_TS,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>)   <span style="color:#008000;font-weight:bold">AS</span> OP_TS, 
+             (UNIX_TIMESTAMP()<span style="color:#666">-</span>OP_TS) <span style="color:#666">/</span> <span style="color:#666">1000</span> <span style="color:#666">/</span> <span style="color:#666">60</span> <span style="color:#666">/</span> <span style="color:#666">60</span> <span style="color:#666">/</span> <span style="color:#666">24</span> <span style="color:#008000;font-weight:bold">AS</span> DAYS_DIFF , 
+             CUSTOMER, 
+             COST 
+        <span style="color:#008000;font-weight:bold">FROM</span> SOURCE_DATA 
+        EMIT CHANGES;
+
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">--------------------+--------------------+----------+-----------+-----+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>ROWTIME_STR         <span style="color:#666">|</span>OP_TS               <span style="color:#666">|</span>DAYS_DIFF <span style="color:#666">|</span>CUSTOMER   <span style="color:#666">|</span>COST <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">--------------------+--------------------+----------+-----------+-----+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">09</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">09</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">334</span>       <span style="color:#666">|</span>A          <span style="color:#666">|</span><span style="color:#666">1</span>    <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">06</span><span style="color:#666">-</span><span style="color:#666">09</span> <span style="color:#666">13</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">06</span><span style="color:#666">-</span><span style="color:#666">09</span> <span style="color:#666">13</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">214</span>       <span style="color:#666">|</span>A          <span style="color:#666">|</span><span style="color:#666">1</span>    <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">11</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">11</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">49</span>        <span style="color:#666">|</span>A          <span style="color:#666">|</span><span style="color:#666">1</span>    <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#666">10</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#666">10</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">30</span>        <span style="color:#666">|</span>A          <span style="color:#666">|</span><span style="color:#666">1</span>    <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">19</span>        <span style="color:#666">|</span>A          <span style="color:#666">|</span><span style="color:#666">1</span>    <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">09</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">09</span> <span style="color:#666">12</span>:<span style="color:#666">37</span>:<span style="color:#666">43</span> <span style="color:#666">|</span><span style="color:#666">0</span>         <span style="color:#666">|</span>A          <span style="color:#666">|</span><span style="color:#666">1</span>    <span style="color:#666">|</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_tumbling_window_examples">Tumbling window examples</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Here&#8217;s the output of tumbling windows of various sizes.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>7 Days</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOWSTART(),<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> WINDOW_START_TS, 
+             CUSTOMER, 
+             <span style="color:#008000;font-weight:bold">SUM</span>(COST) 
+        <span style="color:#008000;font-weight:bold">FROM</span> SOURCE_DATA 
+                WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">7</span> DAYS) 
+        <span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> CUSTOMER 
+        EMIT CHANGES ;
+
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------------+----------+------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>WINDOW_START_TS       <span style="color:#666">|</span>CUSTOMER  <span style="color:#666">|</span>KSQL_COL_2  <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------------+----------+------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">06</span><span style="color:#666">-</span><span style="color:#666">06</span> <span style="color:#666">01</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">11</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#666">05</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#666">19</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">09</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>This is pretty much what we&#8217;d expect to see</p>
+</div>
+</li>
+<li>
+<p>31 days</p>
+<div class="paragraph">
+<p>I was hoping for a month, but ksqlDB only supports:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">Caused by: line 1:160: mismatched input 'MONTH' expecting {'DAY', 'HOUR',
+        'MINUTE', 'SECOND', 'MILLISECOND', 'DAYS', 'HOURS', 'MINUTES', 'SECONDS',
+        'MILLISECONDS'}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Hence here&#8217;s 31 days instead:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOWSTART(),<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> WINDOW_START_TS, 
+             CUSTOMER, 
+             <span style="color:#008000;font-weight:bold">SUM</span>(COST) 
+        <span style="color:#008000;font-weight:bold">FROM</span> SOURCE_DATA 
+                WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">31</span> DAYS) 
+        <span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> CUSTOMER 
+        EMIT CHANGES ;    
+
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-----------------------+----------+------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>WINDOW_START_TS        <span style="color:#666">|</span>CUSTOMER  <span style="color:#666">|</span>KSQL_COL_2  <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-----------------------+----------+------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">22</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>    <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">05</span><span style="color:#666">-</span><span style="color:#666">26</span> <span style="color:#666">01</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>    <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">10</span><span style="color:#666">-</span><span style="color:#666">28</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>    <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">11</span><span style="color:#666">-</span><span style="color:#666">28</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>    <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">2</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#666">29</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>    <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">1</span>           <span style="color:#666">|</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Note that two of the values (for <code>2019-12-10</code>, <code>2019-12-21</code>) fall within the same window (starting <code>2019-11-28</code>)</p>
+</div>
+</li>
+<li>
+<p>365 days</p>
+<div class="paragraph">
+<p>As noted above ksqlDB support <code>DAYS</code> as the largest unit of time, so I&#8217;ll have to approximate 1 year ~~ 365 days</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOWSTART(),<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> WINDOW_START_TS, 
+             CUSTOMER, 
+             <span style="color:#008000;font-weight:bold">SUM</span>(COST) 
+        <span style="color:#008000;font-weight:bold">FROM</span> SOURCE_DATA 
+                WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">365</span> DAYS) 
+        <span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> CUSTOMER 
+        EMIT CHANGES ;    
+
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-----------------------+----------+------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>WINDOW_START_TS        <span style="color:#666">|</span>CUSTOMER  <span style="color:#666">|</span>KSQL_COL_2  <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-----------------------+----------+------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2018</span><span style="color:#666">-</span><span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#666">20</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>    <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">4</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2019</span><span style="color:#666">-</span><span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#666">20</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>    <span style="color:#666">|</span>A         <span style="color:#666">|</span><span style="color:#666">2</span>           <span style="color:#666">|</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>So this is where it gets interesting - looking back on the query output above you can see we only have data within the last year, but for a tumbling window of 365 days we&#8217;re getting two values, starting on December 20th of two consecutive years.</p>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_window_start_date">Window start <strong>date</strong></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>When calculating an time window <strong>within a day</strong> the window starts at midnight. For a window greater than a day, it seems that the window <strong>date</strong> from which the window end date is calculated is based on <a href="https://en.wikipedia.org/wiki/Unix_time">Unix time</a> (which also ties in with window sizes less than a day starting a midnight).</p>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s double-check this assumption. Unix time starts at 1st January 1970 00:00:00. Taking our window size of 365 days, this is:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 50%;">
+<col style="width: 50%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">days</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">365</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">hours</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">8760</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">minutes</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">525600</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">seconds</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">31536000</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">millseconds</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">31536000000</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Now let&#8217;s look at the epoch returned by <code>WINDOWSTART()</code>:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> WINDOWSTART() <span style="color:#008000;font-weight:bold">AS</span> WINDOW_START_EPOCH,
+             CUSTOMER,
+             <span style="color:#008000;font-weight:bold">SUM</span>(COST)
+        <span style="color:#008000;font-weight:bold">FROM</span> SOURCE_DATA
+                WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">365</span> DAYS)
+        <span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> CUSTOMER
+        EMIT CHANGES ;
+
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">--------------------+---------+-----------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>WINDOW_START_EPOCH  <span style="color:#666">|</span>CUSTOMER <span style="color:#666">|</span>KSQL_COL_2 <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">--------------------+---------+-----------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">1545264000000</span>       <span style="color:#666">|</span>A        <span style="color:#666">|</span><span style="color:#666">4</span>          <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">1576800000000</span>       <span style="color:#666">|</span>A        <span style="color:#666">|</span><span style="color:#666">2</span>          <span style="color:#666">|</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>The first of these is <code>1545264000000</code>. What do we get if we divide this by the number of milliseconds in a 365-day window (<code>31536000000</code>)? We find that it fits <strong>exactly</strong>: <code>1545264000000➗31536000000 = 49</code>.</p>
+</div>
+<div class="paragraph">
+<p>This suggests that if you want to build monthly or yearly aggregates in ksqlDB that start based on the Gregorian calendar markers, ksqlDB will need to add support for <code>MONTH</code> and <code>YEAR</code> as window sizes (<em>tracking in <a href="https://github.com/confluentinc/ksql/issues/1968">issue #1968</a></em>).</p>
+</div>
+</div>
+</div>
+
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.github.io/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
