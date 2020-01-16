@@ -9,6 +9,140 @@
     
         <atom:link href="https://rmoff.github.io/index.xml" rel="self" type="application/rss+xml" />
     <item>
+      <title>Changing the Logging Level for Kafka Connect Dynamically</title>
+      <link>https://rmoff.github.io/2020/01/16/changing-the-logging-level-for-kafka-connect-dynamically/</link>
+      <pubDate>2020-01-16</pubDate>
+      
+      <guid>https://rmoff.github.io/2020/01/16/changing-the-logging-level-for-kafka-connect-dynamically/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2020/01/IMG_0102.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Logs are magical things. They tell us what an application is doing—or not doing. They help us debug problems. As it happens, they also underpin the &lt;a href=&#34;https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying&#34;&gt;entire philosophy of Apache Kafka&lt;/a&gt;, but that&amp;#8217;s a story for another day. Today we&amp;#8217;re talking about logs written by Kafka Connect, and how we can change the amount of detail written.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;By default, Kafka Connect will write logs at &lt;code&gt;INFO&lt;/code&gt; and above. So when it starts up, the settings that it&amp;#8217;s using, and any &lt;code&gt;WARN&lt;/code&gt; or &lt;code&gt;ERROR&lt;/code&gt; messages along the way - a missing configuration, a broken connector, and so on. If you want to peer under the covers of what&amp;#8217;s happening, perhaps in a given connector, you&amp;#8217;d want to see &lt;code&gt;DEBUG&lt;/code&gt; or even &lt;code&gt;TRACE&lt;/code&gt; messages too.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Until Apache Kafka 2.4 it was necessary to bring down the Kafka Connect worker, &lt;a href=&#34;https://rmoff.net/post/kafka-connect-change-log-level-and-write-log-to-file/&#34;&gt;change the log configuration file&lt;/a&gt;, and restart the worker. There are a few problems with this approach:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Where&amp;#8217;s the log configuration file? It can be fiddly to find, especially if you&amp;#8217;re not regularly working with it&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;If you&amp;#8217;re troubleshooting a connector with an issue that&amp;#8217;s intermittent, restarting the worker may clear the problem, so you lose the opportunity to see the more detailed log&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;If you&amp;#8217;re trying to get the log files for just a certain element of the logs generated it can be trial-and-error to get the configuration for this, and thus a really long-winded process with stopping and starting the worker each time until you get it right&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_changing_the_log_level_of_kafka_connect&#34;&gt;Changing the log level of Kafka Connect&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With the implementation of &lt;a href=&#34;https://cwiki.apache.org/confluence/display/KAFKA/KIP-495%3A+Dynamically+Adjust+Log+Levels+in+Connect&#34;&gt;KIP-495&lt;/a&gt; it&amp;#8217;s possible to leave the Kafka Connect worker running and change log levels dynamically. This is &lt;strong&gt;VERY&lt;/strong&gt; useful. Let me show you why.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To start with Kafka Connect is running at the default &lt;code&gt;INFO&lt;/code&gt; level. We can confirm this by querying the new &lt;code&gt;admin/logger&lt;/code&gt; API:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s http://localhost:8083/admin/loggers/ | jq
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;org.apache.kafka.connect.runtime.rest&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;level&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;WARN&amp;#34;&lt;/span&gt;
+  &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;,
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;org.reflections&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;level&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;ERROR&amp;#34;&lt;/span&gt;
+  &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;,
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;root&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;level&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;INFO&amp;#34;&lt;/span&gt;
+  &lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For reference, this corresponds to the three loggers that are configured in log4j:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ cat /etc/kafka/connect-log4j.properties
+
+log4j.rootLogger&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;INFO, stdout
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;…&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+log4j.logger.org.reflections&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;ERROR
+log4j.logger.org.apache.kafka.connect.runtime.rest&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;WARN&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can reference any particular logger that you want. Imagine you&amp;#8217;ve got a connector that you want to inspect, but without the noise of &lt;code&gt;TRACE&lt;/code&gt; logging throughout. You can target just this set of logs:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s -X PUT -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/admin/loggers/org.apache.kafka.connect.runtime.WorkerSourceTask &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;level&amp;#34;: &amp;#34;TRACE&amp;#34;}&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;script id=&#34;asciicast-rrTTMT9Bb3jpss0IhSsqIhJsT&#34; src=&#34;https://asciinema.org/a/rrTTMT9Bb3jpss0IhSsqIhJsT.js&#34; async&gt;&lt;/script&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To revert the logging you just re-issue the API call with a different &lt;code&gt;level&lt;/code&gt; set:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s -X PUT -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/admin/loggers/org.apache.kafka.connect.runtime.WorkerSourceTask &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;level&amp;#34;: &amp;#34;INFO&amp;#34;}&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_dynamic_log_levels_in_action_for_troubleshooting_debezium&#34;&gt;Dynamic log levels in action for troubleshooting Debezium&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I had great use for this just today when I was &lt;a href=&#34;https://stackoverflow.com/a/59756354/350613&#34;&gt;debugging a problem that someone was having with Debezium&lt;/a&gt;. In this case, I spun up Kafka Connect with its default config, and simply bumped up the logs for Debezium so that I could see in detail what it was doing:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s -X PUT -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/admin/loggers/io.debezium &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;level&amp;#34;: &amp;#34;TRACE&amp;#34;}&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.debezium&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.debezium.connector.mysql.MySqlConnector&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.debezium.connector.postgresql.PostgresConnector&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.debezium.util.IoUtil&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now I can see exactly what&amp;#8217;s going on&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;…
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;-01-16 &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:47:26,864&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; TRACE Polling &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; events &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.debezium.connector.mysql.MySqlConnectorTask&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;-01-16 &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:47:26,864&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; TRACE Polling &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; next batch of records &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.debezium.connector.mysql.BinlogReader&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;-01-16 &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:47:26,866&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; INFO Creating thread debezium-mysqlconnector-asgard-binlog-client &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.debezium.util.Threads&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;-01-16 &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:47:26,913&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; DEBUG Rotating logs: Event&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;header&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;EventHeaderV4&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;timestamp&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;eventType&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;ROTATE, &lt;span style=&#34;color:#19177c&#34;&gt;serverId&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;headerLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;dataLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;25&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;nextPosition&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;flags&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;32&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;RotateEventData&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;binlogFilename&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;binlog.000002&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;binlogPosition&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;155&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.debezium.connector.mysql.BinlogReader&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;-01-16 &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:47:26,914&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; DEBUG Clearing table converters &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.debezium.connector.mysql.RecordMakers&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;-01-16 &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:47:26,916&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; TRACE Received event: Event&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;header&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;EventHeaderV4&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;timestamp&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;eventType&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;ROTATE, &lt;span style=&#34;color:#19177c&#34;&gt;serverId&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;headerLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;dataLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;25&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;nextPosition&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;flags&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;32&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;RotateEventData&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;binlogFilename&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;binlog.000002&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;binlogPosition&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;155&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.debezium.connector.mysql.BinlogReader&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;-01-16 &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:47:26,918&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; TRACE Ignoring event due to missing handler: Event&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;header&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;EventHeaderV4&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;timestamp&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1579212895000&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;eventType&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;FORMAT_DESCRIPTION, &lt;span style=&#34;color:#19177c&#34;&gt;serverId&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;headerLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;dataLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;101&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;nextPosition&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;flags&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;FormatDescriptionEventData&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;binlogVersion&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;serverVersion&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;8.0.18&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;headerLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;dataLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;96&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;checksumType&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;CRC32&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.debezium.connector.mysql.BinlogReader&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;-01-16 &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:47:26,918&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; TRACE Received event: Event&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;header&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;EventHeaderV4&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;timestamp&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1579212895000&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;eventType&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;FORMAT_DESCRIPTION, &lt;span style=&#34;color:#19177c&#34;&gt;serverId&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;headerLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;dataLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;101&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;nextPosition&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;flags&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;FormatDescriptionEventData&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;binlogVersion&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;serverVersion&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;8.0.18&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;headerLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;dataLength&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;96&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;checksumType&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;CRC32&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.debezium.connector.mysql.BinlogReader&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;-01-16 &lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;:47:31,929&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; TRACE Completed batch of &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; records &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.debezium.connector.mysql.BinlogReader&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+…&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and when I&amp;#8217;m done troubleshooting I can leave the stack undisturbed and simple dial down the logging:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s -X PUT -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/admin/loggers/io.debezium &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;level&amp;#34;: &amp;#34;INFO&amp;#34;}&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;No more restarting workers, no more fiddling with logging configuration files - just simple and straightforward dynamic log levels 😍&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</description>
+    </item>
+    <item>
       <title>How to win [or at least not suck] at the conference abstract submission game</title>
       <link>https://rmoff.github.io/2020/01/16/how-to-win-or-at-least-not-suck-at-the-conference-abstract-submission-game/</link>
       <pubDate>2020-01-16</pubDate>
@@ -2709,445 +2843,6 @@ key: commit-source-datagen-01, payload: &lt;span style=&#34;color:#666&#34;&gt;{
 &lt;div class=&#34;sectionbody&#34;&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;You can see my notes and try out the test rig on Docker Compose &lt;a href=&#34;https://github.com/confluentinc/demo-scene/tree/master/connect-cluster&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-</description>
-    </item>
-    <item>
-      <title>Streaming data from SQL Server to Kafka to Snowflake ❄️ with Kafka Connect</title>
-      <link>https://rmoff.github.io/2019/11/20/streaming-data-from-sql-server-to-kafka-to-snowflake-with-kafka-connect/</link>
-      <pubDate>2019-11-20</pubDate>
-      
-      <guid>https://rmoff.github.io/2019/11/20/streaming-data-from-sql-server-to-kafka-to-snowflake-with-kafka-connect/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.github.io/images/2019/11/IMG_1318.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;a href=&#34;https://www.snowflake.com/&#34;&gt;Snowflake&lt;/a&gt; is &lt;em&gt;the data warehouse built for the cloud&lt;/em&gt;, so let&amp;#8217;s get all ☁️ cloudy and stream some data from Kafka running in &lt;a href=&#34;https://confluent.cloud&#34;&gt;Confluent Cloud&lt;/a&gt; to Snowflake!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;What I&amp;#8217;m showing also works just as well for an on-premises Kafka cluster. I&amp;#8217;m using SQL Server as an example data source, with Debezium to capture and stream and changes from it into Kafka.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/11/sf01.png&#34; alt=&#34;sf01&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I&amp;#8217;m assuming that you&amp;#8217;ve signed up for &lt;a href=&#34;https://confluent.cloud/&#34;&gt;Confluent Cloud&lt;/a&gt; and &lt;a href=&#34;https://www.snowflake.com/try-the-data-warehouse-built-for-the-cloud/&#34;&gt;Snowflake&lt;/a&gt; and are the proud owner of credentials for both. I&amp;#8217;m going to use a demo rig based on Docker to provision SQL Server and a Kafka Connect worker, but you can use your own setup if you want.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;All the code shown here is based on &lt;a href=&#34;https://github.com/confluentinc/demo-scene/tree/master/pipeline-to-the-cloud&#34;&gt;this github repo&lt;/a&gt;. If you&amp;#8217;re following along then make sure you set up &lt;code&gt;.env&lt;/code&gt; (copy the template from &lt;code&gt;.env.example&lt;/code&gt;) with all of your cloud details. This &lt;code&gt;.env&lt;/code&gt; file gets mounted in the Docker container to &lt;code&gt;/data/credentials.properties&lt;/code&gt;, which is what&amp;#8217;s referenced in the connector configurations below.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_sql_server_️_kafka_with_debezium&#34;&gt;SQL Server ➡️ Kafka with Debezium&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;SQL Server needs to be configured for CDC at a database level:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;USE [demo]
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GO&lt;/span&gt;
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;EXEC&lt;/span&gt; sys.sp_cdc_enable_db
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GO&lt;/span&gt; &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;and then per table:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;USE [demo]
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;EXEC&lt;/span&gt; sys.sp_cdc_enable_table
-&lt;span style=&#34;color:#666&#34;&gt;@&lt;/span&gt;source_schema &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; N&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;dbo&amp;#39;&lt;/span&gt;,
-&lt;span style=&#34;color:#666&#34;&gt;@&lt;/span&gt;source_name   &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; N&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;ORDERS&amp;#39;&lt;/span&gt;,
-&lt;span style=&#34;color:#666&#34;&gt;@&lt;/span&gt;role_name     &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;NULL&lt;/span&gt;,
-&lt;span style=&#34;color:#666&#34;&gt;@&lt;/span&gt;supports_net_changes &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GO&lt;/span&gt; &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Once that&amp;#8217;s done you can setup the connector. If you&amp;#8217;ve not installed it already then make sure you&amp;#8217;ve installed the Debezium SQL Server connector in your Kafka Connect worker and restarted it:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;confluent-hub install --no-prompt debezium/debezium-connector-sqlserver:0.10.0&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Check that the plugin has been loaded successfully:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s localhost:8083/connector-plugins|jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.[].class&amp;#39;&lt;/span&gt;|grep debezium
-&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.debezium.connector.sqlserver.SqlServerConnector&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Debezium will write to a topic with all of the data from SQL Server. Debezium also needs its own topic for tracking the DDL—and we need to pre-create both these topics (see &lt;a href=&#34;https://rmoff.net/2019/10/16/using-kafka-connect-and-debezium-with-confluent-cloud/&#34;&gt;this article&lt;/a&gt; for more details):&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ ccloud kafka topic create --partitions &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; dbz_dbhistory.mssql.asgard-01
-$ ccloud kafka topic create mssql-01-mssql.dbo.ORDERS
-$ ccloud kafka topic list
-                 Name
-+-------------------------------------+
-  dbz_dbhistory.mssql.asgard-01
-  mssql-01-mssql.dbo.ORDERS&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now create the connector. It&amp;#8217;s a bit more verbose because we&amp;#8217;re using a secure Kafka cluster and Debezium needs the details passed directly to it:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -i -X PUT -H  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/connectors/source-debezium-mssql-01/config &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;connector.class&amp;#34;: &amp;#34;io.debezium.connector.sqlserver.SqlServerConnector&amp;#34;, 
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.hostname&amp;#34;: &amp;#34;mssql&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.port&amp;#34;: &amp;#34;1433&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.user&amp;#34;: &amp;#34;sa&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.password&amp;#34;: &amp;#34;Admin123&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.dbname&amp;#34;: &amp;#34;demo&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.server.name&amp;#34;: &amp;#34;mssql&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;table.whitelist&amp;#34;:&amp;#34;dbo.orders&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.kafka.bootstrap.servers&amp;#34;: &amp;#34;${file:/data/credentials.properties:CCLOUD_BROKER_HOST}:9092&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.kafka.topic&amp;#34;: &amp;#34;dbz_dbhistory.mssql.asgard-01&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.security.protocol&amp;#34;: &amp;#34;SASL_SSL&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.ssl.endpoint.identification.algorithm&amp;#34;: &amp;#34;https&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.sasl.mechanism&amp;#34;: &amp;#34;PLAIN&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.consumer.sasl.jaas.config&amp;#34;: &amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_KEY}\&amp;#34; password=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_SECRET}\&amp;#34;;&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.security.protocol&amp;#34;: &amp;#34;SASL_SSL&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.ssl.endpoint.identification.algorithm&amp;#34;: &amp;#34;https&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.sasl.mechanism&amp;#34;: &amp;#34;PLAIN&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;database.history.producer.sasl.jaas.config&amp;#34;: &amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_KEY}\&amp;#34; password=\&amp;#34;${file:/data/credentials.properties:CCLOUD_API_SECRET}\&amp;#34;;&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;decimal.handling.mode&amp;#34;:&amp;#34;double&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms&amp;#34;: &amp;#34;unwrap,addTopicPrefix&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.unwrap.type&amp;#34;: &amp;#34;io.debezium.transforms.ExtractNewRecordState&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.addTopicPrefix.type&amp;#34;:&amp;#34;org.apache.kafka.connect.transforms.RegexRouter&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.addTopicPrefix.regex&amp;#34;:&amp;#34;(.*)&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    &amp;#34;transforms.addTopicPrefix.replacement&amp;#34;:&amp;#34;mssql-01-$1&amp;#34;
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;With that running we can then check the data from Kafka. Note that we&amp;#8217;re using Avro to serialise the data, with the Schema Registry running as part of Confluent Cloud.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ ccloud kafka topic consume --from-beginning mssql-04-mssql.dbo.ORDERS
-Starting Kafka Consumer. ^C to &lt;span style=&#34;color:#008000&#34;&gt;exit&lt;/span&gt;
-����������@Proper Job
-���q&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;
-ףp�?Wainwright
-��Ҝ333333@Proper Job
-�ޜ��Q��@Galena&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Because it&amp;#8217;s Avro, it renders here as a bunch of &lt;em&gt;odd&lt;/em&gt; characters. We can use a tool such as &lt;code&gt;kafkacat&lt;/code&gt; if we want to deserialise it:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000&#34;&gt;source&lt;/span&gt; .env
-docker run --rm edenhill/kafkacat:1.5.0 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X ssl.ca.location&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;./etc/ssl/cert.pem -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -b &lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;:9092 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -r https://&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;@&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_SCHEMA_REGISTRY_HOST&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -s avro &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -t mssql-04-mssql.dbo.ORDERS &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -f &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Topic %t[%p], offset: %o, Headers: %h, key: %k, payload: %S bytes: %s\n&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -C -o beginning -c5&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;Topic mssql-04-mssql.dbo.ORDERS&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, offset: &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, Headers: , key: , payload: &lt;span style=&#34;color:#666&#34;&gt;34&lt;/span&gt; bytes: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;14&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_ts&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;18233&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_total_usd&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;.8900000000000001&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;item&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Wainwright&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
-Topic mssql-04-mssql.dbo.ORDERS&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, offset: &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;, Headers: , key: , payload: &lt;span style=&#34;color:#666&#34;&gt;30&lt;/span&gt; bytes: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;6&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;16&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_ts&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;18225&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_total_usd&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;.9100000000000001&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;item&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Galena&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
-Topic mssql-04-mssql.dbo.ORDERS&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, offset: &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;, Headers: , key: , payload: &lt;span style=&#34;color:#666&#34;&gt;32&lt;/span&gt; bytes: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;7&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_ts&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;18227&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_total_usd&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;.6900000000000004&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;item&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Landlord&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
-Topic mssql-04-mssql.dbo.ORDERS&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, offset: &lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;, Headers: , key: , payload: &lt;span style=&#34;color:#666&#34;&gt;34&lt;/span&gt; bytes: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_ts&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;18228&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_total_usd&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;.6699999999999999&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;item&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Proper Job&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
-Topic mssql-04-mssql.dbo.ORDERS&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;, offset: &lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;, Headers: , key: , payload: &lt;span style=&#34;color:#666&#34;&gt;39&lt;/span&gt; bytes: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;9&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;customer_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_ts&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;int&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;18229&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;order_total_usd&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;.2400000000000002&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;item&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Black Sheep Ale&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_kafka_️_snowflake_️&#34;&gt;Kafka ➡️ Snowflake ❄️&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_setting_up_snowflake_account_and_key_pair&#34;&gt;Setting up Snowflake account and key pair&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;To send data to Snowflake you first need to generate a private/public key pair that will be used for authentication. Generate the keys:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Create Private key - keep this safe, do not share!&lt;/span&gt;
-openssl genrsa -out snowflake_key.pem &lt;span style=&#34;color:#666&#34;&gt;2048&lt;/span&gt;
-&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# Generate public key from private key. You can share your public key.&lt;/span&gt; 
-openssl rsa -in snowflake_key.pem  -pubout -out snowflake_key.pub&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You should now have two files:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ ls -l snowflake_key*
--rw-r--r--  &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff  &lt;span style=&#34;color:#666&#34;&gt;1679&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt; Nov &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:28 snowflake_key.pem
--rw-r--r--  &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff   &lt;span style=&#34;color:#666&#34;&gt;451&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt; Nov &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:28 snowflake_key.pub&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now you need to get your &lt;strong&gt;public&lt;/strong&gt; key:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ cat snowflake_key.pub
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAya/BRlyhsfdlJQnPqoRn
-lJfxKxujoyionNBPIDFpVpGZ9C1ZE7Q1kGIrEoZfq1t2p6lT8cX6gIZkMDF10I/8
-yqHGiCdSEQBuMYXwWpnl3C1sttFHNfxbsjiKSZDlMTbEmzwU5s5LpMt8YvFWp8Iu
-3ilHK9Vwy0wbsMDCjDcrC6xCS6qp1n4oso+V24aaxKd/mUtpPy9toAx2NC5GMoDb
-tehlbTyPkk/9qFl7GUsf46HbQMEGoGkRrY9VFm+3Z8wCwsFNpURIvLEBcrTFdnmn
-IgDBa96+dKgaN8qV6RW3ZMheQOJH1tP3M0qXsLNbR00E7yAlCYjNQD3hXjGKL3Oc
-5wIDAQAB
------END PUBLIC KEY-----&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;But minus the header and footer and joined over a single line. You can do this manually, or automagically:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ grep -v &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;BEGIN PUBLIC&amp;#34;&lt;/span&gt; snowflake_key.pub | grep -v &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;END PUBLIC&amp;#34;&lt;/span&gt;|tr -d &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\n&lt;/span&gt;
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAya/BRlyhsfdlJQnPqoRnlJfxKxujoyionNBPIDFpVpGZ9C1ZE7Q1kGIrEoZfq1t2p6lT8cX6gIZkMDF10I/8yqHGiCdSEQBuMYXwWpnl3C1sttFHNfxbsjiKSZDlMTbEmzwU5s5LpMt8YvFWp8Iu3ilHK9Vwy0wbsMDCjDcrC6xCS6qp1n4oso+V24aaxKd/mUtpPy9toAx2NC5GMoDbtehlbTyPkk/9qFl7GUsf46HbQMEGoGkRrY9VFm+3Z8wCwsFNpURIvLEBcrTFdnmnIgDBa96+dKgaN8qV6RW3ZMheQOJH1tP3M0qXsLNbR00E7yAlCYjNQD3hXjGKL3Oc5wIDAQAB&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now head to Snowflake, where we need to create a user for loading the data. First up, switch to the &lt;code&gt;SECURITYADMIN&lt;/code&gt; role.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/11/sf02.png&#34; alt=&#34;sf02&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;admonitionblock note&#34;&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-Make sure you do this in the &lt;code&gt;Context&lt;/code&gt; section of the worksheet, not the top-right dropdown (otherwise you&amp;#8217;ll get &lt;code&gt;SQL access control error: Insufficient privileges to operate on account &#39;xyz&#39;&lt;/code&gt;).
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now create the user, here called &lt;code&gt;kafka&lt;/code&gt;. Because we&amp;#8217;re in demo-land we&amp;#8217;re also granting Kafka the keys to the kingdom (&lt;code&gt;SYSADMIN&lt;/code&gt;), just to make everything nice &#39;n easy.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;CREATE USER kafka RSA_PUBLIC_KEY=&#39;MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAya/BRlyhsfdlJQnPqoRnlJfxKxujoyionNBPIDFpVpGZ9C1ZE7Q1kGIrEoZfq1t2p6lT8cX6gIZkMDF10I/8yqHGiCdSEQBuMYXwWpnl3C1sttFHNfxbsjiKSZDlMTbEmzwU5s5LpMt8YvFWp8Iu3ilHK9Vwy0wbsMDCjDcrC6xCS6qp1n4oso+V24aaxKd/mUtpPy9toAx2NC5GMoDbtehlbTyPkk/9qFl7GUsf46HbQMEGoGkRrY9VFm+3Z8wCwsFNpURIvLEBcrTFdnmnIgDBa96+dKgaN8qV6RW3ZMheQOJH1tP3M0qXsLNbR00E7yAlCYjNQD3hXjGKL3Oc5wIDAQAB&#39;
-GRANT ROLE SYSADMIN TO USER kafka;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/11/sf03.png&#34; alt=&#34;sf03&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now we need to extract the private key for the key pair, which is in the &lt;code&gt;.pem&lt;/code&gt; file that we created, minus the header and footer and on a single line:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/11/sf04.png&#34; alt=&#34;sf04&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;admonitionblock note&#34;&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-Your private key is &lt;strong&gt;private&lt;/strong&gt; - don&amp;#8217;t share it with anyone who shouldn&amp;#8217;t have access to the account, and definitely don&amp;#8217;t post it on the internet on a blog post!
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;As before you can extract the key automagically with:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;grep -v &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;BEGIN RSA PRIVATE&amp;#34;&lt;/span&gt; snowflake_key.pem | grep -v &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;END RSA PRIVATE&amp;#34;&lt;/span&gt;|tr -d &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\n&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Put this value, along with the URL of your Snowflake environment and the user that we created (&lt;code&gt;kafka&lt;/code&gt;) in the &lt;code&gt;.env&lt;/code&gt; file&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/11/sf05.png&#34; alt=&#34;sf05&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This &lt;code&gt;.env&lt;/code&gt; file gets mounted in the Docker container to &lt;code&gt;/data/credentials.properties&lt;/code&gt; which is what&amp;#8217;s referenced in the connector configuration below.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_setting_up_the_snowflake_connector&#34;&gt;Setting up the Snowflake connector&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Install the connector:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;confluent-hub install --no-prompt snowflakeinc/snowflake-kafka-connector:0.5.5&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Restart the Kafka Connect connector and check that it&amp;#8217;s been loaded:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s localhost:8083/connector-plugins|jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.[].class&amp;#39;&lt;/span&gt;|grep snowflake
-&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;com.snowflake.kafka.connector.SnowflakeSinkConnector&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now set up your connector configuration. A few important settings of note:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;topics&lt;/code&gt; - A comma separated list of one or more topics that are to be streamed to Snowflake. You can optionally map topics to table names with &lt;code&gt;snowflake.topic2table.map&lt;/code&gt; but this is not mandatory.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;value.converter&lt;/code&gt; - Snowflake provide their own converters. Use either:&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;com.snowflake.kafka.connector.records.SnowflakeAvroConverter&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;com.snowflake.kafka.connector.records.SnowflakeJsonConverter&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Authentication / sensitive information&lt;/strong&gt; I&amp;#8217;ve &lt;a href=&#34;https://rmoff.net/2019/05/24/putting-kafka-connect-passwords-in-a-separate-file-/-externalising-secrets/&#34;&gt;embedded these in a separate file&lt;/a&gt; (&lt;code&gt;.env&lt;/code&gt;) that&amp;#8217;s loaded by the connector directly:&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;snowflake.url.name&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;snowflake.user.name&lt;/code&gt; - we created the user &lt;code&gt;kafka&lt;/code&gt; for this above&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;snowflake.private.key&lt;/code&gt; - this is the key that we extracted in the step above&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can see all of the configuration options in &lt;a href=&#34;https://docs.snowflake.net/manuals/user-guide/kafka-connector-install.html#kafka-configuration-properties&#34;&gt;the documentation&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Create the connector:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -i -X PUT -H  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    http://localhost:8083/connectors/sink_snowflake_01/config &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;connector.class&amp;#34;:&amp;#34;com.snowflake.kafka.connector.SnowflakeSinkConnector&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;tasks.max&amp;#34;:1,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;topics&amp;#34;:&amp;#34;mssql-01-mssql.dbo.ORDERS&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;snowflake.url.name&amp;#34;:&amp;#34;${file:/data/credentials.properties:SNOWFLAKE_HOST}&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;snowflake.user.name&amp;#34;:&amp;#34;${file:/data/credentials.properties:SNOWFLAKE_USER}&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;snowflake.user.role&amp;#34;:&amp;#34;SYSADMIN&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;snowflake.private.key&amp;#34;:&amp;#34;${file:/data/credentials.properties:SNOWFLAKE_PRIVATE_KEY}&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;snowflake.database.name&amp;#34;:&amp;#34;DEMO_DB&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;snowflake.schema.name&amp;#34;:&amp;#34;PUBLIC&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;key.converter&amp;#34;:&amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;value.converter&amp;#34;:&amp;#34;com.snowflake.kafka.connector.records.SnowflakeAvroConverter&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;value.converter.schema.registry.url&amp;#34;:&amp;#34;https://${file:/data/credentials.properties:CCLOUD_SCHEMA_REGISTRY_HOST}&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;value.converter.basic.auth.credentials.source&amp;#34;:&amp;#34;USER_INFO&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;value.converter.basic.auth.user.info&amp;#34;:&amp;#34;${file:/data/credentials.properties:CCLOUD_SCHEMA_REGISTRY_API_KEY}:${file:/data/credentials.properties:CCLOUD_SCHEMA_REGISTRY_API_SECRET}&amp;#34;
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;    }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Check that it&amp;#8217;s running:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors?expand=info&amp;amp;expand=status&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&amp;#34;connector.class&amp;#34;]|join(&amp;#34;:|:&amp;#34;)&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           column -s : -t| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;//g&amp;#39;&lt;/span&gt;| sort
-sink    |  sink_snowflake_01         |  RUNNING  |  RUNNING  |  com.snowflake.kafka.connector.SnowflakeSinkConnector&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now head over to Snowflake and you&amp;#8217;ll see your table created and data loaded:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/11/sf06.png&#34; alt=&#34;sf06&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The connector writes the Kafka message payload to the &lt;code&gt;RECORD_CONTENT&lt;/code&gt; field and its metadata (partition, offset, etc) to &lt;code&gt;RECORD_METADATA&lt;/code&gt;. You can access the nested values using the colon as a seperator, e.g.:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; RECORD_CONTENT:customer_id &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; CUSTOMER_ID,
-       RECORD_CONTENT:item &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; ITEM, 
-       RECORD_CONTENT:order_total_usd &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; ORDER_TOTAL_USD
-  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;DEMO_DB&amp;#34;&lt;/span&gt;.&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;PUBLIC&amp;#34;&lt;/span&gt;.&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;MSSQL_01_MSSQL_DBO_ORDERS_97237615&amp;#34;&lt;/span&gt;;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.github.io/images/2019/11/sf07.png&#34; alt=&#34;sf07&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_footnote_a_few_gotchas&#34;&gt;Footnote : a few gotchas&lt;/h3&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Gotcha 01 : The &lt;strong&gt;connector name&lt;/strong&gt; must be a valid Snowflake identifier. If it&amp;#8217;s not you&amp;#8217;ll get this error:&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;SF_KAFKA_CONNECTOR&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; name is empty or invalid. It should match Snowflake object identifier syntax. Please see the documentation. &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;com.snowflake.kafka.connector.Utils:246&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;In the example above, the connector name is &lt;code&gt;sink_snowflake_01&lt;/code&gt;. If I tried to name it &lt;code&gt;sink-snowflake-01&lt;/code&gt; (i.e. using &lt;code&gt;-&lt;/code&gt; instead of &lt;code&gt;_&lt;/code&gt;) then it would fail 🤷‍♂️&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;See &lt;a href=&#34;https://github.com/snowflakedb/snowflake-kafka-connector/issues/62&#34;&gt;this issue&lt;/a&gt; on the Snowflake connector repo.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;strong&gt;Solution&lt;/strong&gt;: don&amp;#8217;t name your connector with characters that aren&amp;#8217;t &lt;a href=&#34;https://docs.snowflake.net/manuals/sql-reference/identifiers-syntax.html&#34;&gt;valid in a Snowflake object name&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;You have to use Snowflake&amp;#8217;s own converters, or else you get:&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;SF_KAFKA_CONNECTOR&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; Exception: Invalid record data
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;SF_KAFKA_CONNECTOR&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; Error Code: &lt;span style=&#34;color:#666&#34;&gt;0019&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;SF_KAFKA_CONNECTOR&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; Detail: Unrecognizable record content, please use Snowflake Converters&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;strong&gt;Solution&lt;/strong&gt;: Depending on how your data is serialised, use &lt;code&gt;com.snowflake.kafka.connector.records.SnowflakeJsonConverter&lt;/code&gt; or &lt;code&gt;com.snowflake.kafka.connector.records.SnowflakeAvroConverter&lt;/code&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Sometimes the connector will fail with an error and need restarting:&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;SF_KAFKA_CONNECTOR&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; Exception: Failed to put records
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;SF_KAFKA_CONNECTOR&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; Error Code: &lt;span style=&#34;color:#666&#34;&gt;5014&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;SF_KAFKA_CONNECTOR&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; Detail: SinkTask hasn&lt;span style=&#34;&#34;&gt;&amp;#39;&lt;/span&gt;t been initialized before calling PUT &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;function&lt;/span&gt;
-  at com.snowflake.kafka.connector.internal.SnowflakeErrors.getException&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;SnowflakeErrors.java:362&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at com.snowflake.kafka.connector.internal.SnowflakeErrors.getException&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;SnowflakeErrors.java:321&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at com.snowflake.kafka.connector.SnowflakeSinkTask.getSink&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;SnowflakeSinkTask.java:94&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at com.snowflake.kafka.connector.SnowflakeSinkTask.put&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;SnowflakeSinkTask.java:195&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at org.apache.kafka.connect.runtime.WorkerSinkTask.deliverMessages&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;WorkerSinkTask.java:538&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at org.apache.kafka.connect.runtime.WorkerSinkTask.poll&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;WorkerSinkTask.java:321&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at org.apache.kafka.connect.runtime.WorkerSinkTask.iteration&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;WorkerSinkTask.java:224&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at org.apache.kafka.connect.runtime.WorkerSinkTask.execute&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;WorkerSinkTask.java:192&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at org.apache.kafka.connect.runtime.WorkerTask.doRun&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;WorkerTask.java:177&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at org.apache.kafka.connect.runtime.WorkerTask.run&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;WorkerTask.java:227&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at java.util.concurrent.Executors&lt;span style=&#34;color:#19177c&#34;&gt;$RunnableAdapter&lt;/span&gt;.call&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;Executors.java:511&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at java.util.concurrent.FutureTask.run&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;FutureTask.java:266&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at java.util.concurrent.ThreadPoolExecutor.runWorker&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;ThreadPoolExecutor.java:1149&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at java.util.concurrent.ThreadPoolExecutor&lt;span style=&#34;color:#19177c&#34;&gt;$Worker&lt;/span&gt;.run&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;ThreadPoolExecutor.java:624&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-  at java.lang.Thread.run&lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;Thread.java:748&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;strong&gt;Solution&lt;/strong&gt;: Restart the Connect task via the REST API. If your connector is called &lt;code&gt;sink_snowflake_01&lt;/code&gt; then you can run this to restart task &lt;code&gt;0&lt;/code&gt;:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -X POST http://localhost:8083/connectors/sink_snowflake_01/tasks/0/restart&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
