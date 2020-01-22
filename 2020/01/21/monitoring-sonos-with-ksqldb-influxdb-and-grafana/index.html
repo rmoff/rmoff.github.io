@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Monitoring Sonos with ksqlDB, InfluxDB, and Grafana</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/01/21/monitoring-sonos-with-ksqldb-influxdb-and-grafana/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.59.1" />
+
+		
+		<meta property="og:title" content="Monitoring Sonos with ksqlDB, InfluxDB, and Grafana" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/01/IMG_2265.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/01/21/monitoring-sonos-with-ksqldb-influxdb-and-grafana/" />
+		<meta property="og:site_name" content="Monitoring Sonos with ksqlDB, InfluxDB, and Grafana" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/01/IMG_2265.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Monitoring Sonos with ksqlDB, InfluxDB, and Grafana</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-01-21T22:47:35Z">Jan 21, 2020</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.net/categories/ksqldb" class="no-underline category near-white dim">KsqlDB</a>, <a href="https://rmoff.net/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>, <a href="https://rmoff.net/categories/sonos" class="no-underline category near-white dim">Sonos</a>, <a href="https://rmoff.net/categories/influxdb" class="no-underline category near-white dim">InfluxDB</a>, <a href="https://rmoff.net/categories/grafana" class="no-underline category near-white dim">Grafana</a>, <a href="https://rmoff.net/categories/kafkacat" class="no-underline category near-white dim">Kafkacat</a>
+								<span class="display-print">at https://rmoff.net/2020/01/21/monitoring-sonos-with-ksqldb-influxdb-and-grafana/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>I&#8217;m quite a fan of Sonos audio equipment but recently had some trouble with some of the devices glitching and even cutting out whilst playing. Under the covers Sonos stuff is running Linux (of course) and exposes some diagnostics through a rudimentary frontend that you can access at <code>http://&lt;sonos player IP&gt;:1400/support/review</code>:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/01/sonos00.png" alt="Sonos Network Matrix">
+</div>
+</div>
+<div class="paragraph">
+<p>Whilst this gives you the current state, you can&#8217;t get historical data on it. It <em>felt</em> like the problems were happening "all the time", but <strong>were they actually</strong>? For that, we need some cold, hard, data! Something like this, in fact:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------+---------+----------+---------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>WINDOW_START_TS      <span style="color:#666">|</span>DEVICE   <span style="color:#666">|</span>STATUS    <span style="color:#666">|</span>STATUS_COUNT   <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------+---------+----------+---------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>  <span style="color:#666">|</span>Kitchen  <span style="color:#666">|</span>YELLOW    <span style="color:#666">|</span><span style="color:#666">183</span>            <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>  <span style="color:#666">|</span>Kitchen  <span style="color:#666">|</span>RED       <span style="color:#666">|</span><span style="color:#666">162</span>            <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>  <span style="color:#666">|</span>Kitchen  <span style="color:#666">|</span>ORANGE    <span style="color:#666">|</span><span style="color:#666">156</span>            <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>  <span style="color:#666">|</span>Kitchen  <span style="color:#666">|</span>GREEN     <span style="color:#666">|</span><span style="color:#666">5</span>              <span style="color:#666">|</span>
+[<span style="">…</span>]</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Summaries are nice, but so&#8217;s a plot of the data over time:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/01/sonos01.png" alt="Sonos connectivity data over time">
+</div>
+</div>
+<div class="paragraph">
+<p>In this article I&#8217;ll walk through how to collect this data and process it using some of my favourite tools including ksqlDB, InfluxDB, and Grafana.</p>
+</div>
+<div class="paragraph">
+<p>Which data are we going to collect? For now it&#8217;s based on two metrics of interest here - <code>Noise Floor</code> and <code>OFDM ANI level</code>. Why these two? Well, if we open up the code behind the Network Matrix shown above, we can see the Javascript that defines the colour of the cells evaluates these two:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-javascript" data-lang="javascript">[<span style="">…</span>]
+<span style="color:#008000;font-weight:bold">if</span>( nf <span style="color:#666">&gt;</span> <span style="color:#666">94</span> <span style="color:#666">&amp;&amp;</span> ofdm <span style="color:#666">&gt;</span> <span style="color:#666">4</span> )
+    td.style.background <span style="color:#666">=</span> <span style="color:#ba2121">&#34;rgb(32,190,32)&#34;</span>; <span style="color:#408080;font-style:italic">// GREEN
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#008000;font-weight:bold">else</span> <span style="color:#008000;font-weight:bold">if</span>( nf <span style="color:#666">&gt;</span> <span style="color:#666">89</span> <span style="color:#666">&amp;&amp;</span> ofdm <span style="color:#666">&gt;</span> <span style="color:#666">3</span> )
+    td.style.background <span style="color:#666">=</span> <span style="color:#ba2121">&#34;rgb(255,255,32)&#34;</span>; <span style="color:#408080;font-style:italic">// YELLOW
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#008000;font-weight:bold">else</span> <span style="color:#008000;font-weight:bold">if</span>( nf <span style="color:#666">&gt;</span> <span style="color:#666">84</span> <span style="color:#666">&amp;&amp;</span> ofdm <span style="color:#666">&gt;</span> <span style="color:#666">2</span> )
+    td.style.background <span style="color:#666">=</span> <span style="color:#ba2121">&#34;rgb(255,159,32)&#34;</span>; <span style="color:#408080;font-style:italic">// ORANGE
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#008000;font-weight:bold">else</span>
+    td.style.background <span style="color:#666">=</span> <span style="color:#ba2121">&#34;rgb(255,32,32)&#34;</span>; <span style="color:#408080;font-style:italic">// RED
+</span><span style="color:#408080;font-style:italic"></span>[<span style="">…</span>]
+</code></pre></div>
+</div>
+<div class="sect1">
+<h2 id="_the_stack">The stack</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><code>curl</code> to poll the API for diagnostics, and parse it with <a href="https://github.com/kislyuk/yq"><code>xq</code></a></p>
+</li>
+<li>
+<p><a href="https://github.com/edenhill/kafkacat">kafkacat</a> to stream the data into Kafka</p>
+</li>
+<li>
+<p><a href="https://kafka.apache.org">Apache Kafka</a> to stream and store the data</p>
+</li>
+<li>
+<p><a href="https://ksqldb.io">ksqlDB</a> to process, wrangle, and query the data</p>
+</li>
+<li>
+<p><a href="https://kafka.apache.org">Kafka Connect</a> to load the data into <a href="https://www.influxdata.com/">InfluxDB</a></p>
+</li>
+<li>
+<p><a href="https://grafana.com/">Grafana</a> to visualise it all</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Why Kafka? Because we&#8217;re doing all of this with streams of events. We want to have a low-latency pipeline from event to dashboard, and we also want to be able to replay and re-use the data.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_ingest_diagnostics_data_from_sonos_into_kafka">Ingest diagnostics data from Sonos into Kafka</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>We&#8217;re going to go full-MacGyver for part of this, since Sonos does not offer a nice API. The diagnostics that Sonos devices serve up on the <code>http://&lt;sonos player IP&gt;:1400/support/review</code> interface (I&#8217;ll not actually call it an API, since it isn&#8217;t really) are XML-wrapped plaintext. So whilst XML may actually be nicer than YAML to work with (who knew), plain text is not so nice to work with. Fancy parsing this for key/value pairs? It&#8217;s going to be all hand-crafted code needed:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">Mode: INFRA (sonosnet)
+Operating on channel 2437
+Home channel is 2437
+HT Channel is 0
+RF Chains: RX:4 TX:4
+RF Chainmask: RX:0x0F TX:0x0F
+Max Spatial Streams: RX:4 TX:4
+Noise Floor:    0 dBm (chain 0 ctl)
+Noise Floor:    0 dBm (chain 1 ctl)
+Noise Floor:    0 dBm (chain 2 ctl)
+Noise Floor:    0 dBm (chain 3 ctl)
+PHY errors since last reading/reset: 3882</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To pull the data from Sonos you just need to hit one of the devices, since it serves up the stats for all the others too. I&#8217;m using <a href="https://github.com/kislyuk/yq"><code>xq</code></a> here which is an XML version of the superb <a href="https://stedolan.github.io/jq/"><code>jq</code></a> tool (which is for JSON). It means that I can stream data from <code>curl</code> into <code>xq</code> and parse the document structure for fields and values that I want, as well as starting to manipulate the data into more of a structure for processing (such as splitting the <code>status</code> data shown above into an array).</p>
+</div>
+<div class="paragraph">
+<p>Once it&#8217;s parsed the data it pipes it into <code>kafkacat</code> which writes it to a Kafka topic, as well as echo&#8217;ing it to the terminal.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">while [ 1 -eq 1 ];do
+    curl -s 'http://192.168.10.98:1400/support/review' | \
+        xq -c '.ZPNetworkInfo.ZPSupportInfo[] |
+            {ZPInfo: .ZPInfo.ZoneName,
+            data: [(.File[] |
+                    select (."@name" == "/proc/ath_rincon/status") |
+                    ."#text" |
+                    split("\n")[] |
+                    select((. | contains("OFDM")) or (.|contains("Noise")) or (.|contains("PHY"))))]
+                }' | \
+            docker exec -i kafkacat kafkacat \
+                -b kafka-1:39092,kafka-2:49092,kafka-3:59092 \
+                -t sonos-metrics -P -T | jq '.'
+    sleep 20
+done</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_query_the_streams_of_data_in_ksqldb">Query the streams of data in ksqlDB</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Now the data&#8217;s in Kafka we can examine and process it with ksqlDB. First up we need to create a stream on top of the topic—which is just declaring the schema for the data:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM SONOS_RAW (ZPINFO STRING, <span style="color:#008000;font-weight:bold">DATA</span> <span style="color:#008000">ARRAY</span><span style="color:#666">&lt;</span><span style="color:#008000">VARCHAR</span><span style="color:#666">&gt;</span>,RAWDATA STRING) 
+    <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;sonos-metrics&#39;</span>, VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;JSON&#39;</span>);</code></pre></div>
+</div>
+<div class="paragraph">
+<p>We can query this data:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SET</span> <span style="color:#ba2121">&#39;auto.offset.reset&#39;</span> <span style="color:#666">=</span> <span style="color:#ba2121">&#39;earliest&#39;</span>;
+
+ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ROWTIME,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> TS, 
+             ZPINFO, 
+             <span style="color:#008000;font-weight:bold">DATA</span> 
+        <span style="color:#008000;font-weight:bold">FROM</span> SONOS_RAW 
+        EMIT CHANGES 
+        <span style="color:#008000;font-weight:bold">LIMIT</span> <span style="color:#666">1</span>;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------+-------------+-----------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>TS                   <span style="color:#666">|</span>ZPINFO       <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">DATA</span>                                                       <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------+-------------+-----------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">13</span> <span style="color:#666">23</span>:<span style="color:#666">02</span>:<span style="color:#666">09</span>  <span style="color:#666">|</span>Study (R)    <span style="color:#666">|</span>[Noise Floor:    <span style="color:#666">0</span> dBm (<span style="color:#008000;font-weight:bold">chain</span> <span style="color:#666">0</span> ctl), Noise Floor:    <span style="color:#666">0</span> dBm<span style="color:#666">|</span>
+<span style="color:#666">|</span>                     <span style="color:#666">|</span>             <span style="color:#666">|</span> (<span style="color:#008000;font-weight:bold">chain</span> <span style="color:#666">1</span> ctl), Noise Floor:    <span style="color:#666">0</span> dBm (<span style="color:#008000;font-weight:bold">chain</span> <span style="color:#666">2</span> ctl), Noise <span style="color:#666">|</span>
+<span style="color:#666">|</span>                     <span style="color:#666">|</span>             <span style="color:#666">|</span>Floor:    <span style="color:#666">0</span> dBm (<span style="color:#008000;font-weight:bold">chain</span> <span style="color:#666">3</span> ctl), PHY errors since <span style="color:#008000;font-weight:bold">last</span> readin<span style="color:#666">|</span>
+<span style="color:#666">|</span>                     <span style="color:#666">|</span>             <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">g</span><span style="color:#666">/</span><span style="color:#008000;font-weight:bold">reset</span>: <span style="color:#666">6803</span>        ]                                     <span style="color:#666">|</span>
+<span style="color:#008000;font-weight:bold">Limit</span> Reached
+Query terminated
+ksql<span style="color:#666">&gt;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>and we can manipulate the data using standard SQL capabilities - for example to take a substring of a value and cast it to a new type:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> ZPINFO, 
+             <span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">1</span>],
+             <span style="color:#008000;font-weight:bold">CAST</span>(<span style="color:#008000;font-weight:bold">SUBSTRING</span>(<span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">1</span>],<span style="color:#666">14</span>,<span style="color:#666">4</span>) <span style="color:#008000;font-weight:bold">AS</span> DOUBLE) <span style="color:#008000;font-weight:bold">AS</span> NOISE_FLOOR_DBM0
+     <span style="color:#008000;font-weight:bold">FROM</span>   SONOS_RAW
+     EMIT CHANGES;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------+---------------------------------------------+---------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>ZPINFO          <span style="color:#666">|</span>KSQL_COL_1                                   <span style="color:#666">|</span>NOISE_FLOOR_DBM0                             <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------+---------------------------------------------+---------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>Bedroom         <span style="color:#666">|</span>Noise Floor: <span style="color:#666">-</span><span style="color:#666">104</span> dBm (<span style="color:#008000;font-weight:bold">chain</span> <span style="color:#666">0</span> ctl)          <span style="color:#666">|-</span><span style="color:#666">104</span>.<span style="color:#666">0</span>                                       <span style="color:#666">|</span>
+<span style="color:#666">|</span>Study (L)       <span style="color:#666">|</span>Noise Floor:    <span style="color:#666">0</span> dBm (<span style="color:#008000;font-weight:bold">chain</span> <span style="color:#666">0</span> ctl)          <span style="color:#666">|</span><span style="color:#666">0</span>.<span style="color:#666">0</span>                                          <span style="color:#666">|</span>
+[<span style="">…</span>]</code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_transform_the_data_in_ksqldb">Transform the data in ksqlDB</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The actual data that we want to pull out for now is just the device name (<code>ZPINFO</code>), <code>Noise Floor</code>, and <code>OFDM ANI level</code>. We&#8217;ll do this with some data wrangling along the same lines as shown above.</p>
+</div>
+<div class="paragraph">
+<p>A key thing to note is that the <code>CREATE STREAM</code> here is now writing the results of this query to a new stream, underpinned by a new Kafka topic:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM SONOS_HEALTH_METRICS <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;sonos_metrics_01&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> 
+    <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">MAP</span>(<span style="color:#ba2121">&#39;DEVICE&#39;</span>:<span style="color:#666">=</span>ZPINFO) <span style="color:#008000;font-weight:bold">AS</span> TAGS,
+            (( (<span style="color:#008000;font-weight:bold">CAST</span>(<span style="color:#008000;font-weight:bold">SUBSTRING</span>(<span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">1</span>],<span style="color:#666">14</span>,<span style="color:#666">4</span>) <span style="color:#008000;font-weight:bold">AS</span> DOUBLE) <span style="color:#666">+</span> <span style="color:#008000;font-weight:bold">CAST</span>(<span style="color:#008000;font-weight:bold">SUBSTRING</span>(<span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">2</span>],<span style="color:#666">14</span>,<span style="color:#666">4</span>) <span style="color:#008000;font-weight:bold">AS</span> DOUBLE) <span style="color:#666">+</span>  <span style="color:#008000;font-weight:bold">CAST</span>(<span style="color:#008000;font-weight:bold">SUBSTRING</span>(<span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">3</span>],<span style="color:#666">14</span>,<span style="color:#666">4</span>) <span style="color:#008000;font-weight:bold">AS</span> DOUBLE)) <span style="color:#666">/</span><span style="color:#666">3</span> )) <span style="color:#008000;font-weight:bold">AS</span> AVG_NOISE_FLOOR_DBM,
+            <span style="color:#008000;font-weight:bold">CAST</span>(<span style="color:#008000;font-weight:bold">SUBSTRING</span>(<span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">1</span>],<span style="color:#666">14</span>,<span style="color:#666">4</span>) <span style="color:#008000;font-weight:bold">AS</span> DOUBLE) <span style="color:#008000;font-weight:bold">AS</span> NOISE_FLOOR_DBM0,
+            <span style="color:#008000;font-weight:bold">CAST</span>(<span style="color:#008000;font-weight:bold">SUBSTRING</span>(<span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">2</span>],<span style="color:#666">14</span>,<span style="color:#666">4</span>) <span style="color:#008000;font-weight:bold">AS</span> DOUBLE) <span style="color:#008000;font-weight:bold">AS</span> NOISE_FLOOR_DBM1,
+            <span style="color:#008000;font-weight:bold">CAST</span>(<span style="color:#008000;font-weight:bold">SUBSTRING</span>(<span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">3</span>],<span style="color:#666">14</span>,<span style="color:#666">4</span>) <span style="color:#008000;font-weight:bold">AS</span> DOUBLE) <span style="color:#008000;font-weight:bold">AS</span> NOISE_FLOOR_DBM2,
+            <span style="color:#008000;font-weight:bold">CAST</span>(<span style="color:#008000;font-weight:bold">SUBSTRING</span>(<span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">5</span>],<span style="color:#666">17</span>,<span style="color:#666">2</span>) <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000">INT</span>) <span style="color:#008000;font-weight:bold">AS</span> OFDM_ANI_LEVEL,
+            (<span style="color:#666">12</span><span style="color:#666">-</span><span style="color:#008000;font-weight:bold">CAST</span>(<span style="color:#008000;font-weight:bold">SUBSTRING</span>(<span style="color:#008000;font-weight:bold">DATA</span>[<span style="color:#666">5</span>],<span style="color:#666">17</span>,<span style="color:#666">2</span>) <span style="color:#008000;font-weight:bold">AS</span> <span style="color:#008000">INT</span>))<span style="color:#666">/</span><span style="color:#666">2</span> OFDM_ANI_LEVEL_ADJUSTED
+    <span style="color:#008000;font-weight:bold">FROM</span>   SONOS_RAW
+    EMIT CHANGES ;</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Note the schemas includes a <code>MAP</code> for the tags, which we&#8217;ll use to load into InfluxDB shortly.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">DESCRIBE</span> SONOS_HEALTH_METRICS;
+
+Name                 : SONOS_HEALTH_METRICS
+ Field                   <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">Type</span>
+<span style="color:#408080;font-style:italic">--------------------------------------------------------
+</span><span style="color:#408080;font-style:italic"></span> ROWTIME                 <span style="color:#666">|</span> <span style="color:#008000">BIGINT</span>           (<span style="color:#008000;font-weight:bold">system</span>)
+ ROWKEY                  <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)  (<span style="color:#008000;font-weight:bold">system</span>)
+ TAGS                    <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">MAP</span><span style="color:#666">&lt;</span>STRING, <span style="color:#008000">VARCHAR</span>(STRING)<span style="color:#666">&gt;</span>
+ AVG_NOISE_FLOOR_DBM     <span style="color:#666">|</span> DOUBLE
+ NOISE_FLOOR_DBM0        <span style="color:#666">|</span> DOUBLE
+ NOISE_FLOOR_DBM1        <span style="color:#666">|</span> DOUBLE
+ NOISE_FLOOR_DBM2        <span style="color:#666">|</span> DOUBLE
+ OFDM_ANI_LEVEL          <span style="color:#666">|</span> <span style="color:#008000">INTEGER</span>
+ OFDM_ANI_LEVEL_ADJUSTED <span style="color:#666">|</span> <span style="color:#008000">INTEGER</span>
+<span style="color:#408080;font-style:italic">--------------------------------------------------------
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#008000;font-weight:bold">For</span> runtime <span style="color:#008000;font-weight:bold">statistics</span> <span style="color:#008000;font-weight:bold">and</span> query details run: <span style="color:#008000;font-weight:bold">DESCRIBE</span> EXTENDED <span style="color:#666">&lt;</span>Stream,<span style="color:#008000;font-weight:bold">Table</span><span style="color:#666">&gt;</span>;</code></pre></div>
+</div>
+<div class="paragraph">
+<p>From this fairly simple transformation we now have a set of metrics which we can query from the stream:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ROWTIME,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> TS, 
+             TAGS[<span style="color:#ba2121">&#39;DEVICE&#39;</span>] <span style="color:#008000;font-weight:bold">AS</span> DEVICE, 
+             AVG_NOISE_FLOOR_DBM, 
+             OFDM_ANI_LEVEL_ADJUSTED 
+        <span style="color:#008000;font-weight:bold">FROM</span> SONOS_HEALTH_METRICS 
+        EMIT CHANGES 
+        <span style="color:#008000;font-weight:bold">LIMIT</span> <span style="color:#666">5</span>;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------+-------------+----------------------+-------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>TS                   <span style="color:#666">|</span>DEVICE       <span style="color:#666">|</span>AVG_NOISE_FLOOR_DBM   <span style="color:#666">|</span>OFDM_ANI_LEVEL_ADJUSTED  <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------+-------------+----------------------+-------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">06</span>:<span style="color:#666">33</span>:<span style="color:#666">24</span>  <span style="color:#666">|</span>Sitting Room <span style="color:#666">|</span><span style="color:#666">0</span>.<span style="color:#666">0</span>                   <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">null</span>                     <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">06</span>:<span style="color:#666">34</span>:<span style="color:#666">26</span>  <span style="color:#666">|</span>Kitchen      <span style="color:#666">|</span><span style="color:#666">104</span>.<span style="color:#666">33333333333333</span>    <span style="color:#666">|</span><span style="color:#666">4</span>                        <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">06</span>:<span style="color:#666">36</span>:<span style="color:#666">30</span>  <span style="color:#666">|</span>Study (L)    <span style="color:#666">|</span><span style="color:#666">0</span>.<span style="color:#666">0</span>                   <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">null</span>                     <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">06</span>:<span style="color:#666">37</span>:<span style="color:#666">32</span>  <span style="color:#666">|</span>Bedroom      <span style="color:#666">|</span><span style="color:#666">103</span>.<span style="color:#666">66666666666667</span>    <span style="color:#666">|</span><span style="color:#666">4</span>                        <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">06</span>:<span style="color:#666">37</span>:<span style="color:#666">32</span>  <span style="color:#666">|</span>Study (R)    <span style="color:#666">|</span><span style="color:#666">0</span>.<span style="color:#666">0</span>                   <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">null</span>                     <span style="color:#666">|</span>
+<span style="color:#008000;font-weight:bold">Limit</span> Reached
+Query terminated
+ksql<span style="color:#666">&gt;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>We can also query it from the underlying Kafka topic:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> PRINT sonos_metrics_01 <span style="color:#008000;font-weight:bold">LIMIT</span> <span style="color:#666">5</span>;
+Format:JSON
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1578956524472</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;TAGS&#34;</span>:<span style="">{</span><span style="color:#ba2121">&#34;DEVICE&#34;</span>:<span style="color:#ba2121">&#34;Study (R)&#34;</span><span style="">}</span>,<span style="color:#ba2121">&#34;AVG_NOISE_FLOOR_DBM&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM0&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM1&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM2&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL&#34;</span>:<span style="color:#008000;font-weight:bold">null</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL_ADJUSTED&#34;</span>:<span style="color:#008000;font-weight:bold">null</span><span style="">}</span>
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1578956524472</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;TAGS&#34;</span>:<span style="">{</span><span style="color:#ba2121">&#34;DEVICE&#34;</span>:<span style="color:#ba2121">&#34;Dining Room&#34;</span><span style="">}</span>,<span style="color:#ba2121">&#34;AVG_NOISE_FLOOR_DBM&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM0&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM1&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM2&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL&#34;</span>:<span style="color:#008000;font-weight:bold">null</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL_ADJUSTED&#34;</span>:<span style="color:#008000;font-weight:bold">null</span><span style="">}</span>
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1578956524472</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;TAGS&#34;</span>:<span style="">{</span><span style="color:#ba2121">&#34;DEVICE&#34;</span>:<span style="color:#ba2121">&#34;Kitchen&#34;</span><span style="">}</span>,<span style="color:#ba2121">&#34;AVG_NOISE_FLOOR_DBM&#34;</span>:<span style="color:#666">104</span>.<span style="color:#666">33333333333333</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM0&#34;</span>:<span style="color:#666">-</span><span style="color:#666">104</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM1&#34;</span>:<span style="color:#666">-</span><span style="color:#666">109</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM2&#34;</span>:<span style="color:#666">-</span><span style="color:#666">1</span>E<span style="color:#666">+</span><span style="color:#666">2</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL&#34;</span>:<span style="color:#666">5</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL_ADJUSTED&#34;</span>:<span style="color:#666">3</span><span style="">}</span>
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1578956524472</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;TAGS&#34;</span>:<span style="">{</span><span style="color:#ba2121">&#34;DEVICE&#34;</span>:<span style="color:#ba2121">&#34;Sitting Room&#34;</span><span style="">}</span>,<span style="color:#ba2121">&#34;AVG_NOISE_FLOOR_DBM&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM0&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM1&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM2&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL&#34;</span>:<span style="color:#008000;font-weight:bold">null</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL_ADJUSTED&#34;</span>:<span style="color:#008000;font-weight:bold">null</span><span style="">}</span>
+<span style="">{</span><span style="color:#ba2121">&#34;ROWTIME&#34;</span>:<span style="color:#666">1578956603128</span>,<span style="color:#ba2121">&#34;ROWKEY&#34;</span>:<span style="color:#ba2121">&#34;null&#34;</span>,<span style="color:#ba2121">&#34;TAGS&#34;</span>:<span style="">{</span><span style="color:#ba2121">&#34;DEVICE&#34;</span>:<span style="color:#ba2121">&#34;Study (R)&#34;</span><span style="">}</span>,<span style="color:#ba2121">&#34;AVG_NOISE_FLOOR_DBM&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM0&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM1&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;NOISE_FLOOR_DBM2&#34;</span>:<span style="color:#666">0</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL&#34;</span>:<span style="color:#008000;font-weight:bold">null</span>,<span style="color:#ba2121">&#34;OFDM_ANI_LEVEL_ADJUSTED&#34;</span>:<span style="color:#008000;font-weight:bold">null</span><span style="">}</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_transform_the_message_structure_to_load_into_influxdb">Transform the message structure to load into InfluxDB</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In a moment we&#8217;re going to stream all this data into InfluxDB, but first we need to do a little <a href="https://libquotes.com/linus-torvalds/quote/lbr1k4j"><code>random jiggling</code></a> to get the data into an appropriate format.</p>
+</div>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Warning</div>
+</td>
+<td class="content">
+This is not part of a normal ksqlDB pipeline! It&#8217;s just a hacky workaround to deal with some slightly misaligned interfaces.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>In a nutshell, the InfluxDB connector needs the data to either have a schema embedded in the JSON, or the Avro schema to be constructed a certain way (<code>map</code> not <code>array</code>). Here we&#8217;ll interpolate the JSON-with-schema shell with the payload value, using kafkacat:</p>
+</div>
+<div class="paragraph">
+<p><code>kafkacat</code> reads from the topic, pipes it into <code>jq</code> which adds the schema definition, and then pipes it to another instance of <code>kafkacat</code> which writes it to a new topic.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">docker exec -it kafkacat /bin/sh -c 'kafkacat -b kafka-1:39092,kafka-2:49092,kafka-3:59092 -q -u -X auto.offset.reset=latest -G sonos_rmoff_cg_01 sonos_metrics_01 |jq -c '"'"'. |
+{   schema: { type: "struct", optional: false, version: 1, fields: [
+            { field: "tags", type: "map", keys: {type: "string", optional: false}, values: {type: "string", optional: false}, optional: false },
+            { field: "AVG_NOISE_FLOOR_DBM", type: "double", optional: true},
+            { field: "NOISE_FLOOR_DBM0", type: "double", optional: true},
+            { field: "NOISE_FLOOR_DBM1", type: "double", optional: true},
+            { field: "NOISE_FLOOR_DBM2", type: "double", optional: true},
+            { field: "OFDM_ANI_LEVEL", type: "double", optional: true},
+            { field: "OFDM_ANI_LEVEL_ADJUSTED", type: "double", optional: true}]},
+    payload: {
+        tags:  .TAGS ,
+        AVG_NOISE_FLOOR_DBM: .AVG_NOISE_FLOOR_DBM,
+        NOISE_FLOOR_DBM0: .NOISE_FLOOR_DBM0,
+        NOISE_FLOOR_DBM1: .NOISE_FLOOR_DBM1,
+        NOISE_FLOOR_DBM2: .NOISE_FLOOR_DBM2,
+        OFDM_ANI_LEVEL: .OFDM_ANI_LEVEL,
+        OFDM_ANI_LEVEL_ADJUSTED: .OFDM_ANI_LEVEL_ADJUSTED
+        }
+}'"'"' | \
+kafkacat -b kafka-1:39092,kafka-2:49092,kafka-3:59092 -t sonos_metrics_01_json_with_schema -P -T'</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">{
+  "TAGS": {
+    "DEVICE": "Kitchen"
+  },
+  "AVG_NOISE_FLOOR_DBM": 104.33333333333333,
+  "NOISE_FLOOR_DBM0": -104,
+  "NOISE_FLOOR_DBM1": -109,
+  "NOISE_FLOOR_DBM2": -100,
+  "OFDM_ANI_LEVEL": 5,
+  "OFDM_ANI_LEVEL_ADJUSTED": 3
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Becomes this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">{
+    "schema": { "type": "struct", "optional": false, "version": 1, "fields": [
+        {"field": "tags", "type": "map", "keys": { "type": "string", "optional": false }, "values": { "type": "string", "optional": false }, "optional": false },
+        {"field": "AVG_NOISE_FLOOR_DBM", "type": "double", "optional": true },
+        { "field": "NOISE_FLOOR_DBM0", "type": "double", "optional": true },
+        { "field": "NOISE_FLOOR_DBM1", "type": "double", "optional": true },
+        { "field": "NOISE_FLOOR_DBM2", "type": "double", "optional": true },
+        { "field": "OFDM_ANI_LEVEL", "type": "double", "optional": true },
+        { "field": "OFDM_ANI_LEVEL_ADJUSTED", "type": "double", "optional": true }
+        ]
+    },
+    "payload": {
+        "tags": { "device": "Dining Room" },
+        "AVG_NOISE_FLOOR_DBM": -0,
+        "NOISE_FLOOR_DBM0": 0,
+        "NOISE_FLOOR_DBM1": 0,
+        "NOISE_FLOOR_DBM2": 0,
+        "OFDM_ANI_LEVEL": null,
+        "OFDM_ANI_LEVEL_ADJUSTED": null
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Whilst kafkacat is pretty neat for this kind of message manipulation, note that it will not preserve the partition, timestamp, or header of the source message.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_stream_data_from_kafka_into_influxdb">Stream data from Kafka into InfluxDB</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Back in ksqlDB we can now create a connector:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE SINK CONNECTOR SINK_INFLUX_01 WITH (
+        'connector.class'               = 'io.confluent.influxdb.InfluxDBSinkConnector',
+        'value.converter'               = 'org.apache.kafka.connect.json.JsonConverter',
+        'value.converter.schemas.enable'= 'true',
+        'topics'                        = 'sonos_metrics_01_json_with_schema',
+        'influxdb.url'                  = 'http://influxdb:8086',
+        'influxdb.db'                   = 'sonos',
+        'measurement.name.format'       = 'metrics'
+  );</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Check the connector status:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">ksql&gt; SHOW CONNECTORS;
+
+ Connector Name | Type | Class                                       | Status
+---------------------------------------------------------------------------------------------------
+ SINK_INFLUX_01 | SINK | io.confluent.influxdb.InfluxDBSinkConnector | RUNNING (1/1 tasks RUNNING)
+---------------------------------------------------------------------------------------------------</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And in InfluxDB itself we can see data:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">docker <span style="color:#008000">exec</span> -it influxdb influx -execute <span style="color:#ba2121">&#39;SHOW MEASUREMENTS&#39;</span> -database <span style="color:#ba2121">&#39;sonos&#39;</span>
+name: measurements
+name
+----
+metrics
+----
+
+docker <span style="color:#008000">exec</span> -it influxdb influx -database <span style="color:#ba2121">&#39;sonos&#39;</span> -execute <span style="color:#ba2121">&#39;SELECT LAST(&#34;AVG_NOISE_FLOOR_DBM&#34;) FROM &#34;metrics&#34; GROUP BY &#34;device&#34; LIMIT 3;&#39;</span>
+name: metrics
+tags: <span style="color:#19177c">device</span><span style="color:#666">=</span>Bedroom
+<span style="color:#008000">time</span>                last
+----                ----
+<span style="color:#666">1579608296503000000</span> <span style="color:#666">103</span>.66666666666667
+
+name: metrics
+tags: <span style="color:#19177c">device</span><span style="color:#666">=</span>Dining Room
+<span style="color:#008000">time</span>                last
+----                ----
+<span style="color:#666">1579608234480000000</span> <span style="color:#666">0</span>
+
+name: metrics
+tags: <span style="color:#19177c">device</span><span style="color:#666">=</span>Kitchen
+<span style="color:#008000">time</span>                last
+----                ----
+<span style="color:#666">1579608296491000000</span> <span style="color:#666">104</span>.33333333333333</code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_visualisation">Visualisation</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Grafana is the tool I&#8217;m more familiar with, and plays nicely with InfluxDB.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/01/sonos01.png" alt="Sonos data plotted in Grafana">
+</div>
+</div>
+<div class="paragraph">
+<p>I&#8217;ve taken the thresholds that the Sonos network matrix javascript code (quoted above) uses to determine good/warning/bad and overlaid these on the charts and used them to background colour the current values.</p>
+</div>
+<iframe src="https://snapshot.raintank.io/dashboard-solo/snapshot/CcjhhhJZy2sVCqYylAAlxF62cx6DaFgi?orgId=2&from=1579644113369&to=1579652250260&var-Device=Bedroom&var-Device=Kitchen&panelId=7" width="550" height="200" frameborder="0"></iframe>
+<div class="paragraph">
+<p>You can try the Grafana dashboard <a href="https://snapshot.raintank.io/dashboard/snapshot/qBALXdQGwjU37KTO8Q1zAZ7o8IjaGisB">here</a>.</p>
+</div>
+<div class="paragraph">
+<p>It&#8217;s worth noting that in recent years Influx have developed their own visualisation tool, Chronograf, which is pretty nice too</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/01/sonos02.png" alt="Sonos data plotted in Chronograf">
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_aggregation_in_ksqldb">Aggregation in ksqlDB</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Because ksqlDB gives you a SQL interface to the data in Apache Kafka you can do things like:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Apply threshold calculations to the data as it passes through:</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM DEVICE_STATUS <span style="color:#008000;font-weight:bold">AS</span> 
+    <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(ROWTIME,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> TS, 
+            TAGS[<span style="color:#ba2121">&#39;DEVICE&#39;</span>] <span style="color:#008000;font-weight:bold">AS</span> DEVICE, 
+            AVG_NOISE_FLOOR_DBM,
+            OFDM_ANI_LEVEL_ADJUSTED,
+            <span style="color:#008000;font-weight:bold">CASE</span> <span style="color:#008000;font-weight:bold">WHEN</span> AVG_NOISE_FLOOR_DBM <span style="color:#666">&gt;</span> <span style="color:#666">94</span> <span style="color:#008000;font-weight:bold">AND</span> OFDM_ANI_LEVEL_ADJUSTED <span style="color:#666">&gt;</span> <span style="color:#666">4</span> <span style="color:#008000;font-weight:bold">THEN</span> <span style="color:#ba2121">&#39;GREEN&#39;</span>
+                <span style="color:#008000;font-weight:bold">WHEN</span> AVG_NOISE_FLOOR_DBM <span style="color:#666">&gt;</span> <span style="color:#666">89</span> <span style="color:#008000;font-weight:bold">AND</span> OFDM_ANI_LEVEL_ADJUSTED <span style="color:#666">&gt;</span> <span style="color:#666">3</span> <span style="color:#008000;font-weight:bold">THEN</span> <span style="color:#ba2121">&#39;YELLOW&#39;</span>
+                <span style="color:#008000;font-weight:bold">WHEN</span> AVG_NOISE_FLOOR_DBM <span style="color:#666">&gt;</span> <span style="color:#666">84</span> <span style="color:#008000;font-weight:bold">AND</span> OFDM_ANI_LEVEL_ADJUSTED <span style="color:#666">&gt;</span> <span style="color:#666">2</span> <span style="color:#008000;font-weight:bold">THEN</span> <span style="color:#ba2121">&#39;ORANGE&#39;</span>
+                <span style="color:#008000;font-weight:bold">WHEN</span> OFDM_ANI_LEVEL_ADJUSTED <span style="color:#008000;font-weight:bold">IS</span> <span style="color:#008000;font-weight:bold">NULL</span> <span style="color:#008000;font-weight:bold">THEN</span> <span style="color:#008000;font-weight:bold">NULL</span> <span style="color:#008000;font-weight:bold">ELSE</span> <span style="color:#ba2121">&#39;RED&#39;</span>
+            <span style="color:#008000;font-weight:bold">END</span> <span style="color:#008000;font-weight:bold">AS</span> STATUS
+    <span style="color:#008000;font-weight:bold">FROM</span>    SONOS_HEALTH_METRICS
+    EMIT CHANGES;</code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TS, DEVICE, AVG_NOISE_FLOOR_DBM, OFDM_ANI_LEVEL_ADJUSTED, STATUS <span style="color:#008000;font-weight:bold">FROM</span> DEVICE_STATUS <span style="color:#008000;font-weight:bold">WHERE</span> STATUS <span style="color:#008000;font-weight:bold">IS</span> <span style="color:#008000;font-weight:bold">NOT</span> <span style="color:#008000;font-weight:bold">NULL</span> EMIT CHANGES <span style="color:#008000;font-weight:bold">LIMIT</span> <span style="color:#666">5</span>;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">--------------------+----------+---------------------+------------------------+-------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>TS                  <span style="color:#666">|</span>DEVICE    <span style="color:#666">|</span>AVG_NOISE_FLOOR_DBM  <span style="color:#666">|</span>OFDM_ANI_LEVEL_ADJUSTED <span style="color:#666">|</span>STATUS <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">--------------------+----------+---------------------+------------------------+-------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">06</span>:<span style="color:#666">23</span>:<span style="color:#666">04</span> <span style="color:#666">|</span>Bedroom   <span style="color:#666">|</span><span style="color:#666">103</span>.<span style="color:#666">66666666666667</span>   <span style="color:#666">|</span><span style="color:#666">3</span>                       <span style="color:#666">|</span>ORANGE <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">11</span>:<span style="color:#666">05</span>:<span style="color:#666">12</span> <span style="color:#666">|</span>Bedroom   <span style="color:#666">|</span><span style="color:#666">103</span>.<span style="color:#666">66666666666667</span>   <span style="color:#666">|</span><span style="color:#666">3</span>                       <span style="color:#666">|</span>ORANGE <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">11</span>:<span style="color:#666">10</span>:<span style="color:#666">21</span> <span style="color:#666">|</span>Bedroom   <span style="color:#666">|</span><span style="color:#666">103</span>.<span style="color:#666">66666666666667</span>   <span style="color:#666">|</span><span style="color:#666">3</span>                       <span style="color:#666">|</span>ORANGE <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">06</span>:<span style="color:#666">24</span>:<span style="color:#666">06</span> <span style="color:#666">|</span>Bedroom   <span style="color:#666">|</span><span style="color:#666">103</span>.<span style="color:#666">0</span>                <span style="color:#666">|</span><span style="color:#666">3</span>                       <span style="color:#666">|</span>ORANGE <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">14</span> <span style="color:#666">11</span>:<span style="color:#666">14</span>:<span style="color:#666">29</span> <span style="color:#666">|</span>Bedroom   <span style="color:#666">|</span><span style="color:#666">103</span>.<span style="color:#666">66666666666667</span>   <span style="color:#666">|</span><span style="color:#666">2</span>                       <span style="color:#666">|</span>RED    <span style="color:#666">|</span>
+<span style="color:#008000;font-weight:bold">Limit</span> Reached
+Query terminated</code></pre></div>
+</div>
+</li>
+<li>
+<p>Show aggregate values based on the data in the Kafka topic:</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOWSTART(),<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> WINDOW_START_TS, 
+             DEVICE, 
+             STATUS, 
+             <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> STATUS_COUNT 
+        <span style="color:#008000;font-weight:bold">FROM</span> DEVICE_STATUS 
+                WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">1</span> <span style="color:#008000;font-weight:bold">DAY</span>) 
+        <span style="color:#008000;font-weight:bold">WHERE</span> DEVICE<span style="color:#666">=</span><span style="color:#ba2121">&#39;Kitchen&#39;</span> 
+          <span style="color:#008000;font-weight:bold">AND</span> ROWTIME <span style="color:#666">&gt;</span> (UNIX_TIMESTAMP() <span style="color:#666">-</span> <span style="color:#666">86400000</span>) 
+        <span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> DEVICE, STATUS 
+        EMIT CHANGES;
+
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------+---------+----------+---------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>WINDOW_START_TS      <span style="color:#666">|</span>DEVICE   <span style="color:#666">|</span>STATUS    <span style="color:#666">|</span>STATUS_COUNT   <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------+---------+----------+---------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>  <span style="color:#666">|</span>Kitchen  <span style="color:#666">|</span>YELLOW    <span style="color:#666">|</span><span style="color:#666">183</span>            <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>  <span style="color:#666">|</span>Kitchen  <span style="color:#666">|</span>RED       <span style="color:#666">|</span><span style="color:#666">162</span>            <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>  <span style="color:#666">|</span>Kitchen  <span style="color:#666">|</span>ORANGE    <span style="color:#666">|</span><span style="color:#666">156</span>            <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">01</span><span style="color:#666">-</span><span style="color:#666">21</span> <span style="color:#666">00</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>  <span style="color:#666">|</span>Kitchen  <span style="color:#666">|</span>GREEN     <span style="color:#666">|</span><span style="color:#666">5</span>              <span style="color:#666">|</span>
+[<span style="">…</span>]</code></pre></div>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_try_it_out">Try it out!</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Grab the <a href="https://github.com/confluentinc/demo-scene/blob/master/sonos">Docker Compose from here</a>, and give it a whirl.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>You need to find the IP of your Sonos device (e.g. from the Sonos mobile app <code>About My System</code>), and put this in the <code>log-sonos-to-kafka.sh</code> file and then execute it:</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">./log-sonos-to-kafka.sh</code></pre></div>
+</div>
+</li>
+<li>
+<p>Launch ksqlDB CLI:</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">docker <span style="color:#008000">exec</span> -it ksqldb-cli bash -c <span style="color:#ba2121">&#39;echo -e &#34;\n\n⏳ Waiting for ksqlDB to be available before launching CLI\n&#34;; while : ; do curl_status=$(curl -s -o /dev/null -w %{http_code} http://ksqldb-server:8088/info) ; echo -e $(date) &#34; ksqlDB server listener HTTP state: &#34; $curl_status &#34; (waiting for 200)&#34; ; if [ $curl_status -eq 200 ] ; then  break ; fi ; sleep 5 ; done ; ksql http://ksqldb-server:8088&#39;</span></code></pre></div>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Then run through the article as shown, and enjoy!</p>
+</div>
+<div class="paragraph">
+<p>You&#8217;ll find Grafana at <a href="http://localhost:3000" class="bare">http://localhost:3000</a> (login <code>admin</code>/<code>admin</code>) and Chronograf at <a href="http://localhost:8888/" class="bare">http://localhost:8888/</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_appendix_todo">Appendix : TODO</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>The data at <code>http://&lt;sonos player IP&gt;:1400/support/review</code> also includes other things that would be interesting to extract and plot:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>the signal strength between each device</p>
+</li>
+<li>
+<p>the <code>ifconfig</code> stats for each device (packets received/dropped/errors etc)</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_appendix_other_interesting_sonos_web_endpoints">Appendix : Other interesting Sonos web endpoints</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><code>/status/zp</code></p>
+</li>
+<li>
+<p><code>/status/proc/ath_rincon/status</code></p>
+</li>
+<li>
+<p><code>/status/ifconfig</code></p>
+</li>
+<li>
+<p><code>/status/showstp</code></p>
+</li>
+<li>
+<p><code>/tools.htm</code></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_footnote">Footnote</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Turns out the timing of this blog <a href="https://www.theverge.com/2019/12/30/21042871/sonos-recycle-mode-trade-up-program-controversy">wasn&#8217;t so great</a>:</p>
+</div>
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">Thread! I just got a letter from <a href="https://twitter.com/Sonos?ref_src=twsrc%5Etfw">@Sonos</a> about one of my old speakers. At face value it seems innocuous, but read between the lines and it&#39;s actually fairly threatening. <a href="https://t.co/b0DZCrBuwW">pic.twitter.com/b0DZCrBuwW</a></p>&mdash; Sean Bonner Ⓥ (@seanbonner) <a href="https://twitter.com/seanbonner/status/1219760460028760065?ref_src=twsrc%5Etfw">January 21, 2020</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+</div>
+</div>
+
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
