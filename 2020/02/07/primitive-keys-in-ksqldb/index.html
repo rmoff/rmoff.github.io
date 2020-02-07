@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Primitive Keys in ksqlDB</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/02/07/primitive-keys-in-ksqldb/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.59.1" />
+
+		
+		<meta property="og:title" content="Primitive Keys in ksqlDB" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/02/IMG_2346.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/02/07/primitive-keys-in-ksqldb/" />
+		<meta property="og:site_name" content="Primitive Keys in ksqlDB" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/02/IMG_2346.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Primitive Keys in ksqlDB</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-02-07T10:58:06Z">Feb 7, 2020</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.net/categories/ksqldb" class="no-underline category near-white dim">KsqlDB</a>, <a href="https://rmoff.net/categories/debezium" class="no-underline category near-white dim">Debezium</a>, <a href="https://rmoff.net/categories/single-message-transform" class="no-underline category near-white dim">Single Message Transform</a>, <a href="https://rmoff.net/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>, <a href="https://rmoff.net/categories/kafkacat" class="no-underline category near-white dim">Kafkacat</a>
+								<span class="display-print">at https://rmoff.net/2020/02/07/primitive-keys-in-ksqldb/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>ksqlDB 0.7 will add support for message keys as primitive data types beyond just <code>STRING</code> (which is all we&#8217;ve had to date). That means that Kafka messages are going to be much easier to work with, and require less wrangling to get into the form in which you need them. Take an example of a database table that you&#8217;ve ingested into a Kafka topic, and want to join to a stream of events. Previously you&#8217;d have had to take the Kafka topic into which the table had been ingested and run a ksqlDB processor to re-key the messages such that ksqlDB could join on them. <em>Friends, I am here to tell you that this is no longer needed!</em></p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+ksqlDB 0.7 is not yet (7 February 2020) released - my notes here are based on the latest build from <a href="https://github.com/confluentinc/ksql/">master on GitHub</a>. You can find Docker images for the latest build here: <a href="https://hub.docker.com/r/rmoff/ksqldb-server" class="bare">https://hub.docker.com/r/rmoff/ksqldb-server</a>
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s take the example from above, ingesting data from a database. I&#8217;m going to use Debezium (of course), and stream in data from MySQL. Create the connector using the Kafka Connect REST API:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -i -X PUT -H <span style="color:#ba2121">&#34;Accept:application/json&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -H  <span style="color:#ba2121">&#34;Content-Type:application/json&#34;</span> http://localhost:8083/connectors/source-debezium-mysql-00/config <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -d <span style="color:#ba2121">&#39;{
+</span><span style="color:#ba2121">    &#34;connector.class&#34; : &#34;io.debezium.connector.mysql.MySqlConnector&#34;,
+</span><span style="color:#ba2121">    &#34;database.hostname&#34; : &#34;mysql&#34;,
+</span><span style="color:#ba2121">    &#34;database.port&#34; : &#34;3306&#34;,
+</span><span style="color:#ba2121">    &#34;database.user&#34; : &#34;debezium&#34;,
+</span><span style="color:#ba2121">    &#34;database.password&#34; : &#34;dbz&#34;,
+</span><span style="color:#ba2121">    &#34;database.server.id&#34; : &#34;42&#34;,
+</span><span style="color:#ba2121">    &#34;database.server.name&#34; : &#34;asgard&#34;,
+</span><span style="color:#ba2121">    &#34;table.whitelist&#34; : &#34;demo.customers&#34;,
+</span><span style="color:#ba2121">    &#34;database.history.kafka.bootstrap.servers&#34; : &#34;kafka:29092&#34;,
+</span><span style="color:#ba2121">    &#34;database.history.kafka.topic&#34; : &#34;dbhistory.demo&#34; ,
+</span><span style="color:#ba2121">    &#34;include.schema.changes&#34; : &#34;false&#34;,
+</span><span style="color:#ba2121">    &#34;transforms&#34;: &#34;unwrap,extractkey&#34;,
+</span><span style="color:#ba2121">    &#34;transforms.unwrap.type&#34;: &#34;io.debezium.transforms.ExtractNewRecordState&#34;,
+</span><span style="color:#ba2121">    &#34;transforms.extractkey.type&#34;: &#34;org.apache.kafka.connect.transforms.ExtractField$Key&#34;,
+</span><span style="color:#ba2121">    &#34;transforms.extractkey.field&#34;: &#34;id&#34;,
+</span><span style="color:#ba2121">    &#34;key.converter&#34;: &#34;org.apache.kafka.connect.converters.IntegerConverter&#34;,
+</span><span style="color:#ba2121">    &#34;value.converter&#34;: &#34;io.confluent.connect.avro.AvroConverter&#34;,
+</span><span style="color:#ba2121">    &#34;value.converter.schema.registry.url&#34;: &#34;http://schema-registry:8081&#34;
+</span><span style="color:#ba2121">    }&#39;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Check it&#8217;s running</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=info&amp;expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>           jq <span style="color:#ba2121">&#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&#34;connector.class&#34;]|join(&#34;:|:&#34;)&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>           column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+
+<span style="color:#008000">source</span>  |  source-debezium-mysql-00  |  RUNNING  |  RUNNING  |  io.debezium.connector.mysql.MySqlConnector</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Now let&#8217;s peel back the covers just a bit. The extremely eagle-eyed amongst you will have noticed that in the connector above I specified:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>"key.converter": "org.apache.kafka.connect.converters.IntegerConverter"</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This uses the new set of primitive converters that were added in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-305:+Add+Connect+primitive+number+converters">KIP-305</a> as part of Apache Kafka 2.0. So Debezium will take the primary key of the table (<code>id</code>) and set it as the <em>key</em> of the message, in a struct. I use the <a href="https://docs.confluent.io/current/connect/transforms/extractfield.html#description"><code>ExtractField</code></a> <a href="https://www.confluent.io/blog/simplest-useful-kafka-connect-data-pipeline-world-thereabouts-part-3/">Single Message Transform</a> (SMT) to lift this out of the struct, and write it as the key of the Kafka message as a signed 32-bit integer with the <code>IntegerConverter</code> converter.</p>
+</div>
+<div class="paragraph">
+<p>I also use the <code>ExtractNewRecordState</code> SMT to flatten the <em>value</em> part of the message to just the current DB record state.</p>
+</div>
+<div class="paragraph">
+<p>We can inspect the payload, which shows that things are working as we want them to. I&#8217;m using the <code>-i</code> setting to specify the serde for reading the key and value:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kafkacat -b kafka:29092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -t asgard.demo.CUSTOMERS <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -C <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -c1 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -s <span style="color:#19177c">key</span><span style="color:#666">=</span>i <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -s <span style="color:#19177c">value</span><span style="color:#666">=</span>avro <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>         -r http://schema-registry:8081
+         -f <span style="color:#ba2121">&#39;Topic %t / Partition %p / Offset: %o / Timestamp: %T\nHeaders: %h\nKey (%K bytes): %k\nPayload (%S bytes): %s\n--\n&#39;</span> 
+
+Topic asgard.demo.CUSTOMERS / Partition <span style="color:#666">0</span> / Offset: <span style="color:#666">2</span> / Timestamp: <span style="color:#666">1581069692127</span>
+Headers:
+Key <span style="color:#666">(</span><span style="color:#666">4</span> bytes<span style="color:#666">)</span>: <span style="color:#666">3</span>
+Payload <span style="color:#666">(</span><span style="color:#666">155</span> bytes<span style="color:#666">)</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;id&#34;</span>: <span style="color:#666">3</span>, <span style="color:#ba2121">&#34;first_name&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;string&#34;</span>: <span style="color:#ba2121">&#34;Mariejeanne&#34;</span><span style="color:#666">}</span>, <span style="color:#ba2121">&#34;last_name&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;string&#34;</span>: <span style="color:#ba2121">&#34;Cocci&#34;</span><span style="color:#666">}</span>, <span style="color:#ba2121">&#34;email&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;string&#34;</span>: <span style="color:#ba2121">&#34;mcocci2@techcrunch.com&#34;</span><span style="color:#666">}</span>, <span style="color:#ba2121">&#34;gender&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;string&#34;</span>: <span style="color:#ba2121">&#34;Female&#34;</span><span style="color:#666">}</span>, <span style="color:#ba2121">&#34;club_status&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;string&#34;</span>: <span style="color:#ba2121">&#34;bronze&#34;</span><span style="color:#666">}</span>, <span style="color:#ba2121">&#34;comments&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;string&#34;</span>: <span style="color:#ba2121">&#34;Multi-tiered bandwidth-monitored capability&#34;</span><span style="color:#666">}</span>, <span style="color:#ba2121">&#34;create_ts&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;string&#34;</span>: <span style="color:#ba2121">&#34;2020-02-07T09:35:27Z&#34;</span><span style="color:#666">}</span>, <span style="color:#ba2121">&#34;update_ts&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;string&#34;</span>: <span style="color:#ba2121">&#34;2020-02-07T09:35:27Z&#34;</span><span style="color:#666">}}</span>
+--</code></pre></div>
+</div>
+<div class="paragraph">
+<p>What are all these arguments for <code>kafkacat</code>?</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>-b</code> is the broker connection, and <code>-t</code> is the topic</p>
+</li>
+<li>
+<p><code>-C</code> means run as a consumer, and <code>-c1</code> means just read one message and then exit</p>
+</li>
+<li>
+<p><code>-f</code> is the format string to use when rendering the message - here we&#8217;re showing a ton of useful metadata as well as the key and value themselves. Format string can include:</p>
+</li>
+<li>
+<p><code>-s</code> tells kafkacat how to deserialise the message&#8217;s key and/or value</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>key=i</code> deserialises the <strong>key</strong> as a signed 32-bit integer</p>
+</li>
+<li>
+<p><code>value=avro</code> deserialise the <strong>value</strong> as Avro using the Schema Registry specified in <code>-r</code> to fetch the schema</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+<div class="sect1">
+<h2 id="_use_it_in_ksqldb">Use it in ksqlDB</h2>
+<div class="sectionbody">
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+ksqlDB 0.7 is not yet (7 February 2020) released - my notes here are based on the latest build from <a href="https://github.com/confluentinc/ksql/">master on GitHub</a>. You can find Docker images for the latest build here: <a href="https://hub.docker.com/r/rmoff/ksqldb-server" class="bare">https://hub.docker.com/r/rmoff/ksqldb-server</a>
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>So we&#8217;ve got the Kafka topic populated correctly. Now we can declare a table over it, in ksqlDB, using the new <code>ROWKEY … KEY</code> syntax with the appropriate <a href="https://docs.confluent.io/current/ksql/docs/developer-guide/serialization.html#kafka">primitive type</a>.
+<em>Note that at the moment you have to declare the Avro schema explicitly if you are declaring the key&#8217;s type.</em></p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> <span style="color:#008000;font-weight:bold">TABLE</span> CUSTOMERS (ROWKEY <span style="color:#008000">INT</span> <span style="color:#008000;font-weight:bold">KEY</span>, 
+                        FIRST_NAME <span style="color:#008000">VARCHAR</span>, LAST_NAME <span style="color:#008000">VARCHAR</span>, EMAIL <span style="color:#008000">VARCHAR</span>, GENDER <span style="color:#008000">VARCHAR</span>, CLUB_STATUS <span style="color:#008000">VARCHAR</span>, COMMENTS <span style="color:#008000">VARCHAR</span>, CREATE_TS <span style="color:#008000">VARCHAR</span>, UPDATE_TS <span style="color:#008000">VARCHAR</span>) 
+                <span style="color:#008000;font-weight:bold">WITH</span>    (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;asgard.demo.CUSTOMERS&#39;</span>, 
+                        VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;AVRO&#39;</span>);</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Check out the schema - note the <code>INTEGER</code> key:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">DESCRIBE</span> CUSTOMERS;
+
+Name                 : CUSTOMERS
+ Field       <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">Type</span>
+<span style="color:#408080;font-style:italic">-----------------------------------------
+</span><span style="color:#408080;font-style:italic"></span> ROWTIME     <span style="color:#666">|</span> <span style="color:#008000">BIGINT</span>           (<span style="color:#008000;font-weight:bold">system</span>)
+ ROWKEY      <span style="color:#666">|</span> <span style="color:#008000">INTEGER</span>          (<span style="color:#008000;font-weight:bold">system</span>)
+ FIRST_NAME  <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ LAST_NAME   <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ EMAIL       <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ GENDER      <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ CLUB_STATUS <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ COMMENTS    <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ CREATE_TS   <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ UPDATE_TS   <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+<span style="color:#408080;font-style:italic">-----------------------------------------
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#008000;font-weight:bold">For</span> runtime <span style="color:#008000;font-weight:bold">statistics</span> <span style="color:#008000;font-weight:bold">and</span> query details run: <span style="color:#008000;font-weight:bold">DESCRIBE</span> EXTENDED <span style="color:#666">&lt;</span>Stream,<span style="color:#008000;font-weight:bold">Table</span><span style="color:#666">&gt;</span>;
+ksql<span style="color:#666">&gt;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Query the TABLE:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#666">*</span> <span style="color:#008000;font-weight:bold">FROM</span> CUSTOMERS EMIT CHANGES <span style="color:#008000;font-weight:bold">LIMIT</span> <span style="color:#666">5</span>;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------+---------+-------------+-----------+------------------------+--------+------------+--------------------------+--------------------------+--------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>ROWTIME         <span style="color:#666">|</span>ROWKEY   <span style="color:#666">|</span>FIRST_NAME   <span style="color:#666">|</span>LAST_NAME  <span style="color:#666">|</span>EMAIL                   <span style="color:#666">|</span>GENDER  <span style="color:#666">|</span>CLUB_STATUS <span style="color:#666">|</span>COMMENTS                  <span style="color:#666">|</span>CREATE_TS                 <span style="color:#666">|</span>UPDATE_TS                 <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------+---------+-------------+-----------+------------------------+--------+------------+--------------------------+--------------------------+--------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">1581069692127</span>   <span style="color:#666">|</span><span style="color:#666">1</span>        <span style="color:#666">|</span>Rica         <span style="color:#666">|</span>Blaisdell  <span style="color:#666">|</span>rblaisdell0<span style="color:#666">@</span>rambler.ru  <span style="color:#666">|</span>Female  <span style="color:#666">|</span>bronze      <span style="color:#666">|</span>Universal optimal hierarch<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span>
+<span style="color:#666">|</span>                <span style="color:#666">|</span>         <span style="color:#666">|</span>             <span style="color:#666">|</span>           <span style="color:#666">|</span>                        <span style="color:#666">|</span>        <span style="color:#666">|</span>            <span style="color:#666">|</span>y                         <span style="color:#666">|</span>                          <span style="color:#666">|</span>                          <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">1581069692127</span>   <span style="color:#666">|</span><span style="color:#666">2</span>        <span style="color:#666">|</span>Ruthie       <span style="color:#666">|</span>Brockherst <span style="color:#666">|</span>rbrockherst1<span style="color:#666">@</span>ow.ly      <span style="color:#666">|</span>Female  <span style="color:#666">|</span>platinum    <span style="color:#666">|</span>Reverse<span style="color:#666">-</span>engineered tangibl<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span>
+<span style="color:#666">|</span>                <span style="color:#666">|</span>         <span style="color:#666">|</span>             <span style="color:#666">|</span>           <span style="color:#666">|</span>                        <span style="color:#666">|</span>        <span style="color:#666">|</span>            <span style="color:#666">|</span>e interface               <span style="color:#666">|</span>                          <span style="color:#666">|</span>                          <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">1581069692127</span>   <span style="color:#666">|</span><span style="color:#666">3</span>        <span style="color:#666">|</span>Mariejeanne  <span style="color:#666">|</span>Cocci      <span style="color:#666">|</span>mcocci2<span style="color:#666">@</span>techcrunch.com  <span style="color:#666">|</span>Female  <span style="color:#666">|</span>bronze      <span style="color:#666">|</span>Multi<span style="color:#666">-</span>tiered bandwidth<span style="color:#666">-</span>mon<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span>
+<span style="color:#666">|</span>                <span style="color:#666">|</span>         <span style="color:#666">|</span>             <span style="color:#666">|</span>           <span style="color:#666">|</span>                        <span style="color:#666">|</span>        <span style="color:#666">|</span>            <span style="color:#666">|</span>itored capability         <span style="color:#666">|</span>                          <span style="color:#666">|</span>                          <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">1581069692128</span>   <span style="color:#666">|</span><span style="color:#666">4</span>        <span style="color:#666">|</span>Hashim       <span style="color:#666">|</span>Rumke      <span style="color:#666">|</span>hrumke3<span style="color:#666">@</span>sohu.com        <span style="color:#666">|</span>Male    <span style="color:#666">|</span>platinum    <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">Self</span><span style="color:#666">-</span>enabling <span style="color:#666">24</span><span style="color:#666">/</span><span style="color:#666">7</span> firmwar<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span>
+<span style="color:#666">|</span>                <span style="color:#666">|</span>         <span style="color:#666">|</span>             <span style="color:#666">|</span>           <span style="color:#666">|</span>                        <span style="color:#666">|</span>        <span style="color:#666">|</span>            <span style="color:#666">|</span>e                         <span style="color:#666">|</span>                          <span style="color:#666">|</span>                          <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">1581069692128</span>   <span style="color:#666">|</span><span style="color:#666">5</span>        <span style="color:#666">|</span>Hansiain     <span style="color:#666">|</span>Coda       <span style="color:#666">|</span>hcoda4<span style="color:#666">@</span>senate.gov       <span style="color:#666">|</span>Male    <span style="color:#666">|</span>platinum    <span style="color:#666">|</span>Centralized <span style="color:#008000;font-weight:bold">full</span><span style="color:#666">-</span>range app<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">02</span><span style="color:#666">-</span><span style="color:#666">07</span>T09:<span style="color:#666">35</span>:<span style="color:#666">27</span>Z      <span style="color:#666">|</span>
+<span style="color:#666">|</span>                <span style="color:#666">|</span>         <span style="color:#666">|</span>             <span style="color:#666">|</span>           <span style="color:#666">|</span>                        <span style="color:#666">|</span>        <span style="color:#666">|</span>            <span style="color:#666">|</span>roach                     <span style="color:#666">|</span>                          <span style="color:#666">|</span>                          <span style="color:#666">|</span>
+<span style="color:#008000;font-weight:bold">Limit</span> Reached
+Query terminated</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Now let&#8217;s take a stream of events that have a foreign key (<code>USER_ID</code>) to the customer data above:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">DESCRIBE</span> RATINGS;
+
+Name                 : RATINGS
+ Field       <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">Type</span>
+<span style="color:#408080;font-style:italic">-----------------------------------------
+</span><span style="color:#408080;font-style:italic"></span> ROWTIME     <span style="color:#666">|</span> <span style="color:#008000">BIGINT</span>           (<span style="color:#008000;font-weight:bold">system</span>)
+ ROWKEY      <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)  (<span style="color:#008000;font-weight:bold">system</span>)
+ RATING_ID   <span style="color:#666">|</span> <span style="color:#008000">BIGINT</span>
+ USER_ID     <span style="color:#666">|</span> <span style="color:#008000">INTEGER</span>
+ STARS       <span style="color:#666">|</span> <span style="color:#008000">INTEGER</span>
+ ROUTE_ID    <span style="color:#666">|</span> <span style="color:#008000">INTEGER</span>
+ RATING_TIME <span style="color:#666">|</span> <span style="color:#008000">BIGINT</span>
+ CHANNEL     <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ MESSAGE     <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+<span style="color:#408080;font-style:italic">-----------------------------------------
+</span><span style="color:#408080;font-style:italic"></span>
+ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> USER_ID, STARS, MESSAGE <span style="color:#008000;font-weight:bold">FROM</span> RATINGS EMIT CHANGES;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------+--------+------------------------------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>USER_ID   <span style="color:#666">|</span>STARS   <span style="color:#666">|</span>MESSAGE                                                                       <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------+--------+------------------------------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">10</span>        <span style="color:#666">|</span><span style="color:#666">4</span>       <span style="color:#666">|</span>your team here rocks<span style="color:#666">!</span>                                                         <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">6</span>         <span style="color:#666">|</span><span style="color:#666">1</span>       <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">more</span> peanuts please                                                           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">19</span>        <span style="color:#666">|</span><span style="color:#666">4</span>       <span style="color:#666">|</span>why <span style="color:#008000;font-weight:bold">is</span> it so difficult <span style="color:#008000;font-weight:bold">to</span> keep the bathrooms clean <span style="color:#666">?</span>                          <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">18</span>        <span style="color:#666">|</span><span style="color:#666">3</span>       <span style="color:#666">|</span>Exceeded <span style="color:#008000;font-weight:bold">all</span> my expectations. Thank you <span style="color:#666">!</span>                                     <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">1</span>         <span style="color:#666">|</span><span style="color:#666">1</span>       <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">more</span> peanuts please                                                           <span style="color:#666">|</span>
+<span style="">…</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Join this stream to the customer data, on the common key:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">C</span>.FIRST_NAME <span style="color:#666">+</span> <span style="color:#ba2121">&#39; &#39;</span> <span style="color:#666">+</span> <span style="color:#008000;font-weight:bold">C</span>.LAST_NAME <span style="color:#008000;font-weight:bold">AS</span> CUSTOMER, 
+             R.STARS, 
+             R.MESSAGE 
+        <span style="color:#008000;font-weight:bold">FROM</span> RATINGS R 
+             <span style="color:#008000;font-weight:bold">INNER</span> <span style="color:#008000;font-weight:bold">JOIN</span> CUSTOMERS <span style="color:#008000;font-weight:bold">C</span> 
+                <span style="color:#008000;font-weight:bold">ON</span> R.USER_ID <span style="color:#666">=</span> <span style="color:#008000;font-weight:bold">C</span>.ROWKEY 
+        EMIT CHANGES;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------+-------+-----------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>CUSTOMER        <span style="color:#666">|</span>STARS  <span style="color:#666">|</span>MESSAGE                                              <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------+-------+-----------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>Brena Tollerton <span style="color:#666">|</span><span style="color:#666">4</span>      <span style="color:#666">|</span>your team here rocks<span style="color:#666">!</span>                                <span style="color:#666">|</span>
+<span style="color:#666">|</span>Robinet Leheude <span style="color:#666">|</span><span style="color:#666">1</span>      <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">more</span> peanuts please                                  <span style="color:#666">|</span>
+<span style="color:#666">|</span>Josiah Brockett <span style="color:#666">|</span><span style="color:#666">4</span>      <span style="color:#666">|</span>why <span style="color:#008000;font-weight:bold">is</span> it so difficult <span style="color:#008000;font-weight:bold">to</span> keep the bathrooms clean <span style="color:#666">?</span> <span style="color:#666">|</span>
+<span style="color:#666">|</span>Waldon Keddey   <span style="color:#666">|</span><span style="color:#666">3</span>      <span style="color:#666">|</span>Exceeded <span style="color:#008000;font-weight:bold">all</span> my expectations. Thank you <span style="color:#666">!</span>            <span style="color:#666">|</span>
+<span style="color:#666">|</span>Rica Blaisdell  <span style="color:#666">|</span><span style="color:#666">1</span>      <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">more</span> peanuts please                                  <span style="color:#666">|</span>
+<span style="">…</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_if_im_using_ksqldb_0_7_confluent_platform_5_5_or_if_i_dont_want_to_type_in_the_whole_value_schema_if_its_in_avro">What if I&#8217;m using ksqlDB &lt;0.7 (Confluent Platform &lt;5.5) ? (or if I don&#8217;t want to type in the whole value schema if it&#8217;s in Avro?)</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The option you&#8217;ve got here it to serialise the key as a string, and then in ksqlDB force the foreign key to the same type.</p>
+</div>
+<div class="paragraph">
+<p>Here&#8217;s a new version of the connector, using the StringConverter. Note that it&#8217;s still using the <code>ExtractField$Key</code> SMT.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -i -X PUT -H <span style="color:#ba2121">&#34;Accept:application/json&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -H  <span style="color:#ba2121">&#34;Content-Type:application/json&#34;</span> http://localhost:8083/connectors/source-debezium-mysql-02/config <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    -d <span style="color:#ba2121">&#39;{
+</span><span style="color:#ba2121">    &#34;connector.class&#34; : &#34;io.debezium.connector.mysql.MySqlConnector&#34;,
+</span><span style="color:#ba2121">    &#34;database.hostname&#34; : &#34;mysql&#34;,
+</span><span style="color:#ba2121">    &#34;database.port&#34; : &#34;3306&#34;,
+</span><span style="color:#ba2121">    &#34;database.user&#34; : &#34;debezium&#34;,
+</span><span style="color:#ba2121">    &#34;database.password&#34; : &#34;dbz&#34;,
+</span><span style="color:#ba2121">    &#34;database.server.id&#34; : &#34;43&#34;,
+</span><span style="color:#ba2121">    &#34;database.server.name&#34; : &#34;asgard2&#34;,
+</span><span style="color:#ba2121">    &#34;table.whitelist&#34; : &#34;demo.customers&#34;,
+</span><span style="color:#ba2121">    &#34;database.history.kafka.bootstrap.servers&#34; : &#34;kafka:29092&#34;,
+</span><span style="color:#ba2121">    &#34;database.history.kafka.topic&#34; : &#34;dbhistory.demo&#34; ,
+</span><span style="color:#ba2121">    &#34;include.schema.changes&#34; : &#34;false&#34;,
+</span><span style="color:#ba2121">    &#34;transforms&#34;: &#34;unwrap,extractkey&#34;,
+</span><span style="color:#ba2121">    &#34;transforms.unwrap.type&#34;: &#34;io.debezium.transforms.ExtractNewRecordState&#34;,
+</span><span style="color:#ba2121">    &#34;transforms.extractkey.type&#34;: &#34;org.apache.kafka.connect.transforms.ExtractField$Key&#34;,
+</span><span style="color:#ba2121">    &#34;transforms.extractkey.field&#34;: &#34;id&#34;,
+</span><span style="color:#ba2121">    &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+</span><span style="color:#ba2121">    &#34;value.converter&#34;: &#34;io.confluent.connect.avro.AvroConverter&#34;,
+</span><span style="color:#ba2121">    &#34;value.converter.schema.registry.url&#34;: &#34;http://schema-registry:8081&#34;
+</span><span style="color:#ba2121">    }&#39;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Create a new version of the table - note that we don&#8217;t have to enter the full schema :)</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">CREATE</span> <span style="color:#008000;font-weight:bold">TABLE</span> CUSTOMERS2 <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;asgard2.demo.CUSTOMERS&#39;</span>, VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;AVRO&#39;</span>);
+
+ Message
+<span style="color:#408080;font-style:italic">---------------
+</span><span style="color:#408080;font-style:italic"></span> <span style="color:#008000;font-weight:bold">Table</span> created
+<span style="color:#408080;font-style:italic">---------------
+</span><span style="color:#408080;font-style:italic"></span>ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">DESCRIBE</span> CUSTOMERS2;
+
+Name                 : CUSTOMERS2
+ Field       <span style="color:#666">|</span> <span style="color:#008000;font-weight:bold">Type</span>
+<span style="color:#408080;font-style:italic">-----------------------------------------
+</span><span style="color:#408080;font-style:italic"></span> ROWTIME     <span style="color:#666">|</span> <span style="color:#008000">BIGINT</span>           (<span style="color:#008000;font-weight:bold">system</span>)
+ ROWKEY      <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)  (<span style="color:#008000;font-weight:bold">system</span>)
+ ID          <span style="color:#666">|</span> <span style="color:#008000">INTEGER</span>
+ FIRST_NAME  <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ LAST_NAME   <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ EMAIL       <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ GENDER      <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ CLUB_STATUS <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ COMMENTS    <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ CREATE_TS   <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+ UPDATE_TS   <span style="color:#666">|</span> <span style="color:#008000">VARCHAR</span>(STRING)
+<span style="color:#408080;font-style:italic">-----------------------------------------</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Now we workaround the fact that the foreign key <code>USER_ID</code> is an <code>INT</code> on the events we&#8217;re joining to but <code>ROWKEY</code> is a <code>STRING</code> on the table (per the <code>DESCRIBE</code> output above) by `CAST`ing the datatype on the left-hand side of the join:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> <span style="color:#008000;font-weight:bold">C</span>.FIRST_NAME <span style="color:#666">+</span> <span style="color:#ba2121">&#39; &#39;</span> <span style="color:#666">+</span> <span style="color:#008000;font-weight:bold">C</span>.LAST_NAME <span style="color:#008000;font-weight:bold">AS</span> CUSTOMER, 
+             R.STARS, 
+             R.MESSAGE 
+        <span style="color:#008000;font-weight:bold">FROM</span> RATINGS R 
+             <span style="color:#008000;font-weight:bold">INNER</span> <span style="color:#008000;font-weight:bold">JOIN</span> CUSTOMERS2 <span style="color:#008000;font-weight:bold">C</span> 
+                <span style="color:#008000;font-weight:bold">ON</span> <span style="color:#008000;font-weight:bold">CAST</span>(R.USER_ID <span style="color:#008000;font-weight:bold">AS</span> STRING) <span style="color:#666">=</span> <span style="color:#008000;font-weight:bold">C</span>.ROWKEY 
+        EMIT CHANGES;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-----------------+-------+-----------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>CUSTOMER         <span style="color:#666">|</span>STARS  <span style="color:#666">|</span>MESSAGE                                              <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-----------------+-------+-----------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>Brena Tollerton  <span style="color:#666">|</span><span style="color:#666">4</span>      <span style="color:#666">|</span>your team here rocks<span style="color:#666">!</span>                                <span style="color:#666">|</span>
+<span style="color:#666">|</span>Robinet Leheude  <span style="color:#666">|</span><span style="color:#666">1</span>      <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">more</span> peanuts please                                  <span style="color:#666">|</span>
+<span style="color:#666">|</span>Josiah Brockett  <span style="color:#666">|</span><span style="color:#666">4</span>      <span style="color:#666">|</span>why <span style="color:#008000;font-weight:bold">is</span> it so difficult <span style="color:#008000;font-weight:bold">to</span> keep the bathrooms clean <span style="color:#666">?</span> <span style="color:#666">|</span>
+<span style="color:#666">|</span>Waldon Keddey    <span style="color:#666">|</span><span style="color:#666">3</span>      <span style="color:#666">|</span>Exceeded <span style="color:#008000;font-weight:bold">all</span> my expectations. Thank you <span style="color:#666">!</span>            <span style="color:#666">|</span>
+<span style="color:#666">|</span>Rica Blaisdell   <span style="color:#666">|</span><span style="color:#666">1</span>      <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">more</span> peanuts please                                  <span style="color:#666">|</span>
+<span style="">…</span></code></pre></div>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
