@@ -5,9 +5,71 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2020-02-13</lastBuildDate>
+    <lastBuildDate>2020-02-25</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Kafka Connect JDBC Sink - setting the key field name</title>
+      <link>https://rmoff.net/2020/02/25/kafka-connect-jdbc-sink-setting-the-key-field-name/</link>
+      <pubDate>2020-02-25</pubDate>
+      
+      <guid>https://rmoff.net/2020/02/25/kafka-connect-jdbc-sink-setting-the-key-field-name/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/02/IMG_3118.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I wanted to get some data from a Kafka topic:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; PRINT PERSON_STATS &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; BEGINNING;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;Key&lt;/span&gt; format: KAFKA (STRING)
+Value format: AVRO
+rowtime: &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;25&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;51&lt;/span&gt; PM UTC, &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;key&lt;/span&gt;: robin, value: &lt;span style=&#34;&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;PERSON&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;robin&amp;#34;&lt;/span&gt;,
+ &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;LOCATION_CHANGES&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;UNIQUE_LOCATIONS&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;into Postgres, so did the easy thing and used Kafka Connect with the &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-jdbc/sink-connector/index.html&#34;&gt;JDBC Sink connector&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I wanted to use &lt;code&gt;UPSERT&lt;/code&gt; behaviour based on the key of the Kafka message (as shown above, &lt;code&gt;robin&lt;/code&gt;), so set &lt;code&gt;pk.mode = record_key&lt;/code&gt;. Unfortunately this didn&amp;#8217;t work and errored out with:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;Need exactly one PK column defined since the key schema for records is a primitive type, defined columns are: []&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Hmmmmm, I was puzzled. How can I specify a field name for something that&amp;#8217;s the message key?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Turns out that if you&amp;#8217;ve got a primitive field, &lt;strong&gt;you&lt;/strong&gt; need to specify the field name &lt;em&gt;that is to be created on the target table.&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So this works:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;…
+pk.mode &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; record_key
+pk.fields &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;PERSON&amp;#39;&lt;/span&gt;
+…&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Which then creates a table in the target database like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;postgres&lt;span style=&#34;color:#666&#34;&gt;=#&lt;/span&gt; &lt;span style=&#34;&#34;&gt;\&lt;/span&gt;d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;PERSON_STATS&amp;#34;&lt;/span&gt;
+                &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;Table&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;public.PERSON_STATS&amp;#34;&lt;/span&gt;
+      &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;Column&lt;/span&gt;      &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;Type&lt;/span&gt;  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;Collation&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;Nullable&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;Default&lt;/span&gt;
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;------------------+--------+-----------+----------+---------
+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt; PERSON           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000&#34;&gt;text&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;not&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;null&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+ LOCATION_CHANGES &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000&#34;&gt;bigint&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+ UNIQUE_LOCATIONS &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color:#008000&#34;&gt;bigint&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+Indexes:
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;PERSON_STATS_pkey&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;PRIMARY&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;KEY&lt;/span&gt;, btree (&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;PERSON&amp;#34;&lt;/span&gt;)&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;with data that updates in place as changes are made to the topic in Kafka&lt;/p&gt;
+&lt;/div&gt;
+&lt;script id=&#34;asciicast-304631&#34; src=&#34;https://asciinema.org/a/304631.js&#34; async&gt;&lt;/script&gt;</description>
+    </item>
     <item>
       <title>Adventures in the Cloud, Part 94: ECS</title>
       <link>https://rmoff.net/2020/02/13/adventures-in-the-cloud-part-94-ecs/</link>
@@ -2921,259 +2983,6 @@ curl -s -X PUT http://localhost:8083/admin/loggers/org.apache.kafka.connect.runt
 &lt;div class=&#34;sectionbody&#34;&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;&lt;a href=&#34;https://twitter.com/rmoff&#34;&gt;@ me on Twitter!&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-</description>
-    </item>
-    <item>
-      <title>Exploring ksqlDB window start time</title>
-      <link>https://rmoff.net/2020/01/09/exploring-ksqldb-window-start-time/</link>
-      <pubDate>2020-01-09</pubDate>
-      
-      <guid>https://rmoff.net/2020/01/09/exploring-ksqldb-window-start-time/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/01/IMG_2144.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Prompted by &lt;a href=&#34;https://stackoverflow.com/questions/59629748/ksql-aggregating-data-based-on-last-1-year-365-days&#34;&gt;a question on StackOverflow&lt;/a&gt; I had a bit of a dig into how windows behave in ksqlDB, specifically with regards to their start time. This article shows also how to create test data in ksqlDB and create data to be handled with a timestamp in the past.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;For a general background to windowing in ksqlDB see &lt;a href=&#34;https://docs.ksqldb.io/en/latest/concepts/time-and-windows-in-ksqldb-queries/&#34;&gt;the excellent docs&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The nice thing about recent releases of ksqlDB/KSQL is that you can create and populate streams directly with &lt;code&gt;CREATE STREAM&lt;/code&gt; and &lt;code&gt;INSERT INTO&lt;/code&gt; respectively. Much as I love kafkacat, being able to build a whole example within the ksqlDB CLI is very useful.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_create_the_stream&#34;&gt;Create the stream&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This creates the stream as well as the underlying topic. Since the topic doesn&amp;#8217;t exist already I&amp;#8217;ve specified its name and also &lt;code&gt;PARITIONS&lt;/code&gt; - without these ksqlDB won&amp;#8217;t create it for me.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt; STREAM SOURCE_DATA (OP_TS &lt;span style=&#34;color:#008000&#34;&gt;BIGINT&lt;/span&gt;, CUSTOMER &lt;span style=&#34;color:#008000&#34;&gt;VARCHAR&lt;/span&gt;, COST &lt;span style=&#34;color:#008000&#34;&gt;INT&lt;/span&gt;) 
-  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WITH&lt;/span&gt; (KAFKA_TOPIC&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;MY_DATA&amp;#39;&lt;/span&gt;, 
-        VALUE_FORMAT&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;AVRO&amp;#39;&lt;/span&gt;, 
-        PARTITIONS&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;, 
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;OP_TS&amp;#39;&lt;/span&gt;);&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Note that I&amp;#8217;ve created &lt;code&gt;OP_TS&lt;/code&gt; to hold the timestamp as an epoch (hence &lt;code&gt;BIGINT&lt;/code&gt;) and indicated to ksqlDB that this column is to be used as the timestamp for the records when doing any time-based processing. By default ksqlDB will use the timestamp of the Kafka message.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_populate_the_stream&#34;&gt;Populate the stream&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Using &lt;a href=&#34;https://www.epochconverter.com/&#34; class=&#34;bare&#34;&gt;https://www.epochconverter.com/&lt;/a&gt; for ease I came up with a handful of times within the past year, and inserted messages into the stream for these:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INSERT&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INTO&lt;/span&gt; SOURCE_DATA (OP_TS, CUSTOMER, COST) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;VALUES&lt;/span&gt; (&lt;span style=&#34;color:#666&#34;&gt;1549715863000&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;A&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;);
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INSERT&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INTO&lt;/span&gt; SOURCE_DATA (OP_TS, CUSTOMER, COST) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;VALUES&lt;/span&gt; (&lt;span style=&#34;color:#666&#34;&gt;1560083863000&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;A&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;);
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INSERT&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INTO&lt;/span&gt; SOURCE_DATA (OP_TS, CUSTOMER, COST) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;VALUES&lt;/span&gt; (&lt;span style=&#34;color:#666&#34;&gt;1574339863000&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;A&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;);
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INSERT&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INTO&lt;/span&gt; SOURCE_DATA (OP_TS, CUSTOMER, COST) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;VALUES&lt;/span&gt; (&lt;span style=&#34;color:#666&#34;&gt;1575981463000&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;A&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;);
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INSERT&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INTO&lt;/span&gt; SOURCE_DATA (OP_TS, CUSTOMER, COST) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;VALUES&lt;/span&gt; (&lt;span style=&#34;color:#666&#34;&gt;1576931863000&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;A&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;);
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INSERT&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;INTO&lt;/span&gt; SOURCE_DATA (OP_TS, CUSTOMER, COST) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;VALUES&lt;/span&gt; (&lt;span style=&#34;color:#666&#34;&gt;1578573463000&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;A&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;);&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_query_the_stream&#34;&gt;Query the stream&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Here&amp;#8217;s how the data looks. Note a few things:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;olist arabic&#34;&gt;
-&lt;ol class=&#34;arabic&#34;&gt;
-&lt;li&gt;
-&lt;p&gt;The use of &lt;code&gt;TIMESTAMPTOSTRING&lt;/code&gt; to make the milliseconds-since-epoch more readable&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;The &lt;code&gt;UNIX_TIMESTAMP&lt;/code&gt; function is used to do some date maths to show how long ago from now the timestamp is.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;ROWTIME&lt;/code&gt; and &lt;code&gt;OP_TS&lt;/code&gt; match, because that&amp;#8217;s what we told ksqlDB with the &lt;code&gt;WITH TIMESTAMP&lt;/code&gt; clause in the &lt;code&gt;CREATE STREAM&lt;/code&gt;. If we hadn&amp;#8217;t, then the &lt;code&gt;ROWTIME&lt;/code&gt; would just be the time at which the rows were `INSERT`ed above.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(ROWTIME,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Europe/London&amp;#39;&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; ROWTIME_STR,
-             TIMESTAMPTOSTRING(OP_TS,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Europe/London&amp;#39;&lt;/span&gt;)   &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; OP_TS, 
-             (UNIX_TIMESTAMP()&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;OP_TS) &lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1000&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;60&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;60&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;24&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; DAYS_DIFF , 
-             CUSTOMER, 
-             COST 
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; SOURCE_DATA 
-        EMIT CHANGES;
-
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;--------------------+--------------------+----------+-----------+-----+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;ROWTIME_STR         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;OP_TS               &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;DAYS_DIFF &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;CUSTOMER   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;COST &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;--------------------+--------------------+----------+-----------+-----+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;02&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;02&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;334&lt;/span&gt;       &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;06&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;06&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;214&lt;/span&gt;       &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;49&lt;/span&gt;        &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;30&lt;/span&gt;        &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt;        &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;43&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_tumbling_window_examples&#34;&gt;Tumbling window examples&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Here&amp;#8217;s the output of tumbling windows of various sizes.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;7 Days&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(WINDOWSTART(),&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Europe/London&amp;#39;&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; WINDOW_START_TS, 
-             CUSTOMER, 
-             &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(COST) 
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; SOURCE_DATA 
-                WINDOW TUMBLING (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SIZE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;7&lt;/span&gt; DAYS) 
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt; CUSTOMER 
-        EMIT CHANGES ;
-
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----------------------+----------+------------+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;WINDOW_START_TS       &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;CUSTOMER  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;KSQL_COL_2  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----------------------+----------+------------+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;02&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;07&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;06&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;01&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;05&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;19&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is pretty much what we&amp;#8217;d expect to see&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;31 days&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I was hoping for a month, but ksqlDB only supports:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;Caused by: line 1:160: mismatched input &#39;MONTH&#39; expecting {&#39;DAY&#39;, &#39;HOUR&#39;,
-        &#39;MINUTE&#39;, &#39;SECOND&#39;, &#39;MILLISECOND&#39;, &#39;DAYS&#39;, &#39;HOURS&#39;, &#39;MINUTES&#39;, &#39;SECONDS&#39;,
-        &#39;MILLISECONDS&#39;}&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Hence here&amp;#8217;s 31 days instead:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(WINDOWSTART(),&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Europe/London&amp;#39;&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; WINDOW_START_TS, 
-             CUSTOMER, 
-             &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(COST) 
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; SOURCE_DATA 
-                WINDOW TUMBLING (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SIZE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;31&lt;/span&gt; DAYS) 
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt; CUSTOMER 
-        EMIT CHANGES ;    
-
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-----------------------+----------+------------+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;WINDOW_START_TS        &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;CUSTOMER  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;KSQL_COL_2  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-----------------------+----------+------------+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;05&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;26&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;01&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;28&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;28&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;29&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Note that two of the values (for &lt;code&gt;2019-12-10&lt;/code&gt;, &lt;code&gt;2019-12-21&lt;/code&gt;) fall within the same window (starting &lt;code&gt;2019-11-28&lt;/code&gt;)&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;365 days&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;As noted above ksqlDB support &lt;code&gt;DAYS&lt;/code&gt; as the largest unit of time, so I&amp;#8217;ll have to approximate 1 year ~~ 365 days&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(WINDOWSTART(),&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Europe/London&amp;#39;&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; WINDOW_START_TS, 
-             CUSTOMER, 
-             &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(COST) 
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; SOURCE_DATA 
-                WINDOW TUMBLING (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SIZE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;365&lt;/span&gt; DAYS) 
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt; CUSTOMER 
-        EMIT CHANGES ;    
-
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-----------------------+----------+------------+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;WINDOW_START_TS        &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;CUSTOMER  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;KSQL_COL_2  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-----------------------+----------+------------+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2018&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2019&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;    &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A         &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;So this is where it gets interesting - looking back on the query output above you can see we only have data within the last year, but for a tumbling window of 365 days we&amp;#8217;re getting two values, starting on December 20th of two consecutive years.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_window_start_date&#34;&gt;Window start &lt;strong&gt;date&lt;/strong&gt;&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;When calculating an time window &lt;strong&gt;within a day&lt;/strong&gt; the window starts at midnight. For a window greater than a day, it seems that the window &lt;strong&gt;date&lt;/strong&gt; from which the window end date is calculated is based on &lt;a href=&#34;https://en.wikipedia.org/wiki/Unix_time&#34;&gt;Unix time&lt;/a&gt; (which also ties in with window sizes less than a day starting a midnight).&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Let&amp;#8217;s double-check this assumption. Unix time starts at 1st January 1970 00:00:00. Taking our window size of 365 days, this is:&lt;/p&gt;
-&lt;/div&gt;
-&lt;table class=&#34;tableblock frame-all grid-all stretch&#34;&gt;
-&lt;colgroup&gt;
-&lt;col style=&#34;width: 50%;&#34;&gt;
-&lt;col style=&#34;width: 50%;&#34;&gt;
-&lt;/colgroup&gt;
-&lt;tbody&gt;
-&lt;tr&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;days&lt;/p&gt;&lt;/td&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;365&lt;/p&gt;&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;hours&lt;/p&gt;&lt;/td&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;8760&lt;/p&gt;&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;minutes&lt;/p&gt;&lt;/td&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;525600&lt;/p&gt;&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;seconds&lt;/p&gt;&lt;/td&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;31536000&lt;/p&gt;&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;millseconds&lt;/p&gt;&lt;/td&gt;
-&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;31536000000&lt;/p&gt;&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;
-&lt;/table&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now let&amp;#8217;s look at the epoch returned by &lt;code&gt;WINDOWSTART()&lt;/code&gt;:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; WINDOWSTART() &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; WINDOW_START_EPOCH,
-             CUSTOMER,
-             &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SUM&lt;/span&gt;(COST)
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; SOURCE_DATA
-                WINDOW TUMBLING (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SIZE&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;365&lt;/span&gt; DAYS)
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt; CUSTOMER
-        EMIT CHANGES ;
-
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;--------------------+---------+-----------+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;WINDOW_START_EPOCH  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;CUSTOMER &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;KSQL_COL_2 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;--------------------+---------+-----------+
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1545264000000&lt;/span&gt;       &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A        &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1576800000000&lt;/span&gt;       &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;A        &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;          &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The first of these is &lt;code&gt;1545264000000&lt;/code&gt;. What do we get if we divide this by the number of milliseconds in a 365-day window (&lt;code&gt;31536000000&lt;/code&gt;)? We find that it fits &lt;strong&gt;exactly&lt;/strong&gt;: &lt;code&gt;1545264000000➗31536000000 = 49&lt;/code&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This suggests that if you want to build monthly or yearly aggregates in ksqlDB that start based on the Gregorian calendar markers, ksqlDB will need to add support for &lt;code&gt;MONTH&lt;/code&gt; and &lt;code&gt;YEAR&lt;/code&gt; as window sizes (&lt;em&gt;tracking in &lt;a href=&#34;https://github.com/confluentinc/ksql/issues/1968&#34;&gt;issue #1968&lt;/a&gt;&lt;/em&gt;).&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
