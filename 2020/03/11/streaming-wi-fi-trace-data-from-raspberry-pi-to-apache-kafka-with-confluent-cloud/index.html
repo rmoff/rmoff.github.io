@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Streaming Wi-Fi trace data from Raspberry Pi to Apache Kafka with Confluent Cloud</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/03/11/streaming-wi-fi-trace-data-from-raspberry-pi-to-apache-kafka-with-confluent-cloud/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.59.1" />
+
+		
+		<meta property="og:title" content="Streaming Wi-Fi trace data from Raspberry Pi to Apache Kafka with Confluent Cloud" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/03/IMG_3358.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/03/11/streaming-wi-fi-trace-data-from-raspberry-pi-to-apache-kafka-with-confluent-cloud/" />
+		<meta property="og:site_name" content="Streaming Wi-Fi trace data from Raspberry Pi to Apache Kafka with Confluent Cloud" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/03/IMG_3358.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Streaming Wi-Fi trace data from Raspberry Pi to Apache Kafka with Confluent Cloud</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-03-11T11:58:13Z">Mar 11, 2020</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.net/categories/raspberry-pi" class="no-underline category near-white dim">Raspberry Pi</a>, <a href="https://rmoff.net/categories/kafkacat" class="no-underline category near-white dim">Kafkacat</a>, <a href="https://rmoff.net/categories/confluent-cloud" class="no-underline category near-white dim">Confluent Cloud</a>, <a href="https://rmoff.net/categories/wireshark" class="no-underline category near-white dim">Wireshark</a>, <a href="https://rmoff.net/categories/tshark" class="no-underline category near-white dim">Tshark</a>, <a href="https://rmoff.net/categories/tcpdump" class="no-underline category near-white dim">Tcpdump</a>
+								<span class="display-print">at https://rmoff.net/2020/03/11/streaming-wi-fi-trace-data-from-raspberry-pi-to-apache-kafka-with-confluent-cloud/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>Wi-fi is now ubiquitous in most populated areas, and the way the devices communicate leaves a lot of 'digital exhaust'. Usually a computer will have a Wi-Fi device that&#8217;s configured to connect to a given network, but often these devices can be configured instead to pick up the background Wi-Fi chatter of surrounding devices.</p>
+</div>
+<div class="paragraph">
+<p>There are good reasons—and bad—for doing this. Just like taking apart equipment to understand how it works teaches us things, so being able to <a href="https://rmoff.net/2019/11/29/using-tcpdump-with-docker/">dissect and examine protocol traffic</a> lets us learn about this. However, by collecting this type of traffic it can be possible to track and analyse behaviour in ways that we may or may not feel comfortable with. <a href="https://tfl.gov.uk/corporate/privacy-and-cookies/wi-fi-data-collection">Improving public transport</a>? Sure. <a href="https://www.theguardian.com/technology/datablog/2014/jan/10/how-tracking-customers-in-store-will-soon-be-the-norm">Tracking shopper behaviour</a>? Meh, less sure.</p>
+</div>
+<div class="paragraph">
+<p>So, here&#8217;s how to do it, and go ahead and make sure you&#8217;re doing it for the right reasons. A plague o' your house if you don&#8217;t!</p>
+</div>
+<div class="sect1">
+<h2 id="_kit_list">Kit list</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Raspberry Pi Model B Rev 2, 512MB, running Raspbian GNU/Linux 10 (buster)</p>
+</li>
+<li>
+<p><a href="https://www.amazon.co.uk/gp/product/B00CM83SC0/">ASUS USB-BT400 3Mbps USB Bluetooth v4.0 Mini Dongle</a></p>
+</li>
+<li>
+<p><a href="https://confluent.cloud/signup">Confluent Cloud</a></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>I had the Raspberry Pi plugged into my network on its Ethernet port, since the Wi-Fi dongle will be otherwise occupied :)</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_set_up_the_wireless_interface">Set up the wireless interface</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>First up, delete the existing wireless network interface that&#8217;s probably there already:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">sudo iw dev wlan0 del</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Check that that Wi-Fi physical device supports <em>monitor</em> mode (which is what we&#8217;re using), and make a note of its name (here, <code>phy0</code>):</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ sudo iw phy
+Wiphy phy0
+	max <span style="color:#408080;font-style:italic"># scan SSIDs: 4</span>
+	max scan IEs length: <span style="color:#666">2257</span> bytes
+…
+	Supported interface modes:
+		 * IBSS
+		 * managed
+		 * AP
+		 * AP/VLAN
+		 * monitor
+		 * mesh point
+…         </code></pre></div>
+</div>
+<div class="paragraph">
+<p>Now create a new monitoring interface (<code>type monitor</code>) bound to the physical device (<code>phy0</code>), and bring it up.</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">sudo iw phy phy0 interface add mon0 <span style="color:#008000">type</span> monitor
+sudo ifconfig mon0 up</code></pre></div>
+</div>
+<div class="paragraph">
+<p>If you check its status you should see it in monitor mode:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ iwconfig mon0
+mon0      IEEE <span style="color:#666">802</span>.11  Mode:Monitor  Frequency:2.417 GHz  Tx-Power<span style="color:#666">=</span><span style="color:#666">20</span> dBm
+          Retry short  long limit:2   RTS thr:off   Fragment thr:off
+          Power Management:off</code></pre></div>
+</div>
+<div class="paragraph">
+<p>You should have a network config that looks something like this - a loopback (<code>lo</code>), a network connection to your LAN (<code>eth0</code>), and a monitor interface (<code>mon0</code>):</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ ip a
+<span style="color:#666">1</span>: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu <span style="color:#666">65536</span> qdisc noqueue state UNKNOWN group default qlen <span style="color:#666">1000</span>
+    link/loopback <span style="color:#666">00</span>:00:00:00:00:00 brd <span style="color:#666">00</span>:00:00:00:00:00
+    inet <span style="color:#666">127</span>.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+<span style="color:#666">2</span>: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu <span style="color:#666">1500</span> qdisc pfifo_fast state UP group default qlen <span style="color:#666">1000</span>
+    link/ether b8:27:eb:3f:dc:66 brd ff:ff:ff:ff:ff:ff
+    inet <span style="color:#666">192</span>.168.10.106/24 brd <span style="color:#666">192</span>.168.10.255 scope global noprefixroute eth0
+       valid_lft forever preferred_lft forever
+    inet6 fd00::1:6332:fcea:9237:246c/64 scope global dynamic mngtmpaddr noprefixroute
+       valid_lft 7158sec preferred_lft 7158sec
+    inet6 fe80::8b6b:8c75:94a0:1aac/64 scope link
+       valid_lft forever preferred_lft forever
+<span style="color:#666">4</span>: mon0: &lt;BROADCAST,MULTICAST,PROMISC,UP,LOWER_UP&gt; mtu <span style="color:#666">1500</span> qdisc mq state UNKNOWN group default qlen <span style="color:#666">1000</span>
+    link/ieee802.11/radiotap <span style="color:#666">00</span>:0f:60:04:ef:a4 brd ff:ff:ff:ff:ff:ff</code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_here_comes_the_tools">Here comes the tools</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Let&#8217;s install some useful things:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">sudo apt-get install -y tcpdump tshark jq kafkacat</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Check everything&#8217;s working by running <code>tcpdump</code> to dump out the Wi-Fi traffic as it&#8217;s received:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ sudo tcpdump -i mon0 -n
+tcpdump: verbose output suppressed, use -v or -vv <span style="color:#008000;font-weight:bold">for</span> full protocol decode
+listening on mon0, link-type IEEE802_11_RADIO <span style="color:#666">(</span><span style="color:#666">802</span>.11 plus radiotap header<span style="color:#666">)</span>, capture size <span style="color:#666">262144</span> bytes
+<span style="color:#666">10</span>:36:49.640924 <span style="color:#666">1</span>.0 Mb/s <span style="color:#666">2417</span> MHz 11b -81dBm signal antenna <span style="color:#666">1</span> Data IV:28ee Pad <span style="color:#666">20</span> KeyID <span style="color:#666">2</span>
+<span style="color:#666">10</span>:36:55.497519 <span style="color:#666">1</span>.0 Mb/s <span style="color:#666">2417</span> MHz 11b -77dBm signal antenna <span style="color:#666">1</span> Probe Request <span style="color:#666">(</span>RNM0<span style="color:#666">)</span> <span style="color:#666">[</span><span style="color:#666">1</span>.0 <span style="color:#666">2</span>.0 <span style="color:#666">5</span>.5 <span style="color:#666">11</span>.0 Mbit<span style="color:#666">]</span>
+<span style="color:#666">10</span>:36:57.511322 <span style="color:#666">1</span>.0 Mb/s <span style="color:#666">2417</span> MHz 11b -69dBm signal antenna <span style="color:#666">1</span> Probe Request <span style="color:#666">(</span>RNM0<span style="color:#666">)</span> <span style="color:#666">[</span><span style="color:#666">1</span>.0* <span style="color:#666">2</span>.0* <span style="color:#666">5</span>.5* <span style="color:#666">6</span>.0 <span style="color:#666">9</span>.0 <span style="color:#666">11</span>.0* <span style="color:#666">12</span>.0 <span style="color:#666">18</span>.0 Mbit<span style="color:#666">]</span>
+<span style="color:#666">10</span>:36:57.512419 <span style="color:#666">1</span>.0 Mb/s <span style="color:#666">2417</span> MHz 11b -69dBm signal antenna <span style="color:#666">1</span> Probe Request <span style="color:#666">()</span> <span style="color:#666">[</span><span style="color:#666">1</span>.0* <span style="color:#666">2</span>.0* <span style="color:#666">5</span>.5* <span style="color:#666">6</span>.0 <span style="color:#666">9</span>.0 <span style="color:#666">11</span>.0* <span style="color:#666">12</span>.0 <span style="color:#666">18</span>.0 Mbit<span style="color:#666">]</span>
+<span style="color:#666">10</span>:36:57.679522 <span style="color:#666">1</span>.0 Mb/s <span style="color:#666">2417</span> MHz 11b -67dBm signal antenna <span style="color:#666">1</span> Acknowledgment RA:48:d3:43:xx:xx:xx</code></pre></div>
+</div>
+<div class="paragraph">
+<p>There&#8217;s five packets of real live Wi-Fi data! And there&#8217;s a bunch you can do with <code>tcpdump</code> and filters etc, but because we want this data out in a structured manner (i.e. key/values) I&#8217;m going to cut over to <code>tshark</code> now.</p>
+</div>
+<div class="paragraph">
+<p><code>tshark</code> is the CLI companion to the well known network tool, Wireshark. You can use it standalone, or you can even use it as a source for Wireshark - which is pretty cool.</p>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s start with a quick <code>tshark</code>:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ sudo tshark -i mon0
+Running as user <span style="color:#ba2121">&#34;root&#34;</span> and group <span style="color:#ba2121">&#34;root&#34;</span>. This could be dangerous.
+Capturing on <span style="color:#ba2121">&#39;mon0&#39;</span>
+    <span style="color:#666">1</span> <span style="color:#666">0</span>.000000000 Apple_17:17:d3 → Broadcast    <span style="color:#666">802</span>.11 <span style="color:#666">175</span> Probe Request, <span style="color:#19177c">SN</span><span style="color:#666">=</span><span style="color:#666">672</span>, <span style="color:#19177c">FN</span><span style="color:#666">=</span><span style="color:#666">0</span>, <span style="color:#19177c">Flags</span><span style="color:#666">=</span>........, <span style="color:#19177c">SSID</span><span style="color:#666">=</span>RNM0
+    <span style="color:#666">2</span> <span style="color:#666">0</span>.009712480 Apple_17:17:d3 → Broadcast    <span style="color:#666">802</span>.11 <span style="color:#666">175</span> Probe Request, <span style="color:#19177c">SN</span><span style="color:#666">=</span><span style="color:#666">673</span>, <span style="color:#19177c">FN</span><span style="color:#666">=</span><span style="color:#666">0</span>, <span style="color:#19177c">Flags</span><span style="color:#666">=</span>........, <span style="color:#19177c">SSID</span><span style="color:#666">=</span>RNM0
+    <span style="color:#666">3</span> <span style="color:#666">20</span>.711944424 <span style="color:#666">66</span>:9f:b3:xx:xx:xx → Broadcast    <span style="color:#666">802</span>.11 <span style="color:#666">106</span> Probe Request, <span style="color:#19177c">SN</span><span style="color:#666">=</span><span style="color:#666">772</span>, <span style="color:#19177c">FN</span><span style="color:#666">=</span><span style="color:#666">0</span>, <span style="color:#19177c">Flags</span><span style="color:#666">=</span>........, <span style="color:#19177c">SSID</span><span style="color:#666">=</span>Wildcard <span style="color:#666">(</span>Broadcast<span style="color:#666">)</span>
+    <span style="color:#666">4</span> <span style="color:#666">20</span>.719399794              → Bskyb_13:16:82 <span style="color:#666">(</span>3c:89:94:xx:xx:xx<span style="color:#666">)</span> <span style="color:#666">(</span>RA<span style="color:#666">)</span> <span style="color:#666">802</span>.11 <span style="color:#666">28</span> Acknowledgement, <span style="color:#19177c">Flags</span><span style="color:#666">=</span>........</code></pre></div>
+</div>
+<div class="paragraph">
+<p>There&#8217;s that Wi-Fi data again!</p>
+</div>
+<div class="paragraph">
+<p>But how to get this data out in a truly structured way that&#8217;s going to be useful in subsequent processing?</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_writing_structured_json_from_tshark">Writing structured JSON from <code>tshark</code></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>As you can see from above <code>tshark</code> by default writes data in a loosely-structured way that would be impossible to parse programatically. We want a structured format such as JSON, and that&#8217;s <em>kind of</em> possible with the <code>-T</code> flag and <code>ek</code> argument:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ sudo tshark -i mon0 -T ek
+Running as user <span style="color:#ba2121">&#34;root&#34;</span> and group <span style="color:#ba2121">&#34;root&#34;</span>. This could be dangerous.
+Capturing on <span style="color:#ba2121">&#39;mon0&#39;</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;index&#34;</span> : <span style="color:#666">{</span><span style="color:#ba2121">&#34;_index&#34;</span>: <span style="color:#ba2121">&#34;packets-2020-03-11&#34;</span>, <span style="color:#ba2121">&#34;_type&#34;</span>: <span style="color:#ba2121">&#34;pcap_file&#34;</span><span style="color:#666">}}</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;timestamp&#34;</span> : <span style="color:#ba2121">&#34;1583923701818&#34;</span>, <span style="color:#ba2121">&#34;layers&#34;</span> : <span style="color:#666">{</span><span style="color:#ba2121">&#34;frame&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;frame_frame_interface_id&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;frame_interface_id_frame_interface_name&#34;</span>: <span style="color:#ba2121">&#34;mon0&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_encap_type&#34;</span>: <span style="color:#ba2121">&#34;23&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_time&#34;</span>: <span style="color:#ba2121">&#34;Mar 11, 2020 10:48:21.818766344 GMT&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_offset_shift&#34;</span>: <span style="color:#ba2121">&#34;0.000000000&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_time_epoch&#34;</span>: <span style="color:#ba2121">&#34;1583923701.818766344&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_time_delta&#34;</span>: <span style="color:#ba2121">&#34;0.000000000&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_time_delta_displayed&#34;</span>: <span style="color:#ba2121">&#34;0.000000000&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_time_relative&#34;</span>: <span style="color:#ba2121">&#34;0.000000000&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_number&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_len&#34;</span>: <span style="color:#ba2121">&#34;28&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_cap_len&#34;</span>: <span style="color:#ba2121">&#34;28&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_marked&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_ignored&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;frame_frame_protocols&#34;</span>: <span style="color:#ba2121">&#34;radiotap:wlan_radio:wlan&#34;</span><span style="color:#666">}</span>,<span style="color:#ba2121">&#34;radiotap&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;radiotap_radiotap_version&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_pad&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_length&#34;</span>: <span style="color:#ba2121">&#34;18&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_present&#34;</span>: <span style="color:#ba2121">&#34;&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_radiotap_present_word&#34;</span>: <span style="color:#ba2121">&#34;0x0000482e&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_tsft&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_flags&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_rate&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_channel&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_fhss&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_dbm_antsignal&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_dbm_antnoise&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_lock_quality&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_tx_attenuation&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_db_tx_attenuation&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_dbm_tx_power&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_antenna&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_db_antsignal&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_db_antnoise&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_rxflags&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_xchannel&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_mcs&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_ampdu&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_vht&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_timestamp&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_he&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_he_mu&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_reserved&#34;</span>: <span style="color:#ba2121">&#34;0x00000000&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_rtap_ns&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_vendor_ns&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_present_word_radiotap_present_ext&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_flags&#34;</span>: <span style="color:#ba2121">&#34;0x00000000&#34;</span>,<span style="color:#ba2121">&#34;radiotap_flags_radiotap_flags_cfp&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_flags_radiotap_flags_preamble&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_flags_radiotap_flags_wep&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_flags_radiotap_flags_frag&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_flags_radiotap_flags_fcs&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_flags_radiotap_flags_datapad&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_flags_radiotap_flags_badfcs&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_flags_radiotap_flags_shortgi&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_datarate&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_channel_freq&#34;</span>: <span style="color:#ba2121">&#34;2417&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_channel_flags&#34;</span>: <span style="color:#ba2121">&#34;0x000000a0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_turbo&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_cck&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_ofdm&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_2ghz&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_5ghz&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_passive&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_dynamic&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_gfsk&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_gsm&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_sturbo&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_half&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_channel_flags_radiotap_channel_flags_quarter&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_dbm_antsignal&#34;</span>: <span style="color:#ba2121">&#34;-69&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_antenna&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;radiotap_radiotap_rxflags&#34;</span>: <span style="color:#ba2121">&#34;0x00000000&#34;</span>,<span style="color:#ba2121">&#34;radiotap_rxflags_radiotap_rxflags_badplcp&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span><span style="color:#666">}</span>,<span style="color:#ba2121">&#34;wlan_radio&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;wlan_radio_wlan_radio_phy&#34;</span>: <span style="color:#ba2121">&#34;4&#34;</span>,<span style="color:#ba2121">&#34;wlan_radio_wlan_radio_short_preamble&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_radio_wlan_radio_data_rate&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;wlan_radio_wlan_radio_channel&#34;</span>: <span style="color:#ba2121">&#34;2&#34;</span>,<span style="color:#ba2121">&#34;wlan_radio_wlan_radio_frequency&#34;</span>: <span style="color:#ba2121">&#34;2417&#34;</span>,<span style="color:#ba2121">&#34;wlan_radio_wlan_radio_signal_dbm&#34;</span>: <span style="color:#ba2121">&#34;-69&#34;</span>,<span style="color:#ba2121">&#34;wlan_radio_wlan_radio_duration&#34;</span>: <span style="color:#ba2121">&#34;272&#34;</span>,<span style="color:#ba2121">&#34;wlan_radio_duration_wlan_radio_preamble&#34;</span>: <span style="color:#ba2121">&#34;192&#34;</span><span style="color:#666">}</span>,<span style="color:#ba2121">&#34;wlan&#34;</span>: <span style="color:#666">{</span><span style="color:#ba2121">&#34;wlan_wlan_fc_type_subtype&#34;</span>: <span style="color:#ba2121">&#34;29&#34;</span>,<span style="color:#ba2121">&#34;wlan_wlan_fc&#34;</span>: <span style="color:#ba2121">&#34;0x0000d400&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_wlan_fc_version&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_wlan_fc_type&#34;</span>: <span style="color:#ba2121">&#34;1&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_wlan_fc_subtype&#34;</span>: <span style="color:#ba2121">&#34;13&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_wlan_flags&#34;</span>: <span style="color:#ba2121">&#34;0x00000000&#34;</span>,<span style="color:#ba2121">&#34;wlan_flags_wlan_fc_ds&#34;</span>: <span style="color:#ba2121">&#34;0x00000000&#34;</span>,<span style="color:#ba2121">&#34;wlan_flags_wlan_fc_tods&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_flags_wlan_fc_fromds&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_flags_wlan_fc_frag&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_flags_wlan_fc_retry&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_flags_wlan_fc_pwrmgt&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_flags_wlan_fc_moredata&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_flags_wlan_fc_protected&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_flags_wlan_fc_order&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_wlan_duration&#34;</span>: <span style="color:#ba2121">&#34;0&#34;</span>,<span style="color:#ba2121">&#34;wlan_wlan_ra&#34;</span>: <span style="color:#ba2121">&#34;c8:d1:2a:xx:xx:xx&#34;</span>,<span style="color:#ba2121">&#34;wlan_wlan_ra_resolved&#34;</span>: <span style="color:#ba2121">&#34;Comtrend_96:cc:64&#34;</span>,<span style="color:#ba2121">&#34;wlan_wlan_addr&#34;</span>: <span style="color:#ba2121">&#34;c8:d1:2a:xx:xx:xx&#34;</span>,<span style="color:#ba2121">&#34;wlan_wlan_addr_resolved&#34;</span>: <span style="color:#ba2121">&#34;Comtrend_96:cc:64&#34;</span><span style="color:#666">}}}</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>There&#8217;s a couple of points to deal with here. The first is that for each packet there are <em>two</em> rows emitted; an index header for Elasticsearch (since <code>ek</code> is designed for ingest into it), and then the <em>full</em> payload. We don&#8217;t want the whole payload but just a few columns. We can use the <code>-e</code> parameter to specify the fields that we&#8217;re interested in, and a simple <code>grep</code> to drop the Elasticsearch header message. I&#8217;ve also added <code>-l</code> to stop the output being buffered:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ sudo tshark -i mon0 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -T ek <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -l <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.fc.type <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.fc.type_subtype <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan_radio.channel | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>        grep timestamp</code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-javascript" data-lang="javascript">{<span style="color:#ba2121">&#34;timestamp&#34;</span> <span style="color:#666">:</span> <span style="color:#ba2121">&#34;1583923966878&#34;</span>, <span style="color:#ba2121">&#34;layers&#34;</span> <span style="color:#666">:</span> {<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span><span style="color:#666">:</span> [<span style="color:#ba2121">&#34;1&#34;</span>],<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span><span style="color:#666">:</span> [<span style="color:#ba2121">&#34;27&#34;</span>],<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span><span style="color:#666">:</span> [<span style="color:#ba2121">&#34;2&#34;</span>]}}
+{<span style="color:#ba2121">&#34;timestamp&#34;</span> <span style="color:#666">:</span> <span style="color:#ba2121">&#34;1583923967196&#34;</span>, <span style="color:#ba2121">&#34;layers&#34;</span> <span style="color:#666">:</span> {<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span><span style="color:#666">:</span> [<span style="color:#ba2121">&#34;1&#34;</span>],<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span><span style="color:#666">:</span> [<span style="color:#ba2121">&#34;27&#34;</span>],<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span><span style="color:#666">:</span> [<span style="color:#ba2121">&#34;2&#34;</span>]}}
+{<span style="color:#ba2121">&#34;timestamp&#34;</span> <span style="color:#666">:</span> <span style="color:#ba2121">&#34;1583923967296&#34;</span>, <span style="color:#ba2121">&#34;layers&#34;</span> <span style="color:#666">:</span> {<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span><span style="color:#666">:</span> [<span style="color:#ba2121">&#34;1&#34;</span>],<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span><span style="color:#666">:</span> [<span style="color:#ba2121">&#34;27&#34;</span>],<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span><span style="color:#666">:</span> [<span style="color:#ba2121">&#34;2&#34;</span>]}}
+</code></pre></div>
+</div>
+<div class="paragraph">
+<p>This is starting to look rather useful. Let&#8217;s add in a bit of <code>jq</code> magic to merge the <code>timestamp</code> field in with the rest of the payload which we&#8217;ll pull up to the root level:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ sudo tshark -i mon0 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -T ek <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -l <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.fc.type <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.fc.type_subtype <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan_radio.channel | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>        grep timestamp | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>        jq --unbuffered -c <span style="color:#ba2121">&#39;{timestamp: .timestamp} + .layers&#39;</span> </code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-javascript" data-lang="javascript">{<span style="color:#ba2121">&#34;timestamp&#34;</span><span style="color:#666">:</span><span style="color:#ba2121">&#34;1583924233530&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span><span style="color:#666">:</span>[<span style="color:#ba2121">&#34;0&#34;</span>],<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span><span style="color:#666">:</span>[<span style="color:#ba2121">&#34;4&#34;</span>],<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span><span style="color:#666">:</span>[<span style="color:#ba2121">&#34;2&#34;</span>]}
+{<span style="color:#ba2121">&#34;timestamp&#34;</span><span style="color:#666">:</span><span style="color:#ba2121">&#34;1583924235474&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span><span style="color:#666">:</span>[<span style="color:#ba2121">&#34;1&#34;</span>],<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span><span style="color:#666">:</span>[<span style="color:#ba2121">&#34;25&#34;</span>],<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span><span style="color:#666">:</span>[<span style="color:#ba2121">&#34;2&#34;</span>]}
+{<span style="color:#ba2121">&#34;timestamp&#34;</span><span style="color:#666">:</span><span style="color:#ba2121">&#34;1583924235613&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span><span style="color:#666">:</span>[<span style="color:#ba2121">&#34;1&#34;</span>],<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span><span style="color:#666">:</span>[<span style="color:#ba2121">&#34;25&#34;</span>],<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span><span style="color:#666">:</span>[<span style="color:#ba2121">&#34;2&#34;</span>]}
+</code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_streaming_wi_fi_data_into_apache_kafka">Streaming Wi-Fi data into Apache Kafka</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Now, let&#8217;s stream this data into Kafka. Once it&#8217;s in Kafka we can use it for lots of things! We can use Kafka Connect to stream it onwards to places like Elasticsearch, Neo4j, S3. We can write ksqlDB applications to analyse and aggregate it. We can use it to drive services that subscribe to a stream of Wi-Fi data. The world will be our oyster!</p>
+</div>
+<div class="paragraph">
+<p>Instead of the faff of running Kafka for myself I&#8217;m using Confluent Cloud. Its <a href="https://www.confluent.io/confluent-cloud-faqs/#how-is-pricing-calculated-for-confluent-cloud">pricing</a> is such that you just pay for the data you use, making it very cheap to start playing around with, especially with the current $50 credit per month for first three months offer. <a href="https://confluent.cloud/signup">Sign up</a> and create your cluster and get your API key and broker details.</p>
+</div>
+<div class="paragraph">
+<p>Create a file with your Confluent Cloud details in:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ cat .env
+<span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#666">=</span>foo-bar.us-central1.gcp.confluent.cloud
+<span style="color:#19177c">CCLOUD_API_KEY</span><span style="color:#666">=</span>XXXXXXXXXXX
+<span style="color:#19177c">CCLOUD_API_SECRET</span><span style="color:#666">=</span>YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY</code></pre></div>
+</div>
+<div class="paragraph">
+<p>We installed <code>kafkacat</code> above, and can now use it to connect to our cloud environment. The <code>-L</code> argument tells <code>kafkacat</code> to do a metadata query across the brokers and topics:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ <span style="color:#008000">source</span> .env
+$ kafkacat -X security.protocol<span style="color:#666">=</span>SASL_SSL -X sasl.mechanisms<span style="color:#666">=</span>PLAIN -X api.version.request<span style="color:#666">=</span><span style="color:#008000">true</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -b <span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#b68;font-weight:bold">}</span>:9092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -X sasl.username<span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_KEY</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -X sasl.password<span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_SECRET</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -L</code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">Metadata <span style="color:#008000;font-weight:bold">for</span> all topics <span style="color:#666">(</span>from broker -1: sasl_ssl://foobar.us-central1.gcp.confluent.cloud:9092/bootstrap<span style="color:#666">)</span>:
+ <span style="color:#666">18</span> brokers:
+  broker <span style="color:#666">0</span> at b0-foobar.us-central1.gcp.confluent.cloud:9092
+  broker <span style="color:#666">5</span> at b5-foobar.us-central1.gcp.confluent.cloud:9092
+  broker <span style="color:#666">10</span> at b10-foobar.us-central1.gcp.confluent.cloud:9092
+  broker <span style="color:#666">15</span> at b15-foobar.us-central1.gcp.confluent.cloud:9092
+  broker <span style="color:#666">9</span> at b9-foobar.us-central1.gcp.confluent.cloud:9092
+…
+ <span style="color:#666">8</span> topics:
+  topic <span style="color:#ba2121">&#34;wibble&#34;</span> with <span style="color:#666">6</span> partitions:
+    partition <span style="color:#666">0</span>, leader <span style="color:#666">13</span>, replicas: <span style="color:#666">13</span>,2,5, isrs: <span style="color:#666">13</span>,2,5
+    partition <span style="color:#666">1</span>, leader <span style="color:#666">14</span>, replicas: <span style="color:#666">14</span>,6,7, isrs: <span style="color:#666">14</span>,6,7
+…    </code></pre></div>
+</div>
+<div class="paragraph">
+<p>Now that this is working, go ahead and create a topic called <code>pcap</code>, either through the Confluent Cloud web UI or the command line tool. It&#8217;s important that you create this topic, as auto-topic creation is not enabled on Confluent Cloud.</p>
+</div>
+<div class="paragraph">
+<p>With the topic created, let&#8217;s populate it! We are going to hook up the output from <code>tshark</code> in the previous section with the mighty power of <code>kafkacat</code> courtesy of unix pipes:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">sudo tshark -i mon0 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -T ek <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -l <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.fc.type -e wlan.fc.type_subtype -e wlan_radio.channel <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan_radio.signal_dbm -e wlan_radio.duration -e wlan.ra <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.ra_resolved -e wlan.da -e wlan.da_resolved <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.ta -e wlan.ta_resolved -e wlan.sa <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.sa_resolved -e wlan.staa -e wlan.staa_resolved <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.tagged.all -e wlan.tag.vendor.data -e wlan.tag.vendor.oui.type <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wlan.tag.oui -e wlan.ssid -e wlan.country_info.code <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -e wps.device_name |<span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    grep timestamp|<span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    jq -c <span style="color:#ba2121">&#39;{timestamp: .timestamp} + .layers&#39;</span> |<span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>    kafkacat -X security.protocol<span style="color:#666">=</span>SASL_SSL -X sasl.mechanisms<span style="color:#666">=</span>PLAIN -X api.version.request<span style="color:#666">=</span>true<span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -b <span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#b68;font-weight:bold">}</span>:9092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -X sasl.username<span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_KEY</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -X sasl.password<span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_SECRET</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -P <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -t pcap <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            -T</code></pre></div>
+</div>
+<div class="paragraph">
+<p>A few notes about what&#8217;s going on here. We&#8217;ve added in a bunch more fields from the Wi-Fi payload to capture in <code>tshark</code>. We&#8217;re also specifying <code>-P</code> to tell <code>kafkacat</code> to act as producer, <code>-t</code> to specify the topic, and <code>-T</code> to echo the messages to stdout as well as write them to the topic (just like <code>tee</code> does).</p>
+</div>
+<div class="paragraph">
+<p>With this running you&#8217;ll see the messages arriving in the topic, either through <code>kafkacat</code> run as a producer:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -X security.protocol<span style="color:#666">=</span>SASL_SSL -X sasl.mechanisms<span style="color:#666">=</span>PLAIN -X api.version.request<span style="color:#666">=</span><span style="color:#008000">true</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>           -b <span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#b68;font-weight:bold">}</span>:9092 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>           -X sasl.username<span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_KEY</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#34;</span> -X sasl.password<span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_SECRET</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>           -C -t pcap 
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;timestamp&#34;</span>:<span style="color:#ba2121">&#34;1583925922825&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;2&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;36&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;2&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_signal_dbm&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;-71&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_duration&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;384&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ra&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ra_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_da&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_da_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ta&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ta_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_sa&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_sa_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_staa&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_staa_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]}</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;timestamp&#34;</span>:<span style="color:#ba2121">&#34;1583925941754&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;1&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;29&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;2&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_signal_dbm&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;-71&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_duration&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;272&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ra&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ra_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;Comtrend_96:cc:64&#34;</span><span style="color:#666">]}</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;timestamp&#34;</span>:<span style="color:#ba2121">&#34;1583925963170&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;1&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;28&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;2&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_signal_dbm&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;-71&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_duration&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;40&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ra&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ra_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;Broadcom_08:04:20&#34;</span><span style="color:#666">]}</span>
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;timestamp&#34;</span>:<span style="color:#ba2121">&#34;1583925991920&#34;</span>,<span style="color:#ba2121">&#34;wlan_fc_type&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;2&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_fc_type_subtype&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;36&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_channel&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;2&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_signal_dbm&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;-79&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_radio_duration&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;384&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ra&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ra_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_da&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_da_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ta&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_ta_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_sa&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_sa_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_staa&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]</span>,<span style="color:#ba2121">&#34;wlan_staa_resolved&#34;</span>:<span style="color:#666">[</span><span style="color:#ba2121">&#34;00:11:22:33:44:55&#34;</span><span style="color:#666">]}</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>or through the Confluent Cloud UI:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/03/ccloud_pcap_01.png" alt="ccloud pcap 01">
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_whats_next">What&#8217;s next?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>So now we&#8217;ve got the data streaming into Kafka, what&#8217;s next? Well, how about some <a href="https://ksqldb.io/">ksqlDB</a> to analyse it:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TIMESTAMPTOSTRING(WINDOWSTART,<span style="color:#ba2121">&#39;yyyy-MM-dd HH:mm:ss&#39;</span>,<span style="color:#ba2121">&#39;Europe/London&#39;</span>) <span style="color:#008000;font-weight:bold">AS</span> WINDOW_START_TS,
+<span style="color:#666">&gt;</span>       DISTINCT_TA_MACS,
+<span style="color:#666">&gt;</span>       DISTINCT_RA_MACS,
+<span style="color:#666">&gt;</span>       EVENT_COUNT
+<span style="color:#666">&gt;</span><span style="color:#008000;font-weight:bold">FROM</span>   PROBE_REQUESTS_BY_5MIN
+<span style="color:#666">&gt;</span><span style="color:#008000;font-weight:bold">WHERE</span>  ROWKEY<span style="color:#666">=</span><span style="color:#666">4</span> 
+<span style="color:#666">&gt;</span>  <span style="color:#008000;font-weight:bold">AND</span>  WINDOWSTART <span style="color:#666">&gt;</span> <span style="color:#ba2121">&#39;2020-03-11T08:00:00.000&#39;</span> 
+<span style="color:#666">&gt;</span>  <span style="color:#008000;font-weight:bold">AND</span>  WINDOWSTART <span style="color:#666">&lt;=</span> <span style="color:#ba2121">&#39;2020-03-11T09:00:00.000&#39;</span>;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------------+------------------+------------------+-------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>WINDOW_START_TS       <span style="color:#666">|</span>DISTINCT_TA_MACS  <span style="color:#666">|</span>DISTINCT_RA_MACS  <span style="color:#666">|</span>EVENT_COUNT  <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">----------------------+------------------+------------------+-------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">05</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">13</span>                <span style="color:#666">|</span><span style="color:#666">2</span>                 <span style="color:#666">|</span><span style="color:#666">30</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">10</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">15</span>                <span style="color:#666">|</span><span style="color:#666">1</span>                 <span style="color:#666">|</span><span style="color:#666">63</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">15</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">9</span>                 <span style="color:#666">|</span><span style="color:#666">2</span>                 <span style="color:#666">|</span><span style="color:#666">29</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">20</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">10</span>                <span style="color:#666">|</span><span style="color:#666">1</span>                 <span style="color:#666">|</span><span style="color:#666">28</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">25</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">8</span>                 <span style="color:#666">|</span><span style="color:#666">1</span>                 <span style="color:#666">|</span><span style="color:#666">37</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">30</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">12</span>                <span style="color:#666">|</span><span style="color:#666">2</span>                 <span style="color:#666">|</span><span style="color:#666">57</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">35</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">14</span>                <span style="color:#666">|</span><span style="color:#666">1</span>                 <span style="color:#666">|</span><span style="color:#666">42</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">40</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">22</span>                <span style="color:#666">|</span><span style="color:#666">1</span>                 <span style="color:#666">|</span><span style="color:#666">77</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">45</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">21</span>                <span style="color:#666">|</span><span style="color:#666">2</span>                 <span style="color:#666">|</span><span style="color:#666">64</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">50</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">10</span>                <span style="color:#666">|</span><span style="color:#666">1</span>                 <span style="color:#666">|</span><span style="color:#666">40</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">08</span>:<span style="color:#666">55</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">17</span>                <span style="color:#666">|</span><span style="color:#666">1</span>                 <span style="color:#666">|</span><span style="color:#666">58</span>           <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#666">2020</span><span style="color:#666">-</span><span style="color:#666">03</span><span style="color:#666">-</span><span style="color:#666">11</span> <span style="color:#666">09</span>:<span style="color:#666">00</span>:<span style="color:#666">00</span>   <span style="color:#666">|</span><span style="color:#666">27</span>                <span style="color:#666">|</span><span style="color:#666">2</span>                 <span style="color:#666">|</span><span style="color:#666">54</span>           <span style="color:#666">|</span>
+Query terminated
+ksql<span style="color:#666">&gt;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>or property graph analysis to look at the relationship between things like SSIDs and devices?</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/03/elastic_graph_01.png" alt="elastic graph 01">
+</div>
+</div>
+<div class="paragraph">
+<p>Stay tuned!</p>
+</div>
+<div class="sect2">
+<h3 id="_acknowledments_and_references">Acknowledments and References</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://frdmtoplay.com/counting-wireless-devices-on-a-raspberry-pi-with-tcpdump/" class="bare">https://frdmtoplay.com/counting-wireless-devices-on-a-raspberry-pi-with-tcpdump/</a></p>
+</li>
+<li>
+<p><a href="https://sandilands.info/sgordon/capturing-wifi-in-monitor-mode-with-iw" class="bare">https://sandilands.info/sgordon/capturing-wifi-in-monitor-mode-with-iw</a></p>
+</li>
+<li>
+<p><a href="https://www.cisco.com/c/en/us/support/docs/wireless-mobility/80211/200527-Fundamentals-of-802-11-Wireless-Sniffing.html" class="bare">https://www.cisco.com/c/en/us/support/docs/wireless-mobility/80211/200527-Fundamentals-of-802-11-Wireless-Sniffing.html</a></p>
+</li>
+<li>
+<p><a href="https://www.semfionetworks.com/uploads/2/9/8/3/29831147/wireshark_802.11_filters_-_reference_sheet.pdf" class="bare">https://www.semfionetworks.com/uploads/2/9/8/3/29831147/wireshark_802.11_filters_-_reference_sheet.pdf</a></p>
+</li>
+<li>
+<p><a href="https://www.wireshark.org/docs/dfref/w/wlan.html" class="bare">https://www.wireshark.org/docs/dfref/w/wlan.html</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>

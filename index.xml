@@ -5,9 +5,381 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2020-02-25</lastBuildDate>
+    <lastBuildDate>2020-03-11</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Streaming Wi-Fi trace data from Raspberry Pi to Apache Kafka with Confluent Cloud</title>
+      <link>https://rmoff.net/2020/03/11/streaming-wi-fi-trace-data-from-raspberry-pi-to-apache-kafka-with-confluent-cloud/</link>
+      <pubDate>2020-03-11</pubDate>
+      
+      <guid>https://rmoff.net/2020/03/11/streaming-wi-fi-trace-data-from-raspberry-pi-to-apache-kafka-with-confluent-cloud/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/03/IMG_3332.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Wi-fi is now ubiquitous in most populated areas, and the way the devices communicate leaves a lot of &#39;digital exhaust&#39;. Usually a computer will have a Wi-Fi device that&amp;#8217;s configured to connect to a given network, but often these devices can be configured instead to pick up the background Wi-Fi chatter of surrounding devices.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There are good reasons—and bad—for doing this. Just like taking apart equipment to understand how it works teaches us things, so being able to &lt;a href=&#34;https://rmoff.net/2019/11/29/using-tcpdump-with-docker/&#34;&gt;dissect and examine protocol traffic&lt;/a&gt; lets us learn about this. However, by collecting this type of traffic it can be possible to track and analyse behaviour in ways that we may or may not feel comfortable with. &lt;a href=&#34;https://tfl.gov.uk/corporate/privacy-and-cookies/wi-fi-data-collection&#34;&gt;Improving public transport&lt;/a&gt;? Sure. &lt;a href=&#34;https://www.theguardian.com/technology/datablog/2014/jan/10/how-tracking-customers-in-store-will-soon-be-the-norm&#34;&gt;Tracking shopper behaviour&lt;/a&gt;? Meh, less sure.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So, here&amp;#8217;s how to do it, and go ahead and make sure you&amp;#8217;re doing it for the right reasons. A plague o&#39; your house if you don&amp;#8217;t!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_kit_list&#34;&gt;Kit list&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Raspberry Pi Model B Rev 2, 512MB, running Raspbian GNU/Linux 10 (buster)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.amazon.co.uk/gp/product/B00CM83SC0/&#34;&gt;ASUS USB-BT400 3Mbps USB Bluetooth v4.0 Mini Dongle&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://confluent.cloud/signup&#34;&gt;Confluent Cloud&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I had the Raspberry Pi plugged into my network on its Ethernet port, since the Wi-Fi dongle will be otherwise occupied :)&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_set_up_the_wireless_interface&#34;&gt;Set up the wireless interface&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;First up, delete the existing wireless network interface that&amp;#8217;s probably there already:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;sudo iw dev wlan0 del&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Check that that Wi-Fi physical device supports &lt;em&gt;monitor&lt;/em&gt; mode (which is what we&amp;#8217;re using), and make a note of its name (here, &lt;code&gt;phy0&lt;/code&gt;):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ sudo iw phy
+Wiphy phy0
+	max &lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# scan SSIDs: 4&lt;/span&gt;
+	max scan IEs length: &lt;span style=&#34;color:#666&#34;&gt;2257&lt;/span&gt; bytes
+…
+	Supported interface modes:
+		 * IBSS
+		 * managed
+		 * AP
+		 * AP/VLAN
+		 * monitor
+		 * mesh point
+…         &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now create a new monitoring interface (&lt;code&gt;type monitor&lt;/code&gt;) bound to the physical device (&lt;code&gt;phy0&lt;/code&gt;), and bring it up.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;sudo iw phy phy0 interface add mon0 &lt;span style=&#34;color:#008000&#34;&gt;type&lt;/span&gt; monitor
+sudo ifconfig mon0 up&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you check its status you should see it in monitor mode:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ iwconfig mon0
+mon0      IEEE &lt;span style=&#34;color:#666&#34;&gt;802&lt;/span&gt;.11  Mode:Monitor  Frequency:2.417 GHz  Tx-Power&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt; dBm
+          Retry short  long limit:2   RTS thr:off   Fragment thr:off
+          Power Management:off&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You should have a network config that looks something like this - a loopback (&lt;code&gt;lo&lt;/code&gt;), a network connection to your LAN (&lt;code&gt;eth0&lt;/code&gt;), and a monitor interface (&lt;code&gt;mon0&lt;/code&gt;):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ ip a
+&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;: lo: &amp;lt;LOOPBACK,UP,LOWER_UP&amp;gt; mtu &lt;span style=&#34;color:#666&#34;&gt;65536&lt;/span&gt; qdisc noqueue state UNKNOWN group default qlen &lt;span style=&#34;color:#666&#34;&gt;1000&lt;/span&gt;
+    link/loopback &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:00:00:00:00:00 brd &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:00:00:00:00:00
+    inet &lt;span style=&#34;color:#666&#34;&gt;127&lt;/span&gt;.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;: eth0: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu &lt;span style=&#34;color:#666&#34;&gt;1500&lt;/span&gt; qdisc pfifo_fast state UP group default qlen &lt;span style=&#34;color:#666&#34;&gt;1000&lt;/span&gt;
+    link/ether b8:27:eb:3f:dc:66 brd ff:ff:ff:ff:ff:ff
+    inet &lt;span style=&#34;color:#666&#34;&gt;192&lt;/span&gt;.168.10.106/24 brd &lt;span style=&#34;color:#666&#34;&gt;192&lt;/span&gt;.168.10.255 scope global noprefixroute eth0
+       valid_lft forever preferred_lft forever
+    inet6 fd00::1:6332:fcea:9237:246c/64 scope global dynamic mngtmpaddr noprefixroute
+       valid_lft 7158sec preferred_lft 7158sec
+    inet6 fe80::8b6b:8c75:94a0:1aac/64 scope link
+       valid_lft forever preferred_lft forever
+&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;: mon0: &amp;lt;BROADCAST,MULTICAST,PROMISC,UP,LOWER_UP&amp;gt; mtu &lt;span style=&#34;color:#666&#34;&gt;1500&lt;/span&gt; qdisc mq state UNKNOWN group default qlen &lt;span style=&#34;color:#666&#34;&gt;1000&lt;/span&gt;
+    link/ieee802.11/radiotap &lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:0f:60:04:ef:a4 brd ff:ff:ff:ff:ff:ff&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_here_comes_the_tools&#34;&gt;Here comes the tools&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let&amp;#8217;s install some useful things:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;sudo apt-get install -y tcpdump tshark jq kafkacat&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Check everything&amp;#8217;s working by running &lt;code&gt;tcpdump&lt;/code&gt; to dump out the Wi-Fi traffic as it&amp;#8217;s received:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ sudo tcpdump -i mon0 -n
+tcpdump: verbose output suppressed, use -v or -vv &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; full protocol decode
+listening on mon0, link-type IEEE802_11_RADIO &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;802&lt;/span&gt;.11 plus radiotap header&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;, capture size &lt;span style=&#34;color:#666&#34;&gt;262144&lt;/span&gt; bytes
+&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt;:36:49.640924 &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.0 Mb/s &lt;span style=&#34;color:#666&#34;&gt;2417&lt;/span&gt; MHz 11b -81dBm signal antenna &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; Data IV:28ee Pad &lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt; KeyID &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt;:36:55.497519 &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.0 Mb/s &lt;span style=&#34;color:#666&#34;&gt;2417&lt;/span&gt; MHz 11b -77dBm signal antenna &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; Probe Request &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;RNM0&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.0 &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;.0 &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;.5 &lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;.0 Mbit&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt;:36:57.511322 &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.0 Mb/s &lt;span style=&#34;color:#666&#34;&gt;2417&lt;/span&gt; MHz 11b -69dBm signal antenna &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; Probe Request &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;RNM0&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.0* &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;.0* &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;.5* &lt;span style=&#34;color:#666&#34;&gt;6&lt;/span&gt;.0 &lt;span style=&#34;color:#666&#34;&gt;9&lt;/span&gt;.0 &lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;.0* &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;.0 &lt;span style=&#34;color:#666&#34;&gt;18&lt;/span&gt;.0 Mbit&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt;:36:57.512419 &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.0 Mb/s &lt;span style=&#34;color:#666&#34;&gt;2417&lt;/span&gt; MHz 11b -69dBm signal antenna &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; Probe Request &lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.0* &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;.0* &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;.5* &lt;span style=&#34;color:#666&#34;&gt;6&lt;/span&gt;.0 &lt;span style=&#34;color:#666&#34;&gt;9&lt;/span&gt;.0 &lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt;.0* &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;.0 &lt;span style=&#34;color:#666&#34;&gt;18&lt;/span&gt;.0 Mbit&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt;:36:57.679522 &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.0 Mb/s &lt;span style=&#34;color:#666&#34;&gt;2417&lt;/span&gt; MHz 11b -67dBm signal antenna &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; Acknowledgment RA:48:d3:43:xx:xx:xx&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There&amp;#8217;s five packets of real live Wi-Fi data! And there&amp;#8217;s a bunch you can do with &lt;code&gt;tcpdump&lt;/code&gt; and filters etc, but because we want this data out in a structured manner (i.e. key/values) I&amp;#8217;m going to cut over to &lt;code&gt;tshark&lt;/code&gt; now.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;code&gt;tshark&lt;/code&gt; is the CLI companion to the well known network tool, Wireshark. You can use it standalone, or you can even use it as a source for Wireshark - which is pretty cool.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let&amp;#8217;s start with a quick &lt;code&gt;tshark&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ sudo tshark -i mon0
+Running as user &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;root&amp;#34;&lt;/span&gt; and group &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;root&amp;#34;&lt;/span&gt;. This could be dangerous.
+Capturing on &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;mon0&amp;#39;&lt;/span&gt;
+    &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;.000000000 Apple_17:17:d3 → Broadcast    &lt;span style=&#34;color:#666&#34;&gt;802&lt;/span&gt;.11 &lt;span style=&#34;color:#666&#34;&gt;175&lt;/span&gt; Probe Request, &lt;span style=&#34;color:#19177c&#34;&gt;SN&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;672&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;FN&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;Flags&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;........, &lt;span style=&#34;color:#19177c&#34;&gt;SSID&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;RNM0
+    &lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;.009712480 Apple_17:17:d3 → Broadcast    &lt;span style=&#34;color:#666&#34;&gt;802&lt;/span&gt;.11 &lt;span style=&#34;color:#666&#34;&gt;175&lt;/span&gt; Probe Request, &lt;span style=&#34;color:#19177c&#34;&gt;SN&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;673&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;FN&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;Flags&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;........, &lt;span style=&#34;color:#19177c&#34;&gt;SSID&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;RNM0
+    &lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt;.711944424 &lt;span style=&#34;color:#666&#34;&gt;66&lt;/span&gt;:9f:b3:xx:xx:xx → Broadcast    &lt;span style=&#34;color:#666&#34;&gt;802&lt;/span&gt;.11 &lt;span style=&#34;color:#666&#34;&gt;106&lt;/span&gt; Probe Request, &lt;span style=&#34;color:#19177c&#34;&gt;SN&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;772&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;FN&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#19177c&#34;&gt;Flags&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;........, &lt;span style=&#34;color:#19177c&#34;&gt;SSID&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;Wildcard &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;Broadcast&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt;.719399794              → Bskyb_13:16:82 &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;3c:89:94:xx:xx:xx&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;RA&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;802&lt;/span&gt;.11 &lt;span style=&#34;color:#666&#34;&gt;28&lt;/span&gt; Acknowledgement, &lt;span style=&#34;color:#19177c&#34;&gt;Flags&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;........&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There&amp;#8217;s that Wi-Fi data again!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But how to get this data out in a truly structured way that&amp;#8217;s going to be useful in subsequent processing?&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_writing_structured_json_from_tshark&#34;&gt;Writing structured JSON from &lt;code&gt;tshark&lt;/code&gt;&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As you can see from above &lt;code&gt;tshark&lt;/code&gt; by default writes data in a loosely-structured way that would be impossible to parse programatically. We want a structured format such as JSON, and that&amp;#8217;s &lt;em&gt;kind of&lt;/em&gt; possible with the &lt;code&gt;-T&lt;/code&gt; flag and &lt;code&gt;ek&lt;/code&gt; argument:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ sudo tshark -i mon0 -T ek
+Running as user &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;root&amp;#34;&lt;/span&gt; and group &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;root&amp;#34;&lt;/span&gt;. This could be dangerous.
+Capturing on &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;mon0&amp;#39;&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;index&amp;#34;&lt;/span&gt; : &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_index&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;packets-2020-03-11&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;_type&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;pcap_file&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt; : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583923701818&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;layers&amp;#34;&lt;/span&gt; : &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_interface_id&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_interface_id_frame_interface_name&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;mon0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_encap_type&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;23&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_time&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Mar 11, 2020 10:48:21.818766344 GMT&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_offset_shift&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0.000000000&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_time_epoch&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583923701.818766344&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_time_delta&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0.000000000&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_time_delta_displayed&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0.000000000&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_time_relative&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0.000000000&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_number&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_len&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;28&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_cap_len&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;28&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_marked&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_ignored&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;frame_frame_protocols&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap:wlan_radio:wlan&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_version&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_pad&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_length&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;18&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_present&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_radiotap_present_word&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0x0000482e&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_tsft&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_flags&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_rate&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_channel&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_fhss&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_dbm_antsignal&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_dbm_antnoise&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_lock_quality&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_tx_attenuation&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_db_tx_attenuation&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_dbm_tx_power&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_antenna&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_db_antsignal&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_db_antnoise&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_rxflags&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_xchannel&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_mcs&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_ampdu&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_vht&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_timestamp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_he&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_he_mu&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_reserved&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0x00000000&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_rtap_ns&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_vendor_ns&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_present_word_radiotap_present_ext&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_flags&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0x00000000&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_flags_radiotap_flags_cfp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_flags_radiotap_flags_preamble&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_flags_radiotap_flags_wep&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_flags_radiotap_flags_frag&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_flags_radiotap_flags_fcs&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_flags_radiotap_flags_datapad&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_flags_radiotap_flags_badfcs&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_flags_radiotap_flags_shortgi&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_datarate&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_channel_freq&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2417&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_channel_flags&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0x000000a0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_turbo&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_cck&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_ofdm&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_2ghz&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_5ghz&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_passive&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_dynamic&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_gfsk&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_gsm&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_sturbo&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_half&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_channel_flags_radiotap_channel_flags_quarter&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_dbm_antsignal&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;-69&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_antenna&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_radiotap_rxflags&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0x00000000&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;radiotap_rxflags_radiotap_rxflags_badplcp&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_wlan_radio_phy&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;4&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_wlan_radio_short_preamble&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_wlan_radio_data_rate&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_wlan_radio_channel&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_wlan_radio_frequency&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2417&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_wlan_radio_signal_dbm&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;-69&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_wlan_radio_duration&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;272&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_duration_wlan_radio_preamble&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;192&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_wlan_fc_type_subtype&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;29&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_wlan_fc&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0x0000d400&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_wlan_fc_version&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_wlan_fc_type&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_wlan_fc_subtype&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;13&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_wlan_flags&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0x00000000&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_flags_wlan_fc_ds&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0x00000000&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_flags_wlan_fc_tods&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_flags_wlan_fc_fromds&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_flags_wlan_fc_frag&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_flags_wlan_fc_retry&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_flags_wlan_fc_pwrmgt&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_flags_wlan_fc_moredata&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_flags_wlan_fc_protected&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_flags_wlan_fc_order&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_wlan_duration&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_wlan_ra&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;c8:d1:2a:xx:xx:xx&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_wlan_ra_resolved&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Comtrend_96:cc:64&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_wlan_addr&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;c8:d1:2a:xx:xx:xx&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_wlan_addr_resolved&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Comtrend_96:cc:64&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}}}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There&amp;#8217;s a couple of points to deal with here. The first is that for each packet there are &lt;em&gt;two&lt;/em&gt; rows emitted; an index header for Elasticsearch (since &lt;code&gt;ek&lt;/code&gt; is designed for ingest into it), and then the &lt;em&gt;full&lt;/em&gt; payload. We don&amp;#8217;t want the whole payload but just a few columns. We can use the &lt;code&gt;-e&lt;/code&gt; parameter to specify the fields that we&amp;#8217;re interested in, and a simple &lt;code&gt;grep&lt;/code&gt; to drop the Elasticsearch header message. I&amp;#8217;ve also added &lt;code&gt;-l&lt;/code&gt; to stop the output being buffered:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ sudo tshark -i mon0 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -T ek &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -l &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.fc.type &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.fc.type_subtype &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan_radio.channel | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;        grep timestamp&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583923966878&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;layers&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;27&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;]}}
+{&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583923967196&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;layers&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;27&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;]}}
+{&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583923967296&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;layers&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;27&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;]}}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This is starting to look rather useful. Let&amp;#8217;s add in a bit of &lt;code&gt;jq&lt;/code&gt; magic to merge the &lt;code&gt;timestamp&lt;/code&gt; field in with the rest of the payload which we&amp;#8217;ll pull up to the root level:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ sudo tshark -i mon0 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -T ek &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -l &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.fc.type &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.fc.type_subtype &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan_radio.channel | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;        grep timestamp | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;        jq --unbuffered -c &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{timestamp: .timestamp} + .layers&amp;#39;&lt;/span&gt; &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583924233530&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;[&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;0&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;[&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;4&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;[&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;]}
+{&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583924235474&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;[&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;[&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;25&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;[&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;]}
+{&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583924235613&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;[&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;[&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;25&amp;#34;&lt;/span&gt;],&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt;[&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;]}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_streaming_wi_fi_data_into_apache_kafka&#34;&gt;Streaming Wi-Fi data into Apache Kafka&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now, let&amp;#8217;s stream this data into Kafka. Once it&amp;#8217;s in Kafka we can use it for lots of things! We can use Kafka Connect to stream it onwards to places like Elasticsearch, Neo4j, S3. We can write ksqlDB applications to analyse and aggregate it. We can use it to drive services that subscribe to a stream of Wi-Fi data. The world will be our oyster!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Instead of the faff of running Kafka for myself I&amp;#8217;m using Confluent Cloud. Its &lt;a href=&#34;https://www.confluent.io/confluent-cloud-faqs/#how-is-pricing-calculated-for-confluent-cloud&#34;&gt;pricing&lt;/a&gt; is such that you just pay for the data you use, making it very cheap to start playing around with, especially with the current $50 credit per month for first three months offer. &lt;a href=&#34;https://confluent.cloud/signup&#34;&gt;Sign up&lt;/a&gt; and create your cluster and get your API key and broker details.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Create a file with your Confluent Cloud details in:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ cat .env
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;foo-bar.us-central1.gcp.confluent.cloud
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;XXXXXXXXXXX
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We installed &lt;code&gt;kafkacat&lt;/code&gt; above, and can now use it to connect to our cloud environment. The &lt;code&gt;-L&lt;/code&gt; argument tells &lt;code&gt;kafkacat&lt;/code&gt; to do a metadata query across the brokers and topics:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ &lt;span style=&#34;color:#008000&#34;&gt;source&lt;/span&gt; .env
+$ kafkacat -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -b &lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;:9092 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -L&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;Metadata &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; all topics &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;from broker -1: sasl_ssl://foobar.us-central1.gcp.confluent.cloud:9092/bootstrap&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;:
+ &lt;span style=&#34;color:#666&#34;&gt;18&lt;/span&gt; brokers:
+  broker &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; at b0-foobar.us-central1.gcp.confluent.cloud:9092
+  broker &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt; at b5-foobar.us-central1.gcp.confluent.cloud:9092
+  broker &lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt; at b10-foobar.us-central1.gcp.confluent.cloud:9092
+  broker &lt;span style=&#34;color:#666&#34;&gt;15&lt;/span&gt; at b15-foobar.us-central1.gcp.confluent.cloud:9092
+  broker &lt;span style=&#34;color:#666&#34;&gt;9&lt;/span&gt; at b9-foobar.us-central1.gcp.confluent.cloud:9092
+…
+ &lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt; topics:
+  topic &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wibble&amp;#34;&lt;/span&gt; with &lt;span style=&#34;color:#666&#34;&gt;6&lt;/span&gt; partitions:
+    partition &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, leader &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt;, replicas: &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt;,2,5, isrs: &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt;,2,5
+    partition &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;, leader &lt;span style=&#34;color:#666&#34;&gt;14&lt;/span&gt;, replicas: &lt;span style=&#34;color:#666&#34;&gt;14&lt;/span&gt;,6,7, isrs: &lt;span style=&#34;color:#666&#34;&gt;14&lt;/span&gt;,6,7
+…    &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now that this is working, go ahead and create a topic called &lt;code&gt;pcap&lt;/code&gt;, either through the Confluent Cloud web UI or the command line tool. It&amp;#8217;s important that you create this topic, as auto-topic creation is not enabled on Confluent Cloud.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With the topic created, let&amp;#8217;s populate it! We are going to hook up the output from &lt;code&gt;tshark&lt;/code&gt; in the previous section with the mighty power of &lt;code&gt;kafkacat&lt;/code&gt; courtesy of unix pipes:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;sudo tshark -i mon0 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -T ek &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -l &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.fc.type -e wlan.fc.type_subtype -e wlan_radio.channel &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan_radio.signal_dbm -e wlan_radio.duration -e wlan.ra &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.ra_resolved -e wlan.da -e wlan.da_resolved &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.ta -e wlan.ta_resolved -e wlan.sa &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.sa_resolved -e wlan.staa -e wlan.staa_resolved &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.tagged.all -e wlan.tag.vendor.data -e wlan.tag.vendor.oui.type &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wlan.tag.oui -e wlan.ssid -e wlan.country_info.code &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -e wps.device_name |&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    grep timestamp|&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    jq -c &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{timestamp: .timestamp} + .layers&amp;#39;&lt;/span&gt; |&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    kafkacat -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;true&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -b &lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;:9092 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -P &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -t pcap &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            -T&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;A few notes about what&amp;#8217;s going on here. We&amp;#8217;ve added in a bunch more fields from the Wi-Fi payload to capture in &lt;code&gt;tshark&lt;/code&gt;. We&amp;#8217;re also specifying &lt;code&gt;-P&lt;/code&gt; to tell &lt;code&gt;kafkacat&lt;/code&gt; to act as producer, &lt;code&gt;-t&lt;/code&gt; to specify the topic, and &lt;code&gt;-T&lt;/code&gt; to echo the messages to stdout as well as write them to the topic (just like &lt;code&gt;tee&lt;/code&gt; does).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With this running you&amp;#8217;ll see the messages arriving in the topic, either through &lt;code&gt;kafkacat&lt;/code&gt; run as a producer:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ kafkacat -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -b &lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;:9092 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -C -t pcap 
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583925922825&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;36&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_signal_dbm&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;-71&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_duration&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;384&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ra&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ra_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_da&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_da_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ta&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ta_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_sa&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_sa_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_staa&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_staa_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583925941754&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;29&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_signal_dbm&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;-71&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_duration&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;272&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ra&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ra_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Comtrend_96:cc:64&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583925963170&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;28&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_signal_dbm&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;-71&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_duration&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;40&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ra&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ra_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Broadcom_08:04:20&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]}&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;timestamp&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1583925991920&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_fc_type_subtype&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;36&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_channel&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;2&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_signal_dbm&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;-79&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_radio_duration&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;384&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ra&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ra_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_da&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_da_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ta&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_ta_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_sa&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_sa_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_staa&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wlan_staa_resolved&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;00:11:22:33:44:55&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;or through the Confluent Cloud UI:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/03/ccloud_pcap_01.png&#34; alt=&#34;ccloud pcap 01&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_whats_next&#34;&gt;What&amp;#8217;s next?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So now we&amp;#8217;ve got the data streaming into Kafka, what&amp;#8217;s next? Well, how about some &lt;a href=&#34;https://ksqldb.io/&#34;&gt;ksqlDB&lt;/a&gt; to analyse it:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;ksql&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; TIMESTAMPTOSTRING(WINDOWSTART,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Europe/London&amp;#39;&lt;/span&gt;) &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt; WINDOW_START_TS,
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;       DISTINCT_TA_MACS,
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;       DISTINCT_RA_MACS,
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;       EVENT_COUNT
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt;   PROBE_REQUESTS_BY_5MIN
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WHERE&lt;/span&gt;  ROWKEY&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt; 
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AND&lt;/span&gt;  WINDOWSTART &lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;2020-03-11T08:00:00.000&amp;#39;&lt;/span&gt; 
+&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AND&lt;/span&gt;  WINDOWSTART &lt;span style=&#34;color:#666&#34;&gt;&amp;lt;=&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;2020-03-11T09:00:00.000&amp;#39;&lt;/span&gt;;
+&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----------------------+------------------+------------------+-------------+
+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;WINDOW_START_TS       &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;DISTINCT_TA_MACS  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;DISTINCT_RA_MACS  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;EVENT_COUNT  &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----------------------+------------------+------------------+-------------+
+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;05&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;30&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;15&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;63&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;15&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;9&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;29&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;28&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;25&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;37&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;30&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;57&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;35&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;14&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;42&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;40&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;22&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;77&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;45&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;21&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;64&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;50&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;10&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;40&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;08&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;55&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;17&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;58&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;11&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;09&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;   &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;27&lt;/span&gt;                &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;                 &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;54&lt;/span&gt;           &lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;
+Query terminated
+ksql&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;or property graph analysis to look at the relationship between things like SSIDs and devices?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/03/elastic_graph_01.png&#34; alt=&#34;elastic graph 01&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Stay tuned!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_acknowledments_and_references&#34;&gt;Acknowledments and References&lt;/h3&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://frdmtoplay.com/counting-wireless-devices-on-a-raspberry-pi-with-tcpdump/&#34; class=&#34;bare&#34;&gt;https://frdmtoplay.com/counting-wireless-devices-on-a-raspberry-pi-with-tcpdump/&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://sandilands.info/sgordon/capturing-wifi-in-monitor-mode-with-iw&#34; class=&#34;bare&#34;&gt;https://sandilands.info/sgordon/capturing-wifi-in-monitor-mode-with-iw&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.cisco.com/c/en/us/support/docs/wireless-mobility/80211/200527-Fundamentals-of-802-11-Wireless-Sniffing.html&#34; class=&#34;bare&#34;&gt;https://www.cisco.com/c/en/us/support/docs/wireless-mobility/80211/200527-Fundamentals-of-802-11-Wireless-Sniffing.html&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.semfionetworks.com/uploads/2/9/8/3/29831147/wireshark_802.11_filters_-_reference_sheet.pdf&#34; class=&#34;bare&#34;&gt;https://www.semfionetworks.com/uploads/2/9/8/3/29831147/wireshark_802.11_filters_-_reference_sheet.pdf&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.wireshark.org/docs/dfref/w/wlan.html&#34; class=&#34;bare&#34;&gt;https://www.wireshark.org/docs/dfref/w/wlan.html&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</description>
+    </item>
     <item>
       <title>Kafka Connect JDBC Sink - setting the key field name</title>
       <link>https://rmoff.net/2020/02/25/kafka-connect-jdbc-sink-setting-the-key-field-name/</link>
@@ -2778,238 +3150,6 @@ curl -s -X PUT http://localhost:8083/admin/loggers/io.confluent.influxdb -H &lt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s -X PUT http://localhost:8083/admin/loggers/io.confluent.influxdb -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;level&amp;#34;: &amp;#34;DEBUG&amp;#34;}&amp;#39;&lt;/span&gt; | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;
 curl -s -X PUT http://localhost:8083/admin/loggers/org.apache.kafka.connect.runtime -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;level&amp;#34;: &amp;#34;INFO&amp;#34;}&amp;#39;&lt;/span&gt; | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-</description>
-    </item>
-    <item>
-      <title>How to win [or at least not suck] at the conference abstract submission game</title>
-      <link>https://rmoff.net/2020/01/16/how-to-win-or-at-least-not-suck-at-the-conference-abstract-submission-game/</link>
-      <pubDate>2020-01-16</pubDate>
-      
-      <guid>https://rmoff.net/2020/01/16/how-to-win-or-at-least-not-suck-at-the-conference-abstract-submission-game/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/01/IMG_2206.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Just over a year ago, I put together the crudely-titled &lt;a href=&#34;https://rmoff.net/2018/12/19/quick-thoughts-on-not-writing-a-crap-abstract/&#34;&gt;&#34;Quick Thoughts on Not Writing a Crap Abstract&#34;&lt;/a&gt; after reviewing a few dozen conference abstracts. This time around I&amp;#8217;ve had the honour of being on a conference programme committee and with it the pleasure of reading 250+ abstracts—from which I have some more snarky words of wisdom to impart on the matter.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_remind_mehow_does_this_conference_game_work&#34;&gt;Remind me…how does this conference game work?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Before we really get into it, let&amp;#8217;s recap how this whole game works, because plenty of people are new to conference speaking.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;olist arabic&#34;&gt;
-&lt;ol class=&#34;arabic&#34;&gt;
-&lt;li&gt;
-&lt;p&gt;A conference will usually have a &#34;call for papers&#34; (CfP) that is open for a period of time, during which you can submit your &#34;paper&#34;. Except, this isn&amp;#8217;t an academic conference to which you &lt;strong&gt;actually&lt;/strong&gt; submit a paper for peer-review prior to presenting it. Technical conferences generally work on &#34;abstracts&#34;.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Your abstract is a description of the talk that you intend to give. At this stage its sole purpose is as a &#34;pitch&#34; to the conference programme committee. &lt;strong&gt;You do not need to have written your talk before submitting the abstract&lt;/strong&gt;. In fact, if it&amp;#8217;s a new talk, I wouldn&amp;#8217;t write it until you get it accepted somewhere. Abstracts let you test the water for an idea, and once you have an audience for it, &lt;strong&gt;then&lt;/strong&gt; you can develop it into a talk.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Once the CfP has closed (and occasionally before) the conference&amp;#8217;s programme committee will review all of the submitted abstracts.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;Allow me to let you into a dirty little secret: not every abstract is always going to get read in its entirety and at length&lt;/em&gt;. Conferences will have &lt;em&gt;hundreds&lt;/em&gt; (if not thousands) of submissions, and most of the time the programme committee will be volunteers kindly giving up their time.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Consider this: if you have 200 abstracts to review and spend &lt;strong&gt;just two minutes&lt;/strong&gt; on each, that&amp;#8217;s already nearly seven hours. And think what you can actually do in that time (including the context switching between subjects, opening the abstract, logging the score). It&amp;#8217;s not a lot…scan the title, start reading the abstract…&lt;strong&gt;tick tock…DONE. NEXT ABSTRACT&lt;/strong&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Even allowing for a more leisurely review process, the point still stands: &lt;strong&gt;you need to stack the odds in your favour&lt;/strong&gt; because in general if your abstract is not &lt;em&gt;crystal clear&lt;/em&gt; people are not going to go searching through it to discern what you meant - it&amp;#8217;ll just go onto the &#39;maybe&#39; or &#39;nope&#39; pile.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;The programme committee decides on the talks to accept and send out notifications.&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Your talk got accepted? Yay! Now you get to go and write it :)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Your talk didn&amp;#8217;t get accepted? Never mind. In 2019 I got accepted by 57% of conferences to which I submitted - which is the same as saying that pretty much half the conferences reject every submission - and I&amp;#8217;ve been doing this a while so know a thing or two about crafting abstracts. Not to say they couldn&amp;#8217;t be improved, but just to give you an idea of how often you might strike out.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Don&amp;#8217;t hold off submitting to speak at conferences until your dream conference (Kafka Summit, obviously) comes up. I&amp;#8217;m not saying to submit your talk to &lt;em&gt;every single conference ever&lt;/em&gt;. But I am saying get practice in writing abstracts, navigating the CfP process, and getting experience speaking - all of these will help you, in the long run, to load the dice in your favour when it comes to conferences at which you &lt;em&gt;really really&lt;/em&gt; want to speak.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_show_that_you_care&#34;&gt;Show that you care&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;If you&amp;#8217;re serious about wanting to speak at a conference then I would recommend that you &lt;strong&gt;invest some serious time in preparing your abstract&lt;/strong&gt;. You need to do everything you can to show the programme committee of a conference that &lt;strong&gt;you deserve that speaking slot&lt;/strong&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;One way that you do this is by showing that you have taken the CfP process seriously. Just like teachers at school could spot the homework that was done whilst sat on the bus ride to school the day it was due in, the same goes for your conference abstracts. Abstracts that are mistargeted, lazily written, poorly spelt (plus all the things I list below too) shout out &#34;&lt;em&gt;Yeah I fancy speaking at your conference, but I&amp;#8217;ve got better things to do than spend time on this…but can I do a talk anyway?&lt;/em&gt;&#34;. Or to put it more simply from how the programme committee might see it when weighing up your abstract against others: &#34;&lt;em&gt;&#39;Do I feel lucky?&#39; Well, do you, punk?&lt;/em&gt;&#34;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Here are some concrete ways you can ensure you&amp;#8217;re doing everything to prepare your abstract:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;olist arabic&#34;&gt;
-&lt;ol class=&#34;arabic&#34;&gt;
-&lt;li&gt;
-&lt;p&gt;READ THIS ADVICE! Not just mine, but all the other advice that&amp;#8217;s out there. You would be surprised how many people don&amp;#8217;t. A lot of this process is &#39;playing the game&#39;, and these kinds of blogs all spell out the rules to follow:&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;http://dataeducation.com/capturing-attention-writing-great-session-descriptions/&#34;&gt;Adam Machanic - Capturing Attention: Writing Great Session Descriptions&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;http://www.pythian.com/blog/concrete-advice-for-abstract-writers/&#34;&gt;Gwen Shapira - Concrete Advice for Abstract Writers&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;http://dbakevlar.com/2013/10/abstracts-reviews-and-conferences-oh-my/&#34;&gt;Kellyn Pot’Vin-Gorman - Abstracts, Reviews and Conferences, Oh My!&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;http://alistapart.com/article/conference-proposals-that-dont-suck&#34;&gt;Russ Unger - Conference Proposals that Don’t Suck&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://mwidlake.wordpress.com/2015/04/17/tips-on-submitting-an-abstract-to-conference/&#34;&gt;Martin Widlake - Tips on Submitting an Abstract to Conference&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://bridgetkromhout.com/blog/give-actionable-takeaways/&#34;&gt;Bridget Kromhout - give actionable takeaways&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Proofread your abstract. Read it out loud (not just mutter it under your breath, but actually out loud). Proofread it again. Use &lt;a href=&#34;https://grammarly.com&#34;&gt;Grammarly&lt;/a&gt; to proofread it. There is no excuse for spelling or grammatical errors and they give a REALLY bad impression for your abstract because they imply a lack of attention to detail that the programme committee might assume will be present in your talk too.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Get others to review your abstract. Put it in a Google Doc, give people comment access, and send them the link. A couple of tips for getting the most out of this:&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Don&amp;#8217;t do it the day before the abstract is due in. Make sure there&amp;#8217;s enough time for you to review the changes that might be suggested.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Respect the reviewer&amp;#8217;s time. Don&amp;#8217;t send over a draft abstract you just chucked together. It&amp;#8217;s not their job to write it for you, but to &lt;em&gt;help&lt;/em&gt; you write a good abstract. Make sure you&amp;#8217;ve read some of the material I&amp;#8217;ve linked to above and that you&amp;#8217;re not repeating some of the basic mistakes that show you&amp;#8217;ve not really spent any time on this.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Get some speaking experience. This is not about the abstract as such, but speaking in general. Speak at meetups. If a reviewer is wavering on your talk then you having zero experience may push them to reject. Meetups always want speakers—it&amp;#8217;s a great way to trial your talks, develop your relationship with the community - and to increase your hours in front of an audience.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_why_didnt_my_talk_get_accepted&#34;&gt;Why didn&amp;#8217;t my talk get accepted?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;Whilst these are specific to a Kafka-focussed conference, the premise of them will be transferable to other technologies.&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Scale alone does not get you a speaking slot&lt;/strong&gt;. I don&amp;#8217;t care if you&amp;#8217;re processing 1 gazillion messages - that in itself is not a 45-minute conference talk.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Just because you use Kafka in your architecture doesn&amp;#8217;t itself mean that the audience want to hear about your bespoke Llama-shaving software you wrote with it. Make the talk about the technology or the problems you solved—not the bespoke software that you wrote (that&amp;#8217;s just your vehicle for the story that you&amp;#8217;re going to tell).&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Kafka is a fairly mature technology now. &#34;Show &amp;amp; Tell&#34; is not enough. Just because you have a system using it in Production, that&amp;#8217;s not enough. You need something engaging; a hook, a story. &#34;We&amp;#8217;re using Kafka, we&amp;#8217;ll talk about the problems we encountered&#34; is not compelling. It&amp;#8217;s the same as probably 75% of the other abstracts.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Pay attention to the conference subject(s)&lt;/strong&gt;. If it&amp;#8217;s a Kafka conference don&amp;#8217;t submit a talk that&amp;#8217;s about a technology that&amp;#8217;s not Kafka unless you can clearly explain in your abstract why it&amp;#8217;s relevant.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Your use of the technology needs to be relevant too. If you use Kafka to stream your messages in but then your talk is 90% all about how you use Spark to process them I am going to wonder what it&amp;#8217;s doing at a Kafka conference. Maybe a great talk for Strata, but not a Kafka conference.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Read the CfP closely - conferences will say what kind of talks they want, what subjects and technologies they want.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Kafka and Kubernetes, it&amp;#8217;s &lt;em&gt;so&lt;/em&gt; 2019 😜&lt;/strong&gt;. Either get &lt;em&gt;ahead&lt;/em&gt; of the BS curve if that&amp;#8217;s your intended route in for a talk—or if you do want to talk about something that&amp;#8217;s now &#34;early majority&#34; then make sure you&amp;#8217;re pitching beyond simply &#34;hey &amp;lt;buzzwords!&amp;gt;&#34; and instead have something to say about it that others don&amp;#8217;t.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_abstract_specifics&#34;&gt;Abstract specifics&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Here are some of the common mistakes that I&amp;#8217;ve noticed people make. Some of them you might disagree with, but in general if you can check off all this list as things you&amp;#8217;ve avoided doing then you&amp;#8217;re off to a good start.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;I don&amp;#8217;t care what your system&amp;#8217;s internal name is and nor do conference attendees. It&amp;#8217;s just confusing, even if it&amp;#8217;s the wittiest acronym ever.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Think about &lt;strong&gt;the audience&lt;/strong&gt;. What are they going to &lt;strong&gt;gain&lt;/strong&gt; from attending your talk? Ensure that your abstract makes that clear. If you&amp;#8217;re talking about an implementation then focus on something relevant within what you built that you want to share with people for them to benefit from.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;An analogy would be the 1000 photos from your latest holiday. Do you take five photos of that 1000 and weave a good story around each one, or do you subject someone to every single step and sight of the journey with every one of those 1000 photos?&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Capitalise your words correctly (Kafka has a Kapital K!) ESPECIALLY in your titles! If you don&amp;#8217;t then it looks sloppy and gives a bad impression from the outset.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Don&amp;#8217;t include &lt;strong&gt;all&lt;/strong&gt; the URLs! Especially if it&amp;#8217;s plain text then a dozen &lt;code&gt;http://&lt;/code&gt; quickly pollute the readability of the text. You only need one or two at the very most. You&amp;#8217;re writing an abstract, not a blog.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&#34;&lt;em&gt;If there&amp;#8217;s time&lt;/em&gt;&#34; / &#34;&lt;em&gt;Bonus content if time permits&lt;/em&gt;&#34; - don&amp;#8217;t put this in your abstract. Either cover &amp;lt;x&amp;gt;, or don&amp;#8217;t. By putting this in you&amp;#8217;re suggesting to me that you don&amp;#8217;t really have a handle on what your talk will be like.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Pro-tip: no-one will actually read your abstract back against the delivered talk. So long as you don&amp;#8217;t completely lie and deliver a talk about Mozart when you promised the crowd Meatloaf, you are fine to ad-lib content that wasn&amp;#8217;t included in your abstract.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Just as you should not be terse in your abstract, do not be too verbose.&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;The reviewer will get bored and be desperate for a tl;dr&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;it suggests that if you cannot be clear and concise in your abstract maybe your talk will also be waffly and wordy.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Don&amp;#8217;t submit too many abstracts. If I see your name multiple times my eyes as a reviewer start to glaze over. Pick a small handful of your best topics and pitch those. Focus on the conference and work out which is likely to fit best. If you really have half a dozen talks that are all perfect for the conference then just pick the ones that &lt;strong&gt;you&lt;/strong&gt; would like to deliver most.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;The few hundred words that you have in your abstract are your &lt;strong&gt;only&lt;/strong&gt; opportunity to pitch your talk to the programme committee. Take care with those words and make them justify their space on the screen. Don&amp;#8217;t assume that the programme committee will have mind-reading powers and will somehow magically know what an amazing talk you &lt;em&gt;might&lt;/em&gt; give - lay it out in front of them in the abstract.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Links to talks and blogs are useful to indicate that you&amp;#8217;ve got experience in the subject, but they are not a substitute for a good abstract. Chances are the programme committee won&amp;#8217;t have time to read and watch them, so you still need to nail the abstract.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Use white space! Use paragraphs! Confronted with this, how many people will take the time to pick through it?&lt;/p&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2020/01/ks02.png&#34; alt=&#34;ks02&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Compared to this, where the paragraph breaks make it nice and easy to grok:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2020/01/ks01.png&#34; alt=&#34;ks01&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_thoughts_questions&#34;&gt;Thoughts? Questions?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;a href=&#34;https://twitter.com/rmoff&#34;&gt;@ me on Twitter!&lt;/a&gt;&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
