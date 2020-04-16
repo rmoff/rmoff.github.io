@@ -5,9 +5,348 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2020-03-13</lastBuildDate>
+    <lastBuildDate>2020-04-16</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>A quick and dirty way to monitor data arriving on Kafka</title>
+      <link>https://rmoff.net/2020/04/16/a-quick-and-dirty-way-to-monitor-data-arriving-on-kafka/</link>
+      <pubDate>2020-04-16</pubDate>
+      
+      <guid>https://rmoff.net/2020/04/16/a-quick-and-dirty-way-to-monitor-data-arriving-on-kafka/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/04/IMG_3756.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I&amp;#8217;ve been poking around recently with &lt;a href=&#34;https://rmoff.net/2020/03/11/streaming-wi-fi-trace-data-from-raspberry-pi-to-apache-kafka-with-confluent-cloud/&#34;&gt;capturing Wi-Fi packet data&lt;/a&gt; and streaming it into Apache Kafka, from where I&amp;#8217;m processing and analysing it. Kafka itself it rock-solid - because I&amp;#8217;m using &lt;a href=&#34;https://confluent.cloud/signup&#34;&gt;☁️Confluent Cloud&lt;/a&gt; and someone else worries about provisioning it, scaling it, and keeping it running for me. But whilst Kafka works just great, my side of the setup—&lt;code&gt;tshark&lt;/code&gt; running on a Raspberry Pi—is less than stable. For whatever reason it sometimes stalls and I have to restart the Raspberry Pi and restart the capture process.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I&amp;#8217;m sure there&amp;#8217;s a reason and I&amp;#8217;m sure if I spent long enough looking and debugging I&amp;#8217;d find it - but for now the time invested in this is better spent just knowing when I need to go and bounce it. I don&amp;#8217;t mind losing a few minutes of data, or even a few hours, but this kind of gap of a week makes me sad:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/kib01.png&#34; alt=&#34;kib01&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So what I want is a very simple way to look at the most recent timestamp on a Kafka message, and send me an alert if it&amp;#8217;s outside a threshold.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/alert01.png&#34; alt=&#34;alert01&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Herewith a very dirty hacky way to do just this…&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_parts_list&#34;&gt;Parts List&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;kafkacat&lt;/code&gt; polls the most recent message on the topic&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;jq&lt;/code&gt; extracts the timestamp&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;bash&lt;/code&gt; compares the timestamp to our given threshold and also handles errors in calling &lt;code&gt;kafkacat&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;curl&lt;/code&gt; makes a REST call to Telegram to send the status message&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_setting_up_telegram&#34;&gt;Setting up Telegram&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Create a new Telegram bot per &lt;a href=&#34;https://core.telegram.org/bots#creating-a-new-bot&#34;&gt;the instructions&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/telegram01.png&#34; alt=&#34;telegram01&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Make a note of the access token because you&amp;#8217;ll need this later.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What do all hack projects need? A geeky avatar of course. It may be a dirty hack, but it&amp;#8217;s going to be a well-presented one ;-)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/telegram02.png&#34; alt=&#34;telegram02&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To get our bot to work we need to start it first, so click on its link from Botfather (or just start a Telegram chat with it directly). This will send it the &lt;code&gt;/start&lt;/code&gt; command:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/telegram04.png&#34; alt=&#34;telegram04&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_getting_the_recipients_chat_id&#34;&gt;Getting the recipient&amp;#8217;s Chat ID&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We need to get the id of the recipient of messages that our bot is going to send. This can either be a direct message to you, or you can set up a group (which other real people can be members of an see the same message from the bot). If you want to use a group then make sure you start the bot (&lt;code&gt;/start&lt;/code&gt; per above) and then invite it to the group. Using a group is also more convenient because you could create multiple alert routes with a single bot, instead of having to create a new bot for each purpose.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/telegram03.png&#34; alt=&#34;telegram03&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Having started the bot, and optionally added it to a group and sent a message to the group, now invoke the &lt;a href=&#34;https://core.telegram.org/bots/api#getupdates&#34;&gt;&lt;code&gt;getUpdates&lt;/code&gt;&lt;/a&gt; API:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s https://api.telegram.org/bot&amp;lt;bot access token&amp;gt;/getUpdates&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Replace &lt;code&gt;&amp;lt;bot access token&amp;gt;&lt;/code&gt; with (you guessed it!) the bot access token that the Botfather gave you above. The API is a bit funky here - note that the &lt;code&gt;bot&lt;/code&gt; is hardcoded part of the URL and should not be changed - you &lt;strong&gt;append&lt;/strong&gt; your bot access token to this. So if Botfather gave you an access token of &lt;code&gt;99999:XXXXX&lt;/code&gt; you would invoke:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s https://api.telegram.org/bot99999:XXXXX/getUpdates&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;From this you&amp;#8217;ll get one, or more, messages that the bot has received. This might just be the single &lt;code&gt;/start&lt;/code&gt; that you invoked, or it could also be group messages if you&amp;#8217;ve added it to one. Regardless, identify the message instance corresponding to the recipient that you want for the bot and make a note of the &lt;code&gt;chat.id&lt;/code&gt; value. Here it&amp;#8217;s &lt;code&gt;-468250841&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;message_id&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;3&lt;/span&gt;,
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;from&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;id&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;218419044&lt;/span&gt;,
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;is_bot&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;false&lt;/span&gt;,
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;first_name&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Robin&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;last_name&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Moffatt&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;username&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;rmoff&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;language_code&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;en&amp;#34;&lt;/span&gt;
+  },
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;chat&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;id&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;468250841&lt;/span&gt;,
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;title&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;pcap ingest monitoring&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;group&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;all_members_are_administrators&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;true&lt;/span&gt;
+  },
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;date&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1586894082&lt;/span&gt;,
+  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;group_chat_created&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;true&lt;/span&gt;
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can use &lt;code&gt;jq&lt;/code&gt; to return just the chat ID and associated recipient information too. Here it shows the group chat message quoted above, plus the DM that I sent the bot previously (&lt;code&gt;/start&lt;/code&gt;).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s https://api.telegram.org/bot99999:XXXXX/getUpdates | jq  -c &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.result[].message.chat | [.id , .title, .username]&amp;#39;&lt;/span&gt;
+
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;218419044&lt;/span&gt;,null,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;rmoff&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;-468250841,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;pcap ingest monitoring&amp;#34;&lt;/span&gt;,null&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;However you do it, you should now have:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Bot access token (e.g. &lt;code&gt;99999:XXXXX&lt;/code&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Chat ID (e.g. &lt;code&gt;-468250841&lt;/code&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_sending_a_test_message&#34;&gt;Sending a test message&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let&amp;#8217;s send a test message! We&amp;#8217;ll use the &lt;a href=&#34;https://core.telegram.org/bots/api#sendmessage&#34;&gt;&lt;code&gt;sendMessage&lt;/code&gt;&lt;/a&gt; API to do this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s -X POST https://api.telegram.org/bot&amp;lt;BOT ACCESS TOKEN&amp;gt;/sendMessage &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#19177c&#34;&gt;chat_id&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&amp;lt;CHAT ID&amp;gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#19177c&#34;&gt;text&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Did you ever play tic-tac-toe?&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and as if by magic…&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/telegram05.png&#34; alt=&#34;It works!&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_getting_the_latest_message_from_kafka&#34;&gt;Getting the latest message from Kafka&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As long-time readers of my blog will know, one of my favourite tools in my Kafka toolbox is &lt;code&gt;kafkacat&lt;/code&gt;. Here we&amp;#8217;ll not assume that it&amp;#8217;s installed, and instead run it using Docker. We&amp;#8217;re also going to connect to Confluent Cloud.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+You can of course use this same technique against a self-managed Kafka cluster (and indeed, with kafkacat running locally, not Docker)
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;docker run --rm edenhill/kafkacat:1.5.0 kafkacat &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  -b &lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_BROKER_HOST&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\\&lt;/span&gt;
+  -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;  -C -c1 -o -1 -u -f %T -t pcap &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Aside from the broker details (&lt;code&gt;-b&lt;/code&gt;) and various authentication and security settings (all the &lt;code&gt;-X&lt;/code&gt; parameters), what we&amp;#8217;re doing here is :&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;-C&lt;/code&gt; run as a consumer, and consume one message (&lt;code&gt;-c1&lt;/code&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Read from the penultimate offset &lt;code&gt;-o 1&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;-u&lt;/code&gt; don&amp;#8217;t buffer output&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;-t&lt;/code&gt; read from the &lt;code&gt;pcap&lt;/code&gt; topic&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;-f %T&lt;/code&gt; tells kafkacat just to return the timestamp from the Kafka message&amp;#8217;s metadata&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We&amp;#8217;re going to compare this timestamp to our threshold, which is ten minutes ago, from &lt;code&gt;date&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code&gt;docker run --rm ubuntu date --date &#39;-10 min&#39; &#34;+%s&#34;
+1586992072&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;WHY&lt;/strong&gt; would you invoke &lt;code&gt;date&lt;/code&gt; using docker? Because &lt;code&gt;date&lt;/code&gt; is one of those delightful *nix commands which has a different implementation across Linux, MacOS etc and is completely incompatible in options - so this way at least it works. I told you this was a dirty hack…&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Note that the timestamp that&amp;#8217;s returned from kafkacat is the unix epoch in &lt;strong&gt;milliseconds&lt;/strong&gt;, whilst &lt;code&gt;date&lt;/code&gt; is in &lt;strong&gt;seconds&lt;/strong&gt;. No problem. Let&amp;#8217;s continue this dirty hack by just truncating the last three digits!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;➜ &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1586993170473&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;1586993170473&lt;/span&gt;
+
+➜ &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1586993170473&lt;/span&gt;|sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/[0-9][0-9][0-9]$//g&amp;#39;&lt;/span&gt;
+&lt;span style=&#34;color:#666&#34;&gt;1586993170&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So we can get the timestamp of the latest Kafka message, and the local timestamp (minus a threshold) - now to compare them. That&amp;#8217;s easy enough with a bit of shell scripting. First we store the Kafka timestamp in a variable:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#19177c&#34;&gt;latest_ts&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;docker run --rm edenhill/kafkacat:1.5.0 kafkacat -b &lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_BROKER_HOST&lt;/span&gt; -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; -C -c1 -o -1 -t pcap -u -f %T| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/[0-9][0-9][0-9]$//g&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Then we store the timestamp against which we want to compare it:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#19177c&#34;&gt;ten_minutes_ago&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;docker run --rm ubuntu date --date &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;-10 min&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;+%s&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Finally we compare the two:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;$latest_ts&lt;/span&gt; -lt &lt;span style=&#34;color:#19177c&#34;&gt;$ten_minutes_ago&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;then&lt;/span&gt; 
+		&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Last Kafka message was received over ten minutes ago&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;fi&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_putting_it_all_together&#34;&gt;Putting it all together&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now we take the logic from above to determine if Kafka ingest has stalled, and combine it with the Telegram REST API that we explored above.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/telegram06.png&#34; alt=&#34;telegram06&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#bc7a00&#34;&gt;#!/bin/bash
+&lt;/span&gt;&lt;span style=&#34;color:#bc7a00&#34;&gt;&lt;/span&gt;#
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# @rmoff 16 April 2020&lt;/span&gt;
+#
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# -------------&lt;/span&gt;
+
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# .env should look like:&lt;/span&gt; 
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# CCLOUD_BROKER_HOST=xxxxxx&lt;/span&gt;
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# CCLOUD_API_KEY=xxxxxx&lt;/span&gt;
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# CCLOUD_API_SECRET=xxxxxx&lt;/span&gt;
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# TELEGRAM_BOT_TOKEN=xxxx&lt;/span&gt;
+
+&lt;span style=&#34;color:#008000&#34;&gt;source&lt;/span&gt; .env
+&lt;span style=&#34;color:#19177c&#34;&gt;CHAT_ID&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;-468250841
+
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;#---------&lt;/span&gt;
+
+&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Now              : &amp;#39;&lt;/span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;docker run --rm ubuntu date&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#19177c&#34;&gt;ten_minutes_ago&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;docker run --rm ubuntu date --date &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;-10 min&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;+%s&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Ten minutes ago  : &amp;#39;&lt;/span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;docker run --rm ubuntu date -d @&lt;span style=&#34;color:#19177c&#34;&gt;$ten_minutes_ago&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+
+&lt;span style=&#34;color:#19177c&#34;&gt;latest_ts&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;docker run --rm edenhill/kafkacat:1.5.0 kafkacat -b &lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_BROKER_HOST&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -C -c1 -o -1 -t my_kafka_topic -u -f %T| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/[0-9][0-9][0-9]$//g&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt; -z &lt;span style=&#34;color:#19177c&#34;&gt;$latest_ts&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;then&lt;/span&gt;
+	&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;TS is empty&amp;#34;&lt;/span&gt;
+	&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;chat_id&amp;#34;: &amp;#34;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CHAT_ID&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;&amp;#34;, &amp;#34;text&amp;#34;: &amp;#34;❌my_kafka_topic ingest check failed. Latest ingest time is empty&amp;#34;, &amp;#34;disable_notification&amp;#34;: false}&amp;#34;&amp;#39;&lt;/span&gt; |&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;	curl -s -X POST &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;	     -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Content-Type: application/json&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;	     -d @- &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;	     https://api.telegram.org/bot&lt;span style=&#34;color:#19177c&#34;&gt;$TELEGRAM_BOT_TOKEN&lt;/span&gt;/sendMessage | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;else&lt;/span&gt;
+	&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Latest timestamp : &amp;#39;&lt;/span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;docker run --rm ubuntu date -d @&lt;span style=&#34;color:#19177c&#34;&gt;$latest_ts&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+
+	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;$latest_ts&lt;/span&gt; -lt &lt;span style=&#34;color:#19177c&#34;&gt;$ten_minutes_ago&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;then&lt;/span&gt; 
+		&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Ingest has stalled&amp;#34;&lt;/span&gt;
+		&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;chat_id&amp;#34;: &amp;#34;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CHAT_ID&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;&amp;#34;, &amp;#34;text&amp;#34;: &amp;#34;❌my_kafka_topic ingest has stalled. Latest ingest time is &amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;docker run --rm ubuntu date -d @&lt;span style=&#34;color:#19177c&#34;&gt;$latest_ts&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;&amp;#34;, &amp;#34;disable_notification&amp;#34;: false}&amp;#34;&amp;#39;&lt;/span&gt; |&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;		curl -s -X POST &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;		     -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Content-Type: application/json&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;		     -d @- &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;		     https://api.telegram.org/bot&lt;span style=&#34;color:#19177c&#34;&gt;$TELEGRAM_BOT_TOKEN&lt;/span&gt;/sendMessage | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;
+	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;else&lt;/span&gt;
+		&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;chat_id&amp;#34;: &amp;#34;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CHAT_ID&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;&amp;#34;, &amp;#34;text&amp;#34;: &amp;#34;✅my_kafka_topic ingest looks good. Latest ingest time is &amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;docker run --rm ubuntu date -d @&lt;span style=&#34;color:#19177c&#34;&gt;$latest_ts&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;&amp;#34;, &amp;#34;disable_notification&amp;#34;: true}&amp;#34;&amp;#39;&lt;/span&gt; |&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;		curl -s -X POST &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;		     -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Content-Type: application/json&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;		     -d @- &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;		     https://api.telegram.org/bot&lt;span style=&#34;color:#19177c&#34;&gt;$TELEGRAM_BOT_TOKEN&lt;/span&gt;/sendMessage | jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;
+	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;fi&lt;/span&gt;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;fi&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_complaints&#34;&gt;Complaints?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Please send all complaints to &lt;code&gt;/dev/null&lt;/code&gt; ;-)&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
     <item>
       <title>Are Tech Conferences Dead?</title>
       <link>https://rmoff.net/2020/03/13/are-tech-conferences-dead/</link>
@@ -3094,59 +3433,6 @@ Query terminated&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 </description>
-    </item>
-    <item>
-      <title>UnsupportedClassVersionError: `&lt;x&gt;` has been compiled by a more recent version of the Java Runtime</title>
-      <link>https://rmoff.net/2020/01/21/unsupportedclassversionerror-x-has-been-compiled-by-a-more-recent-version-of-the-java-runtime/</link>
-      <pubDate>2020-01-21</pubDate>
-      
-      <guid>https://rmoff.net/2020/01/21/unsupportedclassversionerror-x-has-been-compiled-by-a-more-recent-version-of-the-java-runtime/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/01/IMG_2114.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This article is just for Googlers and my future self encountering this error. Recently I was building a Docker image from the ksqlDB code base, and whilst it built successfully the ksqlDB server process in the Docker container when instantiated failed with a &lt;code&gt;UnsupportedClassVersionError&lt;/code&gt;:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;java.lang.UnsupportedClassVersionError: javafx/beans/value/ObservableValue has been compiled by a more recent version of the Java Runtime &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;class file version &lt;span style=&#34;color:#666&#34;&gt;54&lt;/span&gt;.0&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;, this version of the Java Runtime only recognizes class file versions up to &lt;span style=&#34;color:#666&#34;&gt;52&lt;/span&gt;.0&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Here&amp;#8217;s how I fixed it, courtesy of help from my colleagues Colin and Tim.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;olist arabic&#34;&gt;
-&lt;ol class=&#34;arabic&#34;&gt;
-&lt;li&gt;
-&lt;p&gt;Download &lt;a href=&#34;https://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html&#34;&gt;JDK 8 (&#34;Java SE&#34;)&lt;/a&gt; and install it&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;On my Mac I had an existing Java, &lt;a href=&#34;https://medium.com/@devkosal/switching-java-jdk-versions-on-macos-80bc868e686a&#34;&gt;this article&lt;/a&gt; showed how to list them and switch between them&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ /usr/libexec/java_home -V
-
-Matching Java Virtual Machines &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;:
-    &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;.0.2, x86_64:	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;OpenJDK 12.0.2&amp;#34;&lt;/span&gt;	/Library/Java/JavaVirtualMachines/adoptopenjdk-12.0.2.jdk/Contents/Home
-    &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.8.0_241, x86_64:	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Java SE 8&amp;#34;&lt;/span&gt;	/Library/Java/JavaVirtualMachines/jdk1.8.0_241.jdk/Contents/Home&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Set the &lt;code&gt;JAVA_HOME&lt;/code&gt; for your current shell to JDK 8&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;JAVA_HOME&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;`&lt;/span&gt;/usr/libexec/java_home -v &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.8&lt;span style=&#34;color:#ba2121&#34;&gt;`&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;In the same shell, run&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;`&lt;/span&gt;mvn clean&lt;span style=&#34;color:#ba2121&#34;&gt;`&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;In the same shell, run the actual Maven build, which will now be done under Java 8 and should work 🤞&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/div&gt;</description>
     </item>
     
   </channel>
