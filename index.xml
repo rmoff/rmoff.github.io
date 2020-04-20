@@ -9,6 +9,325 @@
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
     <item>
+      <title>Using Confluent Cloud when there is no Cloud (or internet)</title>
+      <link>https://rmoff.net/2020/04/20/using-confluent-cloud-when-there-is-no-cloud-or-internet/</link>
+      <pubDate>2020-04-20</pubDate>
+      
+      <guid>https://rmoff.net/2020/04/20/using-confluent-cloud-when-there-is-no-cloud-or-internet/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/04/IMG_3917.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;a href=&#34;https://confluent.cloud/signup&#34;&gt;☁️Confluent Cloud&lt;/a&gt; is a great solution for a hosted and managed Apache Kafka service, with the additional benefits of Confluent Platform such as ksqlDB and managed Kafka Connect connectors. But as a developer, you won&amp;#8217;t always have a reliable internet connection. Train, planes, and automobiles—not to mention crappy hotel or conference Wi-Fi. Wouldn&amp;#8217;t it be useful if you could have a replica of your Cloud data on your local machine? That just pulled down new data automagically, without needing to be restarted each time you got back on the network?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let me show you here how you can go about doing this, to replicate one (or more) topics from Confluent Cloud onto your local machine. It&amp;#8217;s also a really useful thing if you want to develop something locally without perhaps being ready to deploy it against your cloud environment.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_how&#34;&gt;How?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Confluent Replicator is a Kafka Connect plugin, acting as a consumer from one Kafka cluster (Confluent Cloud) and producer to another (your local Kafka cluster). I use Docker Compose to run Kafka locally, almost exclusively. It&amp;#8217;s a piece of cake to provision, spin up - and tear down new environments, in isolation from others.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_setup&#34;&gt;Setup&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Create a &lt;code&gt;.env&lt;/code&gt; file with your Confluent Cloud broker details and credentials in it:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_BROKER_HOST&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;foo.bar.bork.bork.bork.us-central1.gcp.confluent.cloud:9092
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;yyy
+&lt;span style=&#34;color:#19177c&#34;&gt;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;xxx&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Use these environment variables in your local shell (we&amp;#8217;ll use them with Docker later, hence writing them to a file for re-use)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000&#34;&gt;source&lt;/span&gt; .env&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_create_some_test_data_on_confluent_cloud&#34;&gt;Create some test data on Confluent Cloud&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Chuck some dummy data into a Confluent Cloud topic:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;date&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    kafkacat -b &lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_BROKER_HOST&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;             -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;             -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;             -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;             -t test_topic -P&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Verify that it&amp;#8217;s there:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;➜ kafkacat -b &lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_BROKER_HOST&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;              -X security.protocol&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;SASL_SSL -X sasl.mechanisms&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;PLAIN &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;              -X sasl.username&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; -X sasl.password&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;              -X api.version.request&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;              -t test_topic -C -e
+Fri &lt;span style=&#34;color:#666&#34;&gt;17&lt;/span&gt; Apr &lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;18&lt;/span&gt;:03:17 BST&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_create_local_kafka_cluster&#34;&gt;Create local Kafka cluster&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now spin up yourself a local Kafka cluster using &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/ccloud-replicator/docker-compose.yml&#34;&gt;this Docker Compose&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;➜ docker-compose up -d
+➜ docker-compose ps
+   Name               Command            State                      Ports
+---------------------------------------------------------------------------------------------
+kafka-1      /etc/confluent/docker/run   Up      &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;.0.0.0:9092-&amp;gt;9092/tcp
+kafka-2      /etc/confluent/docker/run   Up      &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;.0.0.0:19092-&amp;gt;19092/tcp, &lt;span style=&#34;color:#666&#34;&gt;9092&lt;/span&gt;/tcp
+kafka-3      /etc/confluent/docker/run   Up      &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;.0.0.0:29092-&amp;gt;29092/tcp, &lt;span style=&#34;color:#666&#34;&gt;9092&lt;/span&gt;/tcp
+replicator   /etc/confluent/docker/run   Up      &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;.0.0.0:58083-&amp;gt;58083/tcp, &lt;span style=&#34;color:#666&#34;&gt;8083&lt;/span&gt;/tcp, &lt;span style=&#34;color:#666&#34;&gt;9092&lt;/span&gt;/tcp
+zookeeper    /etc/confluent/docker/run   Up      &lt;span style=&#34;color:#666&#34;&gt;2181&lt;/span&gt;/tcp, &lt;span style=&#34;color:#666&#34;&gt;2888&lt;/span&gt;/tcp, &lt;span style=&#34;color:#666&#34;&gt;3888&lt;/span&gt;/tcp&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_set_up_replicator&#34;&gt;Set up Replicator&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;First, we&amp;#8217;ll check that the Replicator container has started and is ready. Replicator runs as a plugin to Kafka Connect, so we use its API for interacting with Replicator.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+I&amp;#8217;m running a Kafka Connect worker that&amp;#8217;s listening on &lt;code&gt;58083&lt;/code&gt; - modify the code examples below if you&amp;#8217;re using a different one (e.g. the default 8083).
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Waiting for Kafka Connect to start listening on localhost:58083 ⏳&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;while&lt;/span&gt; : ; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;do&lt;/span&gt;
+    &lt;span style=&#34;color:#19177c&#34;&gt;curl_status&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;curl -s -o /dev/null -w %&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;http_code&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; http://localhost:58083/connectors&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; -e &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;date&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34; Kafka Connect listener HTTP state: &amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;$curl_status&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34; (waiting for 200)&amp;#34;&lt;/span&gt;
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;$curl_status&lt;/span&gt; -eq &lt;span style=&#34;color:#666&#34;&gt;200&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; ; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;then&lt;/span&gt;
+    &lt;span style=&#34;color:#008000&#34;&gt;break&lt;/span&gt;
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;fi&lt;/span&gt;
+    sleep &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;done&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Should show:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;Mon &lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt; Apr &lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;12&lt;/span&gt;:32:37 BST  Kafka Connect listener HTTP state:  &lt;span style=&#34;color:#666&#34;&gt;200&lt;/span&gt;  &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;waiting &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;200&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We can also verify that the Replicator plugin has been loaded correctly:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s localhost:58083/connector-plugins|jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.[].class&amp;#39;&lt;/span&gt;|grep -q io.confluent.connect.replicator.ReplicatorSourceConnector
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;$?&lt;/span&gt; -eq &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;then&lt;/span&gt; 
+   &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Replicator plugin is correctly loaded ✅&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;else&lt;/span&gt;
+   &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;😢 Replicator plugin is not loaded. Please check the Kafka Connect worker logs and installation steps&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;fi&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Should show:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;Replicator plugin is correctly loaded ✅&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now send the config to the Kafka Connect worker&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;&lt;span style=&#34;&#34;&gt;source&lt;/span&gt; &lt;span style=&#34;&#34;&gt;.env&lt;/span&gt;
+
+&lt;span style=&#34;&#34;&gt;epoch=$(date&lt;/span&gt; &lt;span style=&#34;&#34;&gt;+%s)&lt;/span&gt;
+
+&lt;span style=&#34;&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;&#34;&gt;-X&lt;/span&gt; &lt;span style=&#34;&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Accept:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;&#34;&gt;\&lt;/span&gt;
+    &lt;span style=&#34;&#34;&gt;-H&lt;/span&gt;  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:58083/connectors/replicator-source&amp;#34;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;$epoch&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;/config&amp;#34;&lt;/span&gt; &lt;span style=&#34;&#34;&gt;\&lt;/span&gt;
+    &lt;span style=&#34;&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;&#34;&gt;&amp;#39;&lt;/span&gt;
+        {
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;connector.class&amp;#34;&lt;/span&gt;             : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.confluent.connect.replicator.ReplicatorSourceConnector&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;key.converter&amp;#34;&lt;/span&gt;               : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.confluent.connect.replicator.util.ByteArrayConverter&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;value.converter&amp;#34;&lt;/span&gt;             : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.confluent.connect.replicator.util.ByteArrayConverter&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;header.converter&amp;#34;&lt;/span&gt;            : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.confluent.connect.replicator.util.ByteArrayConverter&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;src.kafka.bootstrap.servers&amp;#34;&lt;/span&gt; : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&amp;#39;$CCLOUD_BROKER_HOST&amp;#39;:9092&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;src.kafka.security.protocol&amp;#34;&lt;/span&gt; : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;SASL_SSL&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;src.kafka.sasl.mechanism&amp;#34;&lt;/span&gt;    : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;PLAIN&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;src.kafka.sasl.jaas.config&amp;#34;&lt;/span&gt;  : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&amp;#34;&amp;#39;$CCLOUD_API_KEY&amp;#39;\&amp;#34; password=\&amp;#34;&amp;#39;$CCLOUD_API_SECRET&amp;#39;\&amp;#34;;&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;src.consumer.group.id&amp;#34;&lt;/span&gt;       : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;replicator-&amp;#39;$epoch&amp;#39;&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;dest.kafka.bootstrap.servers&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;kafka-1:39092,kafka-2:49092,kafka-3:59092&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;topic.whitelist&amp;#34;&lt;/span&gt;             : &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;test_topic&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;topic.rename.format&amp;#34;&lt;/span&gt;         :&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;${topic}&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;confluent.license&amp;#34;&lt;/span&gt;           :&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;confluent.topic.bootstrap.servers&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;kafka-1:39092,kafka-2:49092,kafka-3:59092&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;confluent.topic.replication.factor&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;,
+        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;offset.start&amp;#34;&lt;/span&gt;                :&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;consumer&amp;#34;&lt;/span&gt;
+        }&lt;span style=&#34;&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Check that it&amp;#8217;s running:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;➜ curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:58083/connectors?expand=info&amp;amp;expand=status&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;       jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&amp;#34;connector.class&amp;#34;]|join(&amp;#34;:|:&amp;#34;)&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;       column -s : -t| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;//g&amp;#39;&lt;/span&gt;| sort
+&lt;span style=&#34;color:#008000&#34;&gt;source&lt;/span&gt;  |  replicator-source1587382706  |  RUNNING  |  RUNNING  |  io.confluent.connect.replicator.ReplicatorSourceConnector&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Check that we&amp;#8217;ve got data:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;➜ kafkacat -b localhost:29092 -t test_topic -C -e
+Fri &lt;span style=&#34;color:#666&#34;&gt;17&lt;/span&gt; Apr &lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;18&lt;/span&gt;:03:17 BST&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So now when data gets sent to Confluent Cloud, we get it also pushed to our local Kafka cluster.&lt;/p&gt;
+&lt;/div&gt;
+&lt;script id=&#34;asciicast-fKlgOPK2gsIW42MIEg7y9FpXz&#34; src=&#34;https://asciinema.org/a/fKlgOPK2gsIW42MIEg7y9FpXz.js&#34; async&gt;&lt;/script&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_restarting_and_dealing_with_network_glitches&#34;&gt;Restarting and dealing with network glitches&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The cool thing about Kafka, and Kafka Connect, is that it keeps track of where a particular consumer has read up to in a topic. Replicator therefore will read from a topic whilst it&amp;#8217;s running, and if you stop and restart it, it&amp;#8217;ll just catch up from where it got to before it stopped.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The same principle applies to if your local machine goes off the network, or perhaps just goes through some patchy connectivity. If it can connect to the source cluster (Confluent Cloud), it will do so. If it can&amp;#8217;t, it&amp;#8217;ll just keep trying and carry on again once it can do.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_ingesting_a_fresh_copy_of_the_data&#34;&gt;Ingesting a fresh copy of the data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So there&amp;#8217;s restarting, and then there&amp;#8217;s &lt;strong&gt;restarting&lt;/strong&gt;. What if instead of wanting to restart the connector (we rebooted the machine, made a config change, whatever) we want to actually &lt;em&gt;start afresh&lt;/em&gt; and start a &lt;em&gt;new replication&lt;/em&gt; of the topic from Confluent Cloud?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Because of the clever way Kafka Connect uses the Kafka consumer group protocol to track offsets, if you were to delete the replicator configuration and create it afresh, it would still carry on from where it got to before! You can see the consumer group name (and consumption progress) in Confluent Cloud UI:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/replicator01.png&#34; alt=&#34;replicator01&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For this reason you may have noticed in the config that we ran above the use of &lt;code&gt;epoch&lt;/code&gt; in the configuration name and, most importantly, &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-replicator/configuration_options.html#cluster-id-and-group-id&#34;&gt;&lt;code&gt;src.consumer.group.id&lt;/code&gt;&lt;/a&gt;. This is just one way of ensuring a unique group name tied to this particular instance of the replicator. We can then choose to provision a new one if we want to start afresh, or restart an existing one.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Whilst you&amp;#8217;re there in the Confluent Cloud UI you can check out the detailed view of the progress of a particular consumer group&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/04/replicator02.png&#34; alt=&#34;replicator02&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_changing_the_target_topic&#34;&gt;Changing the target topic&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There&amp;#8217;s a bunch of parameters that you can set with Replicator. One particularly useful one is to modify the name of the target topic that Replicator writes to. Here&amp;#8217;s an example of routing a source topic to a target one that includes the identifier (&lt;code&gt;epoch&lt;/code&gt;) of the Replicator that wrote it&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;topic.rename.format&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;color:#b68;font-weight:bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;-ccloud-&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$epoch&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;&amp;#34;&lt;/span&gt;,&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The resulting topic name goes from &lt;code&gt;test_topic&lt;/code&gt; on the source (Confluent Cloud) to &lt;code&gt;test_topic-ccloud-1587388241&lt;/code&gt; on our target local cluster&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;➜ kafkacat -b localhost:29092 -t test_topic-ccloud-1587388241 -C -q -u -o end
+Here&lt;span style=&#34;&#34;&gt;&amp;#39;&lt;/span&gt;s a &lt;span style=&#34;color:#008000&#34;&gt;test&lt;/span&gt; message, sent at Mon &lt;span style=&#34;color:#666&#34;&gt;20&lt;/span&gt; Apr &lt;span style=&#34;color:#666&#34;&gt;2020&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;14&lt;/span&gt;:14:09 BST&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_storing_credentials_safely&#34;&gt;Storing credentials safely&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In the example above we passed the credentials for Confluent Cloud just as environment variables to Kafka Connect, which is not great from a security point of view. Instead we could use &lt;a href=&#34;https://rmoff.net/2019/05/24/putting-kafka-connect-passwords-in-a-separate-file-/-externalising-secrets/&#34;&gt;external secrets&lt;/a&gt;. Note that the Replicator docker container has the necessary &lt;code&gt;config.providers&lt;/code&gt; settings to enable this, and that we&amp;#8217;ve mounted out local &lt;code&gt;.env&lt;/code&gt; file into the container.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;…&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;CONNECT_CONFIG_PROVIDERS:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;file&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;CONNECT_CONFIG_PROVIDERS_FILE_CLASS:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;org.apache.kafka.common.config.provider.FileConfigProvider&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;volumes:&lt;span style=&#34;color:#bbb&#34;&gt; 
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;-&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;./.env:/opt/config&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now when we create the replicator we can reference the file and attributes within it:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#19177c&#34;&gt;epoch&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;date +%s&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+curl -s -X PUT -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Accept:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -H  &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:58083/connectors/replicator-source&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$epoch&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;/config&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        {
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;connector.class&amp;#34;: &amp;#34;io.confluent.connect.replicator.ReplicatorSourceConnector&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;key.converter&amp;#34;: &amp;#34;io.confluent.connect.replicator.util.ByteArrayConverter&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;value.converter&amp;#34;: &amp;#34;io.confluent.connect.replicator.util.ByteArrayConverter&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;header.converter&amp;#34;: &amp;#34;io.confluent.connect.replicator.util.ByteArrayConverter&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;src.kafka.bootstrap.servers&amp;#34;: &amp;#34;${file:/opt/config:CCLOUD_BROKER_HOST}&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;src.kafka.security.protocol&amp;#34;: &amp;#34;SASL_SSL&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;src.kafka.sasl.mechanism&amp;#34;: &amp;#34;PLAIN&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;src.kafka.sasl.jaas.config&amp;#34;: &amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&amp;#34;${file:/opt/config:CCLOUD_API_KEY}\&amp;#34; password=\&amp;#34;${file:/opt/config:CCLOUD_API_SECRET}\&amp;#34;;&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;src.consumer.group.id&amp;#34;: &amp;#34;replicator-&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$epoch&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;dest.kafka.bootstrap.servers&amp;#34;: &amp;#34;kafka-1:39092,kafka-2:49092,kafka-3:59092&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;topic.whitelist&amp;#34;: &amp;#34;test_topic&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;topic.rename.format&amp;#34;:&amp;#34;${topic}&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;confluent.license&amp;#34;:&amp;#34;&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;confluent.topic.bootstrap.servers&amp;#34;:&amp;#34;kafka-1:39092,kafka-2:49092,kafka-3:59092&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;confluent.topic.replication.factor&amp;#34;:1,
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        &amp;#34;offset.start&amp;#34;:&amp;#34;consumer&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        }&amp;#39;&lt;/span&gt; &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_its_not_just_for_cloud&#34;&gt;It&amp;#8217;s not just for Cloud&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can use Replicator between any two Apache Kafka clusters, and Confluent Control Center to give you the same consumer group monitoring view that I showed above.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Try it out by &lt;a href=&#34;https://www.confluent.io/download/&#34;&gt;downloading Confluent Platform&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_further_reading&#34;&gt;Further reading&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://docs.confluent.io/current/multi-dc-deployments/replicator/index.html&#34;&gt;Replicator documentation&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://docs.confluent.io/current/installation/docker/installation/replicator.html&#34;&gt;Replicator tutorial&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-replicator/configuration_options.html&#34;&gt;Replicator configuration options&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</description>
+    </item>
+    <item>
       <title>How to install kafkacat on Fedora</title>
       <link>https://rmoff.net/2020/04/20/how-to-install-kafkacat-on-fedora/</link>
       <pubDate>2020-04-20</pubDate>
@@ -2549,297 +2868,6 @@ at org.apache.kafka.connect.runtime.TransformationChain.apply&lt;span style=&#34
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;If you&amp;#8217;ve got multiple Google accounts then just go to that URL in incognito mode to signin using the appropriate account.&lt;/p&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Notes on getting data into InfluxDB from Kafka with Kafka Connect</title>
-      <link>https://rmoff.net/2020/01/23/notes-on-getting-data-into-influxdb-from-kafka-with-kafka-connect/</link>
-      <pubDate>2020-01-23</pubDate>
-      
-      <guid>https://rmoff.net/2020/01/23/notes-on-getting-data-into-influxdb-from-kafka-with-kafka-connect/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/01/IMG_2254.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can download the InfluxDB connector for Kafka Connect &lt;a href=&#34;https://www.confluent.io/hub/confluentinc/kafka-connect-influxdb&#34;&gt;here&lt;/a&gt;. Documentation for it is &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-influxdb/influx-db-sink-connector/&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;When a message from your source Kafka topic is written to InfluxDB the InfluxDB values are set thus:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Timestamp&lt;/strong&gt; is taken from the Kafka message timestamp (which is either set by your producer, or the time at which it was received by the broker)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Tag(s)&lt;/strong&gt; are taken from the &lt;code&gt;tags&lt;/code&gt; field in the message. This field must be a &lt;code&gt;map&lt;/code&gt; type - see below&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Value&lt;/strong&gt; fields are taken from the rest of the message, and must be numeric or boolean&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Measurement name&lt;/strong&gt; can be specified as a field of the message, or hardcoded in the connector config.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_try_it_out&#34;&gt;Try it out&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can find a Docker Compose that will spin up this whole stack for you &lt;a href=&#34;https://github.com/confluentinc/demo-scene/tree/master/influxdb-and-kafka&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_json_example&#34;&gt;JSON example&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;admonitionblock warning&#34;&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;div class=&#34;title&#34;&gt;Warning&lt;/div&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;A sharp edge to watch out for is that the InfluxDB connector relies on there being a &lt;strong&gt;schema&lt;/strong&gt; in your data. You cannot just throw some JSON at it and hope that it will &lt;em&gt;just work&lt;/em&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Learn more about &lt;a href=&#34;https://rmoff.net/2020/01/22/kafka-connect-and-schemas/&#34;&gt;schemas in Kafka Connect here&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;If this is your JSON payload&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
-    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tags&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {
-        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;host&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;FOO&amp;#34;&lt;/span&gt;,
-        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;product&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wibble&amp;#34;&lt;/span&gt;
-    },
-    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;stock&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;500.0&lt;/span&gt;
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Then you&amp;#8217;ll need to wrap it in an envelope with a schema thus:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
-    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;schema&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {
-        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;struct&amp;#34;&lt;/span&gt;,
-        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;fields&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [
-            { &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;field&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tags&amp;#34;&lt;/span&gt; , &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;map&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;keys&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; { &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;optional&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;false&lt;/span&gt; }, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;values&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; { &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;optional&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;false&lt;/span&gt; }, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;optional&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;false&lt;/span&gt;},
-            { &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;field&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;stock&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;optional&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;true&lt;/span&gt; }
-        ],
-        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;optional&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;false&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;version&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;
-    },
-    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;payload&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {
-        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tags&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {
-            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;host&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;FOO&amp;#34;&lt;/span&gt;,
-            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;product&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;wibble&amp;#34;&lt;/span&gt;
-        },
-        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;stock&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;500.0&lt;/span&gt;
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;admonitionblock tip&#34;&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;div class=&#34;title&#34;&gt;Tip&lt;/div&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-If you don&amp;#8217;t have the option of adding this schema to the producer writing the data, there is &lt;a href=&#34;https://rmoff.net/2020/01/22/kafka-connect-and-schemas/&#34;&gt;a hacky way that you can embed your payload in a schema using kafkacat&lt;/a&gt;.
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now create the connector.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -i -X PUT -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;        http://localhost:8083/connectors/sink_influx_json_01/config &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;        -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;connector.class&amp;#34;               : &amp;#34;io.confluent.influxdb.InfluxDBSinkConnector&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;value.converter&amp;#34;               : &amp;#34;org.apache.kafka.connect.json.JsonConverter&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;value.converter.schemas.enable&amp;#34;: &amp;#34;true&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;key.converter&amp;#34;                 : &amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;topics&amp;#34;                        : &amp;#34;json_01&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;influxdb.url&amp;#34;                  : &amp;#34;http://influxdb:8086&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;influxdb.db&amp;#34;                   : &amp;#34;my_db&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;measurement.name.format&amp;#34;       : &amp;#34;${topic}&amp;#34;
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;A most important thing is that the &lt;code&gt;value.converter&lt;/code&gt; is set correctly. This tells Kafka Connect understands how to deserialise the &lt;code&gt;value&lt;/code&gt; component of the message (as opposed to the key, which is specified with &lt;code&gt;key.converter&lt;/code&gt;).&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;For a JSON message such as that shown above with the schema make sure you have set both fields:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;&#34;value.converter&#34;               : &#34;org.apache.kafka.connect.json.JsonConverter&#34;&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;&#34;value.converter.schemas.enable&#34;: &#34;true&#34;&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now let&amp;#8217;s check that the data&amp;#8217;s made it to InfluxDB:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;&#34;&gt;$&lt;/span&gt; influx &lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;execute&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;show measurements on &amp;#34;my_db&amp;#34;&amp;#39;&lt;/span&gt;
-name: measurements
-name
-&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;json_01
-
-&lt;span style=&#34;&#34;&gt;$&lt;/span&gt; influx &lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;execute&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;show tag keys on &amp;#34;my_db&amp;#34;&amp;#39;&lt;/span&gt;
-name: json_01
-tagKey
-&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;------
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;host&lt;/span&gt;
-product
-
-&lt;span style=&#34;&#34;&gt;$&lt;/span&gt; influx &lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;execute&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;SELECT * FROM json_01 GROUP BY host, product;&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;database&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;my_db&amp;#34;&lt;/span&gt;
-name: json_01
-tags: &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;host&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;FOO, product&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;wibble
-time                stock
-&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----                -----
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1579779810974000000&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;500&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_avro_example&#34;&gt;Avro example&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;admonitionblock warning&#34;&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;div class=&#34;title&#34;&gt;Warning&lt;/div&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-ksqlDB/KSQL cannot yet write data in an Avro format that is compatible with this connector.
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Assuming you&amp;#8217;re writing Avro data from your application with full control over the schema, you should follow the same pattern as above, with the &lt;code&gt;tags&lt;/code&gt; field being a &lt;code&gt;map&lt;/code&gt;. Here&amp;#8217;s an example schema:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
-    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;record&amp;#34;&lt;/span&gt;,
-    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;name&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;myrecord&amp;#34;&lt;/span&gt;,
-    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;fields&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; [
-        {
-            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;name&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tags&amp;#34;&lt;/span&gt;,
-            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; {
-                &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;map&amp;#34;&lt;/span&gt;,
-                &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;values&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;string&amp;#34;&lt;/span&gt;
-            }
-        },
-        {
-            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;name&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;stock&amp;#34;&lt;/span&gt;,
-            &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;double&amp;#34;&lt;/span&gt;
-        }
-    ]
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;With your data written in Avro following the above schema pattern using the serialiser provided with Schema Registry, you can now stream it into InfluxDB:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -i -X PUT -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;        http://localhost:8083/connectors/sink_influx_avro_01/config &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;        -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;connector.class&amp;#34;                    : &amp;#34;io.confluent.influxdb.InfluxDBSinkConnector&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;value.converter&amp;#34;                    : &amp;#34;io.confluent.connect.avro.AvroConverter&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;value.converter.schema.registry.url&amp;#34;: &amp;#34;http://schema-registry:8081&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;key.converter&amp;#34;                      : &amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;topics&amp;#34;                             : &amp;#34;avro_01&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;influxdb.url&amp;#34;                       : &amp;#34;http://influxdb:8086&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;influxdb.db&amp;#34;                        : &amp;#34;my_db&amp;#34;,
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;            &amp;#34;measurement.name.format&amp;#34;            : &amp;#34;${topic}&amp;#34;
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;        }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;As above, we can check that the data made it into InfluxDB:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;&#34;&gt;$&lt;/span&gt; influx &lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;execute&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;SELECT * FROM avro_01 GROUP BY host, product;&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;database&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;my_db&amp;#34;&lt;/span&gt;
-name: avro_01
-tags: &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;host&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;FOO, product&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;wibble
-time                stock
-&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----                -----
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1579782223737000000&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;500&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_troubleshooting&#34;&gt;Troubleshooting&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Assuming your connector gets created successfully, you can check its status:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;$ curl -s &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;http://localhost:8083/connectors?expand=info&amp;amp;expand=status&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           jq &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&amp;#34;connector.class&amp;#34;]|join(&amp;#34;:|:&amp;#34;)&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           column -s : -t| sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/\&amp;#34;//g&amp;#39;&lt;/span&gt;| sort
-
-sink  |  sink_influx_json_01  |  RUNNING  |  RUNNING  |  io.confluent.influxdb.InfluxDBSinkConnector&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;If the task is &lt;code&gt;FAILED&lt;/code&gt; you&amp;#8217;ll need to dive into the Kafka Connect worker log to find the reason. Even if it&amp;#8217;s &lt;code&gt;RUNNING&lt;/code&gt; you&amp;#8217;ll need the Kafka Connect worker log for troubleshooting more subtle problems.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;If you&amp;#8217;re using Confluent Platform 5.4 (or Apache Kafka 2.4) you can use the new &lt;a href=&#34;https://rmoff.net/2020/01/16/changing-the-logging-level-for-kafka-connect-dynamically/&#34;&gt;dynamic logging capabilities in Kafka Connect&lt;/a&gt; to bump up the logging just for the InfluxDB connector without being overwhelmed by tons of other &lt;code&gt;TRACE&lt;/code&gt; data:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -s -X PUT http://localhost:8083/admin/loggers/io.confluent.influxdb &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -H &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;{&amp;#34;level&amp;#34;: &amp;#34;TRACE&amp;#34;}&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;With this set, you then get this kind of useful information:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;…
-put&lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt; - Processing records &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;INFLUX_TEST&amp;#39;&lt;/span&gt; database &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.confluent.influxdb.sink.InfluxDBSinkTask:224&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-put&lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt; - Looking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; tags &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.confluent.influxdb.sink.InfluxDBSinkTask:240&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-put&lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt; - tags field found but doesn&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;t match Schema{MAP} or Schema{MAP}. (io.confluent.influxdb.sink.InfluxDBSinkTask:253)
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;put() - tags =  (io.confluent.influxdb.sink.InfluxDBSinkTask:258)
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;put() - Processing field &amp;#39;&lt;/span&gt;measurement&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;:STRING:&amp;#39;&lt;/span&gt;null&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39; (io.confluent.influxdb.sink.InfluxDBSinkTask:272)
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;put() - Skipping field &amp;#39;&lt;/span&gt;tags&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39; (io.confluent.influxdb.sink.InfluxDBSinkTask:269)
-&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;put() - Processing field &amp;#39;&lt;/span&gt;cpu1&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;:INT32:&amp;#39;&lt;/span&gt;null&lt;span style=&#34;&#34;&gt;&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;io.confluent.influxdb.sink.InfluxDBSinkTask:272&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-…&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_resources&#34;&gt;Resources&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Read more about &lt;a href=&#34;https://www.confluent.io/blog/kafka-connect-deep-dive-converters-serialization-explained/&#34;&gt;Kafka and serialisation/converters&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;An example of the &lt;a href=&#34;https://rmoff.net/2020/01/21/monitoring-sonos-with-ksqldb-influxdb-and-grafana/&#34;&gt;InfluxDB connector in action&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Learn more about &lt;a href=&#34;https://rmoff.dev/crunch19-zero-to-hero-kafka-connect&#34;&gt;Kafka Connect&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
 &lt;/div&gt;</description>
     </item>
     
