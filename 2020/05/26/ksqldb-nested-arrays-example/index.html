@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>ksqlDB nested arrays - example</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/05/26/ksqldb-nested-arrays-example/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.59.1" />
+
+		
+		<meta property="og:title" content="ksqlDB nested arrays - example" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/img/default-header-img.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/05/26/ksqldb-nested-arrays-example/" />
+		<meta property="og:site_name" content="ksqlDB nested arrays - example" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/img/default-header-img.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">ksqlDB nested arrays - example</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-05-26T10:02:48&#43;01:00">May 26, 2020</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.net/categories/ksqldb" class="no-underline category near-white dim">KsqlDB</a>
+								<span class="display-print">at https://rmoff.net/2020/05/26/ksqldb-nested-arrays-example/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="@rmoff" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>Question from the Confluent Community Slack group:</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>How can I access the data in object in an array like below using ksqlDB stream</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-json" data-lang="json">"Total": [
+        {
+          "TotalType": "Standard",
+          "TotalAmount": 15.99
+        },
+{
+          "TotalType": "Old Standard",
+          "TotalAmount": 16,
+" STID":56
+        }
+]</code></pre>
+</div>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s take a look at this. First, spin up a ksqlDB environment using <a href="https://github.com/confluentinc/demo-scene/tree/master/introduction-to-ksqldb">this Docker Compose</a>.</p>
+</div>
+<div class="paragraph">
+<p>Send the sample message to a Kafka topic, first wrapping it in curly braces to make it valid JSON</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">docker <span style="color:#008000">exec</span> -i kafkacat kafkacat <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>        -b kafka:29092 -P <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>        -t my_topic <span style="color:#ba2121">&lt;&lt;EOF
+</span><span style="color:#ba2121">{ &#34;Total&#34;: [ { &#34;TotalType&#34;: &#34;Standard&#34;, &#34;TotalAmount&#34;: 15.99 }, { &#34;TotalType&#34;: &#34;Old Standard&#34;, &#34;TotalAmount&#34;: 16, &#34;STID&#34;: 56 } ] }
+</span><span style="color:#ba2121">EOF</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Fire up ksqlDB CLI</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="">$</span> ksql htp:<span style="color:#666">//</span>ksqldb:<span style="color:#666">8088</span>
+
+                  <span style="color:#666">===========================================</span>
+                  <span style="color:#666">=</span>       _              _ ____  ____       <span style="color:#666">=</span>
+                  <span style="color:#666">=</span>      <span style="color:#666">|</span> <span style="color:#666">|</span> _____  __ _<span style="color:#666">|</span> <span style="color:#666">|</span>  _ <span style="">\</span><span style="color:#666">|</span> __ )      <span style="color:#666">=</span>
+                  <span style="color:#666">=</span>      <span style="color:#666">|</span> <span style="color:#666">|/</span> <span style="color:#666">/</span> __<span style="color:#666">|/</span> _<span style="color:#666">`</span> <span style="color:#666">|</span> <span style="color:#666">|</span> <span style="color:#666">|</span> <span style="color:#666">|</span> <span style="color:#666">|</span>  _ <span style="">\</span>      <span style="color:#666">=</span>
+                  <span style="color:#666">=</span>      <span style="color:#666">|</span>   <span style="color:#666">&lt;</span><span style="">\</span>__ <span style="">\</span> (_<span style="color:#666">|</span> <span style="color:#666">|</span> <span style="color:#666">|</span> <span style="color:#666">|</span>_<span style="color:#666">|</span> <span style="color:#666">|</span> <span style="color:#666">|</span>_) <span style="color:#666">|</span>     <span style="color:#666">=</span>
+                  <span style="color:#666">=</span>      <span style="color:#666">|</span>_<span style="color:#666">|</span><span style="">\</span>_<span style="">\</span>___<span style="color:#666">/</span><span style="">\</span>__, <span style="color:#666">|</span>_<span style="color:#666">|</span>____<span style="color:#666">/|</span>____<span style="color:#666">/</span>      <span style="color:#666">=</span>
+                  <span style="color:#666">=</span>                   <span style="color:#666">|</span>_<span style="color:#666">|</span>                   <span style="color:#666">=</span>
+                  <span style="color:#666">=</span>  Event Streaming <span style="color:#008000;font-weight:bold">Database</span> purpose<span style="color:#666">-</span>built <span style="color:#666">=</span>
+                  <span style="color:#666">=</span>        <span style="color:#008000;font-weight:bold">for</span> stream processing apps       <span style="color:#666">=</span>
+                  <span style="color:#666">===========================================</span>
+
+Copyright <span style="color:#666">2017</span><span style="color:#666">-</span><span style="color:#666">2020</span> Confluent Inc.
+
+CLI v0.<span style="color:#666">9</span>.<span style="color:#666">0</span>, Server v0.<span style="color:#666">9</span>.<span style="color:#666">0</span> located <span style="color:#008000;font-weight:bold">at</span> http:<span style="color:#666">//</span>ksqldb:<span style="color:#666">8088</span>
+
+<span style="color:#008000;font-weight:bold">Having</span> trouble<span style="color:#666">?</span> <span style="color:#008000;font-weight:bold">Type</span> <span style="color:#ba2121">&#39;help&#39;</span> (<span style="color:#008000;font-weight:bold">case</span><span style="color:#666">-</span><span style="color:#008000;font-weight:bold">insensitive</span>) <span style="color:#008000;font-weight:bold">for</span> a rundown <span style="color:#008000;font-weight:bold">of</span> how things <span style="color:#008000;font-weight:bold">work</span><span style="color:#666">!</span>
+
+ksql<span style="color:#666">&gt;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Set the offset to the earliest so that we&#8217;re querying all the data in the topic</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SET</span> <span style="color:#ba2121">&#39;auto.offset.reset&#39;</span> <span style="color:#666">=</span> <span style="color:#ba2121">&#39;earliest&#39;</span>;
+<span style="color:#666">&gt;</span>
+Successfully changed <span style="color:#008000;font-weight:bold">local</span> property <span style="color:#ba2121">&#39;auto.offset.reset&#39;</span> <span style="color:#008000;font-weight:bold">to</span> <span style="color:#ba2121">&#39;earliest&#39;</span>. Use the UNSET command <span style="color:#008000;font-weight:bold">to</span> revert your change.</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Model the input data as a ksqlDB stream:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">CREATE</span> STREAM my_stream (TOTAL <span style="color:#008000">ARRAY</span><span style="color:#666">&lt;</span>STRUCT<span style="color:#666">&lt;</span>TotalType   <span style="color:#008000">VARCHAR</span>, 
+                                                  TotalAmount <span style="color:#008000">VARCHAR</span>, 
+                                                  STID        <span style="color:#008000">VARCHAR</span><span style="color:#666">&gt;&gt;</span>) 
+                         <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;my_topic&#39;</span>, 
+                               VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;JSON&#39;</span>);
+
+ Message
+<span style="color:#408080;font-style:italic">----------------
+</span><span style="color:#408080;font-style:italic"></span> Stream created
+<span style="color:#408080;font-style:italic">----------------</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Play with the data:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Select specific array entry</p>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+ksqlDB arrays are 1-based
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TOTAL[<span style="color:#666">1</span>] <span style="color:#008000;font-weight:bold">FROM</span> my_stream EMIT CHANGES <span style="color:#008000;font-weight:bold">LIMIT</span> <span style="color:#666">1</span>;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-------------------------------------------------------------------------------------------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>KSQL_COL_0                                                                                                                                 <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-------------------------------------------------------------------------------------------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="">{</span>TOTALTYPE<span style="color:#666">=</span>Standard, TOTALAMOUNT<span style="color:#666">=</span><span style="color:#666">15</span>.<span style="color:#666">99</span>, STID<span style="color:#666">=</span><span style="color:#008000;font-weight:bold">null</span><span style="">}</span>                                                                                         <span style="color:#666">|</span></code></pre></div>
+</div>
+</li>
+<li>
+<p>Select nested array element</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> TOTAL[<span style="color:#666">1</span>]<span style="color:#666">-&gt;</span>TotalType, TOTAL[<span style="color:#666">1</span>]<span style="color:#666">-&gt;</span>totalamount <span style="color:#008000;font-weight:bold">FROM</span> my_stream EMIT CHANGES;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">--------------------------------------------------------------------+--------------------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>TOTALTYPE                                                           <span style="color:#666">|</span>TOTALAMOUNT                                                         <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">--------------------------------------------------------------------+--------------------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>Standard                                                            <span style="color:#666">|</span><span style="color:#666">15</span>.<span style="color:#666">99</span>                                                               <span style="color:#666">|</span></code></pre></div>
+</div>
+</li>
+<li>
+<p>Explode the array</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> EXPLODE(TOTAL) <span style="color:#008000;font-weight:bold">FROM</span> my_stream EMIT CHANGES;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-------------------------------------------------------------------------------------------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>KSQL_COL_0                                                                                                                                 <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">-------------------------------------------------------------------------------------------------------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span><span style="">{</span>TOTALTYPE<span style="color:#666">=</span>Standard, TOTALAMOUNT<span style="color:#666">=</span><span style="color:#666">15</span>.<span style="color:#666">99</span>, STID<span style="color:#666">=</span><span style="color:#008000;font-weight:bold">null</span><span style="">}</span>                                                                                         <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="">{</span>TOTALTYPE<span style="color:#666">=</span><span style="color:#008000;font-weight:bold">Old</span> Standard, TOTALAMOUNT<span style="color:#666">=</span><span style="color:#666">16</span>, STID<span style="color:#666">=</span><span style="color:#666">56</span><span style="">}</span>                                                                                          <span style="color:#666">|</span></code></pre></div>
+</div>
+</li>
+<li>
+<p>Explode, un-nest, and change the field names of the resulting fields</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> EXPLODE(TOTAL)<span style="color:#666">-&gt;</span>TOTALTYPE <span style="color:#008000;font-weight:bold">AS</span> TOTAL_TYPE, 
+             EXPLODE(TOTAL)<span style="color:#666">-&gt;</span>TOTALAMOUNT <span style="color:#008000;font-weight:bold">AS</span> TOTALAMOUNT, 
+             EXPLODE(TOTAL)<span style="color:#666">-&gt;</span>STID <span style="color:#008000;font-weight:bold">AS</span> STID 
+        <span style="color:#008000;font-weight:bold">FROM</span> my_stream EMIT CHANGES;
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------------------------------+---------------------------------------------+---------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>TOTAL_TYPE                                   <span style="color:#666">|</span>TOTALAMOUNT                                  <span style="color:#666">|</span>STID                                         <span style="color:#666">|</span>
+<span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------------------------------+---------------------------------------------+---------------------------------------------+
+</span><span style="color:#408080;font-style:italic"></span><span style="color:#666">|</span>Standard                                     <span style="color:#666">|</span><span style="color:#666">15</span>.<span style="color:#666">99</span>                                        <span style="color:#666">|</span><span style="color:#008000;font-weight:bold">null</span>                                         <span style="color:#666">|</span>
+<span style="color:#666">|</span><span style="color:#008000;font-weight:bold">Old</span> Standard                                 <span style="color:#666">|</span><span style="color:#666">16</span>                                           <span style="color:#666">|</span><span style="color:#666">56</span>                                           <span style="color:#666">|</span></code></pre></div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Persist this to a new stream (backed by a Kafka topic):</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">CREATE</span> STREAM new_stream <span style="color:#008000;font-weight:bold">AS</span>
+         <span style="color:#008000;font-weight:bold">SELECT</span> EXPLODE(TOTAL)<span style="color:#666">-&gt;</span>TOTALTYPE <span style="color:#008000;font-weight:bold">AS</span> TOTAL_TYPE, 
+                EXPLODE(TOTAL)<span style="color:#666">-&gt;</span>TOTALAMOUNT <span style="color:#008000;font-weight:bold">AS</span> TOTALAMOUNT, 
+                EXPLODE(TOTAL)<span style="color:#666">-&gt;</span>STID <span style="color:#008000;font-weight:bold">AS</span> STID 
+            <span style="color:#008000;font-weight:bold">FROM</span> my_stream EMIT CHANGES;
+ Message
+<span style="color:#408080;font-style:italic">-----------------------------------------
+</span><span style="color:#408080;font-style:italic"></span> Created query <span style="color:#008000;font-weight:bold">with</span> ID CSAS_NEW_STREAM_0
+<span style="color:#408080;font-style:italic">-----------------------------------------
+</span><span style="color:#408080;font-style:italic"></span>ksql<span style="color:#666">&gt;</span></code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SHOW</span> TOPICS;
+
+ Kafka Topic <span style="color:#666">|</span> Partitions <span style="color:#666">|</span> Partition Replicas
+<span style="color:#408080;font-style:italic">-----------------------------------------------
+</span><span style="color:#408080;font-style:italic"></span> NEW_STREAM  <span style="color:#666">|</span> <span style="color:#666">1</span>          <span style="color:#666">|</span> <span style="color:#666">1</span>
+ my_topic    <span style="color:#666">|</span> <span style="color:#666">1</span>          <span style="color:#666">|</span> <span style="color:#666">1</span>
+<span style="color:#408080;font-style:italic">-----------------------------------------------
+</span><span style="color:#408080;font-style:italic"></span>ksql<span style="color:#666">&gt;</span> PRINT NEW_STREAM <span style="color:#008000;font-weight:bold">FROM</span> BEGINNING;
+<span style="color:#008000;font-weight:bold">Key</span> format: <span style="">¯\</span>_(<span style="">ツ</span>)_<span style="color:#666">/</span><span style="">¯</span> <span style="color:#666">-</span> <span style="color:#008000;font-weight:bold">no</span> <span style="color:#008000;font-weight:bold">data</span> processed
+Value format: JSON <span style="color:#008000;font-weight:bold">or</span> KAFKA_STRING
+rowtime: <span style="color:#666">2020</span><span style="color:#666">/</span><span style="color:#666">05</span><span style="color:#666">/</span><span style="color:#666">26</span> <span style="color:#666">08</span>:<span style="color:#666">58</span>:<span style="color:#666">35</span>.<span style="color:#666">691</span> Z, <span style="color:#008000;font-weight:bold">key</span>: <span style="color:#666">&lt;</span><span style="color:#008000;font-weight:bold">null</span><span style="color:#666">&gt;</span>, value: <span style="">{</span><span style="color:#ba2121">&#34;TOTAL_TYPE&#34;</span>:<span style="color:#ba2121">&#34;Standard&#34;</span>,<span style="color:#ba2121">&#34;TOTALAMOUNT&#34;</span>:<span style="color:#ba2121">&#34;15.99&#34;</span>,<span style="color:#ba2121">&#34;STID&#34;</span>:<span style="color:#008000;font-weight:bold">null</span><span style="">}</span>
+rowtime: <span style="color:#666">2020</span><span style="color:#666">/</span><span style="color:#666">05</span><span style="color:#666">/</span><span style="color:#666">26</span> <span style="color:#666">08</span>:<span style="color:#666">58</span>:<span style="color:#666">35</span>.<span style="color:#666">691</span> Z, <span style="color:#008000;font-weight:bold">key</span>: <span style="color:#666">&lt;</span><span style="color:#008000;font-weight:bold">null</span><span style="color:#666">&gt;</span>, value: <span style="">{</span><span style="color:#ba2121">&#34;TOTAL_TYPE&#34;</span>:<span style="color:#ba2121">&#34;Old Standard&#34;</span>,<span style="color:#ba2121">&#34;TOTALAMOUNT&#34;</span>:<span style="color:#ba2121">&#34;16&#34;</span>,<span style="color:#ba2121">&#34;STID&#34;</span>:<span style="color:#ba2121">&#34;56&#34;</span><span style="">}</span></code></pre></div>
+</div>
+
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
