@@ -87,6 +87,9 @@
 	<div class="paragraph">
 <p>Kafka Connect configuration is easy - you just write some JSON! But what if you&#8217;ve got credentials that you need to pass? Embedding those in a config file is not always such a smart idea. Fortunately with <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-297%3A+Externalizing+Secrets+for+Connect+Configurations">KIP-297</a> which was released in Apache Kafka 2.0 there is support for external secrets. It&#8217;s extendable to use your own <code>ConfigProvider</code>, and ships with its own for just putting credentials in a file - which I&#8217;ll show here. You can <a href="https://docs.confluent.io/current/connect/security.html#externalizing-secrets">read more here</a>.</p>
 </div>
+<div class="sect1">
+<h2 id="_kafka_connect_connector_secrets_management">Kafka Connect connector secrets management</h2>
+<div class="sectionbody">
 <div class="olist arabic">
 <ol class="arabic">
 <li>
@@ -146,6 +149,93 @@
 </div>
 </li>
 </ol>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_kafka_connect_worker_secrets_management">Kafka Connect worker secrets management</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>You can use the same approach to externalise sensitive values from the worker configuration file itself too. Whilst the worker masks sensitive values in the logfile, you still have the plaintext stored in the worker configuration file. Moving that to another file as shown below may not be so useful (unless the file is secured differently) but when combined with a configuration provider such as a password vault will be very useful.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>As above, in the worker configuration, define the config provider. For a file provider it looks like this:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Properties file</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">config.providers=file
+config.providers.file.class=org.apache.kafka.common.config.provider.FileConfigProvider</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Docker environment variables</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">CONNECT_CONFIG_PROVIDERS: 'file'
+CONNECT_CONFIG_PROVIDERS_FILE_CLASS: 'org.apache.kafka.common.config.provider.FileConfigProvider'</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>For the file provider, create a file with the key/value configuration items:</p>
+<div class="literalblock">
+<div class="content">
+<pre>SSL_KEYSTORE_PASSWORD=nevergonnagiveyouup
+GROUP_ID=my_connect_group</pre>
+</div>
+</div>
+</li>
+<li>
+<p>In the worker configuration specify the configuration items you&#8217;d like to source from the configuration provider, just the same you would for a connector itself. For example, to override the group id and the SSL keystore password using the config specified in the sample file above:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Properties file</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">group.id=${file:/data/connect_external.properties:GROUP_ID}
+ssl.keystore.password=${file:/data/connect_external.properties:SSL_KEYSTORE_PASSWORD}</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Docker environment variables</p>
+<div class="paragraph">
+<p><em>Note the double <code>$$</code>, since one it&#8217;s own will give you the error `Invalid interpolation format`</em></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">CONNECT_GROUP_ID: $${file:/data/connect_external.properties:GROUP_ID}
+CONNECT_SSL_KEYSTORE_PASSWORD: $${file:/data/connect_external.properties:SSL_KEYSTORE_PASSWORD}</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>When the Kafka Connect worker launches you&#8217;ll see it uses the new values. Since the SSL credentials are already masked you just see that it&#8217;s a hidden value.</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>[2020-06-16 13:03:09,721] INFO DistributedConfig values:
+…
+group.id = my_connect_group
+ssl.keystore.password = [hidden]</pre>
+</div>
+</div>
+</div>
 </div>
 </article>
 
