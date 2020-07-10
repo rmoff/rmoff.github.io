@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Learning Golang (some rough notes) - S02E02 - Adding error handling to the Producer</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.59.1" />
+
+		
+		<meta property="og:title" content="Learning Golang (some rough notes) - S02E02 - Adding error handling to the Producer" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/07/IMG_5284.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/" />
+		<meta property="og:site_name" content="Learning Golang (some rough notes) - S02E02 - Adding error handling to the Producer" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/07/IMG_5284.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Learning Golang (some rough notes) - S02E02 - Adding error handling to the Producer</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-07-10T10:59:05&#43;01:00">Jul 10, 2020</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.net/categories/go" class="no-underline category near-white dim">Go</a>, <a href="https://rmoff.net/categories/golang" class="no-underline category near-white dim">Golang</a>, <a href="https://rmoff.net/categories/kafka" class="no-underline category near-white dim">Kafka</a>, <a href="https://rmoff.net/categories/kafka-producer-api" class="no-underline category near-white dim">Kafka Producer API</a>, <a href="https://rmoff.net/categories/error-handling" class="no-underline category near-white dim">Error Handling</a>, <a href="https://rmoff.net/categories/type-assertion" class="no-underline category near-white dim">Type Assertion</a>
+								<span class="display-print">at https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="@rmoff" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>I looked <a href="/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/">last time</a> at the very bare basics of writing a Kafka producer using Go. It worked, but only with everything lined up and pointing the right way. There was no error handling of any sorts. Let&#8217;s see about fixing this now.</p>
+</div>
+<div class="sect1">
+<h2 id="_a_bit_of_code_tidying">A bit of code tidying</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>To make the code more readable to me, I split out the configuration into a new variable that&#8217;s then passed to the <code>NewProducer</code>, so instead of the more compact but possibly less readable</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">p</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">_</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">NewProducer</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">ConfigMap</span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #d14">"bootstrap.servers"</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"localhost:9092"</span><span style="background-color: #f8f8f8">})</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I have this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">c</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">ConfigMap</span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #d14">"boostrap.servers"</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"localhost:9092"</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+
+</span><span style="background-color: #f8f8f8">p</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">_</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">NewProducer</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">c</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_catching_errors_from_newproducer">Catching errors from <code>NewProducer()</code></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Instead of <code>p, <em></code> when invoking <code>NewProducer</code> (the <code></em></code> denoting an empty placeholder variable), we supply a variable into which the error can be stored:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">p</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">NewProducer</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">c</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we can check it and report back if there&#8217;s a problem:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢Oh noes, there's an error creating the Producer! %v"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #999988;font-style: italic">// do producing stuff</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If I make a deliberate mistake so that the <code>NewProducer</code> returns an error we get this</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>😢 Oh noes, there's an error creating the Producer! No such configuration property: "boostrap.servers"</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_be_assertive">Be Assertive!</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>We can take this a step further and look at the type of error that&#8217;s returned. Whilst <code>e</code> is a generic interface for holding an error, we can try casting it to a <code>kafka.Error</code>. Why would we want to do this? Well, <code>kafka.Error</code> exposes <a href="https://github.com/confluentinc/confluent-kafka-go/blob/master/kafka/error.go#L35-L41">properties</a> including an <a href="https://docs.confluent.io/current/clients/confluent-kafka-go/index.html#ErrorCode">ErrorCode</a> that describes the type of error. From that code we can handle the error in a more useful way than just dumping it to the screen. For example, if it&#8217;s an error about configuration properties (as in the example above) we could tell the user where to find the reference information for this; but including that in an error to the user if it&#8217;s <em>not</em> a problem in this area would be redundant (and possibly confusing).</p>
+</div>
+<div class="paragraph">
+<p>To cast it to a <code>kafka.Error</code> we use a <a href="https://tour.golang.org/methods/15">type assertion</a>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">ke</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We also check for success when we do it (just in case it&#8217;s not actually a <code>kafka.Error</code>)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ke</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ok</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">);</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ok</span><span style="color: #000000;font-weight: bold">==</span><span style="color: #008080">true</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #999988;font-style: italic">// it's a kafka.Error</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #999988;font-style: italic">// it's an error, but not a kafka.Error</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Once we&#8217;ve established that it&#8217;s a <code>kafka.Error</code> we can use the <code>Code()</code> function to access the <code>ErrorCode</code> and handle it with a <code>switch</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ke</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ok</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">);</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ok</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">==</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">true</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #000000;font-weight: bold">switch</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ke</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Code</span><span style="background-color: #f8f8f8">();</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">ErrInvalidArg</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+            </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer because you've configured it wrong (code: %d)!</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n\n</span><span style="color: #d14">To see the configuration options, refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #000000;font-weight: bold">default</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+            </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+        </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #999988;font-style: italic">// It's not a kafka.Error</span><span style="background-color: #f8f8f8">
+        </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Oh noes, there's a generic error creating the Producer! %v"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">())</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So now the same mistake as before in configuring <code>bootstrap.servers</code> is caught and reported like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>😢 Can't create the producer because you've configured it wrong (code: -186)!
+	No such configuration property: "boostrap.servers"
+
+To see the configuration options, refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_handling_producer_errors">Handling Producer Errors</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>When it comes to the <code>Produce</code> I&#8217;ve done the same as above - split out the creation of the message into a new variable for clarity, and added a check for error:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #999988;font-style: italic">// Build the message</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">Topic</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">topic</span><span style="background-color: #f8f8f8">},</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">Value</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">[]</span><span style="color: #445588;font-weight: bold">byte</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Hello world"</span><span style="background-color: #f8f8f8">)}</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #999988;font-style: italic">// Produce the message</span><span style="background-color: #f8f8f8">
+</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Produce</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8">);</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Darn, there's an error producing the message! %v"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">())</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But if I kill my Kafka broker and run my code, I don&#8217;t get an error. Why not? Because if you look at the <a href="https://docs.confluent.io/current/clients/confluent-kafka-go/index.html#Producer.Produce">documentation for <code>Produce</code></a> you&#8217;ll see that it says</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>This is an asynchronous call that enqueues the message on the internal transmit queue, thus returning immediately</p>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>So all we&#8217;re doing is "fire and forget". Put it on an internal queue, and we&#8217;re done. We still don&#8217;t know if it was delivered.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_producer_events">Producer Events</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Since the Producer is called asychronously, it uses Go <a href="https://gobyexample.com/channels">Channels</a> to provide events back to the calling application about what&#8217;s going on. These can be of different types, covering both errors, and the status of messages that have been sent for producing.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://docs.confluent.io/current/clients/confluent-kafka-go/index.html#Error">Error</a> events contain … errors ;-)</p>
+</li>
+<li>
+<p><a href="https://docs.confluent.io/current/clients/confluent-kafka-go/index.html#Message">Message</a> events contain information about messages that have been sent for producing, including whether it worked or not.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>You can consume these events in two different ways:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Poll the producer&#8217;s <code>Events()</code> channel and triage by type</p>
+</li>
+<li>
+<p>Create a dedicated delivery report channel, and poll <code>Events()</code> for errors only</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Here&#8217;s an example of the first option, in which we use a <a href="https://gobyexample.com/goroutines">Go Routine</a> to listen to all events and handle them based on type:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">go</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">func</span><span style="background-color: #f8f8f8">()</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #000000;font-weight: bold">for</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #999988;font-style: italic">// The `select` blocks until one of the `case` conditions</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #999988;font-style: italic">// are met - therefore we run it in a Go Routine.</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #000000;font-weight: bold">select</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+            </span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Events</span><span style="background-color: #f8f8f8">()</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+                </span><span style="color: #999988;font-style: italic">// Look at the type of Event we've received</span><span style="background-color: #f8f8f8">
+                </span><span style="color: #000000;font-weight: bold">switch</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">type</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+
+                </span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Message</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+                    </span><span style="color: #999988;font-style: italic">// It's a delivery report</span><span style="background-color: #f8f8f8">
+                    </span><span style="background-color: #f8f8f8">km</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+                    </span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+                        </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"☠️ Failed to send message '%v' to topic '%v'</span><span style="color: #d14">\n\t</span><span style="color: #d14">Err: %v"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">
+                            </span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Value</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8">
+                            </span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Topic</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8">
+                            </span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+                    </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+                        </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"✅ Message '%v' delivered to topic '%v' (partition %d at offset %d)</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">
+                            </span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Value</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8">
+                            </span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Topic</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8">
+                            </span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Partition</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">
+                            </span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Offset</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+                    </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+
+                </span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+                    </span><span style="color: #999988;font-style: italic">// It's an error</span><span style="background-color: #f8f8f8">
+                    </span><span style="background-color: #f8f8f8">em</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+                    </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"☠️ Uh oh, caught an error:</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">em</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+                </span><span style="color: #000000;font-weight: bold">default</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+                    </span><span style="color: #999988;font-style: italic">// It's not anything we were expecting</span><span style="background-color: #f8f8f8">
+                    </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Got an event that's not a Message or Error 👻</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+
+                </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+        </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}()</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now when we produce a message successfully we receive a <code>kafka.Message</code> with a <code>nil</code> value in <code>TopicPartition.Error</code> and the offset of the produced message in <code>TopicPartition.Offset</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>✅ Message 'Hello world' delivered to topic 'test_topic_02' (partition 0 at offset 0)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And if there&#8217;s a problem we get full details of it</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>☠️ Uh oh, caught an error:
+	foobar:9092/1: Failed to resolve 'foobar:9092': nodename nor servname provided, or not known (after 64ms in state CONNECT)</code></pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_phantom_events">Phantom events</h3>
+<div class="paragraph">
+<p>If you run the code as-is you&#8217;ll notice you get this</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #a61717;background-color: #e3d2d2">✅</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8"> </span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">Hello</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">world</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">delivered</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">to</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">topic</span><span style="background-color: #f8f8f8"> </span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">test_topic_02</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">partition</span><span style="background-color: #f8f8f8"> </span><span style="color: #009999">0</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">at</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">offset</span><span style="background-color: #f8f8f8"> </span><span style="color: #009999">3</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #000000;font-weight: bold">--</span><span style="background-color: #f8f8f8">
+</span><span style="color: #a61717;background-color: #e3d2d2">✨</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">All</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">messages</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">flushed</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">from</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">the</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">queue</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">Got</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">an</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">event</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">that</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">not</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">or</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8"> </span><span style="color: #a61717;background-color: #e3d2d2">👻</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #008080">nil</span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">Got</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">an</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">event</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">that</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">not</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">or</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8"> </span><span style="color: #a61717;background-color: #e3d2d2">👻</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #008080">nil</span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">Got</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">an</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">event</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">that</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">not</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">or</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8"> </span><span style="color: #a61717;background-color: #e3d2d2">👻</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #008080">nil</span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">Got</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">an</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">event</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">that</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">not</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">or</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8"> </span><span style="color: #a61717;background-color: #e3d2d2">👻</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #008080">nil</span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">Got</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">an</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">event</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">that</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">not</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">or</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8"> </span><span style="color: #a61717;background-color: #e3d2d2">👻</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #008080">nil</span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8">
+</span><span style="color: #a61717;background-color: #e3d2d2">…</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After the <code>Close()</code> is called, there are still events being consumed by our Go Routine event handler. We don&#8217;t want to be doing this (if the Producer is closed, then its <code>Events()</code> channel is meaningless), so use this pattern (inspired by <a href="https://github.com/confluentinc/confluent-kafka-go/blob/master/examples/idempotent_producer_example/idempotent_producer_example.go#L164">this code</a>) to avoid it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #999988;font-style: italic">// For signalling termination from main to go-routine</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">termChan</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #0086B3">make</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">chan</span><span style="background-color: #f8f8f8"> </span><span style="color: #445588;font-weight: bold">bool</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+</span><span style="color: #999988;font-style: italic">// For signalling that termination is done from go-routine to main</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">doneChan</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #0086B3">make</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">chan</span><span style="background-color: #f8f8f8"> </span><span style="color: #445588;font-weight: bold">bool</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #000000;font-weight: bold">go</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">func</span><span style="background-color: #f8f8f8">()</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">doTerm</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">false</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #000000;font-weight: bold">for</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!</span><span style="background-color: #f8f8f8">doTerm</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #000000;font-weight: bold">select</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+
+            </span><span style="color: #999988;font-style: italic">// channels that we're listening to</span><span style="background-color: #f8f8f8">
+
+        </span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">termChan</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+            </span><span style="background-color: #f8f8f8">doTerm</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">true</span><span style="background-color: #f8f8f8">
+        </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+
+    </span><span style="color: #0086B3">close</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">doneChan</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}()</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #999988;font-style: italic">// …</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #999988;font-style: italic">// We're ready to finish</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">termChan</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">true</span><span style="background-color: #f8f8f8">
+</span><span style="color: #999988;font-style: italic">// wait for go-routine to terminate</span><span style="background-color: #f8f8f8">
+</span><span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">doneChan</span><span style="background-color: #f8f8f8">
+</span><span style="color: #999988;font-style: italic">// Now we can exit</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Close</span><span style="background-color: #f8f8f8">()</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_make_sure_you_flush">Make sure you <code>Flush()</code></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Once we&#8217;ve sent our message to the Producer, we get control back straight away, because it&#8217;s an asynchronous process. If we don&#8217;t put anything else in place the code will run on through to the <code>Close()</code> and exit. We want to make sure we&#8217;ve sent all the messages successfully - or not. To do this we use the <code>Flush()</code> function with a timeout of how long we&#8217;ll wait before considering sending messages to have failed.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #999988;font-style: italic">// Flush the Producer queue</span><span style="background-color: #f8f8f8">
+</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Flush</span><span style="background-color: #f8f8f8">(</span><span style="color: #009999">10000</span><span style="background-color: #f8f8f8">);</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8"> </span><span style="color: #009999">0</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">--</span><span style="color: #d14">\n</span><span style="color: #d14">⚠️ Failed to flush all messages after 10 seconds. %d message(s) remain</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Println</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">--</span><span style="color: #d14">\n</span><span style="color: #d14">✨ All messages flushed from the queue"</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With this in place we get a confirmation on exit of success:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>✨ All messages flushed from the queue</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>or failure:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>⚠️ Failed to flush all messages after 10 seconds. 1 message(s) remain</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_finished_result">The finished result</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">package</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">main</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #000000;font-weight: bold">import</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #d14">"fmt"</span><span style="background-color: #f8f8f8">
+
+	</span><span style="color: #d14">"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #000000;font-weight: bold">func</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">main</span><span style="background-color: #f8f8f8">()</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+
+	</span><span style="color: #999988;font-style: italic">// --</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #999988;font-style: italic">// The topic is passed as a pointer to the Producer, so we can't</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #999988;font-style: italic">// use a hard-coded literal. And a variable is a nicer way to do</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #999988;font-style: italic">// it anyway ;-)</span><span style="background-color: #f8f8f8">
+	</span><span style="background-color: #f8f8f8">topic</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"test_topic_02"</span><span style="background-color: #f8f8f8">
+
+	</span><span style="color: #999988;font-style: italic">// --</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #999988;font-style: italic">// Create Producer instance</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #999988;font-style: italic">// https://docs.confluent.io/current/clients/confluent-kafka-go/index.html#NewProducer</span><span style="background-color: #f8f8f8">
+
+	</span><span style="color: #999988;font-style: italic">// Store the config</span><span style="background-color: #f8f8f8">
+	</span><span style="background-color: #f8f8f8">c</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">ConfigMap</span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #d14">"bootstrap.servers"</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"localhost:9092"</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+
+	</span><span style="color: #999988;font-style: italic">// Variable p holds the new Producer instance.</span><span style="background-color: #f8f8f8">
+	</span><span style="background-color: #f8f8f8">p</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">NewProducer</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">c</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+
+	</span><span style="color: #999988;font-style: italic">// Check for errors in creating the Producer</span><span style="background-color: #f8f8f8">
+	</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ke</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ok</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">);</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ok</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">==</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">true</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+			</span><span style="color: #000000;font-weight: bold">switch</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ke</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Code</span><span style="background-color: #f8f8f8">();</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+			</span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">ErrInvalidArg</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+				</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer because you've configured it wrong (code: %d)!</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n\n</span><span style="color: #d14">To see the configuration options, refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+			</span><span style="color: #000000;font-weight: bold">default</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+				</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+			</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+			</span><span style="color: #999988;font-style: italic">// It's not a kafka.Error</span><span style="background-color: #f8f8f8">
+			</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Oh noes, there's a generic error creating the Producer! %v"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">())</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+
+	</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+
+		</span><span style="color: #999988;font-style: italic">// For signalling termination from main to go-routine</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">termChan</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #0086B3">make</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">chan</span><span style="background-color: #f8f8f8"> </span><span style="color: #445588;font-weight: bold">bool</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// For signalling that termination is done from go-routine to main</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">doneChan</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #0086B3">make</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">chan</span><span style="background-color: #f8f8f8"> </span><span style="color: #445588;font-weight: bold">bool</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+
+		</span><span style="color: #999988;font-style: italic">// --</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// Send a message using Produce()</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// https://docs.confluent.io/current/clients/confluent-kafka-go/index.html#Producer.Produce</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">//</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// Build the message</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">Topic</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">topic</span><span style="background-color: #f8f8f8">},</span><span style="background-color: #f8f8f8">
+			</span><span style="background-color: #f8f8f8">Value</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">[]</span><span style="color: #445588;font-weight: bold">byte</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Hello world"</span><span style="background-color: #f8f8f8">)}</span><span style="background-color: #f8f8f8">
+
+		</span><span style="color: #999988;font-style: italic">// Handle any events that we get</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #000000;font-weight: bold">go</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">func</span><span style="background-color: #f8f8f8">()</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+			</span><span style="background-color: #f8f8f8">doTerm</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">false</span><span style="background-color: #f8f8f8">
+			</span><span style="color: #000000;font-weight: bold">for</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!</span><span style="background-color: #f8f8f8">doTerm</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+				</span><span style="color: #999988;font-style: italic">// The `select` blocks until one of the `case` conditions</span><span style="background-color: #f8f8f8">
+				</span><span style="color: #999988;font-style: italic">// are met - therefore we run it in a Go Routine.</span><span style="background-color: #f8f8f8">
+				</span><span style="color: #000000;font-weight: bold">select</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+				</span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Events</span><span style="background-color: #f8f8f8">()</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+					</span><span style="color: #999988;font-style: italic">// Look at the type of Event we've received</span><span style="background-color: #f8f8f8">
+					</span><span style="color: #000000;font-weight: bold">switch</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">type</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+
+					</span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Message</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+						</span><span style="color: #999988;font-style: italic">// It's a delivery report</span><span style="background-color: #f8f8f8">
+						</span><span style="background-color: #f8f8f8">km</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+						</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+							</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"☠️ Failed to send message '%v' to topic '%v'</span><span style="color: #d14">\n\t</span><span style="color: #d14">Err: %v"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">
+								</span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Value</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8">
+								</span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Topic</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8">
+								</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+						</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+							</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"✅ Message '%v' delivered to topic '%v' (partition %d at offset %d)</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">
+								</span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Value</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8">
+								</span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Topic</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8">
+								</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Partition</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">
+								</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Offset</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+						</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+
+					</span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+						</span><span style="color: #999988;font-style: italic">// It's an error</span><span style="background-color: #f8f8f8">
+						</span><span style="background-color: #f8f8f8">em</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+						</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"☠️ Uh oh, caught an error:</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">em</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+					</span><span style="color: #000000;font-weight: bold">default</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+						</span><span style="color: #999988;font-style: italic">// It's not anything we were expecting</span><span style="background-color: #f8f8f8">
+						</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Got an event that's not a Message or Error 👻</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ev</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+
+					</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+				</span><span style="color: #000000;font-weight: bold">case</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">termChan</span><span style="color: #000000;font-weight: bold">:</span><span style="background-color: #f8f8f8">
+					</span><span style="background-color: #f8f8f8">doTerm</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">true</span><span style="background-color: #f8f8f8">
+
+				</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+			</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+			</span><span style="color: #0086B3">close</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">doneChan</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">}()</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// Produce the message</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Produce</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8">);</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+			</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Darn, there's an error producing the message! %v"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">())</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+
+		</span><span style="color: #999988;font-style: italic">// --</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// Flush the Producer queue</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">t</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #009999">10000</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Flush</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">t</span><span style="background-color: #f8f8f8">);</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8"> </span><span style="color: #009999">0</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+			</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">--</span><span style="color: #d14">\n</span><span style="color: #d14">⚠️ Failed to flush all messages after %d milliseconds. %d message(s) remain</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">t</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+			</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Println</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">--</span><span style="color: #d14">\n</span><span style="color: #d14">✨ All messages flushed from the queue"</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// --</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// Stop listening to events and close the producer</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// We're ready to finish</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">termChan</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">true</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// wait for go-routine to terminate</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">doneChan</span><span style="background-color: #f8f8f8">
+		</span><span style="color: #999988;font-style: italic">// Now we can exit</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Close</span><span style="background-color: #f8f8f8">()</span><span style="background-color: #f8f8f8">
+
+	</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+
+</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_more_episodes">📺 More Episodes…</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><a href="/2020/06/25/learning-golang-some-rough-notes-s01e00/">S01E00 - Background</a></p>
+</li>
+<li>
+<p><a href="/2020/06/25/learning-golang-some-rough-notes-s01e01-pointers/">S01E01 - Pointers</a></p>
+</li>
+<li>
+<p><a href="/2020/06/25/learning-golang-some-rough-notes-s01e02-slices/">S01E02 - Slices</a></p>
+</li>
+<li>
+<p><a href="/2020/06/29/learning-golang-some-rough-notes-s01e03-maps/">S01E03 - Maps</a></p>
+</li>
+<li>
+<p><a href="/2020/06/29/learning-golang-some-rough-notes-s01e04-function-closures/">S01E04 - Function Closures</a></p>
+</li>
+<li>
+<p><a href="/2020/06/30/learning-golang-some-rough-notes-s01e05-interfaces/">S01E05 - Interfaces</a></p>
+</li>
+<li>
+<p><a href="/2020/07/01/learning-golang-some-rough-notes-s01e06-errors/">S01E06 - Errors</a></p>
+</li>
+<li>
+<p><a href="/2020/07/01/learning-golang-some-rough-notes-s01e07-readers/">S01E07 - Readers</a></p>
+</li>
+<li>
+<p><a href="/2020/07/02/learning-golang-some-rough-notes-s01e08-images/">S01E08 - Images</a></p>
+</li>
+<li>
+<p><a href="/2020/07/02/learning-golang-some-rough-notes-s01e09-concurrency-channels-goroutines/">S01E09 - Concurrency (Channels, Goroutines)</a></p>
+</li>
+<li>
+<p><a href="/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/">S01E10 - Concurrency (Web Crawler)</a></p>
+</li>
+<li>
+<p><a href="/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/">S02E00 - Kafka and Go</a></p>
+</li>
+<li>
+<p><a href="/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/">S02E01 - My First Kafka Go Producer</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
