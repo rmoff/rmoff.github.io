@@ -9,6 +9,630 @@
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
     <item>
+      <title>Learning Golang (some rough notes) - S02E06 - Putting the Producer in a function and handling errors in a Go routine</title>
+      <link>https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/</link>
+      <pubDate>2020-07-15</pubDate>
+      
+      <guid>https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/07/IMG_5126.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;When I set out to &lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e00/&#34;&gt;learn Go&lt;/a&gt; one of the aims I had in mind was to write a version of &lt;a href=&#34;https://github.com/rmoff/kafka-listeners/blob/master/python/python_kafka_test_client.py&#34;&gt;this little Python utility&lt;/a&gt; which accompanies a blog I wrote recently about &lt;a href=&#34;https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc&#34;&gt;understanding and diagnosing problems with Kafka advertised listeners&lt;/a&gt;. Having successfully got &lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;Producer&lt;/a&gt;, &lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;Consumer&lt;/a&gt;, and &lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;AdminClient&lt;/a&gt; API examples working, it is now time to turn to that task.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I&amp;#8217;m quite keen to figure out how to do this &lt;em&gt;properly&lt;/em&gt; and take the opportunity to learn. It would be easy enough to copy &amp;amp; paste all my snippets together, ignore any error handling, and check the task off as done. But since I don&amp;#8217;t have a strong background in coding, now seems a good chance to try and instill a little bit of rigour in what I&amp;#8217;m doing.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_command_line_arguments&#34;&gt;Command line arguments&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Instead of hard coding the broker host and port, I want to be able to pass this as a commandline argument. This is easy enough using the &lt;a href=&#34;https://golang.org/pkg/os/&#34;&gt;OS&lt;/a&gt; package, which behaves very similar to the Python equivalent:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;import&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;os&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;func&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;main&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Read the first commandline argument to get the broker details&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;os&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Args&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Broker: %v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I&amp;#8217;m using VSCode for my IDE as it works very nicely with Go - both for writing code, and debugging it. To pass an argument to the command line as part of debugging go to &lt;code&gt;Run&lt;/code&gt; &amp;#8594; &lt;code&gt;Open Configurations&lt;/code&gt; and in the JSON file set the argument(s) that you want to pass:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;args&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;localhost:9092&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This works fine when the code is run&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;Broker: localhost:9092&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But what if the user &lt;em&gt;doesn&amp;#8217;t&lt;/em&gt; specify the required commandline arguments?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;panic: runtime error: index out of range [1] with length 1
+
+goroutine 1 [running]:
+main.main()
+	/Users/rmoff/git/rmoff-blog/content/code/go/kafka/producer_function/producer_function.go:15 +0x24e&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So we need a bit of care here, and check for the length too&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;var&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;len&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;os&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Args&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;==&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;os&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Args&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Println&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;(No broker specifed on commandline; defaulting to localhost:9092)&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;localhost:9092&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Broker: %v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_functions&#34;&gt;Functions&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;code&gt;main()&lt;/code&gt; code is going to look something like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Do init stuff to set vars etc&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// …&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Create AdminClient connection to check metadata&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doAdmin&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Produce message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doProduce&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Consume message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doConsume&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// fin.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Each one is dependent on the other, so we need to know if there was an error…&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_errors&#34;&gt;Errors&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Following the same pattern as I explored &lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;here&lt;/a&gt; I&amp;#8217;m expecting to have something that looks like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Do init stuff to set vars etc&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// …&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Create AdminClient connection to check metadata&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doAdmin&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;There was a problem with AdminClient :-(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;%v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Produce message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doProduce&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+        &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;There was a problem calling the producer :-(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;%v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+        &lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Consume message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+        &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doConsume&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+            &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;There was a problem calling the consumer :-(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;%v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+        &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// fin.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To do this, each function needs to return an &lt;code&gt;error&lt;/code&gt;, so the function looks like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;func&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doProduce&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// If you hit an error then&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errors&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;New&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;OH NO! THERE WAS AN ERROR&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+    &lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// assuming everything has gone ok return no error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Where we were previously dumping messages to the output:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;😢 Can&#39;t create the producer (Kafka error code %d)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Error: %v&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We now want to take this and pass it back as the error. Since &lt;code&gt;errors.New()&lt;/code&gt; takes a &lt;code&gt;string&lt;/code&gt; it makes sense to replace our existing &lt;code&gt;fmt.Printf&lt;/code&gt; with &lt;code&gt;fmt.Sprintf&lt;/code&gt; and pass this to &lt;code&gt;errors.New()&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errors&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;New&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;😢 Can&#39;t create the producer (Kafka error code %d)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Error: %v&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;))&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The Go linter in VSCode is brilliant here as it actively tells you this is not the best way to do it, with some nice orange underlining:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/07/error01.png&#34; alt=&#34;error01&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you hover over it you get a nice tip of how to write the code better:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/07/error02.png&#34; alt=&#34;error02&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So, instead of&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errors&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;New&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;😢 Can&#39;t create the producer (Kafka error code %d)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Error: %v&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;))&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We just replace&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;😢 Can&#39;t create the producer (Kafka error code %d)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Error: %v&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;with&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Errorf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;😢 Can&#39;t create the producer (Kafka error code %d)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Error: %v&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_error_in_go_routines&#34;&gt;Error in Go routines&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This all works, except in the Go routine within the function. In the case of the Producer code the Go routine is there to handle events such as message delivery reports, errors, etc. Since a Go routine is a function itself with no return variables, then we can&amp;#8217;t &lt;code&gt;return&lt;/code&gt; an error from within it. If you try to, you get this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;too many arguments to return
+	have (error)
+	want ()&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now, maybe the code in your function will catch an error as a side effect of the error thrown in the Go routine, but it&amp;#8217;s not great to rely on that happening. Instead we can provide a channel that the Go routine can write to if there&amp;#8217;s an error, and then check that from our parent function and return an error if we find one. Something like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;package&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;main&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;import&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;errors&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;fmt&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;time&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;func&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;main&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doThisThing&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;();&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;doThisThing failed.&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;%v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;doThisThing worked.&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;func&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doThisThing&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;make&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;chan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;8&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;go&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;func&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// If we&#39;re all good then do stuff&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// …&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// If we hit an error then log an error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;here is an error from the go routine :(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;here is another error from the go routine :(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;close&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Do all our stuff in the function that we need to&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// …&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;time&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sleep&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;time&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Second&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// pretend we&#39;re doing stuff&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// …&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// When we&#39;re ready to return, check if the go routine has sent errors&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Note that we&#39;re relying on the Go routine to close the channel, otherwise&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// we deadlock.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// If there are no errors then the channel is simply closed and we read no values.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;done&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;var&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;done&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;t&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;o&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;o&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;==&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// o is false if we&#39;ve read all the values and the channel is closed&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// If that&#39;s the case, then we&#39;re done here&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;done&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// We&#39;ve read a value so let&#39;s concatenate it with the others&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// that we&#39;ve got&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;t&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;len&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// If we&#39;ve got any errors, then return an error to the caller&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errors&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;New&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// assuming everything has gone ok return no error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;When run this looks like:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;doThisThing failed.
+here is an error from the go routine :(
+here is another error from the go routine :(&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_producer&#34;&gt;The Producer&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With this error handling in place, I can now call my &lt;code&gt;doProduce&lt;/code&gt; function and get an error (or not) back from it successfully:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;It works!&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;ℹ️ No broker specified on commandline; defaulting to localhost:9092
+
+Broker: localhost:9092
+
+--
+✨ All messages flushed from the queue
+✅ Message &#39;foo / Thu, 16 Jul 2020 00:05:57 +0100&#39; delivered to topic &#39;rmoff_test_00&#39; (partition 0 at offset 11)
+
+-=-=
+Wrapping up…
+👋 … and we&#39;re done.
+Oh joy! Oh rejoice! Calling the producer worked *just fine*.&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;It doesn&amp;#8217;t!&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;ℹ️ No broker specified on commandline; defaulting to localhost:9092
+
+Broker: localhost:9092
+-=-=
+Wrapping up…
+❌ … returning an error
+
+There was a problem calling the producer :-(
+
+**☠️ Uh oh, caught an error:
+	localhost:9092/bootstrap: Connect to ipv6#[::1]:9092 failed: Connection refused (after 3ms in state CONNECT)
+
+**☠️ Uh oh, caught an error:
+	1/1 brokers are down
+
+--
+⚠️ Failed to flush all messages after 1000 milliseconds. 1 message(s) remain&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here&amp;#8217;s the full code, and a &lt;a href=&#34;https://rmoff.net/code/go/kafka/producer_function/docker-compose.yml&#34;&gt;Docker Compose&lt;/a&gt; you can use to try it with.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;package&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;main&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;import&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;errors&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;fmt&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;os&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;time&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;gopkg.in/confluentinc/confluent-kafka-go.v1/kafka&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;func&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;main&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Read the first commandline argument to get the broker details&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;var&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;len&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;os&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Args&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;==&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;os&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Args&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;ℹ️ No broker specified on commandline; defaulting to localhost:9092&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;localhost:9092&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Broker: %v&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Set the topic name that we&#39;ll use&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;rmoff_test_00&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Create Admin Connection&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// doAdmin(broker)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Produce message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doProduce&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;There was a problem calling the producer :-(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;%v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Println&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Oh joy! Oh rejoice! Calling the producer worked *just fine*.&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Consume message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// doConsume()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// fin.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;func&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doProduce&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// --&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Create Producer instance&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// https://docs.confluent.io/current/clients/confluent-kafka-go/index.html#NewProducer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Store the config&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;c&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ConfigMap&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;bootstrap.servers&#34;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Check for errors in creating the Producer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;p&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NewProducer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;c&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ke&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ok&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ok&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;==&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;switch&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ke&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Code&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;();&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;case&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ErrInvalidArg&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Errorf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;😢 Can&#39;t create the producer because you&#39;ve configured it wrong (code: %d)!&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;%v&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;To see the configuration options, refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;default&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Errorf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;😢 Can&#39;t create the producer (Kafka error code %d)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Error: %v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// It&#39;s not a kafka.Error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Errorf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;😢 Oh noes, there&#39;s a generic error creating the Producer! %v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;())&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;defer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;p&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Close&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// For signalling termination from main to go-routine&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;termChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;make&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;chan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;bool&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// For signalling that termination is done from go-routine to main&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doneChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;make&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;chan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;bool&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// For capturing errors from the go-routine&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errorChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;make&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;chan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;8&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// --&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Send a message using Produce()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// https://docs.confluent.io/current/clients/confluent-kafka-go/index.html#Producer.Produce&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Build the message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;m&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TopicPartition&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TopicPartition&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Topic&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Value&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[]&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;byte&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;foo / %v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;time&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Now&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Format&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;time&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;RFC1123Z&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)))}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Handle any events that we get&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;go&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;func&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doTerm&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doTerm&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// The `select` blocks until one of the `case` conditions&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// are met - therefore we run it in a Go Routine.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;select&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;case&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ev&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;p&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Events&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+					&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Look at the type of Event we&#39;ve received&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+					&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;switch&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ev&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;type&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+					&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;case&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Message&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+						&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// It&#39;s a delivery report&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+						&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;km&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ev&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+						&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;km&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TopicPartition&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+							&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errorChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;**☠️ Failed to send message &#39;%v&#39; to topic &#39;%v&#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Err: %v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+								&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;km&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Value&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;),&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+								&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;km&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TopicPartition&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;),&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+								&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;km&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TopicPartition&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+						&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+							&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;✅ Message &#39;%v&#39; delivered to topic &#39;%v&#39; (partition %d at offset %d)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+								&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;km&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Value&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;),&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+								&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;km&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TopicPartition&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Topic&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;),&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+								&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;km&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TopicPartition&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Partition&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+								&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;km&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TopicPartition&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Offset&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+						&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+					&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;case&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Error&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+						&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// It&#39;s an error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+						&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;em&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ev&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafka&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+						&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errorChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;**☠️ Uh oh, caught an error:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;%v&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;em&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+					&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;default&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+						&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// It&#39;s not anything we were expecting&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+						&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errorChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;**Got an event that&#39;s not a Message or Error 👻&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;%v&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ev&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+					&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;case&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;termChan&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+					&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doTerm&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+				&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;close&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errorChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;close&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doneChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}()&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Produce the message&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;p&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Produce&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;m&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errorChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;😢 Darn, there&#39;s an error producing the message! %v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;())&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// --&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Flush the Producer queue&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;t&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1000&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;p&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flush&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;t&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errorChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sprintf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;--&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;⚠️ Failed to flush all messages after %d milliseconds. %d message(s) remain&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;t&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Println&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;--&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;✨ All messages flushed from the queue&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// --&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Stop listening to events and close the producer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// We&#39;re ready to finish&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;termChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// wait for go-routine to terminate&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doneChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Now we can get ready to exit&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;-=-=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Wrapping up…&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// When we&#39;re ready to return, check if the go routine has sent errors&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Note that we&#39;re relying on the Go routine to close the channel, otherwise&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// we deadlock.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// If there are no errors then the channel is simply closed and we read no values.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;done&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;var&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;done&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;t&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;o&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errorChan&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;o&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;==&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// o is false if we&#39;ve read all the values and the channel is closed&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// If that&#39;s the case, then we&#39;re done here&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;done&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// We&#39;ve read a value so let&#39;s concatenate it with the others&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// that we&#39;ve got&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+				&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;t&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;len&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// If we&#39;ve got any errors, then return an error to the caller&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+			&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;❌ … returning an error&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+			&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;errors&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;New&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;e&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+		&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// assuming everything has gone ok return no error&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;👋 … and we&#39;re done.&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_more_episodes&#34;&gt;📺 More Episodes…&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Kafka and Go&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/&#34;&gt;S02E00 - Kafka and Go&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/&#34;&gt;S02E01 - My First Kafka Go Producer&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;S02E02 - Adding error handling to the Producer&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/&#34;&gt;S02E03 - Kafka Go Consumer (Channel-based)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;S02E04 - Kafka Go Consumer (Function-based)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Learning Go&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e00/&#34;&gt;S01E00 - Background&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e01-pointers/&#34;&gt;S01E01 - Pointers&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e02-slices/&#34;&gt;S01E02 - Slices&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/29/learning-golang-some-rough-notes-s01e03-maps/&#34;&gt;S01E03 - Maps&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/29/learning-golang-some-rough-notes-s01e04-function-closures/&#34;&gt;S01E04 - Function Closures&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/30/learning-golang-some-rough-notes-s01e05-interfaces/&#34;&gt;S01E05 - Interfaces&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/01/learning-golang-some-rough-notes-s01e06-errors/&#34;&gt;S01E06 - Errors&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/01/learning-golang-some-rough-notes-s01e07-readers/&#34;&gt;S01E07 - Readers&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e08-images/&#34;&gt;S01E08 - Images&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e09-concurrency-channels-goroutines/&#34;&gt;S01E09 - Concurrency (Channels, Goroutines)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/&#34;&gt;S01E10 - Concurrency (Web Crawler)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
       <title>Learning Golang (some rough notes) - S02E05 - Kafka Go AdminClient</title>
       <link>https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/</link>
       <pubDate>2020-07-15</pubDate>
@@ -286,7 +910,10 @@
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;S02E04 - Kafka Go Consumer (Function-based)&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;&lt;strong&gt;S02E05 - Kafka Go AdminClient&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;/div&gt;
@@ -519,10 +1146,13 @@
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/&#34;&gt;S02E03 - Kafka Go Consumer (Channel-based)&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;&lt;strong&gt;S02E04 - Kafka Go Consumer (Function-based)&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;S02E04 - Kafka Go Consumer (Function-based)&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;/div&gt;
@@ -821,13 +1451,16 @@ I&amp;#8217;ve used the channel-based consumer because it fitted the most neatly
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;S02E02 - Adding error handling to the Producer&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/&#34;&gt;&lt;strong&gt;S02E03 - Kafka Go Consumer (Channel-based)&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/&#34;&gt;S02E03 - Kafka Go Consumer (Channel-based)&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;S02E04 - Kafka Go Consumer (Function-based)&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;/div&gt;
@@ -1371,7 +2004,7 @@ To see the configuration options, refer to https://github.com/edenhill/librdkafk
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/&#34;&gt;S02E01 - My First Kafka Go Producer&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;&lt;strong&gt;S02E02 - Adding error handling to the Producer&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;S02E02 - Adding error handling to the Producer&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/&#34;&gt;S02E03 - Kafka Go Consumer (Channel-based)&lt;/a&gt;&lt;/p&gt;
@@ -1381,6 +2014,9 @@ To see the configuration options, refer to https://github.com/edenhill/librdkafk
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;/div&gt;
@@ -1554,7 +2190,7 @@ To see the configuration options, refer to https://github.com/edenhill/librdkafk
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/&#34;&gt;S02E00 - Kafka and Go&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/&#34;&gt;&lt;strong&gt;S02E01 - My First Kafka Go Producer&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/&#34;&gt;S02E01 - My First Kafka Go Producer&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;S02E02 - Adding error handling to the Producer&lt;/a&gt;&lt;/p&gt;
@@ -1567,6 +2203,9 @@ To see the configuration options, refer to https://github.com/edenhill/librdkafk
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;/div&gt;
@@ -1642,7 +2281,7 @@ To see the configuration options, refer to https://github.com/edenhill/librdkafk
 &lt;div class=&#34;ulist&#34;&gt;
 &lt;ul&gt;
 &lt;li&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/&#34;&gt;&lt;strong&gt;S02E00 - Kafka and Go&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/&#34;&gt;S02E00 - Kafka and Go&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/&#34;&gt;S02E01 - My First Kafka Go Producer&lt;/a&gt;&lt;/p&gt;
@@ -1658,6 +2297,9 @@ To see the configuration options, refer to https://github.com/edenhill/librdkafk
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;/div&gt;
@@ -1912,6 +2554,38 @@ main.&lt;span style=&#34;color:#00f&#34;&gt;main&lt;/span&gt;()
 &lt;div class=&#34;ulist&#34;&gt;
 &lt;ul&gt;
 &lt;li&gt;
+&lt;p&gt;Kafka and Go&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/&#34;&gt;S02E00 - Kafka and Go&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/&#34;&gt;S02E01 - My First Kafka Go Producer&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;S02E02 - Adding error handling to the Producer&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/&#34;&gt;S02E03 - Kafka Go Consumer (Channel-based)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;S02E04 - Kafka Go Consumer (Function-based)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Learning Go&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e00/&#34;&gt;S01E00 - Background&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
@@ -1942,7 +2616,10 @@ main.&lt;span style=&#34;color:#00f&#34;&gt;main&lt;/span&gt;()
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e09-concurrency-channels-goroutines/&#34;&gt;S01E09 - Concurrency (Channels, Goroutines)&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
-&lt;p&gt;&lt;strong&gt;S01E10 - Concurrency (Web Crawler)&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/&#34;&gt;S01E10 - Concurrency (Web Crawler)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;/div&gt;
@@ -2647,6 +3324,38 @@ x2 is [&lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt; &lt;span style=&#34
 &lt;div class=&#34;ulist&#34;&gt;
 &lt;ul&gt;
 &lt;li&gt;
+&lt;p&gt;Kafka and Go&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/&#34;&gt;S02E00 - Kafka and Go&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/&#34;&gt;S02E01 - My First Kafka Go Producer&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;S02E02 - Adding error handling to the Producer&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/&#34;&gt;S02E03 - Kafka Go Consumer (Channel-based)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;S02E04 - Kafka Go Consumer (Function-based)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Learning Go&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e00/&#34;&gt;S01E00 - Background&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
@@ -2674,296 +3383,13 @@ x2 is [&lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt; &lt;span style=&#34
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e08-images/&#34;&gt;S01E08 - Images&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
-&lt;p&gt;&lt;strong&gt;S01E09 - Concurrency (Channels, Goroutines)&lt;/strong&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/&#34;&gt;S01E10 - Concurrency (Web Crawler)&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Learning Golang (some rough notes) - S01E08 - Images</title>
-      <link>https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e08-images/</link>
-      <pubDate>2020-07-02</pubDate>
-      
-      <guid>https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e08-images/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/06/IMG_5277.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://tour.golang.org/methods/25&#34;&gt;A Tour of Go : Exercise: Images&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is based on the Picture generator from the &lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e02-slices/&#34;&gt;Slices exercise&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#00f&#34;&gt;Pic&lt;/span&gt;(dx, dy &lt;span style=&#34;color:#b00040&#34;&gt;int&lt;/span&gt;) [][]&lt;span style=&#34;color:#b00040&#34;&gt;uint8&lt;/span&gt; {
-	p &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; &lt;span style=&#34;color:#008000&#34;&gt;make&lt;/span&gt;([][]&lt;span style=&#34;color:#b00040&#34;&gt;uint8&lt;/span&gt;,dy)
-	
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; i &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;range&lt;/span&gt; p {
-		p[i] = &lt;span style=&#34;color:#008000&#34;&gt;make&lt;/span&gt;([]&lt;span style=&#34;color:#b00040&#34;&gt;uint8&lt;/span&gt;,dx)
-	}
-
-	 &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; y &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;range&lt;/span&gt; p {
-        &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; x &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;range&lt;/span&gt; p[y] {
-            p[y][x]=(&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(x)&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(y))
-        }
-    }
-
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; p
-}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2020/06/slice02.png&#34; alt=&#34;slice02&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;quoteblock&#34;&gt;
-&lt;blockquote&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;this time it will return an implementation of &lt;code&gt;image.Image&lt;/code&gt; instead of a slice of data.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/blockquote&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;So we need to implement the &lt;a href=&#34;https://golang.org/pkg/image/#Image&#34;&gt;interfaces defined&lt;/a&gt;:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;ColorModel&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;Bounds&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;At&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Let&amp;#8217;s start off with one of these to see if we&amp;#8217;re on the right lines…&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;image/color&amp;#34;&lt;/span&gt;
-&lt;/span&gt;	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;golang.org/x/tour/pic&amp;#34;&lt;/span&gt;
-)
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;type&lt;/span&gt; Image &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;struct&lt;/span&gt;{}
-
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;ColorModel&lt;/span&gt;() color.Model {
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; color.RGBAModel
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;}
-&lt;/span&gt;
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#00f&#34;&gt;main&lt;/span&gt;() {
-	m &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; Image{}
-	pic.&lt;span style=&#34;color:#00f&#34;&gt;ShowImage&lt;/span&gt;(m)
-}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This compiles (🙌) and fails (as we&amp;#8217;d expect) with something that may or may not be validating that we&amp;#8217;ve not screwed things up &lt;em&gt;yet&lt;/em&gt;:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;.&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;prog.&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;go&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;17&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;15&lt;/span&gt;: cannot use &lt;span style=&#34;color:#00f&#34;&gt;m&lt;/span&gt; (&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;type&lt;/span&gt; Image) as &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;type&lt;/span&gt; image.Image in argument to pic.ShowImage:
-	Image does not implement image.&lt;span style=&#34;color:#00f&#34;&gt;Image&lt;/span&gt; (missing At method)&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Let&amp;#8217;s add in the other fixed value, &lt;code&gt;Bounds&lt;/code&gt;:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;image&amp;#34;&lt;/span&gt;
-&lt;/span&gt;	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;image/color&amp;#34;&lt;/span&gt;
-	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;golang.org/x/tour/pic&amp;#34;&lt;/span&gt;
-)
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;type&lt;/span&gt; Image &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;struct&lt;/span&gt;{}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;ColorModel&lt;/span&gt;() color.Model {
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; color.RGBAModel
-}
-
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;Bounds&lt;/span&gt;() image.Rectangle {
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; image.&lt;span style=&#34;color:#00f&#34;&gt;Rect&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;256&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;256&lt;/span&gt;)
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;}
-&lt;/span&gt;
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#00f&#34;&gt;main&lt;/span&gt;() {
-	m &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; Image{}
-	pic.&lt;span style=&#34;color:#00f&#34;&gt;ShowImage&lt;/span&gt;(m)
-}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now the final part - &lt;code&gt;At&lt;/code&gt;. Building it up bit by bit, we know what the function definition should look like, based on the above pattern and the &lt;a href=&#34;https://golang.org/pkg/image/#Image&#34;&gt;interface definition&lt;/a&gt;:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;At&lt;/span&gt;(x,y &lt;span style=&#34;color:#b00040&#34;&gt;int&lt;/span&gt;) color.Color {&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The value returned by this function is the colour (yes, I said colo_u_r! 🇬🇧) at the given coordinates. In the picture we created earlier this was using the expression x*y to describe the strength of the bluescale to plot. The &lt;code&gt;Color&lt;/code&gt; type for the &lt;code&gt;RGBAModel&lt;/code&gt; we&amp;#8217;re using is + &lt;a href=&#34;https://golang.org/pkg/image/color/#RGBA&#34;&gt;&lt;code&gt;RGBA&lt;/code&gt;&lt;/a&gt;, which returns RGB plus alpha, so let&amp;#8217;s try this here:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
-	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;image&amp;#34;&lt;/span&gt;
-	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;image/color&amp;#34;&lt;/span&gt;
-	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;golang.org/x/tour/pic&amp;#34;&lt;/span&gt;
-)
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;type&lt;/span&gt; Image &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;struct&lt;/span&gt;{}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;ColorModel&lt;/span&gt;() color.Model {
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; color.RGBAModel
-}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;Bounds&lt;/span&gt;() image.Rectangle {
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; image.&lt;span style=&#34;color:#00f&#34;&gt;Rect&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;256&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;256&lt;/span&gt;)
-}
-
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;At&lt;/span&gt;(x,y &lt;span style=&#34;color:#b00040&#34;&gt;int&lt;/span&gt;) color.Color {
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;var&lt;/span&gt; r,g,b,a &lt;span style=&#34;color:#b00040&#34;&gt;uint8&lt;/span&gt; = &lt;span style=&#34;color:#666&#34;&gt;25&lt;/span&gt; ,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;    b=&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(x)&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(y)
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; color.RGBA{r,g,b,a}
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;}
-&lt;/span&gt;
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#00f&#34;&gt;main&lt;/span&gt;() {
-	m &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; Image{}
-	pic.&lt;span style=&#34;color:#00f&#34;&gt;ShowImage&lt;/span&gt;(m)
-}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This not only compiles (🙌) but successfully runs (😅)…but doesn&amp;#8217;t display anything 😢 … or does it? 🤔&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;In the Go execution window the &lt;code&gt;Program exited&lt;/code&gt; is lower down the page:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2020/07/image01.png&#34; alt=&#34;image01&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;and if you right-click over the blank space you can see there&amp;#8217;s an image there, and inspecting this with developer tools shows it&amp;#8217;s a 256x256 &lt;strong&gt;transparent&lt;/strong&gt; image. That alpha thingy… setting it to zero means the image is transparent!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Let&amp;#8217;s try again and set the alpha level this time:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
-	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;image&amp;#34;&lt;/span&gt;
-	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;image/color&amp;#34;&lt;/span&gt;
-	&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;golang.org/x/tour/pic&amp;#34;&lt;/span&gt;
-)
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;type&lt;/span&gt; Image &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;struct&lt;/span&gt;{}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;ColorModel&lt;/span&gt;() color.Model {
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; color.RGBAModel
-}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;Bounds&lt;/span&gt;() image.Rectangle {
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; image.&lt;span style=&#34;color:#00f&#34;&gt;Rect&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;256&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;256&lt;/span&gt;)
-}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;At&lt;/span&gt;(x,y &lt;span style=&#34;color:#b00040&#34;&gt;int&lt;/span&gt;) color.Color {
-    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;var&lt;/span&gt; r,g,b,a &lt;span style=&#34;color:#b00040&#34;&gt;uint8&lt;/span&gt; = &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; ,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-    b=&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(x)&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(y)
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	a=b
-&lt;/span&gt;	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; color.RGBA{r,g,b,a}
-}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#00f&#34;&gt;main&lt;/span&gt;() {
-	m &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; Image{}
-	pic.&lt;span style=&#34;color:#00f&#34;&gt;ShowImage&lt;/span&gt;(m)
-}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;🎉 TADA! 🎉&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2020/07/image02.png&#34; alt=&#34;image02&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can muck about with the other colour values too:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;At&lt;/span&gt;(x,y &lt;span style=&#34;color:#b00040&#34;&gt;int&lt;/span&gt;) color.Color {
-    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;var&lt;/span&gt; r,g,b,a &lt;span style=&#34;color:#b00040&#34;&gt;uint8&lt;/span&gt; = &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; ,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	b=&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(&lt;span style=&#34;color:#008000&#34;&gt;float64&lt;/span&gt;(y)&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0.2&lt;/span&gt;) &lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(x)
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	r=&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(&lt;span style=&#34;color:#008000&#34;&gt;float64&lt;/span&gt;(y)&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0.5&lt;/span&gt;)
-&lt;/span&gt;	a=b
-	
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; color.RGBA{r,g,b,a}
-}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2020/07/image03.png&#34; alt=&#34;image03&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (i Image) &lt;span style=&#34;color:#00f&#34;&gt;At&lt;/span&gt;(x,y &lt;span style=&#34;color:#b00040&#34;&gt;int&lt;/span&gt;) color.Color {
-    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;var&lt;/span&gt; r,g,b,a &lt;span style=&#34;color:#b00040&#34;&gt;uint8&lt;/span&gt; = &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; ,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	b=&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(&lt;span style=&#34;color:#008000&#34;&gt;float64&lt;/span&gt;(y)&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4.25&lt;/span&gt;) &lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(x&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;) 
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	r=&lt;span style=&#34;color:#008000&#34;&gt;uint8&lt;/span&gt;(&lt;span style=&#34;color:#008000&#34;&gt;float64&lt;/span&gt;(y)&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;16&lt;/span&gt;)
-&lt;/span&gt;	a=b
-	
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; color.RGBA{r,g,b,a}
-}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2020/07/image04.png&#34; alt=&#34;image04&#34;&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;hr&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_more_episodes&#34;&gt;📺 More Episodes…&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e00/&#34;&gt;S01E00 - Background&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e01-pointers/&#34;&gt;S01E01 - Pointers&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e02-slices/&#34;&gt;S01E02 - Slices&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/29/learning-golang-some-rough-notes-s01e03-maps/&#34;&gt;S01E03 - Maps&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/29/learning-golang-some-rough-notes-s01e04-function-closures/&#34;&gt;S01E04 - Function Closures&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/30/learning-golang-some-rough-notes-s01e05-interfaces/&#34;&gt;S01E05 - Interfaces&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/01/learning-golang-some-rough-notes-s01e06-errors/&#34;&gt;S01E06 - Errors&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/01/learning-golang-some-rough-notes-s01e07-readers/&#34;&gt;S01E07 - Readers&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;S01E08 - Images&lt;/strong&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e09-concurrency-channels-goroutines/&#34;&gt;S01E09 - Concurrency (Channels, Goroutines)&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/&#34;&gt;S01E10 - Concurrency (Web Crawler)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;/div&gt;
