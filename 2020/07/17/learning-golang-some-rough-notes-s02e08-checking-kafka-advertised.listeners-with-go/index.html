@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Learning Golang (some rough notes) - S02E08 - Checking Kafka advertised.listeners with Go</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/07/17/learning-golang-some-rough-notes-s02e08-checking-kafka-advertised.listeners-with-go/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.59.1" />
+
+		
+		<meta property="og:title" content="Learning Golang (some rough notes) - S02E08 - Checking Kafka advertised.listeners with Go" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/07/IMG_5284.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/07/17/learning-golang-some-rough-notes-s02e08-checking-kafka-advertised.listeners-with-go/" />
+		<meta property="og:site_name" content="Learning Golang (some rough notes) - S02E08 - Checking Kafka advertised.listeners with Go" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/07/IMG_5284.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Learning Golang (some rough notes) - S02E08 - Checking Kafka advertised.listeners with Go</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-07-17T11:00:05&#43;01:00">Jul 17, 2020</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.net/categories/go" class="no-underline category near-white dim">Go</a>, <a href="https://rmoff.net/categories/golang" class="no-underline category near-white dim">Golang</a>, <a href="https://rmoff.net/categories/advertised.listeners" class="no-underline category near-white dim">Advertised.listeners</a>
+								<span class="display-print">at https://rmoff.net/2020/07/17/learning-golang-some-rough-notes-s02e08-checking-kafka-advertised.listeners-with-go/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="@rmoff" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>At the <a href="/2020/06/25/learning-golang-some-rough-notes-s01e00/">beginning of all this</a> my aim was to learn something new (Go), and use it to write a version of a utility that I&#8217;d previously <a href="https://github.com/rmoff/kafka-listeners/blob/master/python/python_kafka_test_client.py">hacked together in Python</a> that checks your Apache Kafka broker configuration for possible problems with the infamous <code>advertised.listeners</code> setting. Check out a blog that I wrote which explains <em><a href="https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc">all about Apache Kafka and listener configuration</a></em>.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+You can find the code at <a href="https://github.com/rmoff/kafka-listeners" class="bare">https://github.com/rmoff/kafka-listeners</a>
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>It&#8217;s been a fun journey, and now I am pleased to be able to show the results of it.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/07/cap01.gif" alt="cap01">
+</div>
+</div>
+<div class="paragraph">
+<p>You need <a href="https://github.com/confluentinc/confluent-kafka-go">Confluent&#8217;s Golang Client for Apache Kafka™️</a>, which you can install thus:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">go</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">get</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">gopkg</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">in</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">confluentinc</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">confluent</span><span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #000000;font-weight: bold">go</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">v1</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">kafka</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can run the code directly with go:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">➜ go run <span style="color: #0086B3">.</span>
+<span style="color: #000000;font-weight: bold">(</span>A single commandline argument should be used to specify the broker. Defaulting to localhost:9092<span style="color: #000000;font-weight: bold">)</span>
+Using Broker: localhost:9092
+<span style="color: #000080">--------------------------</span>
+
+✔️ Created AdminClient
+✔️ Metadata - Originating broker <span style="color: #000000;font-weight: bold">[</span>i.e. the broker to which you<span style="color: #d14">'re connected here]
+	[ID 1] localhost:9092/1
+…</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And you can also build it to create a single executable</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">go build</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">➜ ./listener_test asgard05.moffatt.me:9092
+Using Broker: asgard05.moffatt.me:9092
+<span style="color: #000080">--------------------------</span>
+
+✔️ Created AdminClient
+✔️ Metadata - Originating broker <span style="color: #000000;font-weight: bold">[</span>i.e. the broker to which you<span style="color: #d14">'re connected here]
+	[ID 1] asgard05.moffatt.me:9092/1
+✔️ Metadata - Brokers [i.e. the advertised listeners of the brokers in the cluster]
+	[ID 2] asgard05.moffatt.me:19092
+	[ID 3] asgard05.moffatt.me:29092
+	[ID 1] asgard05.moffatt.me:9092
+
+✔️ ClusterID: Vf5L7L88QC66PLYDjN5Qvg
+✔️ ControllerID: 3
+✅ AdminClient worked
+…</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The rest of this article gives you some sample outputs for given situations.</p>
+</div>
+<div class="sect1">
+<h2 id="_broker_up_but_advertised_listeners_is_misconfigured">Broker up but advertised.listeners is misconfigured</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #000000;font-weight: bold">(</span>A single commandline argument should be used to specify the broker. Defaulting to localhost:9092<span style="color: #000000;font-weight: bold">)</span>
+Using Broker: localhost:9092
+<span style="color: #000080">--------------------------</span>
+
+✔️ Created AdminClient
+✔️ Metadata - Originating broker <span style="color: #000000;font-weight: bold">[</span>i.e. the broker to which you<span style="color: #d14">'re connected here]
+        [ID -1] localhost:9092/bootstrap
+✔️ Metadata - Brokers [i.e. the advertised listeners of the brokers in the cluster]
+        [ID 1] foobar:9092
+
+😱 😱 😱 😱 😱 😱 😱 😱
+🛑 None of the advertised listeners on the cluster match the broker (localhost:9092) to which you'</span>re connecting.
+
+You<span style="color: #d14">'re gonna have a bad time trying to produce or consumer with the config like this.
+
+🔗 Check out https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc to understand more
+✔️ ClusterID: vF4bIJeiQFiS7abLjBZ1tA
+✔️ ControllerID: 1
+✅ AdminClient worked
+--------------------------
+
+❌There was a problem calling the producer:
+
+
+☠️ Uh oh, caught an error:
+        foobar:9092/1: Failed to resolve '</span>foobar:9092<span style="color: #d14">': nodename nor servname provided, or not known (after 2ms in state CONNECT)
+⚠️ Failed to flush all messages after 5000 milliseconds. 1 message(s) remain
+</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_everything_a_ok">Everything a-ok 👌</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">Using Broker: localhost:9092
+<span style="color: #000080">--------------------------</span>
+
+✔️ Created AdminClient
+✔️ Metadata - Originating broker <span style="color: #000000;font-weight: bold">[</span>i.e. the broker to which you<span style="color: #d14">'re connected here]
+        [ID 1] localhost:9092/1
+✔️ Metadata - Brokers [i.e. the advertised listeners of the brokers in the cluster]
+        [ID 1] localhost:9092
+
+✔️ ClusterID: KJeOfk4KTjegF1oH-UOwjg
+✔️ ControllerID: 1
+✅ AdminClient worked
+--------------------------
+
+✔️ Message '</span>foo / Fri, 17 Jul 2020 15:43:30 +0100<span style="color: #d14">' delivered to topic '</span>rmoff_test_00<span style="color: #d14">' (partition 0 at offset 0)
+✨ All messages flushed from the queue
+✅ Producer worked
+--------------------------
+
+Starting consumer, 👀 looking for specific message:
+        foo / Fri, 17 Jul 2020 15:43:30 +0100
+
+Subscribed to topic rmoff_test_00……
+……
+……
+……
+……
+……
+……
+……
+Partition 0 position unset
+✅ Message '</span>foo / Fri, 17 Jul 2020 15:43:30 +0100<span style="color: #d14">' received from topic '</span>rmoff_test_00<span style="color: #d14">' (partition 0 at offset 0)
+✔️ Read the message we were waiting for. Closing the consumer.
+✅ Consumer worked
+--------------------------</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_broker_down">Broker down</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">Using Broker: localhost:9092
+<span style="color: #000080">--------------------------</span>
+
+✔️ Created AdminClient
+❌There was a problem calling the Admin Client:
+😢 Error <span style="color: #000000;font-weight: bold">(</span>Local: Broker transport failure<span style="color: #000000;font-weight: bold">)</span> getting cluster Metadata. Is localhost:9092 valid broker and reachable from the machine on which this is running?</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_more_episodes">📺 More Episodes…</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Kafka and Go</p>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/">S02E00 - Kafka and Go</a></p>
+</li>
+<li>
+<p><a href="/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/">S02E01 - My First Kafka Go Producer</a></p>
+</li>
+<li>
+<p><a href="/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/">S02E02 - Adding error handling to the Producer</a></p>
+</li>
+<li>
+<p><a href="/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/">S02E03 - Kafka Go Consumer (Channel-based)</a></p>
+</li>
+<li>
+<p><a href="/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/">S02E04 - Kafka Go Consumer (Function-based)</a></p>
+</li>
+<li>
+<p><a href="/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/">S02E05 - Kafka Go AdminClient</a></p>
+</li>
+<li>
+<p><a href="/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/">S02E06 - Putting the Producer in a function and handling errors in a Go routine</a></p>
+</li>
+<li>
+<p><a href="/2020/07/16/learning-golang-some-rough-notes-s02e07-splitting-go-code-into-separate-source-files-and-building-a-binary-executable/">S02E07 - Splitting Go code into separate source files and building a binary executable</a></p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Learning Go</p>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="/2020/06/25/learning-golang-some-rough-notes-s01e00/">S01E00 - Background</a></p>
+</li>
+<li>
+<p><a href="/2020/06/25/learning-golang-some-rough-notes-s01e01-pointers/">S01E01 - Pointers</a></p>
+</li>
+<li>
+<p><a href="/2020/06/25/learning-golang-some-rough-notes-s01e02-slices/">S01E02 - Slices</a></p>
+</li>
+<li>
+<p><a href="/2020/06/29/learning-golang-some-rough-notes-s01e03-maps/">S01E03 - Maps</a></p>
+</li>
+<li>
+<p><a href="/2020/06/29/learning-golang-some-rough-notes-s01e04-function-closures/">S01E04 - Function Closures</a></p>
+</li>
+<li>
+<p><a href="/2020/06/30/learning-golang-some-rough-notes-s01e05-interfaces/">S01E05 - Interfaces</a></p>
+</li>
+<li>
+<p><a href="/2020/07/01/learning-golang-some-rough-notes-s01e06-errors/">S01E06 - Errors</a></p>
+</li>
+<li>
+<p><a href="/2020/07/01/learning-golang-some-rough-notes-s01e07-readers/">S01E07 - Readers</a></p>
+</li>
+<li>
+<p><a href="/2020/07/02/learning-golang-some-rough-notes-s01e08-images/">S01E08 - Images</a></p>
+</li>
+<li>
+<p><a href="/2020/07/02/learning-golang-some-rough-notes-s01e09-concurrency-channels-goroutines/">S01E09 - Concurrency (Channels, Goroutines)</a></p>
+</li>
+<li>
+<p><a href="/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/">S01E10 - Concurrency (Web Crawler)</a></p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
