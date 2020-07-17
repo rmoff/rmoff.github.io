@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Why JSON isn&rsquo;t the same as JSON Schema in Kafka Connect converters (Viewing Kafka messages bytes as hex)</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/07/03/why-json-isnt-the-same-as-json-schema-in-kafka-connect-converters-viewing-kafka-messages-bytes-as-hex/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.59.1" />
+
+		
+		<meta property="og:title" content="Why JSON isn&rsquo;t the same as JSON Schema in Kafka Connect converters (Viewing Kafka messages bytes as hex)" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/05/IMG_4473.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/07/03/why-json-isnt-the-same-as-json-schema-in-kafka-connect-converters-viewing-kafka-messages-bytes-as-hex/" />
+		<meta property="og:site_name" content="Why JSON isn&rsquo;t the same as JSON Schema in Kafka Connect converters (Viewing Kafka messages bytes as hex)" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/05/IMG_4473.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Why JSON isn&rsquo;t the same as JSON Schema in Kafka Connect converters (Viewing Kafka messages bytes as hex)</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-07-03T08:16:36&#43;01:00">Jul 3, 2020</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.net/categories/kafkacat" class="no-underline category near-white dim">Kafkacat</a>, <a href="https://rmoff.net/categories/hexdump" class="no-underline category near-white dim">Hexdump</a>, <a href="https://rmoff.net/categories/json" class="no-underline category near-white dim">JSON</a>, <a href="https://rmoff.net/categories/json-schema" class="no-underline category near-white dim">JSON Schema</a>
+								<span class="display-print">at https://rmoff.net/2020/07/03/why-json-isnt-the-same-as-json-schema-in-kafka-connect-converters-viewing-kafka-messages-bytes-as-hex/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="@rmoff" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>I&#8217;ve been playing around with the new SerDes (serialisers/deserialisers) that shipped with Confluent Platform 5.5 - <a href="https://docs.confluent.io/current/schema-registry/serdes-develop/index.html">Protobuf, and JSON Schema</a> (these were added to the existing support for Avro). The serialisers (and associated <a href="https://docs.confluent.io/current/schema-registry/connect.html">Kafka Connect converters</a>) take a payload and serialise it into bytes for sending to Kafka, and I was interested in what those bytes look like. For that I used my favourite Kafka swiss-army knife: kafkacat.</p>
+</div>
+<div class="paragraph">
+<p>Here&#8217;s a message serialised to JSON Schema:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b kafka:29092 -t pageviews-js -C -c1
+
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;viewtime&#34;</span>:1,<span style="color:#ba2121">&#34;userid&#34;</span>:<span style="color:#ba2121">&#34;User_9&#34;</span>,<span style="color:#ba2121">&#34;pageid&#34;</span>:<span style="color:#ba2121">&#34;Page_57&#34;</span><span style="color:#666">}</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Looks just like a message from another topic serialised as regular JSON, right?</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b kafka:29092 -t pageviews-j -C -c1
+
+<span style="color:#666">{</span><span style="color:#ba2121">&#34;viewtime&#34;</span>:1,<span style="color:#ba2121">&#34;userid&#34;</span>:<span style="color:#ba2121">&#34;User_3&#34;</span>,<span style="color:#ba2121">&#34;pageid&#34;</span>:<span style="color:#ba2121">&#34;Page_77&#34;</span><span style="color:#666">}</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Except it&#8217;s not! We can confirm this by looking at the raw bytes on the message itself by piping the output from kafkacat into hexdump.</p>
+</div>
+<div class="paragraph">
+<p>Check out these magical, pesky, bytes on the front of the JSON Schema-encoded message, and note that they&#8217;re not there on the JSON message:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b kafka:29092 -t pageviews-jsonschema -C -c1 | hexdump -C
+
+<span style="display:block;width:100%;background-color:#e5e5e5"><span style="color:#666">00000000</span>  <span style="color:#666">00</span> <span style="color:#666">00</span> <span style="color:#666">00</span> <span style="color:#666">00</span> <span style="color:#666">02</span> 7b <span style="color:#666">22</span> <span style="color:#666">76</span>  <span style="color:#666">69</span> <span style="color:#666">65</span> <span style="color:#666">77</span> <span style="color:#666">74</span> <span style="color:#666">69</span> 6d <span style="color:#666">65</span> <span style="color:#666">22</span>  |.....<span style="color:#666">{</span><span style="color:#ba2121">&#34;viewtime&#34;</span>|
+</span><span style="color:#666">00000010</span>  3a <span style="color:#666">31</span> 2c <span style="color:#666">22</span> <span style="color:#666">75</span> <span style="color:#666">73</span> <span style="color:#666">65</span> <span style="color:#666">72</span>  <span style="color:#666">69</span> <span style="color:#666">64</span> <span style="color:#666">22</span> 3a <span style="color:#666">22</span> <span style="color:#666">55</span> <span style="color:#666">73</span> <span style="color:#666">65</span>  |:1,<span style="color:#ba2121">&#34;userid&#34;</span>:<span style="color:#ba2121">&#34;Use|
+</span><span style="color:#ba2121">00000020  72 5f 39 22 2c 22 70 61  67 65 69 64 22 3a 22 50  |r_9&#34;</span>,<span style="color:#ba2121">&#34;pageid&#34;</span>:<span style="color:#ba2121">&#34;P|
+</span><span style="color:#ba2121">00000030  61 67 65 5f 35 37 22 7d  0a                       |age_57&#34;</span><span style="color:#666">}</span>.|
+<span style="color:#666">00000039</span></code></pre></div>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b kafka:29092 -t pageviews-json -C -c1 | hexdump -C
+
+<span style="display:block;width:100%;background-color:#e5e5e5"><span style="color:#666">00000000</span>  7b <span style="color:#666">22</span> <span style="color:#666">76</span> <span style="color:#666">69</span> <span style="color:#666">65</span> <span style="color:#666">77</span> <span style="color:#666">74</span> <span style="color:#666">69</span>  6d <span style="color:#666">65</span> <span style="color:#666">22</span> 3a <span style="color:#666">31</span> 2c <span style="color:#666">22</span> <span style="color:#666">75</span>  |<span style="color:#666">{</span><span style="color:#ba2121">&#34;viewtime&#34;</span>:1,<span style="color:#ba2121">&#34;u|
+</span></span><span style="color:#ba2121">00000010  73 65 72 69 64 22 3a 22  55 73 65 72 5f 33 22 2c  |serid&#34;</span>:<span style="color:#ba2121">&#34;User_3&#34;</span>,|
+<span style="color:#666">00000020</span>  <span style="color:#666">22</span> <span style="color:#666">70</span> <span style="color:#666">61</span> <span style="color:#666">67</span> <span style="color:#666">65</span> <span style="color:#666">69</span> <span style="color:#666">64</span> <span style="color:#666">22</span>  3a <span style="color:#666">22</span> <span style="color:#666">50</span> <span style="color:#666">61</span> <span style="color:#666">67</span> <span style="color:#666">65</span> 5f <span style="color:#666">37</span>  |<span style="color:#ba2121">&#34;pageid&#34;</span>:<span style="color:#ba2121">&#34;Page_7|
+</span><span style="color:#ba2121">00000030  37 22 7d 0a                                       |7&#34;</span><span style="color:#666">}</span>.|
+<span style="color:#666">00000034</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>The five extra bytes (<code>00 00 00 00 02</code>) are defined in the <a href="https://docs.confluent.io/current/schema-registry/serdes-develop/index.html#wire-format">wire format</a> used by the Schema Registry serdes:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Byte 0</strong>: Magic Byte - Confluent serialization format version number; currently always 0.</p>
+</li>
+<li>
+<p><strong>Bytes 1-4</strong>: 4-byte schema ID as returned by Schema Registry.</p>
+</li>
+</ul>
+</div>
+<div class="sect1">
+<h2 id="_json_json_schema">JSON != JSON Schema</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>They may sound similar, but the above analysis shows that you can&#8217;t just interchange <code>org.apache.kafka.connect.json.JsonConverter</code> and <code>io.confluent.connect.json.JsonSchemaConverter</code> - they are writing and expecting to read data with different wire formats. If you try to read data that&#8217;s been serialised with one using the other, it&#8217;s gonna break.</p>
+</div>
+<div class="paragraph">
+<p>Here&#8217;s an example of writing data in the two formats in Kafka Connect:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-javascript" data-lang="javascript">curl <span style="color:#666">-</span>s <span style="color:#666">-</span>X PUT <span style="color:#666">-</span>H  <span style="color:#ba2121">&#34;Content-Type:application/json&#34;</span> http<span style="color:#666">:</span><span style="color:#408080;font-style:italic">//localhost:8083/connectors/source-datagen-jsonschema-01/config \
+</span><span style="color:#408080;font-style:italic"></span>            <span style="color:#666">-</span>d <span style="color:#ba2121">&#39;{
+</span><span style="color:#ba2121">            &#34;connector.class&#34;: &#34;io.confluent.kafka.connect.datagen.DatagenConnector&#34;,
+</span><span style="color:#ba2121">            &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+</span><span style="color:#ba2121">            &#34;value.converter&#34;: &#34;io.confluent.connect.json.JsonSchemaConverter&#34;,
+</span><span style="color:#ba2121">            &#34;value.converter.schema.registry.url&#34;: &#34;http://schema-registry:8081&#34;,
+</span><span style="color:#ba2121">            &#34;quickstart&#34;: &#34;ratings&#34;,
+</span><span style="color:#ba2121">            &#34;iterations&#34;:1,
+</span><span style="color:#ba2121">            &#34;kafka.topic&#34;: &#34;test-jsonschema&#34;,
+</span><span style="color:#ba2121">            &#34;tasks.max&#34;: 1
+</span><span style="color:#ba2121">        }&#39;</span>
+
+curl <span style="color:#666">-</span>s <span style="color:#666">-</span>X PUT <span style="color:#666">-</span>H  <span style="color:#ba2121">&#34;Content-Type:application/json&#34;</span> http<span style="color:#666">:</span><span style="color:#408080;font-style:italic">//localhost:8083/connectors/source-datagen-json-01/config \
+</span><span style="color:#408080;font-style:italic"></span>            <span style="color:#666">-</span>d <span style="color:#ba2121">&#39;{
+</span><span style="color:#ba2121">            &#34;connector.class&#34;: &#34;io.confluent.kafka.connect.datagen.DatagenConnector&#34;,
+</span><span style="color:#ba2121">            &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+</span><span style="color:#ba2121">            &#34;value.converter&#34;: &#34;org.apache.kafka.connect.json.JsonConverter&#34;,
+</span><span style="color:#ba2121">            &#34;quickstart&#34;: &#34;ratings&#34;,
+</span><span style="color:#ba2121">            &#34;iterations&#34;:1,
+</span><span style="color:#ba2121">            &#34;kafka.topic&#34;: &#34;test-json&#34;,
+</span><span style="color:#ba2121">            &#34;tasks.max&#34;: 1
+</span><span style="color:#ba2121">        }&#39;</span>
+</code></pre></div>
+</div>
+<div class="paragraph">
+<p>From this we have two topics; <code>test-json</code> and <code>test-jsonschema</code>. Let&#8217;s read the contents of these using a Kafka Connect sink with the correct converters:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-javascript" data-lang="javascript">curl <span style="color:#666">-</span>i <span style="color:#666">-</span>X PUT <span style="color:#666">-</span>H  <span style="color:#ba2121">&#34;Content-Type:application/json&#34;</span> http<span style="color:#666">:</span><span style="color:#408080;font-style:italic">//localhost:8083/connectors/sink-file-jsonschema-as-jsonschema/config \
+</span><span style="color:#408080;font-style:italic"></span>    <span style="color:#666">-</span>d <span style="color:#ba2121">&#39;{
+</span><span style="color:#ba2121">            &#34;connector.class&#34;: &#34;org.apache.kafka.connect.file.FileStreamSinkConnector&#34;,
+</span><span style="color:#ba2121">            &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+</span><span style="color:#ba2121">            &#34;value.converter&#34;: &#34;io.confluent.connect.json.JsonSchemaConverter&#34;,
+</span><span style="color:#ba2121">            &#34;value.converter.schema.registry.url&#34;: &#34;http://schema-registry:8081&#34;,
+</span><span style="color:#ba2121">            &#34;tasks.max&#34;: 1,
+</span><span style="color:#ba2121">            &#34;file&#34;: &#34;/jsonschema-as-jsonschema.txt&#34;,
+</span><span style="color:#ba2121">            &#34;topics&#34;: &#34;test-jsonschema&#34;
+</span><span style="color:#ba2121">}&#39;</span>
+
+curl <span style="color:#666">-</span>i <span style="color:#666">-</span>X PUT <span style="color:#666">-</span>H  <span style="color:#ba2121">&#34;Content-Type:application/json&#34;</span> http<span style="color:#666">:</span><span style="color:#408080;font-style:italic">//localhost:8083/connectors/sink-file-json-as-json/config \
+</span><span style="color:#408080;font-style:italic"></span>    <span style="color:#666">-</span>d <span style="color:#ba2121">&#39;{
+</span><span style="color:#ba2121">            &#34;connector.class&#34;: &#34;org.apache.kafka.connect.file.FileStreamSinkConnector&#34;,
+</span><span style="color:#ba2121">            &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+</span><span style="color:#ba2121">            &#34;value.converter&#34;: &#34;org.apache.kafka.connect.json.JsonConverter&#34;,
+</span><span style="color:#ba2121">            &#34;tasks.max&#34;: 1,
+</span><span style="color:#ba2121">            &#34;file&#34;: &#34;/json-as-json.txt&#34;,
+</span><span style="color:#ba2121">            &#34;topics&#34;: &#34;test-json&#34;
+</span><span style="color:#ba2121">}&#39;</span>
+</code></pre></div>
+</div>
+<div class="paragraph">
+<p>As expected, this works. But what about if we mix it up, and try to read JSON data using the JSON Schema deserialiser (through the <code>io.confluent.connect.json.JsonSchemaConverter</code> converter)?</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-javascript" data-lang="javascript">curl <span style="color:#666">-</span>i <span style="color:#666">-</span>X PUT <span style="color:#666">-</span>H  <span style="color:#ba2121">&#34;Content-Type:application/json&#34;</span> http<span style="color:#666">:</span><span style="color:#408080;font-style:italic">//localhost:8083/connectors/sink-file-json-as-jsonschema/config \
+</span><span style="color:#408080;font-style:italic"></span>    <span style="color:#666">-</span>d <span style="color:#ba2121">&#39;{
+</span><span style="color:#ba2121">            &#34;connector.class&#34;: &#34;org.apache.kafka.connect.file.FileStreamSinkConnector&#34;,
+</span><span style="color:#ba2121">            &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+</span><span style="color:#ba2121">            &#34;value.converter&#34;: &#34;io.confluent.connect.json.JsonSchemaConverter&#34;,
+</span><span style="color:#ba2121">            &#34;value.converter.schema.registry.url&#34;: &#34;http://schema-registry:8081&#34;,
+</span><span style="color:#ba2121">            &#34;tasks.max&#34;: 1,
+</span><span style="color:#ba2121">            &#34;file&#34;: &#34;/json-as-jsonschema.txt&#34;,
+</span><span style="color:#ba2121">            &#34;topics&#34;: &#34;test-json&#34;
+</span><span style="color:#ba2121">}&#39;</span>
+</code></pre></div>
+</div>
+<div class="paragraph">
+<p>⚠️ It fails!</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">org.apache.kafka.connect.errors.DataException: Converting byte<span style="color:#666">[]</span> to Kafka Connect data failed due to serialization error:
+        at io.confluent.connect.json.JsonSchemaConverter.toConnectData<span style="color:#666">(</span>JsonSchemaConverter.java:111<span style="color:#666">)</span>
+        at org.apache.kafka.connect.storage.Converter.toConnectData<span style="color:#666">(</span>Converter.java:87<span style="color:#666">)</span>
+        at org.apache.kafka.connect.runtime.WorkerSinkTask.lambda<span style="color:#19177c">$convertAndTransformRecord$2</span><span style="color:#666">(</span>WorkerSinkTask.java:492<span style="color:#666">)</span>
+        at org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator.execAndRetry<span style="color:#666">(</span>RetryWithToleranceOperator.java:128<span style="color:#666">)</span>
+        at org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator.execAndHandleError<span style="color:#666">(</span>RetryWithToleranceOperator.java:162<span style="color:#666">)</span>
+        ... <span style="color:#666">13</span> more
+Caused by: org.apache.kafka.common.errors.SerializationException: Error deserializing JSON message <span style="color:#008000;font-weight:bold">for</span> id -1
+Caused by: org.apache.kafka.common.errors.SerializationException: Unknown magic byte!</code></pre></div>
+</div>
+<div class="paragraph">
+<p>What&#8217;s this mean? Well <code>Unknown magic byte!</code> is the deserialiser&#8217;s quirky way of say that the bytes on the front of the message that JSON Schema has (which we saw above) aren&#8217;t there. Why aren&#8217;t they there? Because it&#8217;s just straight-up JSON that we&#8217;re trying to read - and so we should be use the JSON deserialiser (provided for Kafka Connect by the <code>org.apache.kafka.connect.json.JsonConverter</code> converter).</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Actual (JSON)</p>
+<div class="paragraph">
+<p><code>00000000  7b 22 76 69 65 77 74 69  6d 65 22 3a 31 2c 22 75  |{"viewtime":1,"u|</code></p>
+</div>
+</li>
+<li>
+<p>Expected (JSON Schema)</p>
+<div class="paragraph">
+<p><code>00000000  00 00 00 00 02 7b 22 76  69 65 77 74 69 6d 65 22  |&#8230;&#8203;..{"viewtime"|</code></p>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+<div class="paragraph">
+<p>The final permutation here is trying to read JSON Schema messages using the JSON deserialiser:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-javascript" data-lang="javascript">curl <span style="color:#666">-</span>i <span style="color:#666">-</span>X PUT <span style="color:#666">-</span>H  <span style="color:#ba2121">&#34;Content-Type:application/json&#34;</span> http<span style="color:#666">:</span><span style="color:#408080;font-style:italic">//localhost:8083/connectors/sink-file-jsonschema-as-json/config \
+</span><span style="color:#408080;font-style:italic"></span>    <span style="color:#666">-</span>d <span style="color:#ba2121">&#39;{
+</span><span style="color:#ba2121">            &#34;connector.class&#34;: &#34;org.apache.kafka.connect.file.FileStreamSinkConnector&#34;,
+</span><span style="color:#ba2121">            &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+</span><span style="color:#ba2121">            &#34;value.converter&#34;: &#34;org.apache.kafka.connect.json.JsonConverter&#34;,
+</span><span style="color:#ba2121">            &#34;tasks.max&#34;: 1,
+</span><span style="color:#ba2121">            &#34;file&#34;: &#34;/jsonschema-as-json.txt&#34;,
+</span><span style="color:#ba2121">            &#34;topics&#34;: &#34;test-jsonschema&#34;
+</span><span style="color:#ba2121">}&#39;</span>
+</code></pre></div>
+</div>
+<div class="paragraph">
+<p>As we might expect, this also fails</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">org.apache.kafka.connect.errors.DataException: Converting byte<span style="color:#666">[]</span> to Kafka Connect data failed due to serialization error:
+        at org.apache.kafka.connect.json.JsonConverter.toConnectData<span style="color:#666">(</span>JsonConverter.java:355<span style="color:#666">)</span>
+        at org.apache.kafka.connect.storage.Converter.toConnectData<span style="color:#666">(</span>Converter.java:87<span style="color:#666">)</span>                                                               
+        at org.apache.kafka.connect.runtime.WorkerSinkTask.lambda<span style="color:#19177c">$convertAndTransformRecord$2</span><span style="color:#666">(</span>WorkerSinkTask.java:492<span style="color:#666">)</span>                               
+        at org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator.execAndRetry<span style="color:#666">(</span>RetryWithToleranceOperator.java:128<span style="color:#666">)</span>
+        at org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator.execAndHandleError<span style="color:#666">(</span>RetryWithToleranceOperator.java:162<span style="color:#666">)</span>                
+        ... <span style="color:#666">13</span> more                                                                                                                          
+Caused by: org.apache.kafka.common.errors.SerializationException: java.io.CharConversionException: Invalid UTF-32 character 0x27a2272 <span style="color:#666">(</span>above 0x0010ffff<span style="color:#666">)</span> at char <span style="color:#408080;font-style:italic">#1, byte #7)</span>
+Caused by: java.io.CharConversionException: Invalid UTF-32 character 0x27a2272 <span style="color:#666">(</span>above 0x0010ffff<span style="color:#666">)</span> at char <span style="color:#408080;font-style:italic">#1, byte #7)</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Here the JSON deserialiser is trying to read JSON, but hitting the bytes that the JSON Schema serialiser writes to the front of each message, which are not valid JSON (<code>Invalid UTF-32 character 0x27a2272 (above 0x0010ffff) at char #1, byte #7</code>). If you&#8217;ve serialised your data using the Confluent Schema Registry JSON Schema serialiser, you&#8217;ve gotta deserialise it with that too.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Actual (JSON Schema)</p>
+<div class="paragraph">
+<p><code>00000000  00 00 00 00 02 7b 22 76  69 65 77 74 69 6d 65 22  |&#8230;&#8203;..{"viewtime"|</code></p>
+</div>
+</li>
+<li>
+<p>Expected (JSON)</p>
+<div class="paragraph">
+<p><code>00000000  7b 22 76 69 65 77 74 69  6d 65 22 3a 31 2c 22 75  |{"viewtime":1,"u|</code></p>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
