@@ -5,9 +5,342 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2020-07-17</lastBuildDate>
+    <lastBuildDate>2020-07-23</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Learning Golang (some rough notes) - S02E09 - Processing chunked responses before EOF is reached</title>
+      <link>https://rmoff.net/2020/07/23/learning-golang-some-rough-notes-s02e09-processing-chunked-responses-before-eof-is-reached/</link>
+      <pubDate>2020-07-23</pubDate>
+      
+      <guid>https://rmoff.net/2020/07/23/learning-golang-some-rough-notes-s02e09-processing-chunked-responses-before-eof-is-reached/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/07/IMG_5126.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The server sends &lt;code&gt;Transfer-Encoding: chunked&lt;/code&gt; data, and you want to work with the data &lt;strong&gt;as you get it&lt;/strong&gt;, instead of waiting for the server to finish, the EOF to fire, and &lt;em&gt;then&lt;/em&gt; process the data?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here&amp;#8217;s an example &lt;code&gt;curl&lt;/code&gt; of the kind of session I&amp;#8217;m talking about:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;➜ curl &lt;span style=&#34;color: #000080&#34;&gt;--verbose&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;--location&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&#39;http://localhost:8088/query&#39;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+&lt;span style=&#34;color: #000080&#34;&gt;--header&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&#39;Content-Type: application/vnd.ksql.v1+json; charset=utf-8&#39;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+&lt;span style=&#34;color: #000080&#34;&gt;--data-raw&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&#39;{
+    &#34;ksql&#34;: &#34;SELECT NAME, TS, CAPACITY, EMPTY_PLACES FROM CARPARK_EVENTS  WHERE  EMPTY_PLACES &amp;gt; 100 emit changes;&#34;
+}&#39;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;   Trying ::1...
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; TCP_NODELAY &lt;span style=&#34;color: #0086B3&#34;&gt;set&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; Connected to localhost &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;::1&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt; port 8088 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;#0)&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; POST /query HTTP/1.1
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; Host: localhost:8088
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; User-Agent: curl/7.64.1
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; Accept: &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;/&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; Content-Type: application/vnd.ksql.v1+json&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;charset&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;utf-8
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; Content-Length: 118
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; upload completely sent off: 118 out of 118 bytes
+&amp;lt; HTTP/1.1 200 OK
+&amp;lt; content-type: application/json
+&amp;lt; Transfer-Encoding: chunked
+&amp;lt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The API that I&amp;#8217;m working with sends a complete JSON message, but spread over chunks. It starts with a header&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;header&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;queryId&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;none&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;schema&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;`NAME` STRING, `TS` BIGINT, `CAPACITY` INTEGER, `EMPTY_PLACES` INTEGER&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}},&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and then at some point - perhaps straight away, perhaps after a few seconds, you get some data&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;row&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;columns&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Westgate&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1595372100000&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;116&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;116&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]}},&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;row&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;columns&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Burnett St&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1595372100000&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;122&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;117&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]}},&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and then some empty rows&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and then maybe some more data&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;row&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;columns&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Crown Court&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1595372100000&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;142&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;130&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]}},&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;row&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;columns&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Leisure Exchange&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1595372100000&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;996&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;976&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]}},&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This is from a &lt;a href=&#34;https://ksqldb.io&#34;&gt;streaming database&lt;/a&gt;, and the idea is that the client can use the data as it&amp;#8217;s continually sent. Contrast this to the standard request-response pattern of data consumption in which the request is fully satisfied before the client will process the response.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;From my Googling I came across two standard patterns for consuming JSON from a REST call:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;NewDecoder&lt;/code&gt;&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;json&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NewDecoder&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;resp&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Body&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Decode&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;m&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;Unmarshal&lt;/code&gt;&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;json&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Unmarshal&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;resp&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Body&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;m&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But I found that both of these &lt;strong&gt;blocked&lt;/strong&gt; until the entire response had been received - which is not what I wanted. &lt;a href=&#34;https://stackoverflow.com/a/22177737/350613&#34;&gt;Courtesy of &lt;code&gt;chourobin&lt;/code&gt;&lt;/a&gt; I found this solution. First up, create the client and request:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Prepare the request&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;url&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;http://localhost:8088/query&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;method&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;POST&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;k&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;SELECT NAME, TS, CAPACITY, EMPTY_PLACES FROM CARPARK_EVENTS  WHERE  EMPTY_PLACES &amp;gt; &#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;strconv&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Itoa&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;c&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;  EMIT CHANGES;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;payload&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;strings&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NewReader&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ksql&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;k&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;}&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Create the client&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;client&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Client&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;req&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NewRequest&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;method&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;url&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;payload&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;req&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Header&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Add&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Content-Type&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;application/vnd.ksql.v1+json; charset=utf-8&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Make the request&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;res&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;client&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Do&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;req&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;defer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;res&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Body&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Close&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;()&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now create a &lt;code&gt;NewReader&lt;/code&gt; to consume the response:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;reader&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;bufio&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NewReader&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;res&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Body&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;And then run a loop which consumes the response a line at a time:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doThis&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doThis&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Read the next chunk&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;lb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;reader&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ReadBytes&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#39;\n&#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+        &lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Got an error back (e.g. EOF), so exit the loop&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+        &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;doThis&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+        &lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Do stuff with the response here&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+        &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Got some data:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n\t&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;%v&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;lb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;))&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_what_about_the_json&#34;&gt;What about the JSON?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you notice the example response shown above, the chunks are not self-contained JSON.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;The header chunk opens an array:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;header&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;queryId&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;none&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;schema&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;`NAME` STRING, `TS` BIGINT, `CAPACITY` INTEGER, `EMPTY_PLACES` INTEGER&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}},&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Each row chunk is an array entry with trailing comma&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;row&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;columns&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Westgate&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1595372100000&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;116&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;116&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]}},&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The inbound stream of Bytes is split into lines using &lt;code&gt;reader.ReadBytes(&#39;\n&#39;)&lt;/code&gt;. This function takes a single byte as the token by which to split, but instead of splitting on &lt;code&gt;\n&lt;/code&gt; (ASCII 13) alone, we actually want to split on &lt;code&gt;,\r\n&lt;/code&gt; (ASCII 44, 10, 13) since we have the trailing comma to remove, and the CRLF as the delineator.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now, I &lt;strong&gt;think&lt;/strong&gt; the proper option here is to use a &lt;a href=&#34;https://golang.org/pkg/bufio/#Scanner&#34;&gt;&lt;code&gt;Scanner&lt;/code&gt;&lt;/a&gt; but for a quick win I instead did a dirty thing and just truncated slice by two bytes 🤢  (the first byte being &lt;code&gt;\n&lt;/code&gt; which had already been removed by the &lt;code&gt;ReadBytes&lt;/code&gt; function)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;len&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;lb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;lb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;lb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;len&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;lb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can then take the slice of bytes and marshall the JSON into a Go variable. You need to declare this first, using a custom type—defining the type is easy using &lt;a href=&#34;https://mholt.github.io/json-to-go/&#34;&gt;this handy little tool&lt;/a&gt;, into which you paste some sample JSON and it spits out the Go type defintion:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/07/jsontogo.png&#34; alt=&#34;jsontogo&#34;&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So taking this Go code:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;type&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ksqlDBMessageRow&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;struct&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Row&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;struct&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+		&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Columns&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[]&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;interface&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;`json:&#34;columns&#34;`&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+	&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;`json:&#34;row&#34;`&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;you declare the variable into which you&amp;#8217;ll store the row that&amp;#8217;s been read:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;var&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ksqlDBMessageRow&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// …&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+
+&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;strings&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Contains&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;lb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;),&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;row&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Looks like a Row, let&#39;s process it!&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;json&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Unmarshal&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;lb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+        &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Error decoding JSON %v (%v)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;lb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;),&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;err&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;From that you can then access the actual values in the payload itself:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Row&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Columns&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;nil&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CARPARK&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Row&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Columns&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;DATA_TS&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Row&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Columns&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;float64&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CURRENT_EMPTY_PLACES&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Row&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Columns&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;float64&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CAPACITY&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;r&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Row&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Columns&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;float64&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;// Handle the timestamp&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;t&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #445588;font-weight: bold&#34;&gt;int64&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;DATA_TS&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;:=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;time&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Unix&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;t&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1000&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;fmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Printf&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;Carpark %v at %v has %v spaces available (capacity %v)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CARPARK&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CURRENT_EMPTY_PLACES&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CAPACITY&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_more_episodes&#34;&gt;📺 More Episodes…&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Kafka and Go&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/&#34;&gt;S02E00 - Kafka and Go&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/&#34;&gt;S02E01 - My First Kafka Go Producer&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;S02E02 - Adding error handling to the Producer&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/&#34;&gt;S02E03 - Kafka Go Consumer (Channel-based)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;S02E04 - Kafka Go Consumer (Function-based)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/16/learning-golang-some-rough-notes-s02e07-splitting-go-code-into-separate-source-files-and-building-a-binary-executable/&#34;&gt;S02E07 - Splitting Go code into separate source files and building a binary executable&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/17/learning-golang-some-rough-notes-s02e08-checking-kafka-advertised.listeners-with-go/&#34;&gt;S02E08 - Checking Kafka advertised.listeners with Go&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/23/learning-golang-some-rough-notes-s02e09-processing-chunked-responses-before-eof-is-reached/&#34;&gt;S02E09 - Processing chunked responses before EOF is reached&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Learning Go&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e00/&#34;&gt;S01E00 - Background&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e01-pointers/&#34;&gt;S01E01 - Pointers&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e02-slices/&#34;&gt;S01E02 - Slices&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/29/learning-golang-some-rough-notes-s01e03-maps/&#34;&gt;S01E03 - Maps&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/29/learning-golang-some-rough-notes-s01e04-function-closures/&#34;&gt;S01E04 - Function Closures&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/30/learning-golang-some-rough-notes-s01e05-interfaces/&#34;&gt;S01E05 - Interfaces&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/01/learning-golang-some-rough-notes-s01e06-errors/&#34;&gt;S01E06 - Errors&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/01/learning-golang-some-rough-notes-s01e07-readers/&#34;&gt;S01E07 - Readers&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e08-images/&#34;&gt;S01E08 - Images&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e09-concurrency-channels-goroutines/&#34;&gt;S01E09 - Concurrency (Channels, Goroutines)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/&#34;&gt;S01E10 - Concurrency (Web Crawler)&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
     <item>
       <title>Learning Golang (some rough notes) - S02E08 - Checking Kafka advertised.listeners with Go</title>
       <link>https://rmoff.net/2020/07/17/learning-golang-some-rough-notes-s02e08-checking-kafka-advertised.listeners-with-go/</link>
@@ -2875,292 +3208,6 @@ To see the configuration options, refer to https://github.com/edenhill/librdkafk
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;Here I&amp;#8217;m going to try and apply what I&amp;#8217;ve learnt so far to the Kafka client and build my understanding of it from the ground up (instead of blindly copy &amp;amp; pasting which is effective but less educational than taking something apart and reassembling it 😎).&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_more_episodes&#34;&gt;📺 More Episodes…&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Kafka and Go&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/&#34;&gt;S02E00 - Kafka and Go&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/&#34;&gt;S02E01 - My First Kafka Go Producer&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/&#34;&gt;S02E02 - Adding error handling to the Producer&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/&#34;&gt;S02E03 - Kafka Go Consumer (Channel-based)&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/&#34;&gt;S02E04 - Kafka Go Consumer (Function-based)&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/&#34;&gt;S02E05 - Kafka Go AdminClient&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/&#34;&gt;S02E06 - Putting the Producer in a function and handling errors in a Go routine&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/16/learning-golang-some-rough-notes-s02e07-splitting-go-code-into-separate-source-files-and-building-a-binary-executable/&#34;&gt;S02E07 - Splitting Go code into separate source files and building a binary executable&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/17/learning-golang-some-rough-notes-s02e08-checking-kafka-advertised.listeners-with-go/&#34;&gt;S02E08 - Checking Kafka advertised.listeners with Go&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/23/learning-golang-some-rough-notes-s02e09-processing-chunked-responses-before-eof-is-reached/&#34;&gt;S02E09 - Processing chunked responses before EOF is reached&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Learning Go&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e00/&#34;&gt;S01E00 - Background&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e01-pointers/&#34;&gt;S01E01 - Pointers&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e02-slices/&#34;&gt;S01E02 - Slices&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/29/learning-golang-some-rough-notes-s01e03-maps/&#34;&gt;S01E03 - Maps&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/29/learning-golang-some-rough-notes-s01e04-function-closures/&#34;&gt;S01E04 - Function Closures&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/06/30/learning-golang-some-rough-notes-s01e05-interfaces/&#34;&gt;S01E05 - Interfaces&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/01/learning-golang-some-rough-notes-s01e06-errors/&#34;&gt;S01E06 - Errors&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/01/learning-golang-some-rough-notes-s01e07-readers/&#34;&gt;S01E07 - Readers&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e08-images/&#34;&gt;S01E08 - Images&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e09-concurrency-channels-goroutines/&#34;&gt;S01E09 - Concurrency (Channels, Goroutines)&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/&#34;&gt;S01E10 - Concurrency (Web Crawler)&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Learning Golang (some rough notes) - S01E10 - Concurrency (Web Crawler)</title>
-      <link>https://rmoff.net/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/</link>
-      <pubDate>2020-07-03</pubDate>
-      
-      <guid>https://rmoff.net/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/06/IMG_5277.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://tour.golang.org/concurrency/9&#34;&gt;A Tour of Go : sync.Mutex&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;In the &lt;a href=&#34;https://rmoff.net/2020/07/02/learning-golang-some-rough-notes-s01e09-concurrency-channels-goroutines/&#34;&gt;previous exercise&lt;/a&gt; I felt my &lt;a href=&#34;https://rmoff.net/2020/06/25/learning-golang-some-rough-notes-s01e00/&#34;&gt;absence of a formal CompSci background&lt;/a&gt; with the introduction of Binary Sorted Trees, and now I am concious of it again with learning about mutex. I&amp;#8217;d &lt;em&gt;heard&lt;/em&gt; of them before, mostly when Oracle performance folk were talking about wait types - TIL it stands for &lt;code&gt;mutual exclusion&lt;/code&gt;!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;quoteblock&#34;&gt;
-&lt;blockquote&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;What if we … want to make sure only one goroutine can access a variable at a time to avoid conflicts?&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This concept is called mutual exclusion, and the conventional name for the data structure that provides it is &lt;strong&gt;mutex&lt;/strong&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/blockquote&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_exercise_web_crawler&#34;&gt;Exercise: Web Crawler&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://tour.golang.org/concurrency/10&#34;&gt;A Tour of Go : Exercise: Web Crawler&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This was quite a fun one once I wrapped my head around it. It gave a health dose of copy &amp;amp; paste advice in the form of the &lt;a href=&#34;https://tour.golang.org/concurrency/9&#34;&gt;previous example&lt;/a&gt; which I used to implement the first requirement.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_dont_fetch_the_same_url_twice&#34;&gt;Don&amp;#8217;t fetch the same URL twice&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I created a &lt;code&gt;URLs&lt;/code&gt; struct to hold a map of URLs and a boolean of whether they have been crawled or not, and included a mutex so that it can be read and updated safely in concurrent execution&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;type&lt;/span&gt; URLs &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;struct&lt;/span&gt; {
-	c   &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;map&lt;/span&gt;[&lt;span style=&#34;color:#b00040&#34;&gt;string&lt;/span&gt;]&lt;span style=&#34;color:#b00040&#34;&gt;bool&lt;/span&gt;
-	mux sync.Mutex
-}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;var&lt;/span&gt; u URLs = URLs{c: &lt;span style=&#34;color:#008000&#34;&gt;make&lt;/span&gt;(&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;map&lt;/span&gt;[&lt;span style=&#34;color:#b00040&#34;&gt;string&lt;/span&gt;]&lt;span style=&#34;color:#b00040&#34;&gt;bool&lt;/span&gt;)}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The &lt;code&gt;URLs&lt;/code&gt; type implements two functions - one to check if a given URL has been crawled, and the other to mark it as such&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (u URLs) &lt;span style=&#34;color:#00f&#34;&gt;IsCrawled&lt;/span&gt;(url &lt;span style=&#34;color:#b00040&#34;&gt;string&lt;/span&gt;) &lt;span style=&#34;color:#b00040&#34;&gt;bool&lt;/span&gt; {
-	fmt.&lt;span style=&#34;color:#00f&#34;&gt;Printf&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;\n👀 Checking if %v has been crawled…&amp;#34;&lt;/span&gt;, url)
-	u.mux.&lt;span style=&#34;color:#00f&#34;&gt;Lock&lt;/span&gt;()
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;defer&lt;/span&gt; u.mux.&lt;span style=&#34;color:#00f&#34;&gt;Unlock&lt;/span&gt;()
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; _, ok &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; u.c[url]; ok &lt;span style=&#34;color:#666&#34;&gt;==&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;false&lt;/span&gt; {
-		fmt.&lt;span style=&#34;color:#00f&#34;&gt;Printf&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;…it hasn&amp;#39;t\t&amp;#34;&lt;/span&gt;)
-		&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;false&lt;/span&gt;
-	}
-	fmt.&lt;span style=&#34;color:#00f&#34;&gt;Printf&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;…it has\t&amp;#34;&lt;/span&gt;)
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;true&lt;/span&gt;
-}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; (u URLs) &lt;span style=&#34;color:#00f&#34;&gt;Crawled&lt;/span&gt;(url &lt;span style=&#34;color:#b00040&#34;&gt;string&lt;/span&gt;) {
-	u.mux.&lt;span style=&#34;color:#00f&#34;&gt;Lock&lt;/span&gt;()
-	u.c[url] = &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;true&lt;/span&gt;
-	u.mux.&lt;span style=&#34;color:#00f&#34;&gt;Unlock&lt;/span&gt;()
-}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;To the main &lt;code&gt;Crawl&lt;/code&gt; function I then added calls to these functions and a conditional return:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;// Check if the URL has been crawled already
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; u.&lt;span style=&#34;color:#00f&#34;&gt;IsCrawled&lt;/span&gt;(url) &lt;span style=&#34;color:#666&#34;&gt;==&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;true&lt;/span&gt; {
-    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt;
-}
-fmt.&lt;span style=&#34;color:#00f&#34;&gt;Printf&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;\n➡️ Crawling %v&amp;#34;&lt;/span&gt;, url)
-body, urls, err &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; fetcher.&lt;span style=&#34;color:#00f&#34;&gt;Fetch&lt;/span&gt;(url)
-&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;// Mark the URL as crawled (assumes that if there&amp;#39;s an error you don&amp;#39;t want to retry it)
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;u.&lt;span style=&#34;color:#00f&#34;&gt;Crawled&lt;/span&gt;(url)&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;As the comment notes, we assume that if a URL has been crawled, then we mark it as such, regardless of error status. If I was feeling adventurous I guess I could implement some kind of retry logic with incremental backoff…but I&amp;#8217;m keeping it simple for now :)&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_fetch_urls_in_parallel&#34;&gt;Fetch URLs in parallel&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This one I assumed could be done by simply using a Go routine in calling the nested &lt;code&gt;Crawl&lt;/code&gt; functions. What it actually did was just fetch the first URL and exit&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&amp;gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/ has been crawled……it hasn&amp;#39;t	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;	found: https:&lt;span style=&#34;color:#666&#34;&gt;//&lt;/span&gt;golang.org&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;The Go Programming Language&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Off to Google we went and found &lt;a href=&#34;https://stackoverflow.com/a/12250366/350613&#34;&gt;this answer on StackOverflow&lt;/a&gt; which showed the use of &lt;a href=&#34;https://golang.org/pkg/sync/#WaitGroup&#34;&gt;WaitGroups&lt;/a&gt; (nice &lt;a href=&#34;https://gobyexample.com/waitgroups&#34;&gt;example here&lt;/a&gt;). I ripped this off shamelessly into my code and it &lt;em&gt;almost&lt;/em&gt; worked…&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/ has been crawled……it hasn&amp;#39;t	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;➡&lt;/span&gt;️ Crawling https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&amp;gt;&lt;span style=&#34;&#34;&gt;✅&lt;/span&gt; found: https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/ &amp;#34;The Go Programming Language&amp;#34;
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;
-&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/ has been crawled……it hasn&amp;#39;t	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;➡���&lt;/span&gt; Crawling https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&amp;gt;&lt;span style=&#34;&#34;&gt;✅&lt;/span&gt; found: https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/ &amp;#34;Packages&amp;#34;
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;
-&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/ has been crawled……it has	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/cmd/ has been crawled……it hasn&amp;#39;t	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;➡&lt;/span&gt;️ Crawling https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/cmd/
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&amp;gt;&lt;span style=&#34;&#34;&gt;⚠&lt;/span&gt;️ not found: https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/cmd/
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;
-&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/fmt/ has been crawled……it hasn&amp;#39;t	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;➡&lt;/span&gt;️ Crawling https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/fmt/
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&amp;gt;&lt;span style=&#34;&#34;&gt;✅&lt;/span&gt; found: https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/fmt/ &amp;#34;Package fmt&amp;#34;
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;
-&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/ has been crawled……it has	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/ has been crawled……it has	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/os/ has been crawled……it hasn&amp;#39;t	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;➡&lt;/span&gt;️ Crawling https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/os/
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&amp;gt;&lt;span style=&#34;&#34;&gt;✅&lt;/span&gt; found: https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/os/ &amp;#34;Package os&amp;#34;
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;
-&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/ has been crawled……it has	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//golang.org/pkg/ has been crawled……it has	
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;&#34;&gt;👀&lt;/span&gt; Checking &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; https:&lt;span style=&#34;color:#666&#34;&gt;//&lt;/span&gt;golang.org&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;cmd&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt; has been crawled&lt;span style=&#34;&#34;&gt;……&lt;/span&gt;it has	&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;but then threw a panic&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;panic: sync: negative WaitGroup counter
-
-goroutine &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; [running]:
-sync.(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;WaitGroup).&lt;span style=&#34;color:#00f&#34;&gt;Add&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;0xc0000a4010&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;0xffffffffffffffff&lt;/span&gt;)
-	&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;usr&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;local&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;go&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;src&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;sync&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;waitgroup.&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;go&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;74&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0x1ec&lt;/span&gt;
-sync.(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;WaitGroup).&lt;span style=&#34;color:#00f&#34;&gt;Done&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;0xc0000a4010&lt;/span&gt;)
-	&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;usr&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;local&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;go&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;src&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;sync&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;waitgroup.&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;go&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;99&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0x34&lt;/span&gt;
-main.&lt;span style=&#34;color:#00f&#34;&gt;Crawl&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;0x1100e8c&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;0x13&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;0x4&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;0x110fb60&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;0xc0000801b0&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;0xc0000a4010&lt;/span&gt;)
-	&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;Users&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;rmoff&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;go&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;src&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;webcrawler&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;webcrawler.&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;go&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;68&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0x676&lt;/span&gt;
-main.&lt;span style=&#34;color:#00f&#34;&gt;main&lt;/span&gt;()
-	&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;Users&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;rmoff&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;go&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;src&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;webcrawler&lt;span style=&#34;color:#666&#34;&gt;/&lt;/span&gt;webcrawler.&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;go&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;73&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0x98&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;A bit of Googling showed that &lt;code&gt;panic: sync: negative WaitGroup counter&lt;/code&gt; (as the error actually suggests) comes about because &lt;a href=&#34;https://golang.org/pkg/sync/#WaitGroup.Done&#34;&gt;Done&lt;/a&gt; had been called to decrease the number of WaitGroups and taken them below zero.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This happened because every execution of &lt;code&gt;Crawl&lt;/code&gt; includes&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;defer&lt;/span&gt; wg.&lt;span style=&#34;color:#00f&#34;&gt;Done&lt;/span&gt;()&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;but the corresponding&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;wg.&lt;span style=&#34;color:#00f&#34;&gt;Add&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;)&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;was only added in the &lt;em&gt;nested&lt;/em&gt; call to &lt;code&gt;Crawl&lt;/code&gt; and not the initial invocation from &lt;code&gt;main()&lt;/code&gt;. Adding this into &lt;code&gt;main()&lt;/code&gt; then made everything work just great.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#00f&#34;&gt;Crawl&lt;/span&gt;(url &lt;span style=&#34;color:#b00040&#34;&gt;string&lt;/span&gt;, depth &lt;span style=&#34;color:#b00040&#34;&gt;int&lt;/span&gt;, fetcher Fetcher, wg &lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;sync.WaitGroup) {
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;defer&lt;/span&gt; wg.&lt;span style=&#34;color:#00f&#34;&gt;Done&lt;/span&gt;()
-&lt;/span&gt;
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; depth &lt;span style=&#34;color:#666&#34;&gt;&amp;lt;=&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; {
-		&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt;
-	}
-
-	&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;// Check if the URL has been crawled already
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; u.&lt;span style=&#34;color:#00f&#34;&gt;IsCrawled&lt;/span&gt;(url) &lt;span style=&#34;color:#666&#34;&gt;==&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;true&lt;/span&gt; {
-		&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt;
-	}
-	fmt.&lt;span style=&#34;color:#00f&#34;&gt;Printf&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;\n➡️ Crawling %v&amp;#34;&lt;/span&gt;, url)
-	body, urls, err &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; fetcher.&lt;span style=&#34;color:#00f&#34;&gt;Fetch&lt;/span&gt;(url)
-	&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;// Mark the URL as crawled (assumes that if there&amp;#39;s an error you don&amp;#39;t want to retry it)
-&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;	u.&lt;span style=&#34;color:#00f&#34;&gt;Crawled&lt;/span&gt;(url)
-
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#666&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
-		fmt.&lt;span style=&#34;color:#00f&#34;&gt;Println&lt;/span&gt;(err)
-		&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;return&lt;/span&gt;
-	}
-	fmt.&lt;span style=&#34;color:#00f&#34;&gt;Printf&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;\n\t-&amp;gt;✅ found: %s %q\n&amp;#34;&lt;/span&gt;, url, body)
-	&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; _, z &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;range&lt;/span&gt; urls {
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;		wg.&lt;span style=&#34;color:#00f&#34;&gt;Add&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;)
-&lt;/span&gt;
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;		&lt;span style=&#34;color:#00f&#34;&gt;Crawl&lt;/span&gt;(z, depth&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;, fetcher, wg)
-&lt;/span&gt;	}
-
-}
-
-&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#00f&#34;&gt;main&lt;/span&gt;() {
-&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	wg &lt;span style=&#34;color:#666&#34;&gt;:=&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;&amp;amp;&lt;/span&gt;sync.WaitGroup{}
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	wg.&lt;span style=&#34;color:#00f&#34;&gt;Add&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;)
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	&lt;span style=&#34;color:#00f&#34;&gt;Crawl&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;https://golang.org/&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;, fetcher, wg)
-&lt;/span&gt;&lt;span style=&#34;display:block;width:100%;background-color:#e5e5e5&#34;&gt;	wg.&lt;span style=&#34;color:#00f&#34;&gt;Wait&lt;/span&gt;()
-&lt;/span&gt;}&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;hr&gt;
-&lt;/div&gt;
-&lt;/div&gt;
 &lt;/div&gt;
 &lt;div class=&#34;sect1&#34;&gt;
 &lt;h2 id=&#34;_more_episodes&#34;&gt;📺 More Episodes…&lt;/h2&gt;

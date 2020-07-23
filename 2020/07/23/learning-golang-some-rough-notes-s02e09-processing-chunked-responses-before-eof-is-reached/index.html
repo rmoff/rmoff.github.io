@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Learning Golang (some rough notes) - S02E09 - Processing chunked responses before EOF is reached</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/07/23/learning-golang-some-rough-notes-s02e09-processing-chunked-responses-before-eof-is-reached/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.59.1" />
+
+		
+		<meta property="og:title" content="Learning Golang (some rough notes) - S02E09 - Processing chunked responses before EOF is reached" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/07/IMG_5284.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/07/23/learning-golang-some-rough-notes-s02e09-processing-chunked-responses-before-eof-is-reached/" />
+		<meta property="og:site_name" content="Learning Golang (some rough notes) - S02E09 - Processing chunked responses before EOF is reached" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/07/IMG_5284.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Learning Golang (some rough notes) - S02E09 - Processing chunked responses before EOF is reached</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-07-23T10:00:05&#43;01:00">Jul 23, 2020</time>
+								<span class="display-print">by Robin Moffatt</span>
+								 in <a href="https://rmoff.net/categories/go" class="no-underline category near-white dim">Go</a>, <a href="https://rmoff.net/categories/golang" class="no-underline category near-white dim">Golang</a>, <a href="https://rmoff.net/categories/chunked-response" class="no-underline category near-white dim">Chunked Response</a>, <a href="https://rmoff.net/categories/ksqldb" class="no-underline category near-white dim">KsqlDB</a>
+								<span class="display-print">at https://rmoff.net/2020/07/23/learning-golang-some-rough-notes-s02e09-processing-chunked-responses-before-eof-is-reached/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="@rmoff" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>The server sends <code>Transfer-Encoding: chunked</code> data, and you want to work with the data <strong>as you get it</strong>, instead of waiting for the server to finish, the EOF to fire, and <em>then</em> process the data?</p>
+</div>
+<div class="paragraph">
+<p>Here&#8217;s an example <code>curl</code> of the kind of session I&#8217;m talking about:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">➜ curl <span style="color: #000080">--verbose</span> <span style="color: #000080">--location</span> <span style="color: #d14">'http://localhost:8088/query'</span> <span style="color: #d14">\</span>
+<span style="color: #000080">--header</span> <span style="color: #d14">'Content-Type: application/vnd.ksql.v1+json; charset=utf-8'</span> <span style="color: #d14">\</span>
+<span style="color: #000080">--data-raw</span> <span style="color: #d14">'{
+    "ksql": "SELECT NAME, TS, CAPACITY, EMPTY_PLACES FROM CARPARK_EVENTS  WHERE  EMPTY_PLACES &gt; 100 emit changes;"
+}'</span>
+<span style="color: #000000;font-weight: bold">*</span>   Trying ::1...
+<span style="color: #000000;font-weight: bold">*</span> TCP_NODELAY <span style="color: #0086B3">set</span>
+<span style="color: #000000;font-weight: bold">*</span> Connected to localhost <span style="color: #000000;font-weight: bold">(</span>::1<span style="color: #000000;font-weight: bold">)</span> port 8088 <span style="color: #000000;font-weight: bold">(</span><span style="color: #999988;font-style: italic">#0)</span>
+<span style="color: #000000;font-weight: bold">&gt;</span> POST /query HTTP/1.1
+<span style="color: #000000;font-weight: bold">&gt;</span> Host: localhost:8088
+<span style="color: #000000;font-weight: bold">&gt;</span> User-Agent: curl/7.64.1
+<span style="color: #000000;font-weight: bold">&gt;</span> Accept: <span style="color: #000000;font-weight: bold">*</span>/<span style="color: #000000;font-weight: bold">*</span>
+<span style="color: #000000;font-weight: bold">&gt;</span> Content-Type: application/vnd.ksql.v1+json<span style="background-color: #f8f8f8">;</span> <span style="color: #008080">charset</span><span style="color: #000000;font-weight: bold">=</span>utf-8
+<span style="color: #000000;font-weight: bold">&gt;</span> Content-Length: 118
+<span style="color: #000000;font-weight: bold">&gt;</span>
+<span style="color: #000000;font-weight: bold">*</span> upload completely sent off: 118 out of 118 bytes
+&lt; HTTP/1.1 200 OK
+&lt; content-type: application/json
+&lt; Transfer-Encoding: chunked
+&lt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The API that I&#8217;m working with sends a complete JSON message, but spread over chunks. It starts with a header</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">[{</span><span style="color: #d14">"header"</span><span style="background-color: #f8f8f8">:{</span><span style="color: #d14">"queryId"</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">"none"</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">"schema"</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">"`NAME` STRING, `TS` BIGINT, `CAPACITY` INTEGER, `EMPTY_PLACES` INTEGER"</span><span style="background-color: #f8f8f8">}},</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then at some point - perhaps straight away, perhaps after a few seconds, you get some data</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span><span style="color: #d14">"row"</span><span style="background-color: #f8f8f8">:{</span><span style="color: #d14">"columns"</span><span style="background-color: #f8f8f8">:[</span><span style="color: #d14">"Westgate"</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">1595372100000</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">116</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">116</span><span style="background-color: #f8f8f8">]}},</span>
+<span style="background-color: #f8f8f8">{</span><span style="color: #d14">"row"</span><span style="background-color: #f8f8f8">:{</span><span style="color: #d14">"columns"</span><span style="background-color: #f8f8f8">:[</span><span style="color: #d14">"Burnett St"</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">1595372100000</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">122</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">117</span><span style="background-color: #f8f8f8">]}},</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then some empty rows</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then maybe some more data</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span><span style="color: #d14">"row"</span><span style="background-color: #f8f8f8">:{</span><span style="color: #d14">"columns"</span><span style="background-color: #f8f8f8">:[</span><span style="color: #d14">"Crown Court"</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">1595372100000</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">142</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">130</span><span style="background-color: #f8f8f8">]}},</span>
+<span style="background-color: #f8f8f8">{</span><span style="color: #d14">"row"</span><span style="background-color: #f8f8f8">:{</span><span style="color: #d14">"columns"</span><span style="background-color: #f8f8f8">:[</span><span style="color: #d14">"Leisure Exchange"</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">1595372100000</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">996</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">976</span><span style="background-color: #f8f8f8">]}},</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is from a <a href="https://ksqldb.io">streaming database</a>, and the idea is that the client can use the data as it&#8217;s continually sent. Contrast this to the standard request-response pattern of data consumption in which the request is fully satisfied before the client will process the response.</p>
+</div>
+<div class="paragraph">
+<p>From my Googling I came across two standard patterns for consuming JSON from a REST call:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>NewDecoder</code></p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">json</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">NewDecoder</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">resp</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Body</span><span style="background-color: #f8f8f8">)</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Decode</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+</li>
+<li>
+<p><code>Unmarshal</code></p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">json</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Unmarshal</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">resp</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Body</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>But I found that both of these <strong>blocked</strong> until the entire response had been received - which is not what I wanted. <a href="https://stackoverflow.com/a/22177737/350613">Courtesy of <code>chourobin</code></a> I found this solution. First up, create the client and request:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #999988;font-style: italic">// Prepare the request</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">url</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"http://localhost:8088/query"</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">method</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"POST"</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">k</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"SELECT NAME, TS, CAPACITY, EMPTY_PLACES FROM CARPARK_EVENTS  WHERE  EMPTY_PLACES &gt; "</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">strconv</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Itoa</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">c</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"  EMIT CHANGES;"</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">payload</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">strings</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">NewReader</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"{</span><span style="color: #d14">\"</span><span style="color: #d14">ksql</span><span style="color: #d14">\"</span><span style="color: #d14">:</span><span style="color: #d14">\"</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">k</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"</span><span style="color: #d14">\"</span><span style="color: #d14">}"</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #999988;font-style: italic">// Create the client</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">client</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">http</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Client</span><span style="background-color: #f8f8f8">{}</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">req</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">http</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">NewRequest</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">method</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">url</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">payload</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #000000;font-weight: bold">return</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">req</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Header</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Add</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Content-Type"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"application/vnd.ksql.v1+json; charset=utf-8"</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #999988;font-style: italic">// Make the request</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">res</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">client</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Do</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">req</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #000000;font-weight: bold">return</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+</span><span style="color: #000000;font-weight: bold">defer</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">res</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Body</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Close</span><span style="background-color: #f8f8f8">()</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now create a <code>NewReader</code> to consume the response:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">reader</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">bufio</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">NewReader</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">res</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Body</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And then run a loop which consumes the response a line at a time:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">doThis</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">true</span><span style="background-color: #f8f8f8">
+</span><span style="color: #000000;font-weight: bold">for</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">doThis</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #999988;font-style: italic">// Read the next chunk</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">lb</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">reader</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">ReadBytes</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">'\n'</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #999988;font-style: italic">// Got an error back (e.g. EOF), so exit the loop</span><span style="background-color: #f8f8f8">
+        </span><span style="background-color: #f8f8f8">doThis</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">false</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">else</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+        </span><span style="color: #999988;font-style: italic">// Do stuff with the response here</span><span style="background-color: #f8f8f8">
+        </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">Got some data:</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">lb</span><span style="background-color: #f8f8f8">))</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_about_the_json">What about the JSON?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>If you notice the example response shown above, the chunks are not self-contained JSON.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The header chunk opens an array:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">[{</span><span style="color: #d14">"header"</span><span style="background-color: #f8f8f8">:{</span><span style="color: #d14">"queryId"</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">"none"</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">"schema"</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">"`NAME` STRING, `TS` BIGINT, `CAPACITY` INTEGER, `EMPTY_PLACES` INTEGER"</span><span style="background-color: #f8f8f8">}},</span></code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Each row chunk is an array entry with trailing comma</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span><span style="color: #d14">"row"</span><span style="background-color: #f8f8f8">:{</span><span style="color: #d14">"columns"</span><span style="background-color: #f8f8f8">:[</span><span style="color: #d14">"Westgate"</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">1595372100000</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">116</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">116</span><span style="background-color: #f8f8f8">]}},</span></code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The inbound stream of Bytes is split into lines using <code>reader.ReadBytes('\n')</code>. This function takes a single byte as the token by which to split, but instead of splitting on <code>\n</code> (ASCII 13) alone, we actually want to split on <code>,\r\n</code> (ASCII 44, 10, 13) since we have the trailing comma to remove, and the CRLF as the delineator.</p>
+</div>
+<div class="paragraph">
+<p>Now, I <strong>think</strong> the proper option here is to use a <a href="https://golang.org/pkg/bufio/#Scanner"><code>Scanner</code></a> but for a quick win I instead did a dirty thing and just truncated slice by two bytes 🤢  (the first byte being <code>\n</code> which had already been removed by the <code>ReadBytes</code> function)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="color: #0086B3">len</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">lb</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8"> </span><span style="color: #009999">2</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">lb</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">lb</span><span style="background-color: #f8f8f8">[</span><span style="color: #000000;font-weight: bold">:</span><span style="color: #0086B3">len</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">lb</span><span style="background-color: #f8f8f8">)</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">2</span><span style="background-color: #f8f8f8">]</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can then take the slice of bytes and marshall the JSON into a Go variable. You need to declare this first, using a custom type—defining the type is easy using <a href="https://mholt.github.io/json-to-go/">this handy little tool</a>, into which you paste some sample JSON and it spits out the Go type defintion:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/07/jsontogo.png" alt="jsontogo">
+</div>
+</div>
+<div class="paragraph">
+<p>So taking this Go code:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">type</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ksqlDBMessageRow</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">struct</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+	</span><span style="background-color: #f8f8f8">Row</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">struct</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+		</span><span style="background-color: #f8f8f8">Columns</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">[]</span><span style="color: #000000;font-weight: bold">interface</span><span style="background-color: #f8f8f8">{}</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">`json:"columns"`</span><span style="background-color: #f8f8f8">
+	</span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">`json:"row"`</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>you declare the variable into which you&#8217;ll store the row that&#8217;s been read:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">var</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ksqlDBMessageRow</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #999988;font-style: italic">// …</span><span style="background-color: #f8f8f8">
+
+</span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">strings</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Contains</span><span style="background-color: #f8f8f8">(</span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">lb</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8"> </span><span style="color: #d14">"row"</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #999988;font-style: italic">// Looks like a Row, let's process it!</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">json</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Unmarshal</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">lb</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+        </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Error decoding JSON %v (%v)</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">lb</span><span style="background-color: #f8f8f8">),</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">err</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">}</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>From that you can then access the actual values in the payload itself:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">if</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Row</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Columns</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8"> </span><span style="color: #008080">nil</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">CARPARK</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Row</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Columns</span><span style="background-color: #f8f8f8">[</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">]</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">DATA_TS</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Row</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Columns</span><span style="background-color: #f8f8f8">[</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">]</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #445588;font-weight: bold">float64</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">CURRENT_EMPTY_PLACES</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Row</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Columns</span><span style="background-color: #f8f8f8">[</span><span style="color: #009999">2</span><span style="background-color: #f8f8f8">]</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #445588;font-weight: bold">float64</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">CAPACITY</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">r</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Row</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Columns</span><span style="background-color: #f8f8f8">[</span><span style="color: #009999">3</span><span style="background-color: #f8f8f8">]</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #445588;font-weight: bold">float64</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+    </span><span style="color: #999988;font-style: italic">// Handle the timestamp</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">t</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="color: #445588;font-weight: bold">int64</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">DATA_TS</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8"> </span><span style="color: #000000;font-weight: bold">:=</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">time</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Unix</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">t</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">1000</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+    </span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Carpark %v at %v has %v spaces available (capacity %v)</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">CARPARK</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">CURRENT_EMPTY_PLACES</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8"> </span><span style="background-color: #f8f8f8">CAPACITY</span><span style="background-color: #f8f8f8">)</span><span style="background-color: #f8f8f8">
+</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_more_episodes">📺 More Episodes…</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Kafka and Go</p>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="/2020/07/08/learning-golang-some-rough-notes-s02e00-kafka-and-go/">S02E00 - Kafka and Go</a></p>
+</li>
+<li>
+<p><a href="/2020/07/08/learning-golang-some-rough-notes-s02e01-my-first-kafka-go-producer/">S02E01 - My First Kafka Go Producer</a></p>
+</li>
+<li>
+<p><a href="/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/">S02E02 - Adding error handling to the Producer</a></p>
+</li>
+<li>
+<p><a href="/2020/07/14/learning-golang-some-rough-notes-s02e03-kafka-go-consumer-channel-based/">S02E03 - Kafka Go Consumer (Channel-based)</a></p>
+</li>
+<li>
+<p><a href="/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/">S02E04 - Kafka Go Consumer (Function-based)</a></p>
+</li>
+<li>
+<p><a href="/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/">S02E05 - Kafka Go AdminClient</a></p>
+</li>
+<li>
+<p><a href="/2020/07/15/learning-golang-some-rough-notes-s02e06-putting-the-producer-in-a-function-and-handling-errors-in-a-go-routine/">S02E06 - Putting the Producer in a function and handling errors in a Go routine</a></p>
+</li>
+<li>
+<p><a href="/2020/07/16/learning-golang-some-rough-notes-s02e07-splitting-go-code-into-separate-source-files-and-building-a-binary-executable/">S02E07 - Splitting Go code into separate source files and building a binary executable</a></p>
+</li>
+<li>
+<p><a href="/2020/07/17/learning-golang-some-rough-notes-s02e08-checking-kafka-advertised.listeners-with-go/">S02E08 - Checking Kafka advertised.listeners with Go</a></p>
+</li>
+<li>
+<p><a href="/2020/07/23/learning-golang-some-rough-notes-s02e09-processing-chunked-responses-before-eof-is-reached/">S02E09 - Processing chunked responses before EOF is reached</a></p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Learning Go</p>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="/2020/06/25/learning-golang-some-rough-notes-s01e00/">S01E00 - Background</a></p>
+</li>
+<li>
+<p><a href="/2020/06/25/learning-golang-some-rough-notes-s01e01-pointers/">S01E01 - Pointers</a></p>
+</li>
+<li>
+<p><a href="/2020/06/25/learning-golang-some-rough-notes-s01e02-slices/">S01E02 - Slices</a></p>
+</li>
+<li>
+<p><a href="/2020/06/29/learning-golang-some-rough-notes-s01e03-maps/">S01E03 - Maps</a></p>
+</li>
+<li>
+<p><a href="/2020/06/29/learning-golang-some-rough-notes-s01e04-function-closures/">S01E04 - Function Closures</a></p>
+</li>
+<li>
+<p><a href="/2020/06/30/learning-golang-some-rough-notes-s01e05-interfaces/">S01E05 - Interfaces</a></p>
+</li>
+<li>
+<p><a href="/2020/07/01/learning-golang-some-rough-notes-s01e06-errors/">S01E06 - Errors</a></p>
+</li>
+<li>
+<p><a href="/2020/07/01/learning-golang-some-rough-notes-s01e07-readers/">S01E07 - Readers</a></p>
+</li>
+<li>
+<p><a href="/2020/07/02/learning-golang-some-rough-notes-s01e08-images/">S01E08 - Images</a></p>
+</li>
+<li>
+<p><a href="/2020/07/02/learning-golang-some-rough-notes-s01e09-concurrency-channels-goroutines/">S01E09 - Concurrency (Channels, Goroutines)</a></p>
+</li>
+<li>
+<p><a href="/2020/07/03/learning-golang-some-rough-notes-s01e10-concurrency-web-crawler/">S01E10 - Concurrency (Web Crawler)</a></p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 Robin Moffatt
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
