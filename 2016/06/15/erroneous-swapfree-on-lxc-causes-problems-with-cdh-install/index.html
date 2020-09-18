@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Erroneous SwapFree on LXC causes problems with CDH install" />
@@ -85,20 +85,14 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<p>Installing CDH 5.7 on Linux Containers (LXC) hosted on Proxmox 4. Everything was going well until <strong>Cluster Setup</strong>, and which point it failed on <strong>Start YARN (MR2 included)</strong></p>
-
 <pre><code>Completed only 0/1 steps. First failure: Failed to execute command Start on service YARN (MR2 Included)
 </code></pre>
-
-<p><img src="/images/2016/06/cdh-yarn-01-1.png" alt="" /></p>
-
+<p><img src="/images/2016/06/cdh-yarn-01-1.png" alt=""></p>
 <p>Log <code>/var/log/hadoop-yarn/hadoop-cmf-yarn-NODEMANAGER-cdh57-01-node-02.moffatt.me.log.out</code> showed:</p>
-
 <pre><code>org.apache.hadoop.service.AbstractService: Service containers-monitor failed in state INITED; cause: java.lang.NumberFormatException: For input string: &quot;18446744073709550364&quot;
 java.lang.NumberFormatException: For input string: &quot;18446744073709550364&quot;
 </code></pre>
-
 <p>Looking down the stack trace, this came from <code>org.apache.hadoop.yarn.util.LinuxResourceCalculatorPlugin.readProcMemInfoFile</code>, which the <a href="http://grepcode.com/file/repo1.maven.org/maven2/org.apache.hadoop/hadoop-yarn-common/0.23.1/org/apache/hadoop/yarn/util/LinuxResourceCalculatorPlugin.java#LinuxResourceCalculatorPlugin.readProcMemInfoFile%28boolean%29">source code</a> shows is reading <code>/proc/meminfo</code>. Looking at this file on each node showed:</p>
-
 <pre><code>[root@cdh57-01-node-02 hadoop-yarn]# cat /proc/meminfo
 MemTotal:       24576000 kB
 MemFree:        22123008 kB
@@ -118,52 +112,38 @@ SwapTotal:             0 kB
 SwapFree:       18446744073709550384 kB
 Dirty:              2008 kB
 [...]
-</code></pre>
-
-<p>Erm &hellip; <strong>SwapFree</strong> is 16 <strong>million petabytes</strong>???</p>
-
+</code></pre><p>Erm &hellip; <strong>SwapFree</strong> is 16 <strong>million petabytes</strong>???</p>
 <p>In my LXC configuration in Proxmox I&rsquo;d set zero swap, thinking that disabling swap would be a good idea. Evidently not.</p>
-
-<p><img src="/images/2016/06/cdh-yarn-02.png" alt="" /></p>
-
+<p><img src="/images/2016/06/cdh-yarn-02.png" alt=""></p>
 <p>As soon as I updated the container Swap to 128Mb, the SwapFree looked better:</p>
-
 <pre><code>[root@cdh57-01-node-02 hadoop-yarn]# cat /proc/meminfo
 [...]
 SwapTotal:        131072 kB
 SwapFree:         129840 kB
 [...]
-</code></pre>
-
-<p>To apply this to all the six container nodes, I could have used the Proxmox web GUI, but took advantage of the CLI to save some time with a little bash iteration over the six container IDs (111 to 116) and the <code>pct set</code> command</p>
-
-<pre><code class="language-bash">for i in 11{1..6}; do pct set $i -swap 512;done
-</code></pre>
-
-<p>To check the value across each node at once, I used <a href="http://www.rittmanmead.com/2014/12/linux-cluster-sysadmin-parallel-command-execution-with-pdsh/">pdsh</a> from my laptop to run the same command on each node directly:</p>
-
-<pre><code class="language-bash">rmoff@asgard:~&gt; pdsh -l root -w cdh57-01-node-0[1-6] &quot;grep Swap /proc/meminfo&quot;|sort
-cdh57-01-node-01: SwapCached:            0 kB
-cdh57-01-node-01: SwapFree:         515496 kB
-cdh57-01-node-01: SwapTotal:        524288 kB
-cdh57-01-node-02: SwapCached:            0 kB
-cdh57-01-node-02: SwapFree:         523056 kB
-cdh57-01-node-02: SwapTotal:        524288 kB
-cdh57-01-node-03: SwapCached:            0 kB
-cdh57-01-node-03: SwapFree:         523476 kB
-cdh57-01-node-03: SwapTotal:        524288 kB
-cdh57-01-node-04: SwapCached:            0 kB
-cdh57-01-node-04: SwapFree:         523760 kB
-cdh57-01-node-04: SwapTotal:        524288 kB
-cdh57-01-node-05: SwapCached:            0 kB
-cdh57-01-node-05: SwapFree:         522272 kB
-cdh57-01-node-05: SwapTotal:        524288 kB
-cdh57-01-node-06: SwapCached:            0 kB
-cdh57-01-node-06: SwapFree:         519456 kB
-cdh57-01-node-06: SwapTotal:        524288 kB
-</code></pre>
-
-<p>From the Cloudera Manager <strong>Cluster Setup</strong> page I then clicked <strong>Retry</strong> and YARN came up successfully.</p>
+</code></pre><p>To apply this to all the six container nodes, I could have used the Proxmox web GUI, but took advantage of the CLI to save some time with a little bash iteration over the six container IDs (111 to 116) and the <code>pct set</code> command</p>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#008000;font-weight:bold">for</span> i in 11<span style="color:#666">{</span>1..6<span style="color:#666">}</span>; <span style="color:#008000;font-weight:bold">do</span> pct <span style="color:#008000">set</span> <span style="color:#19177c">$i</span> -swap 512;<span style="color:#008000;font-weight:bold">done</span>
+</code></pre></div><p>To check the value across each node at once, I used <a href="http://www.rittmanmead.com/2014/12/linux-cluster-sysadmin-parallel-command-execution-with-pdsh/">pdsh</a> from my laptop to run the same command on each node directly:</p>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">rmoff@asgard:~&gt; pdsh -l root -w cdh57-01-node-0<span style="color:#666">[</span>1-6<span style="color:#666">]</span> <span style="color:#ba2121">&#34;grep Swap /proc/meminfo&#34;</span>|sort
+cdh57-01-node-01: SwapCached:            <span style="color:#666">0</span> kB
+cdh57-01-node-01: SwapFree:         <span style="color:#666">515496</span> kB
+cdh57-01-node-01: SwapTotal:        <span style="color:#666">524288</span> kB
+cdh57-01-node-02: SwapCached:            <span style="color:#666">0</span> kB
+cdh57-01-node-02: SwapFree:         <span style="color:#666">523056</span> kB
+cdh57-01-node-02: SwapTotal:        <span style="color:#666">524288</span> kB
+cdh57-01-node-03: SwapCached:            <span style="color:#666">0</span> kB
+cdh57-01-node-03: SwapFree:         <span style="color:#666">523476</span> kB
+cdh57-01-node-03: SwapTotal:        <span style="color:#666">524288</span> kB
+cdh57-01-node-04: SwapCached:            <span style="color:#666">0</span> kB
+cdh57-01-node-04: SwapFree:         <span style="color:#666">523760</span> kB
+cdh57-01-node-04: SwapTotal:        <span style="color:#666">524288</span> kB
+cdh57-01-node-05: SwapCached:            <span style="color:#666">0</span> kB
+cdh57-01-node-05: SwapFree:         <span style="color:#666">522272</span> kB
+cdh57-01-node-05: SwapTotal:        <span style="color:#666">524288</span> kB
+cdh57-01-node-06: SwapCached:            <span style="color:#666">0</span> kB
+cdh57-01-node-06: SwapFree:         <span style="color:#666">519456</span> kB
+cdh57-01-node-06: SwapTotal:        <span style="color:#666">524288</span> kB
+</code></pre></div><p>From the Cloudera Manager <strong>Cluster Setup</strong> page I then clicked <strong>Retry</strong> and YARN came up successfully.</p>
 
 </article>
 
@@ -175,11 +155,9 @@ cdh57-01-node-06: SwapTotal:        524288 kB
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

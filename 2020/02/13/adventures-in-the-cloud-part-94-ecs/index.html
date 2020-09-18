@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Adventures in the Cloud, Part 94: ECS" />
@@ -85,35 +85,35 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<div class="paragraph">
-<p>My name&#8217;s Robin, and I&#8217;m a Developer Advocate. What that means in part is that I build a ton of demos, and Docker Compose is my jam. I love using Docker Compose for the same reasons that many people do:</p>
+<p>My name’s Robin, and I’m a Developer Advocate. What that means in part is that I build a ton of demos, and Docker Compose is my jam. I love using Docker Compose for the same reasons that many people do:</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>Spin up and tear down fully-functioning multi-component environments with ease. No bespoke builds, no cloning of VMs to preserve "that magic state where everything works"</p>
+<p>Spin up and tear down fully-functioning multi-component environments with ease. No bespoke builds, no cloning of VMs to preserve &#34;that magic state where everything works&#34;</p>
 </li>
 <li>
-<p>Repeatability. It&#8217;s the same each time.</p>
+<p>Repeatability. It’s the same each time.</p>
 </li>
 <li>
-<p>Portability. I can point someone at a <code>docker-compose.yml</code> that I&#8217;ve written and they can run the same on their machine with the same results almost guaranteed.</p>
+<p>Portability. I can point someone at a <code>docker-compose.yml</code> that I’ve written and they can run the same on their machine with the same results almost guaranteed.</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>So, I use Docker Compose all the time. And soon I have a <a href="https://qconlondon.com/london2020/workshop/kafka">workshop to run</a> which is exciting but daunting as now I have fifty people to coach through using Docker on their laptops. Laptops which are guaranteed not to all be the lovely piece of 15" 32GB MacBook Pro hardware that Confluent equip their staff with. Instead there&#8217;ll also be Linux (fine but figure it out yourself), and Windows. Ah, Windows. And not only Windows, but often corporate laptops running Windows with the inevitable security provisions in place to mean that they&#8217;re bugger all use for running anything other than MS Excel—and definitely not Docker.</p>
+<p>So, I use Docker Compose all the time. And soon I have a <a href="https://qconlondon.com/london2020/workshop/kafka">workshop to run</a> which is exciting but daunting as now I have fifty people to coach through using Docker on their laptops. Laptops which are guaranteed not to all be the lovely piece of 15&#34; 32GB MacBook Pro hardware that Confluent equip their staff with. Instead there’ll also be Linux (fine but figure it out yourself), and Windows. Ah, Windows. And not only Windows, but often corporate laptops running Windows with the inevitable security provisions in place to mean that they’re bugger all use for running anything other than MS Excel—and definitely not Docker.</p>
 </div>
 <div class="paragraph">
-<p>What to do? Well, Cloud. Cloud is always the answer, if you ask the right question. And here I feel Cloud <strong>should</strong> be the answer. Can&#8217;t I provision a bunch of containers up in the Cloud that people can then connect to simply from their laptops, and all they need then is a SSH client?</p>
+<p>What to do? Well, Cloud. Cloud is always the answer, if you ask the right question. And here I feel Cloud <strong>should</strong> be the answer. Can’t I provision a bunch of containers up in the Cloud that people can then connect to simply from their laptops, and all they need then is a SSH client?</p>
 </div>
 <div class="paragraph">
-<p>But here&#8217;s the rub:</p>
+<p>But here’s the rub:</p>
 </div>
 <div class="paragraph">
-<p>I build all my material in Docker Compose, locally, on my laptop. Docker is <em>perfect</em> for that. <strong>I don&#8217;t want to build something twice</strong>. I realise there&#8217;s <em>Terraform and chef and ansible and puppet and kerplunk and uno and a bunch of others tools that I could use and only some of which I&#8217;ve made up</em>. But the moment I start building something with them, I am now maintaining two code bases. One locally to run Docker Compose on my laptop, one in <code>&lt;other tool&gt;</code> for spinning up the stack in the Cloud.</p>
+<p>I build all my material in Docker Compose, locally, on my laptop. Docker is <em>perfect</em> for that. <strong>I don’t want to build something twice</strong>. I realise there’s <em>Terraform and chef and ansible and puppet and kerplunk and uno and a bunch of others tools that I could use and only some of which I’ve made up</em>. But the moment I start building something with them, I am now maintaining two code bases. One locally to run Docker Compose on my laptop, one in <code>&lt;other tool&gt;</code> for spinning up the stack in the Cloud.</p>
 </div>
 <div class="paragraph">
-<p>So join me on this adventure, as I figure out how to take this Docker Compose which runs beautifully on my laptop, and get it to run in Amazon&#8217;s Elastic Container Service (ECS). What&#8217;s more, at the end of it all, it still runs on my laptop too!</p>
+<p>So join me on this adventure, as I figure out how to take this Docker Compose which runs beautifully on my laptop, and get it to run in Amazon’s Elastic Container Service (ECS). What’s more, at the end of it all, it still runs on my laptop too!</p>
 </div>
 <div class="sect1">
 <h2 id="_ecs_wossat">ECS, wossat?</h2>
@@ -126,17 +126,17 @@
 </blockquote>
 </div>
 <div class="paragraph">
-<p>Sounds fancy, and it probably is. I&#8217;m going to bastardise it and abuse it and get it to not really do what it was intended for, but pretty much works at doing anyway. Because in amongst the ECS functionality is this little gem: <a href="https://aws.amazon.com/about-aws/whats-new/2018/06/amazon-ecs-cli-supports-docker-compose-version-3/">Amazon ECS CLI Supports Docker Compose Version 3</a>. By using the provided command-line tool, you can use an existing Docker Compose file and have ECS run it for you.</p>
+<p>Sounds fancy, and it probably is. I’m going to bastardise it and abuse it and get it to not really do what it was intended for, but pretty much works at doing anyway. Because in amongst the ECS functionality is this little gem: <a href="https://aws.amazon.com/about-aws/whats-new/2018/06/amazon-ecs-cli-supports-docker-compose-version-3/">Amazon ECS CLI Supports Docker Compose Version 3</a>. By using the provided command-line tool, you can use an existing Docker Compose file and have ECS run it for you.</p>
 </div>
 <div class="paragraph">
-<p>ECS takes Docker images and runs and orchestrates them for you (i.e. makes sure stuff is running in the place and quantity that you want and manages that process). It can run the Docker containers on an EC2 instance that you provision and can access, or it can run them on <a href="https://aws.amazon.com/fargate/">Fargate</a>. I&#8217;m using EC2; my spidey-sense tells me that what I&#8217;m trying to do only just works with EC2 and almost certainly wouldn&#8217;t with Fargate.</p>
+<p>ECS takes Docker images and runs and orchestrates them for you (i.e. makes sure stuff is running in the place and quantity that you want and manages that process). It can run the Docker containers on an EC2 instance that you provision and can access, or it can run them on <a href="https://aws.amazon.com/fargate/">Fargate</a>. I’m using EC2; my spidey-sense tells me that what I’m trying to do only just works with EC2 and almost certainly wouldn’t with Fargate.</p>
 </div>
 <div class="paragraph">
 <p>Within ECS you provision a <strong>Cluster</strong>, which has one or more <strong>Container instances</strong> (such as an EC2 machine) on which stuff runs. The stuff that runs is called <strong>Tasks</strong>, and these are translated from <strong>Task Definitions</strong>. The secret-sauce that we have here is that ECS can take a Docker Compose file and translate it into task definitions, which it then runs.</p>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/02/ecs01.png" alt="ecs01">
+<img src="/images/2020/02/ecs01.png" alt="ecs01"/>
 </div>
 </div>
 <div class="paragraph">
@@ -144,7 +144,7 @@
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/02/ecs02.png" alt="ecs02">
+<img src="/images/2020/02/ecs02.png" alt="ecs02"/>
 </div>
 </div>
 <div class="paragraph">
@@ -156,34 +156,34 @@
 <h2 id="_getting_started_with_ecs">Getting started with ECS</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Make sure you&#8217;ve got both the <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html">AWS CLI</a> and the <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_CLI_installation.html">ECS CLI</a>.</p>
+<p>Make sure you’ve got both the <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html">AWS CLI</a> and the <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_CLI_installation.html">ECS CLI</a>.</p>
 </div>
 <div class="admonitionblock note">
 <table>
-<tr>
+<tbody><tr>
 <td class="icon">
 <div class="title">Note</div>
 </td>
 <td class="content">
-Whilst you can manage ECS using the AWS CLI, there is some magic stuff in the ECS CLI that isn&#8217;t in the AWS CLI 🤪
+Whilst you can manage ECS using the AWS CLI, there is some magic stuff in the ECS CLI that isn’t in the AWS CLI 🤪
 </td>
 </tr>
-</table>
+</tbody></table>
 </div>
 <div class="paragraph">
-<p>You&#8217;ll need the access key and secret key for your AWS account. Run <code>aws2 configure</code> to set this up in the AWS CLI, and then run this to configure the ECS CLI:</p>
+<p>You’ll need the access key and secret key for your AWS account. Run <code>aws2 configure</code> to set this up in the AWS CLI, and then run this to configure the ECS CLI:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ ecs-cli configure profile --access-key XXXXXX --secret-key YYYYY</code></pre></div>
 </div>
 <div class="paragraph">
-<p>Since we&#8217;re using EC2 on which to run these Docker containers, we&#8217;ll probably want to SSH onto the machine to have a poke around and see what&#8217;s what. For that, we&#8217;ll need an SSH keypair. Let&#8217;s create one now.</p>
+<p>Since we’re using EC2 on which to run these Docker containers, we’ll probably want to SSH onto the machine to have a poke around and see what’s what. For that, we’ll need an SSH keypair. Let’s create one now.</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ aws2 ec2 create-key-pair --key-name rmoff-qcon-ldn-workshop</code></pre></div>
 </div>
 <div class="paragraph">
-<p>You&#8217;ll get back the private key - keep this safe and don&#8217;t share it with anyone. Note that there are <code>\n</code> control characters that you&#8217;ll need to convert into actual line breaks when you write this as a private key file to use with SSH.</p>
+<p>You’ll get back the private key - keep this safe and don’t share it with anyone. Note that there are <code>\n</code> control characters that you’ll need to convert into actual line breaks when you write this as a private key file to use with SSH.</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#666">{</span>
@@ -194,7 +194,7 @@ Whilst you can manage ECS using the AWS CLI, there is some magic stuff in the EC
 <span style="color:#666">}</span></code></pre></div>
 </div>
 <div class="paragraph">
-<p>Now let&#8217;s provision some tin on which our containers can run.</p>
+<p>Now let’s provision some tin on which our containers can run.</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ ecs-cli up --cluster qcon-ldn-workshop <span style="color:#b62;font-weight:bold">\
@@ -207,15 +207,15 @@ Whilst you can manage ECS using the AWS CLI, there is some magic stuff in the EC
 </div>
 <div class="admonitionblock note">
 <table>
-<tr>
+<tbody><tr>
 <td class="icon">
 <div class="title">Note</div>
 </td>
 <td class="content">
-Choose your instance type carefully - initially, I just picked one that sounded good and ended up with <code>a1.xlarge</code>. Unfortunately for me this has an ARM-based processor and some of the Docker images that I was using wouldn&#8217;t work on this architecture (they error with <code>STOPPED Reason: CannotPullContainerError: no matching manifest for linux/arm64/v8 in the manifest list entries</code>)
+Choose your instance type carefully - initially, I just picked one that sounded good and ended up with <code>a1.xlarge</code>. Unfortunately for me this has an ARM-based processor and some of the Docker images that I was using wouldn’t work on this architecture (they error with <code>STOPPED Reason: CannotPullContainerError: no matching manifest for linux/arm64/v8 in the manifest list entries</code>)
 </td>
 </tr>
-</table>
+</tbody></table>
 </div>
 <div class="paragraph">
 <p>This ECS CLI command does two things:</p>
@@ -223,7 +223,7 @@ Choose your instance type carefully - initially, I just picked one that sounded 
 <div class="ulist">
 <ul>
 <li>
-<p>Create an <em>ECS Cluster</em> - a logical thing into which we&#8217;ll deploy and manage our Docker containers</p>
+<p>Create an <em>ECS Cluster</em> - a logical thing into which we’ll deploy and manage our Docker containers</p>
 </li>
 <li>
 <p>Create one or more <em>Container instances</em> — the EC2 boxes on which the Docker containers will run</p>
@@ -238,11 +238,11 @@ Choose your instance type carefully - initially, I just picked one that sounded 
 </ul>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">INFO<span style="color:#666">[</span><span style="color:#666">0001</span><span style="color:#666">]</span> Using recommended Amazon Linux <span style="color:#666">2</span> AMI with ECS Agent <span style="color:#666">1</span>.36.1 and Docker version <span style="color:#666">18</span>.09.9-ce
-INFO<span style="color:#666">[</span><span style="color:#666">0002</span><span style="color:#666">]</span> Created cluster                               <span style="color:#19177c">cluster</span><span style="color:#666">=</span>qcon-ldn-workshop <span style="color:#19177c">region</span><span style="color:#666">=</span>us-east-1
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Waiting <span style="color:#008000;font-weight:bold">for</span> your cluster resources to be created...
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Cloudformation stack status                   <span style="color:#19177c">stackStatus</span><span style="color:#666">=</span>CREATE_IN_PROGRESS
-INFO<span style="color:#666">[</span><span style="color:#666">0066</span><span style="color:#666">]</span> Cloudformation stack status                   <span style="color:#19177c">stackStatus</span><span style="color:#666">=</span>CREATE_IN_PROGRESS
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">INFO<span style="color:#666">[</span>0001<span style="color:#666">]</span> Using recommended Amazon Linux <span style="color:#666">2</span> AMI with ECS Agent 1.36.1 and Docker version 18.09.9-ce
+INFO<span style="color:#666">[</span>0002<span style="color:#666">]</span> Created cluster                               <span style="color:#19177c">cluster</span><span style="color:#666">=</span>qcon-ldn-workshop <span style="color:#19177c">region</span><span style="color:#666">=</span>us-east-1
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Waiting <span style="color:#008000;font-weight:bold">for</span> your cluster resources to be created...
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Cloudformation stack status                   <span style="color:#19177c">stackStatus</span><span style="color:#666">=</span>CREATE_IN_PROGRESS
+INFO<span style="color:#666">[</span>0066<span style="color:#666">]</span> Cloudformation stack status                   <span style="color:#19177c">stackStatus</span><span style="color:#666">=</span>CREATE_IN_PROGRESS
 VPC created: vpc-02f6b2c8501a92f47
 Security Group created: sg-0385e8d8893e00cf3
 Subnet created: subnet-0a2c391d4ffdefbb0
@@ -279,7 +279,7 @@ $ aws2 cloudformation list-stacks |jq <span style="color:#ba2121">&#39;.&#39;</s
 <span style="color:#666">}</span></code></pre></div>
 </div>
 <div class="paragraph">
-<p>So we&#8217;ve now built ourselves an ECS cluster, ready to run our Docker containers—the definitions for which come from a Docker Compose</p>
+<p>So we’ve now built ourselves an ECS cluster, ready to run our Docker containers—the definitions for which come from a Docker Compose</p>
 </div>
 </div>
 </div>
@@ -287,15 +287,15 @@ $ aws2 cloudformation list-stacks |jq <span style="color:#ba2121">&#39;.&#39;</s
 <h2 id="_running_docker_compose_on_ecs">Running Docker Compose on ECS</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Let&#8217;s start with a simple example, taken from the ECS CLI docs. Create a new folder (e.g. <code>ecs-compose-test</code>) and a <code>docker-compose.yml</code> file within it:</p>
+<p>Let’s start with a simple example, taken from the ECS CLI docs. Create a new folder (e.g. <code>ecs-compose-test</code>) and a <code>docker-compose.yml</code> file within it:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">version:<span style="color:#bbb"> </span><span style="color:#ba2121">&#39;2&#39;</span><span style="color:#bbb">
-</span><span style="color:#bbb"></span>services:<span style="color:#bbb">
-</span><span style="color:#bbb">  </span>web:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>image:<span style="color:#bbb"> </span>amazon/amazon-ecs-sample<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>ports:<span style="color:#bbb">
-</span><span style="color:#bbb">     </span>-<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;80:80&#34;</span></code></pre></div>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#008000;font-weight:bold">version</span>:<span style="color:#bbb"> </span><span style="color:#ba2121">&#39;2&#39;</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#008000;font-weight:bold">services</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">web</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">image</span>:<span style="color:#bbb"> </span>amazon/amazon-ecs-sample<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">     </span>- <span style="color:#ba2121">&#34;80:80&#34;</span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>For fun, run it locally first just to show that it works:</p>
@@ -320,19 +320,19 @@ web_1  | AH00558: apache2: Could not reliably determine the server<span style="c
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/02/ecs-compose-test_local.png" alt="ecs compose test local">
+<img src="/images/2020/02/ecs-compose-test_local.png" alt="ecs compose test local"/>
 </div>
 </div>
 <div class="paragraph">
-<p>Now let&#8217;s run it in the cloud. Whilst you can just use <code>ecs-cli compose up</code> we&#8217;re going to run it in two stages here to understand what&#8217;s going on.</p>
+<p>Now let’s run it in the cloud. Whilst you can just use <code>ecs-cli compose up</code> we’re going to run it in two stages here to understand what’s going on.</p>
 </div>
 <div class="olist arabic">
 <ol class="arabic">
 <li>
-<p>Use <code>ecs-cli compose create</code> to parse the Docker Compose into an ECS <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definitions.html"><em>task definition</em></a>. This doesn&#8217;t execute anything yet.</p>
+<p>Use <code>ecs-cli compose create</code> to parse the Docker Compose into an ECS <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definitions.html"><em>task definition</em></a>. This doesn’t execute anything yet.</p>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ ecs-cli compose create
-INFO<span style="color:#666">[</span><span style="color:#666">0001</span><span style="color:#666">]</span> Using ECS task definition                     <span style="color:#19177c">TaskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;ecs-compose-test:1&#34;</span></code></pre></div>
+INFO<span style="color:#666">[</span>0001<span style="color:#666">]</span> Using ECS task definition                     <span style="color:#19177c">TaskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;ecs-compose-test:1&#34;</span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>This has created a task definition which we can inspect:</p>
@@ -354,45 +354,45 @@ $ aws2 ecs describe-task-definition <span style="color:#b62;font-weight:bold">\
             <span style="color:#666">{</span>
                 <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;web&#34;</span>,
                 <span style="color:#ba2121">&#34;image&#34;</span>: <span style="color:#ba2121">&#34;amazon/amazon-ecs-sample&#34;</span>,
-                <span style="color:#ba2121">&#34;cpu&#34;</span>: <span style="color:#666">0</span>,
-                <span style="color:#ba2121">&#34;memory&#34;</span>: <span style="color:#666">512</span>,
+                <span style="color:#ba2121">&#34;cpu&#34;</span>: 0,
+                <span style="color:#ba2121">&#34;memory&#34;</span>: 512,
                 <span style="color:#ba2121">&#34;links&#34;</span>: <span style="color:#666">[]</span>,
                 <span style="color:#ba2121">&#34;portMappings&#34;</span>: <span style="color:#666">[</span>
                     <span style="color:#666">{</span>
-                        <span style="color:#ba2121">&#34;containerPort&#34;</span>: <span style="color:#666">80</span>,
-                        <span style="color:#ba2121">&#34;hostPort&#34;</span>: <span style="color:#666">80</span>,
+                        <span style="color:#ba2121">&#34;containerPort&#34;</span>: 80,
+                        <span style="color:#ba2121">&#34;hostPort&#34;</span>: 80,
                         <span style="color:#ba2121">&#34;protocol&#34;</span>: <span style="color:#ba2121">&#34;tcp&#34;</span>
                     <span style="color:#666">}</span>
                 <span style="color:#666">]</span>,
 …                </code></pre></div>
 </div>
 <div class="paragraph">
-<p>So it&#8217;s taken the Docker Compose and translated it into a <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html">task definition</a>.</p>
+<p>So it’s taken the Docker Compose and translated it into a <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html">task definition</a>.</p>
 </div>
 </li>
 <li>
 <p>With this task definition created, we can now set it to run on the ECS cluster that we created above:</p>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ ecs-cli compose start --cluster qcon-ldn-workshop
-INFO<span style="color:#666">[</span><span style="color:#666">0001</span><span style="color:#666">]</span> Using ECS task definition                     <span style="color:#19177c">TaskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;ecs-compose-test:1&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0001</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>5c1e40ca-88c2-4463-949e-91c68e103f3f/web
-INFO<span style="color:#666">[</span><span style="color:#666">0001</span><span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>5c1e40ca-88c2-4463-949e-91c68e103f3f/web <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;ecs-compose-test:1&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0014</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>5c1e40ca-88c2-4463-949e-91c68e103f3f/web <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;ecs-compose-test:1&#34;</span></code></pre></div>
+INFO<span style="color:#666">[</span>0001<span style="color:#666">]</span> Using ECS task definition                     <span style="color:#19177c">TaskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;ecs-compose-test:1&#34;</span>
+INFO<span style="color:#666">[</span>0001<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>5c1e40ca-88c2-4463-949e-91c68e103f3f/web
+INFO<span style="color:#666">[</span>0001<span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>5c1e40ca-88c2-4463-949e-91c68e103f3f/web <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;ecs-compose-test:1&#34;</span>
+INFO<span style="color:#666">[</span>0014<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>5c1e40ca-88c2-4463-949e-91c68e103f3f/web <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;ecs-compose-test:1&#34;</span></code></pre></div>
 </div>
 <div class="paragraph">
-<p>Notice here that it says <strong><code>desiredStatus</code></strong> and <strong><code>lastStatus</code></strong> - that&#8217;s the <em>orchestration</em> at work, because ECS isn&#8217;t just going to fire &amp; forget. It knows what <em>should</em> be running, and it&#8217;ll keep an eye on things to make sure that they are.</p>
+<p>Notice here that it says <strong><code>desiredStatus</code></strong> and <strong><code>lastStatus</code></strong> - that’s the <em>orchestration</em> at work, because ECS isn’t just going to fire &amp; forget. It knows what <em>should</em> be running, and it’ll keep an eye on things to make sure that they are.</p>
 </div>
 <div class="paragraph">
-<p>Let&#8217;s check that the test worked. When we created the ECS cluster and associated EC2 instance above we specified <code>--port 22</code> to be opened up on the firewall for inbound connections. So that we can check the test web site is working we need to access port 80 on the EC2 instance, so we&#8217;ll use the wonderful SSH port forwarding function:</p>
+<p>Let’s check that the test worked. When we created the ECS cluster and associated EC2 instance above we specified <code>--port 22</code> to be opened up on the firewall for inbound connections. So that we can check the test web site is working we need to access port 80 on the EC2 instance, so we’ll use the wonderful SSH port forwarding function:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">ssh  -L <span style="color:#666">8080</span>:localhost:80 <span style="color:#b62;font-weight:bold">\
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">ssh  -L 8080:localhost:80 <span style="color:#b62;font-weight:bold">\
 </span><span style="color:#b62;font-weight:bold"></span>     -i rmoff-qcon-ldn-workshop.rsa <span style="color:#b62;font-weight:bold">\
 </span><span style="color:#b62;font-weight:bold"></span>     ec2-user@34.201.131.235</code></pre></div>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/02/ecs-compose-test_ecs.png" alt="ecs compose test ecs">
+<img src="/images/2020/02/ecs-compose-test_ecs.png" alt="ecs compose test ecs"/>
 </div>
 </div>
 </li>
@@ -427,7 +427,7 @@ INFO<span style="color:#666">[</span><span style="color:#666">0014</span><span s
     <span style="color:#666">{</span>
       <span style="color:#ba2121">&#34;containerInstanceArn&#34;</span>: <span style="color:#ba2121">&#34;arn:aws:ecs:us-east-1:523370736235:container-instance/bfedb3c3-ace9-4476-a119-d234ce59dfda&#34;</span>,
       <span style="color:#ba2121">&#34;ec2InstanceId&#34;</span>: <span style="color:#ba2121">&#34;i-0b59c0f85fe1eea7c&#34;</span>,
-      <span style="color:#ba2121">&#34;version&#34;</span>: <span style="color:#666">6</span>,
+      <span style="color:#ba2121">&#34;version&#34;</span>: 6,
       <span style="color:#ba2121">&#34;versionInfo&#34;</span>: <span style="color:#666">{</span>
         <span style="color:#ba2121">&#34;agentVersion&#34;</span>: <span style="color:#ba2121">&#34;1.36.1&#34;</span>,
         <span style="color:#ba2121">&#34;agentHash&#34;</span>: <span style="color:#ba2121">&#34;f199a183&#34;</span>,
@@ -437,8 +437,8 @@ INFO<span style="color:#666">[</span><span style="color:#666">0014</span><span s
         <span style="color:#666">{</span>
           <span style="color:#ba2121">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;CPU&#34;</span>,
           <span style="color:#ba2121">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;INTEGER&#34;</span>,
-          <span style="color:#ba2121">&#34;doubleValue&#34;</span>: <span style="color:#666">0</span>,
-          <span style="color:#ba2121">&#34;longValue&#34;</span>: <span style="color:#666">0</span>,
+          <span style="color:#ba2121">&#34;doubleValue&#34;</span>: 0,
+          <span style="color:#ba2121">&#34;longValue&#34;</span>: 0,
           <span style="color:#ba2121">&#34;integerValue&#34;</span>: <span style="color:#666">4096</span>
         <span style="color:#666">}</span>,</code></pre></div>
 </div>
@@ -470,11 +470,11 @@ INFO<span style="color:#666">[</span><span style="color:#666">0014</span><span s
 <div class="sect2">
 <h3 id="_a_poke_under_the_covers_can_we">A poke under the covers? Can we?</h3>
 <div class="paragraph">
-<p>With all this magical orchestration, it&#8217;s possible to forget about where this stuff runs. But if you SSH onto the EC2 <code>container instance</code> you&#8217;ll find it&#8217;s "just" a box running Docker - but with some clever ECS bits to make it all work:</p>
+<p>With all this magical orchestration, it’s possible to forget about where this stuff runs. But if you SSH onto the EC2 <code>container instance</code> you’ll find it’s &#34;just&#34; a box running Docker - but with some clever ECS bits to make it all work:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ ssh  -i rmoff-qcon-ldn-workshop.rsa ec2-user@34.201.131.235
-Last login: Tue Feb <span style="color:#666">11</span> <span style="color:#666">23</span>:48:52 <span style="color:#666">2020</span> from foo.bar.somewhere
+Last login: Tue Feb <span style="color:#666">11</span> 23:48:52 <span style="color:#666">2020</span> from foo.bar.somewhere
 
    __|  __|  __|
    _|  <span style="color:#666">(</span>   <span style="color:#b62;font-weight:bold">\_</span>_ <span style="color:#b62;font-weight:bold">\ </span>  Amazon Linux <span style="color:#666">2</span> <span style="color:#666">(</span>ECS Optimized<span style="color:#666">)</span>
@@ -491,35 +491,35 @@ Run <span style="color:#ba2121">&#34;sudo yum update&#34;</span> to apply all up
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#666">[</span>ec2-user@ip-10-0-0-135 ~<span style="color:#666">]</span>$ docker ps
 CONTAINER ID        IMAGE                            COMMAND                  CREATED             STATUS                       PORTS                NAMES
-2a93fd8eb058        amazon/amazon-ecs-sample         <span style="color:#ba2121">&#34;/usr/sbin/apache2 -…&#34;</span>   <span style="color:#666">33</span> minutes ago      Up <span style="color:#666">33</span> minutes                <span style="color:#666">0</span>.0.0.0:80-&gt;80/tcp   ecs-ecs-compose-test-1-web-dc899799ec95ecf42100
+2a93fd8eb058        amazon/amazon-ecs-sample         <span style="color:#ba2121">&#34;/usr/sbin/apache2 -…&#34;</span>   <span style="color:#666">33</span> minutes ago      Up <span style="color:#666">33</span> minutes                0.0.0.0:80-&gt;80/tcp   ecs-ecs-compose-test-1-web-dc899799ec95ecf42100
 5f4c1d77376c        amazon/amazon-ecs-agent:latest   <span style="color:#ba2121">&#34;/agent&#34;</span>                 About an hour ago   Up About an hour <span style="color:#666">(</span>healthy<span style="color:#666">)</span>                        ecs-agent</code></pre></div>
 </div>
 <div class="paragraph">
-<p>And if things aren&#8217;t working as you want them to, you can inspect the logs for each container:</p>
+<p>And if things aren’t working as you want them to, you can inspect the logs for each container:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#666">[</span>ec2-user@ip-10-0-0-135 ~<span style="color:#666">]</span>$ docker logs -f ecs-ecs-compose-test-1-web-dc899799ec95ecf42100
 AH00558: apache2: Could not reliably determine the server<span style="color:#ba2121">&#39;s fully qualified domain name, using 172.17.0.2. Set the &#39;</span>ServerName<span style="">&#39;</span> directive globally to suppress this message</code></pre></div>
 </div>
 <div class="paragraph">
-<p>You can even install your own stuff, not that you should except for helping with troubleshooting early stages and figuring out what&#8217;s going on</p>
+<p>You can even install your own stuff, not that you should except for helping with troubleshooting early stages and figuring out what’s going on</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ sudo yum install -y htop</code></pre></div>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/02/htop.png" alt="htop">
+<img src="/images/2020/02/htop.png" alt="htop"/>
 </div>
 </div>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_lets_run_some_stuff_for_real_now">Let&#8217;s run some stuff for real now!</h2>
+<h2 id="_lets_run_some_stuff_for_real_now">Let’s run some stuff for real now!</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>OK, let&#8217;s. You can find the Docker Compose that I had built <a href="https://github.com/confluentinc/demo-scene/blob/streaming-jan2020-update/build-a-streaming-pipeline/docker-compose.yml">here</a>, in its initial incarnation. It spins up a stack made up of:</p>
+<p>OK, let’s. You can find the Docker Compose that I had built <a href="https://github.com/confluentinc/demo-scene/blob/streaming-jan2020-update/build-a-streaming-pipeline/docker-compose.yml">here</a>, in its initial incarnation. It spins up a stack made up of:</p>
 </div>
 <div class="ulist">
 <ul>
@@ -550,41 +550,41 @@ AH00558: apache2: Could not reliably determine the server<span style="color:#ba2
 <p>Each of the distributed components (Kafka, etc) just have a single node—this is a sandbox, after all.</p>
 </div>
 <div class="paragraph">
-<p>First let&#8217;s see it succeed, and then let&#8217;s understand what that journey looked like. Spin the stack up using my <a href="https://github.com/confluentinc/demo-scene/blob/streaming-jan2020-update/build-a-streaming-pipeline/docker-compose.yml">docker-compose.yml</a>:</p>
+<p>First let’s see it succeed, and then let’s understand what that journey looked like. Spin the stack up using my <a href="https://github.com/confluentinc/demo-scene/blob/streaming-jan2020-update/build-a-streaming-pipeline/docker-compose.yml">docker-compose.yml</a>:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ <span style="color:#008000">cd</span> ~/git/demo-scene/build-a-streaming-pipeline
 $ ecs-cli compose up --cluster qcon-ldn-workshop
-WARN<span style="color:#666">[</span><span style="color:#666">0000</span><span style="color:#666">]</span> Skipping unsupported YAML option <span style="color:#008000;font-weight:bold">for</span> service...  option <span style="color:#19177c">name</span><span style="color:#666">=</span>container_name service <span style="color:#19177c">name</span><span style="color:#666">=</span>elasticsearch
-WARN<span style="color:#666">[</span><span style="color:#666">0000</span><span style="color:#666">]</span> Skipping unsupported YAML option <span style="color:#008000;font-weight:bold">for</span> service...  option <span style="color:#19177c">name</span><span style="color:#666">=</span>container_name service <span style="color:#19177c">name</span><span style="color:#666">=</span>kafka
-WARN<span style="color:#666">[</span><span style="color:#666">0000</span><span style="color:#666">]</span> Skipping unsupported YAML option <span style="color:#008000;font-weight:bold">for</span> service...  option <span style="color:#19177c">name</span><span style="color:#666">=</span>depends_on service <span style="color:#19177c">name</span><span style="color:#666">=</span>kafka
-WARN<span style="color:#666">[</span><span style="color:#666">0000</span><span style="color:#666">]</span> Skipping unsupported YAML option <span style="color:#008000;font-weight:bold">for</span> service...  option <span style="color:#19177c">name</span><span style="color:#666">=</span>container_name service <span style="color:#19177c">name</span><span style="color:#666">=</span>kafka-connect-01
+WARN<span style="color:#666">[</span>0000<span style="color:#666">]</span> Skipping unsupported YAML option <span style="color:#008000;font-weight:bold">for</span> service...  option <span style="color:#19177c">name</span><span style="color:#666">=</span>container_name service <span style="color:#19177c">name</span><span style="color:#666">=</span>elasticsearch
+WARN<span style="color:#666">[</span>0000<span style="color:#666">]</span> Skipping unsupported YAML option <span style="color:#008000;font-weight:bold">for</span> service...  option <span style="color:#19177c">name</span><span style="color:#666">=</span>container_name service <span style="color:#19177c">name</span><span style="color:#666">=</span>kafka
+WARN<span style="color:#666">[</span>0000<span style="color:#666">]</span> Skipping unsupported YAML option <span style="color:#008000;font-weight:bold">for</span> service...  option <span style="color:#19177c">name</span><span style="color:#666">=</span>depends_on service <span style="color:#19177c">name</span><span style="color:#666">=</span>kafka
+WARN<span style="color:#666">[</span>0000<span style="color:#666">]</span> Skipping unsupported YAML option <span style="color:#008000;font-weight:bold">for</span> service...  option <span style="color:#19177c">name</span><span style="color:#666">=</span>container_name service <span style="color:#19177c">name</span><span style="color:#666">=</span>kafka-connect-01
 …
-INFO<span style="color:#666">[</span><span style="color:#666">0003</span><span style="color:#666">]</span> Using ECS task definition                     <span style="color:#19177c">TaskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/elasticsearch
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka-connect-01
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafkacat
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kibana
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/ksqldb
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/mysql
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/schema-registry
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/zookeeper
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/elasticsearch <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka-connect-01 <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/schema-registry <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0004</span><span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafkacat <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0003<span style="color:#666">]</span> Using ECS task definition                     <span style="color:#19177c">TaskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/elasticsearch
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka-connect-01
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafkacat
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kibana
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/ksqldb
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/mysql
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/schema-registry
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Starting container...                         <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/zookeeper
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/elasticsearch <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka-connect-01 <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/schema-registry <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0004<span style="color:#666">]</span> Describe ECS container status                 <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafkacat <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>PENDING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
 …
-INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/elasticsearch <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka-connect-01 <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/schema-registry <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafkacat <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kibana <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/ksqldb <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/mysql <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
-INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/zookeeper <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span></code></pre></div>
+INFO<span style="color:#666">[</span>0095<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/elasticsearch <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0095<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka-connect-01 <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0095<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/schema-registry <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0095<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafka <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0095<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kafkacat <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0095<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/kibana <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0095<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/ksqldb <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0095<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/mysql <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span>
+INFO<span style="color:#666">[</span>0095<span style="color:#666">]</span> Started container...                          <span style="color:#19177c">container</span><span style="color:#666">=</span>345ebb39-a936-41e6-b3bc-fb8911fff187/zookeeper <span style="color:#19177c">desiredStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">lastStatus</span><span style="color:#666">=</span>RUNNING <span style="color:#19177c">taskDefinition</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;build-a-streaming-pipeline:50&#34;</span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>Now if I SSH onto the EC2 host I can see the containers running:</p>
@@ -592,15 +592,15 @@ INFO<span style="color:#666">[</span><span style="color:#666">0095</span><span s
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#666">[</span>ec2-user@ip-10-0-0-135 ~<span style="color:#666">]</span>$ docker ps
 CONTAINER ID        IMAGE                                                 COMMAND                   CREATED             STATUS                            PORTS                               NAMES
-15de955540df        rmoff/ksqldb-server:master-20200210-12f4317           <span style="color:#ba2121">&#34;/usr/bin/docker/run&#34;</span>     <span style="color:#666">2</span> minutes ago       Up <span style="color:#666">2</span> minutes                      <span style="color:#666">0</span>.0.0.0:8088-&gt;8088/tcp              ecs-build-a-streaming-pipeline-50-ksqldb-f6dfb1ede8fcc0e7c901
-592c1798425e        confluentinc/cp-kafka-connect:5.4.0                   <span style="color:#ba2121">&#34;bash -c &#39;echo \&#34;Inst…&#34;</span>   <span style="color:#666">2</span> minutes ago       Up <span style="color:#666">2</span> minutes <span style="color:#666">(</span>health: starting<span style="color:#666">)</span>   <span style="color:#666">0</span>.0.0.0:8083-&gt;8083/tcp, <span style="color:#666">9092</span>/tcp    ecs-build-a-streaming-pipeline-50-kafka-connect-01-ae8afda6bde3e2a66800
+15de955540df        rmoff/ksqldb-server:master-20200210-12f4317           <span style="color:#ba2121">&#34;/usr/bin/docker/run&#34;</span>     <span style="color:#666">2</span> minutes ago       Up <span style="color:#666">2</span> minutes                      0.0.0.0:8088-&gt;8088/tcp              ecs-build-a-streaming-pipeline-50-ksqldb-f6dfb1ede8fcc0e7c901
+592c1798425e        confluentinc/cp-kafka-connect:5.4.0                   <span style="color:#ba2121">&#34;bash -c &#39;echo \&#34;Inst…&#34;</span>   <span style="color:#666">2</span> minutes ago       Up <span style="color:#666">2</span> minutes <span style="color:#666">(</span>health: starting<span style="color:#666">)</span>   0.0.0.0:8083-&gt;8083/tcp, 9092/tcp    ecs-build-a-streaming-pipeline-50-kafka-connect-01-ae8afda6bde3e2a66800
 a90ff81d290c        edenhill/kafkacat:1.5.0                               <span style="color:#ba2121">&#34;/bin/sh -c &#39;apk add…&#34;</span>    <span style="color:#666">2</span> minutes ago       Up <span style="color:#666">2</span> minutes                                                          ecs-build-a-streaming-pipeline-50-kafkacat-f891f4a4fecac5d77400
-ebe6a4917748        docker.elastic.co/kibana/kibana:7.5.0                 <span style="color:#ba2121">&#34;/usr/local/bin/dumb…&#34;</span>    <span style="color:#666">2</span> minutes ago       Up <span style="color:#666">2</span> minutes                      <span style="color:#666">0</span>.0.0.0:5601-&gt;5601/tcp              ecs-build-a-streaming-pipeline-50-kibana-80c8e09e9a8d92841800
-0939c0a63a8d        confluentinc/cp-schema-registry:5.4.0                 <span style="color:#ba2121">&#34;/etc/confluent/dock…&#34;</span>    <span style="color:#666">2</span> minutes ago       Up <span style="color:#666">2</span> minutes                      <span style="color:#666">0</span>.0.0.0:8081-&gt;8081/tcp              ecs-build-a-streaming-pipeline-50-schema-registry-c298d3f3a3ead6ed4700
-6097e70ca417        confluentinc/cp-enterprise-kafka:5.4.0                <span style="color:#ba2121">&#34;bash -c &#39;echo &#39;127.…&#34;</span>    <span style="color:#666">3</span> minutes ago       Up <span style="color:#666">3</span> minutes                      <span style="color:#666">0</span>.0.0.0:9092-&gt;9092/tcp              ecs-build-a-streaming-pipeline-50-kafka-b6a9a5dfa29f80ce5e00
-42395ba12925        docker.elastic.co/elasticsearch/elasticsearch:7.5.0   <span style="color:#ba2121">&#34;/usr/local/bin/dock…&#34;</span>    <span style="color:#666">3</span> minutes ago       Up <span style="color:#666">3</span> minutes                      <span style="color:#666">0</span>.0.0.0:9200-&gt;9200/tcp, <span style="color:#666">9300</span>/tcp    ecs-build-a-streaming-pipeline-50-elasticsearch-9ab3c6a4ef92d8b00300
-8cabb0de9648        confluentinc/cp-zookeeper:5.4.0                       <span style="color:#ba2121">&#34;/etc/confluent/dock…&#34;</span>    <span style="color:#666">3</span> minutes ago       Up <span style="color:#666">3</span> minutes                      <span style="color:#666">2181</span>/tcp, <span style="color:#666">2888</span>/tcp, <span style="color:#666">3888</span>/tcp        ecs-build-a-streaming-pipeline-50-zookeeper-b8c2c1ce9ae48b821500
-75279ad553bf        mysql:8.0                                             <span style="color:#ba2121">&#34;docker-entrypoint.s…&#34;</span>    <span style="color:#666">3</span> minutes ago       Up <span style="color:#666">3</span> minutes                      <span style="color:#666">0</span>.0.0.0:3306-&gt;3306/tcp, <span style="color:#666">33060</span>/tcp   ecs-build-a-streaming-pipeline-50-mysql-96f3c78287d1a6985b00
+ebe6a4917748        docker.elastic.co/kibana/kibana:7.5.0                 <span style="color:#ba2121">&#34;/usr/local/bin/dumb…&#34;</span>    <span style="color:#666">2</span> minutes ago       Up <span style="color:#666">2</span> minutes                      0.0.0.0:5601-&gt;5601/tcp              ecs-build-a-streaming-pipeline-50-kibana-80c8e09e9a8d92841800
+0939c0a63a8d        confluentinc/cp-schema-registry:5.4.0                 <span style="color:#ba2121">&#34;/etc/confluent/dock…&#34;</span>    <span style="color:#666">2</span> minutes ago       Up <span style="color:#666">2</span> minutes                      0.0.0.0:8081-&gt;8081/tcp              ecs-build-a-streaming-pipeline-50-schema-registry-c298d3f3a3ead6ed4700
+6097e70ca417        confluentinc/cp-enterprise-kafka:5.4.0                <span style="color:#ba2121">&#34;bash -c &#39;echo &#39;127.…&#34;</span>    <span style="color:#666">3</span> minutes ago       Up <span style="color:#666">3</span> minutes                      0.0.0.0:9092-&gt;9092/tcp              ecs-build-a-streaming-pipeline-50-kafka-b6a9a5dfa29f80ce5e00
+42395ba12925        docker.elastic.co/elasticsearch/elasticsearch:7.5.0   <span style="color:#ba2121">&#34;/usr/local/bin/dock…&#34;</span>    <span style="color:#666">3</span> minutes ago       Up <span style="color:#666">3</span> minutes                      0.0.0.0:9200-&gt;9200/tcp, 9300/tcp    ecs-build-a-streaming-pipeline-50-elasticsearch-9ab3c6a4ef92d8b00300
+8cabb0de9648        confluentinc/cp-zookeeper:5.4.0                       <span style="color:#ba2121">&#34;/etc/confluent/dock…&#34;</span>    <span style="color:#666">3</span> minutes ago       Up <span style="color:#666">3</span> minutes                      2181/tcp, 2888/tcp, 3888/tcp        ecs-build-a-streaming-pipeline-50-zookeeper-b8c2c1ce9ae48b821500
+75279ad553bf        mysql:8.0                                             <span style="color:#ba2121">&#34;docker-entrypoint.s…&#34;</span>    <span style="color:#666">3</span> minutes ago       Up <span style="color:#666">3</span> minutes                      0.0.0.0:3306-&gt;3306/tcp, 33060/tcp   ecs-build-a-streaming-pipeline-50-mysql-96f3c78287d1a6985b00
 5f4c1d77376c        amazon/amazon-ecs-agent:latest                        <span style="color:#ba2121">&#34;/agent&#34;</span>                  About an hour ago   Up About an hour <span style="color:#666">(</span>healthy<span style="color:#666">)</span>                                            ecs-agent
 <span style="color:#666">[</span>ec2-user@ip-10-0-0-135 ~<span style="color:#666">]</span>$</code></pre></div>
 </div>
@@ -621,7 +621,7 @@ ebe6a4917748        docker.elastic.co/kibana/kibana:7.5.0                 <span 
                   <span style="color:#666">=</span>        <span style="color:#008000;font-weight:bold">for</span> stream processing <span style="color:#19177c">apps</span>       <span style="color:#666">=</span>
                   <span style="color:#666">===========================================</span>
 
-Copyright <span style="color:#666">2017</span>-2019 Confluent Inc.
+Copyright 2017-2019 Confluent Inc.
 
 CLI v6.0.0-SNAPSHOT, Server v6.0.0-SNAPSHOT located at http://localhost:8088
 
@@ -651,65 +651,65 @@ ksql&gt;</code></pre></div>
 <p>Any container that you want to be able to reach another, you must define with a <code>link:</code>. So</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span>kafka:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>image:<span style="color:#bbb"> </span>confluentinc/cp-enterprise-kafka:<span style="color:#666">5.4.0</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span>container_name:<span style="color:#bbb"> </span>kafka<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>depends_on:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>zookeeper</code></pre></div>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">kafka</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">image</span>:<span style="color:#bbb"> </span>confluentinc/cp-enterprise-kafka:5.4.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">container_name</span>:<span style="color:#bbb"> </span>kafka<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">depends_on</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- zookeeper</code></pre></div>
 </div>
 <div class="paragraph">
 <p>becomes in an ECS-compatible Docker Compose (assuming the <code>kafka</code> needs to reach <code>zookeeper</code>, which it does):</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span>kafka:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>image:<span style="color:#bbb"> </span>confluentinc/cp-enterprise-kafka:<span style="color:#666">5.4.0</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span>container_name:<span style="color:#bbb"> </span>kafka<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>depends_on:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>zookeeper<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>links:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>zookeeper</code></pre></div>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">kafka</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">image</span>:<span style="color:#bbb"> </span>confluentinc/cp-enterprise-kafka:5.4.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">container_name</span>:<span style="color:#bbb"> </span>kafka<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">depends_on</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- zookeeper<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">links</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- zookeeper</code></pre></div>
 </div>
 <div class="paragraph">
 <p>Strictly speaking, you could use:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span>kafka:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>image:<span style="color:#bbb"> </span>confluentinc/cp-enterprise-kafka:<span style="color:#666">5.4.0</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span>links:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>zookeeper</code></pre></div>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">kafka</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">image</span>:<span style="color:#bbb"> </span>confluentinc/cp-enterprise-kafka:5.4.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">links</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- zookeeper</code></pre></div>
 </div>
 <div class="paragraph">
 <p>Since ECS ignores <code>container_name</code> and <code>depends_on</code> (per the warnings shown in the <code>ecs-cli compose up</code> above).</p>
 </div>
 <div class="admonitionblock important">
 <table>
-<tr>
+<tbody><tr>
 <td class="icon">
 <div class="title">Important</div>
 </td>
 <td class="content">
-It&#8217;s worth restating this to be clear: any container that you want to be able to address another <strong>must</strong> be defined in <code>links:</code>. If it&#8217;s not, it&#8217;s not added to the <code>/etc/hosts</code> file of the container when it&#8217;s provisioned and trying to resolve it will fail.
+It’s worth restating this to be clear: any container that you want to be able to address another <strong>must</strong> be defined in <code>links:</code>. If it’s not, it’s not added to the <code>/etc/hosts</code> file of the container when it’s provisioned and trying to resolve it will fail.
 </td>
 </tr>
-</table>
+</tbody></table>
 </div>
 </div>
 <div class="sect3">
 <h4 id="_containers_cannot_resolve_their_own_hostname">Containers cannot resolve their own hostname</h4>
 <div class="paragraph">
-<p>Containers cannot access themselves by their own hostname. Under Docker Compose a container with <code>container_name</code> of <code>kafka</code> would be able to use <code>kafka</code> as a resolvable hostname (it would resolve to itself). With ECS this doesn&#8217;t happen - you have to use <code>localhost</code> if you want to loopback.</p>
+<p>Containers cannot access themselves by their own hostname. Under Docker Compose a container with <code>container_name</code> of <code>kafka</code> would be able to use <code>kafka</code> as a resolvable hostname (it would resolve to itself). With ECS this doesn’t happen - you have to use <code>localhost</code> if you want to loopback.</p>
 </div>
 <div class="paragraph">
 <p>This causes a problem with Kafka because <a href="https://rmoff.net/2018/08/02/kafka-listeners-explained/">per standard listeners configuration</a> you may have a listener configured using the <strong>hostname</strong> (and not localhost).</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">WARN <span style="color:#666">[</span>RequestSendThread <span style="color:#19177c">controllerId</span><span style="color:#666">=</span><span style="color:#666">1</span><span style="color:#666">]</span> Controller <span style="color:#666">1</span><span style="">&#39;</span>s connection to broker kafka:29092 <span style="color:#666">(</span>id: <span style="color:#666">1</span> rack: null<span style="color:#666">)</span> was unsuccessful <span style="color:#666">(</span>kafka.controller.RequestSendThread<span style="color:#666">)</span>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">WARN <span style="color:#666">[</span>RequestSendThread <span style="color:#19177c">controllerId</span><span style="color:#666">=</span>1<span style="color:#666">]</span> Controller 1<span style="">&#39;</span>s connection to broker kafka:29092 <span style="color:#666">(</span>id: <span style="color:#666">1</span> rack: null<span style="color:#666">)</span> was unsuccessful <span style="color:#666">(</span>kafka.controller.RequestSendThread<span style="color:#666">)</span>
 java.io.IOException: Connection to kafka:29092 <span style="color:#666">(</span>id: <span style="color:#666">1</span> rack: null<span style="color:#666">)</span> failed.
         at org.apache.kafka.clients.NetworkClientUtils.awaitReady<span style="color:#666">(</span>NetworkClientUtils.java:71<span style="color:#666">)</span>
         at kafka.controller.RequestSendThread.brokerReady<span style="color:#666">(</span>ControllerChannelManager.scala:296<span style="color:#666">)</span>
         at kafka.controller.RequestSendThread.doWork<span style="color:#666">(</span>ControllerChannelManager.scala:250<span style="color:#666">)</span>
         at kafka.utils.ShutdownableThread.run<span style="color:#666">(</span>ShutdownableThread.scala:96<span style="color:#666">)</span>
-WARN <span style="color:#666">[</span>Controller <span style="color:#19177c">id</span><span style="color:#666">=</span><span style="color:#666">1</span>, <span style="color:#19177c">targetBrokerId</span><span style="color:#666">=</span><span style="color:#666">1</span><span style="color:#666">]</span> Error connecting to node kafka:29092 <span style="color:#666">(</span>id: <span style="color:#666">1</span> rack: null<span style="color:#666">)</span> <span style="color:#666">(</span>org.apache.kafka.clients.NetworkClient<span style="color:#666">)</span>
+WARN <span style="color:#666">[</span>Controller <span style="color:#19177c">id</span><span style="color:#666">=</span>1, <span style="color:#19177c">targetBrokerId</span><span style="color:#666">=</span>1<span style="color:#666">]</span> Error connecting to node kafka:29092 <span style="color:#666">(</span>id: <span style="color:#666">1</span> rack: null<span style="color:#666">)</span> <span style="color:#666">(</span>org.apache.kafka.clients.NetworkClient<span style="color:#666">)</span>
 java.net.UnknownHostException: kafka
         at java.net.InetAddress.getAllByName0<span style="color:#666">(</span>InetAddress.java:1281<span style="color:#666">)</span>
         at java.net.InetAddress.getAllByName<span style="color:#666">(</span>InetAddress.java:1193<span style="color:#666">)</span>
@@ -719,24 +719,24 @@ java.net.UnknownHostException: kafka
 <p>Whilst it may be possible to jiggle the listener config to avoid this, I ended up hacking the hosts file to append an entry for the hostname. Why? This was preferable to butchering my existing config, since the driving force behind all of this exercise is to retain a Docker Compose which works locally, rather than to build something which is specialised for ECS alone.</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span>kafka:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>image:<span style="color:#bbb"> </span>confluentinc/cp-enterprise-kafka:<span style="color:#666">5.4.0</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span>container_name:<span style="color:#bbb"> </span>kafka<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>depends_on:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>zookeeper<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>links:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>zookeeper<span style="color:#bbb">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">kafka</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">image</span>:<span style="color:#bbb"> </span>confluentinc/cp-enterprise-kafka:5.4.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">container_name</span>:<span style="color:#bbb"> </span>kafka<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">depends_on</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- zookeeper<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">links</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- zookeeper<span style="color:#bbb">
 </span><span style="color:#bbb"></span>…<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>command:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>bash<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>-c<span style="color:#bbb"> 
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span><span style="color:#ba2121;font-style:italic">|
-</span><span style="color:#ba2121;font-style:italic">        echo &#39;127.0.0.1 kafka&#39; &gt;&gt; /etc/hosts</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>/etc/confluent/docker/run<span style="color:#bbb">
-</span><span style="color:#bbb">        </span>sleep<span style="color:#bbb"> </span>infinity<span style="color:#bbb">  </span></code></pre></div>
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">command</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- bash<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- -c <span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#ba2121;font-style:italic">|
+</span><span style="color:#ba2121;font-style:italic">        echo &#39;127.0.0.1 kafka&#39; &gt;&gt; /etc/hosts
+</span><span style="color:#ba2121;font-style:italic">        /etc/confluent/docker/run
+</span><span style="color:#ba2121;font-style:italic">        sleep infinity  </span></code></pre></div>
 </div>
 <div class="paragraph">
-<p>This adds the entry to the hosts file and then invokes the container&#8217;s default startup routine. You can find out what a container does at launch time by inspecting its Docker image:</p>
+<p>This adds the entry to the hosts file and then invokes the container’s default startup routine. You can find out what a container does at launch time by inspecting its Docker image:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ docker inspect --format<span style="color:#666">=</span><span style="color:#ba2121">&#39;{{.Config.Cmd}}&#39;</span> confluentinc/cp-enterprise-kafka:5.4.0
@@ -748,7 +748,7 @@ $ docker inspect --format<span style="color:#666">=</span><span style="color:#ba
 <div class="sect3">
 <h4 id="_security_groups">Security Groups</h4>
 <div class="paragraph">
-<p>Not Docker Compose differences as such, but important to note that <code>ecs-cli up</code> lets you specify just a single port to open with <code>--port</code>. If you want to access other ports exposed by the Docker containers you need to either use SSH port forwarding (as shown above), or amend the EC2 security group to open up the required port. Here&#8217;s an example of doing that:</p>
+<p>Not Docker Compose differences as such, but important to note that <code>ecs-cli up</code> lets you specify just a single port to open with <code>--port</code>. If you want to access other ports exposed by the Docker containers you need to either use SSH port forwarding (as shown above), or amend the EC2 security group to open up the required port. Here’s an example of doing that:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">aws2 ec2 describe-security-groups --filters <span style="color:#19177c">Name</span><span style="color:#666">=</span>tag:workshop,Values<span style="color:#666">=</span>qcon_london |<span style="color:#b62;font-weight:bold">\
@@ -757,52 +757,52 @@ $ docker inspect --format<span style="color:#666">=</span><span style="color:#ba
 </span><span style="color:#b62;font-weight:bold"></span>        --group-id FOO <span style="color:#b62;font-weight:bold">\
 </span><span style="color:#b62;font-weight:bold"></span>        --protocol tcp <span style="color:#b62;font-weight:bold">\
 </span><span style="color:#b62;font-weight:bold"></span>        --port <span style="color:#666">5601</span> <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>        --cidr <span style="color:#666">0</span>.0.0.0/0 | jq <span style="color:#ba2121">&#39;.&#39;</span></code></pre></div>
+</span><span style="color:#b62;font-weight:bold"></span>        --cidr 0.0.0.0/0 | jq <span style="color:#ba2121">&#39;.&#39;</span></code></pre></div>
 </div>
 <div class="paragraph">
-<p>This finds every security group that&#8217;s tagged with <code>workshop:qcon_london</code> and opens it up for inbound TCP traffic on port 5601 from any address.</p>
+<p>This finds every security group that’s tagged with <code>workshop:qcon_london</code> and opens it up for inbound TCP traffic on port 5601 from any address.</p>
 </div>
 </div>
 </div>
 <div class="sect2">
 <h3 id="_memory_allocation">Memory allocation</h3>
 <div class="paragraph">
-<p>With Docker I just let the containers do what they want with my laptop&#8217;s memory, and it all kinda works out. Since ECS is envisaged as a more large-scale environment than just my laptop, it requires you to give some consideration to your container&#8217;s memory requirements.</p>
+<p>With Docker I just let the containers do what they want with my laptop’s memory, and it all kinda works out. Since ECS is envisaged as a more large-scale environment than just my laptop, it requires you to give some consideration to your container’s memory requirements.</p>
 </div>
 <div class="paragraph">
-<p>If you don&#8217;t, you&#8217;ll probably find that stuff starts up, and then dies. If you take a look at <code>/var/log/messages</code> you&#8217;ll see this kind of fun going on:</p>
+<p>If you don’t, you’ll probably find that stuff starts up, and then dies. If you take a look at <code>/var/log/messages</code> you’ll see this kind of fun going on:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">Feb <span style="color:#666">10</span> <span style="color:#666">12</span>:37:38 ip-10-0-1-43 kernel: Memory cgroup out of memory: Kill process <span style="color:#666">10103</span> <span style="color:#666">(</span>java<span style="color:#666">)</span> score <span style="color:#666">1018</span> or sacrifice child
-Feb <span style="color:#666">10</span> <span style="color:#666">12</span>:37:38 ip-10-0-1-43 kernel: java invoked oom-killer: <span style="color:#19177c">gfp_mask</span><span style="color:#666">=</span>0x14000c0<span style="color:#666">(</span>GFP_KERNEL<span style="color:#666">)</span>, <span style="color:#19177c">nodemask</span><span style="color:#666">=(</span>null<span style="color:#666">)</span>,  <span style="color:#19177c">order</span><span style="color:#666">=</span><span style="color:#666">0</span>, <span style="color:#19177c">oom_score_adj</span><span style="color:#666">=</span><span style="color:#666">0</span>                                                                                                                                           <span style="color:#666">[</span><span style="color:#666">18</span>/560<span style="color:#666">]</span>
-Feb <span style="color:#666">10</span> <span style="color:#666">12</span>:37:38 ip-10-0-1-43 kernel: Killed process <span style="color:#666">10103</span> <span style="color:#666">(</span>java<span style="color:#666">)</span> total-vm:1557648kB, anon-rss:521148kB, file-rss:11888kB, shmem-rss:0kB
-Feb <span style="color:#666">10</span> <span style="color:#666">12</span>:37:38 ip-10-0-1-43 kernel: oom_reaper: reaped process <span style="color:#666">10103</span> <span style="color:#666">(</span>java<span style="color:#666">)</span>, now anon-rss:0kB, file-rss:0kB, shmem-rss:0kB</code></pre></div>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">Feb <span style="color:#666">10</span> 12:37:38 ip-10-0-1-43 kernel: Memory cgroup out of memory: Kill process <span style="color:#666">10103</span> <span style="color:#666">(</span>java<span style="color:#666">)</span> score <span style="color:#666">1018</span> or sacrifice child
+Feb <span style="color:#666">10</span> 12:37:38 ip-10-0-1-43 kernel: java invoked oom-killer: <span style="color:#19177c">gfp_mask</span><span style="color:#666">=</span>0x14000c0<span style="color:#666">(</span>GFP_KERNEL<span style="color:#666">)</span>, <span style="color:#19177c">nodemask</span><span style="color:#666">=(</span>null<span style="color:#666">)</span>,  <span style="color:#19177c">order</span><span style="color:#666">=</span>0, <span style="color:#19177c">oom_score_adj</span><span style="color:#666">=</span><span style="color:#666">0</span>                                                                                                                                           <span style="color:#666">[</span>18/560<span style="color:#666">]</span>
+Feb <span style="color:#666">10</span> 12:37:38 ip-10-0-1-43 kernel: Killed process <span style="color:#666">10103</span> <span style="color:#666">(</span>java<span style="color:#666">)</span> total-vm:1557648kB, anon-rss:521148kB, file-rss:11888kB, shmem-rss:0kB
+Feb <span style="color:#666">10</span> 12:37:38 ip-10-0-1-43 kernel: oom_reaper: reaped process <span style="color:#666">10103</span> <span style="color:#666">(</span>java<span style="color:#666">)</span>, now anon-rss:0kB, file-rss:0kB, shmem-rss:0kB</code></pre></div>
 </div>
 <div class="paragraph">
 <p>I created a <code>ecs-params.yml</code> file in the same folder as <code>docker-compose.yml</code> and defined some memory allocations for each service. This was a rough guesstimate, and it seems to have worked so far…</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">version:<span style="color:#bbb"> </span><span style="color:#666">1</span><span style="color:#bbb">
-</span><span style="color:#bbb"></span>task_definition:<span style="color:#bbb">
-</span><span style="color:#bbb">  </span>services:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>elasticsearch:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>mem_limit:<span style="color:#bbb"> </span>2g<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>kafka:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>mem_limit:<span style="color:#bbb"> </span>2g<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>kafka-connect<span style="color:#666">-01</span>:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>mem_limit:<span style="color:#bbb"> </span>2g<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>kafkacat:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>mem_limit:<span style="color:#bbb"> </span>1g<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>kibana:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>mem_limit:<span style="color:#bbb"> </span>1g<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>ksqldb:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>mem_limit:<span style="color:#bbb"> </span>2g<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>mysql:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>mem_limit:<span style="color:#bbb"> </span>1g<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>schema-registry:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>mem_limit:<span style="color:#bbb"> </span>1g<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>zookeeper:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>mem_limit:<span style="color:#bbb"> </span>1g</code></pre></div>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#008000;font-weight:bold">version</span>:<span style="color:#bbb"> </span><span style="color:#666">1</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#008000;font-weight:bold">task_definition</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">services</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">elasticsearch</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">mem_limit</span>:<span style="color:#bbb"> </span>2g<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">kafka</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">mem_limit</span>:<span style="color:#bbb"> </span>2g<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">kafka-connect-01</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">mem_limit</span>:<span style="color:#bbb"> </span>2g<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">kafkacat</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">mem_limit</span>:<span style="color:#bbb"> </span>1g<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">kibana</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">mem_limit</span>:<span style="color:#bbb"> </span>1g<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">ksqldb</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">mem_limit</span>:<span style="color:#bbb"> </span>2g<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">mysql</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">mem_limit</span>:<span style="color:#bbb"> </span>1g<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">schema-registry</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">mem_limit</span>:<span style="color:#bbb"> </span>1g<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">zookeeper</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">mem_limit</span>:<span style="color:#bbb"> </span>1g</code></pre></div>
 </div>
 <div class="quoteblock">
 <blockquote>
@@ -812,24 +812,24 @@ Feb <span style="color:#666">10</span> <span style="color:#666">12</span>:37:38 
 </blockquote>
 </div>
 <div class="paragraph">
-<p><em>Narrator:</em> It didn&#8217;t.</p>
+<p><em>Narrator:</em> It didn’t.</p>
 </div>
 <div class="paragraph">
-<p>Turns out that this wasn&#8217;t sufficient and <code>oom-killer</code> came back for more. Here running <code>docker stats</code> on the EC2 host can be useful to see where the memory is under pressure:</p>
+<p>Turns out that this wasn’t sufficient and <code>oom-killer</code> came back for more. Here running <code>docker stats</code> on the EC2 host can be useful to see where the memory is under pressure:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ docker stats
 CONTAINER ID        NAME                                                                       CPU %               MEM USAGE / LIMIT     MEM %               NET I/O             BLOCK I/O           PIDS
-f08c9236195a        ecs-build-a-streaming-pipeline-146-ksqldb-a8b8a1a484c5b7ad1700             <span style="color:#666">0</span>.10%               <span style="color:#666">208</span>.9MiB / 2GiB       <span style="color:#666">10</span>.20%              <span style="color:#666">50</span>.6MB / <span style="color:#666">43</span>.9MB     0B / <span style="color:#666">69</span>.6kB         <span style="color:#666">29</span>
-4bbfe73d8ee9        ecs-build-a-streaming-pipeline-146-kafka-connect-01-b6ffcfd8bbe8958ed701   <span style="color:#666">0</span>.40%               <span style="color:#666">1</span>.988GiB / 2GiB       <span style="color:#666">99</span>.39%              214MB / 283MB       0B / <span style="color:#666">69</span>.6kB         <span style="color:#666">42</span>
-a4df1ca23558        ecs-build-a-streaming-pipeline-146-kafkacat-bec2a5e2a9c0afd89001           <span style="color:#666">0</span>.00%               <span style="color:#666">1</span>.715MiB / 1GiB       <span style="color:#666">0</span>.17%               <span style="color:#666">1</span>.86MB / <span style="color:#666">9</span>.96kB     0B / 0B             <span style="color:#666">2</span>
-c6b6f96b68f6        ecs-build-a-streaming-pipeline-146-kibana-9696c1a7edc8b0ae4d00             <span style="color:#666">2</span>.30%               <span style="color:#666">396</span>.3MiB / 1GiB       <span style="color:#666">38</span>.71%              340MB / 256MB       0B / <span style="color:#666">4</span>.1kB          <span style="color:#666">13</span>
-f450f35cf540        ecs-build-a-streaming-pipeline-146-schema-registry-84dd89d6a9b592c48001    <span style="color:#666">0</span>.09%               <span style="color:#666">229</span>.7MiB / 1GiB       <span style="color:#666">22</span>.43%              <span style="color:#666">51</span>.3MB / 49MB       0B / 41kB           <span style="color:#666">32</span>
-f3eedff2d214        ecs-build-a-streaming-pipeline-146-kafka-ececf5aab2e2daca7900              <span style="color:#666">0</span>.82%               <span style="color:#666">623</span>.1MiB / 2GiB       <span style="color:#666">30</span>.42%              372MB / 306MB       0B / 110MB          <span style="color:#666">72</span>
-a840c8aadcf7        ecs-build-a-streaming-pipeline-146-elasticsearch-d291aec1eea9a8a0fb01      <span style="color:#666">1</span>.49%               <span style="color:#666">1</span>.296GiB / 2GiB       <span style="color:#666">64</span>.80%              256MB / 340MB       0B / <span style="color:#666">1</span>.88MB         <span style="color:#666">52</span>
-e3db7b3206b9        ecs-build-a-streaming-pipeline-146-zookeeper-9a83bde2beede19d9501          <span style="color:#666">0</span>.04%               <span style="color:#666">117</span>.2MiB / 1GiB       <span style="color:#666">11</span>.45%              <span style="color:#666">9</span>.98MB / <span style="color:#666">6</span>.04MB     0B / 766kB          <span style="color:#666">35</span>
-837eb7bd06f2        ecs-build-a-streaming-pipeline-146-mysql-b0e586d2df94ea823100              <span style="color:#666">0</span>.28%               <span style="color:#666">304</span>.7MiB / 1GiB       <span style="color:#666">29</span>.76%              <span style="color:#666">7</span>.91kB / 0B         115kB / <span style="color:#666">1</span>.17GB      <span style="color:#666">39</span>
-b365389f5ddf        ecs-agent                                                                  <span style="color:#666">0</span>.11%               <span style="color:#666">14</span>.27MiB / <span style="color:#666">15</span>.38GiB   <span style="color:#666">0</span>.09%               0B / 0B             <span style="color:#666">61</span>.4kB / <span style="color:#666">10</span>.4MB     <span style="color:#666">16</span></code></pre></div>
+f08c9236195a        ecs-build-a-streaming-pipeline-146-ksqldb-a8b8a1a484c5b7ad1700             0.10%               208.9MiB / 2GiB       10.20%              50.6MB / 43.9MB     0B / 69.6kB         <span style="color:#666">29</span>
+4bbfe73d8ee9        ecs-build-a-streaming-pipeline-146-kafka-connect-01-b6ffcfd8bbe8958ed701   0.40%               1.988GiB / 2GiB       99.39%              214MB / 283MB       0B / 69.6kB         <span style="color:#666">42</span>
+a4df1ca23558        ecs-build-a-streaming-pipeline-146-kafkacat-bec2a5e2a9c0afd89001           0.00%               1.715MiB / 1GiB       0.17%               1.86MB / 9.96kB     0B / 0B             <span style="color:#666">2</span>
+c6b6f96b68f6        ecs-build-a-streaming-pipeline-146-kibana-9696c1a7edc8b0ae4d00             2.30%               396.3MiB / 1GiB       38.71%              340MB / 256MB       0B / 4.1kB          <span style="color:#666">13</span>
+f450f35cf540        ecs-build-a-streaming-pipeline-146-schema-registry-84dd89d6a9b592c48001    0.09%               229.7MiB / 1GiB       22.43%              51.3MB / 49MB       0B / 41kB           <span style="color:#666">32</span>
+f3eedff2d214        ecs-build-a-streaming-pipeline-146-kafka-ececf5aab2e2daca7900              0.82%               623.1MiB / 2GiB       30.42%              372MB / 306MB       0B / 110MB          <span style="color:#666">72</span>
+a840c8aadcf7        ecs-build-a-streaming-pipeline-146-elasticsearch-d291aec1eea9a8a0fb01      1.49%               1.296GiB / 2GiB       64.80%              256MB / 340MB       0B / 1.88MB         <span style="color:#666">52</span>
+e3db7b3206b9        ecs-build-a-streaming-pipeline-146-zookeeper-9a83bde2beede19d9501          0.04%               117.2MiB / 1GiB       11.45%              9.98MB / 6.04MB     0B / 766kB          <span style="color:#666">35</span>
+837eb7bd06f2        ecs-build-a-streaming-pipeline-146-mysql-b0e586d2df94ea823100              0.28%               304.7MiB / 1GiB       29.76%              7.91kB / 0B         115kB / 1.17GB      <span style="color:#666">39</span>
+b365389f5ddf        ecs-agent                                                                  0.11%               14.27MiB / 15.38GiB   0.09%               0B / 0B             61.4kB / 10.4MB     <span style="color:#666">16</span></code></pre></div>
 </div>
 </div>
 <div class="sect2">
@@ -838,10 +838,10 @@ b365389f5ddf        ecs-agent                                                   
 <p>Elasticsearch needed a bit of fiddling with to get working. First up the server failed to start with this fairly common error:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">max virtual memory areas vm.max_map_count <span style="color:#666">[</span><span style="color:#666">65530</span><span style="color:#666">]</span> is too low, increase to at least <span style="color:#666">[</span><span style="color:#666">262144</span><span style="color:#666">]</span></code></pre></div>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">max virtual memory areas vm.max_map_count <span style="color:#666">[</span>65530<span style="color:#666">]</span> is too low, increase to at least <span style="color:#666">[</span>262144<span style="color:#666">]</span></code></pre></div>
 </div>
 <div class="paragraph">
-<p>The interesting one about this is that it&#8217;s usually fixed by setting a parameter on the <em>host machine</em> - but with something ephemeral like ECS' container instances that&#8217;s less than practical. The answer was to tell Elasticsearch not to use that type of storage <code>node.store.allow_mmap: "false"</code> (<a href="https://www.elastic.co/guide/en/elasticsearch/reference/master/index-modules-store.html">ref</a>).</p>
+<p>The interesting one about this is that it’s usually fixed by setting a parameter on the <em>host machine</em> - but with something ephemeral like ECS&#39; container instances that’s less than practical. The answer was to tell Elasticsearch not to use that type of storage <code>node.store.allow_mmap: &#34;false&#34;</code> (<a href="https://www.elastic.co/guide/en/elasticsearch/reference/master/index-modules-store.html">ref</a>).</p>
 </div>
 <div class="paragraph">
 <p>The second issue was the server was simply getting killed by the OOM manager process (even with <code>ecs-params.yml</code> defined). The last line in the log file before the process died was:</p>
@@ -864,32 +864,32 @@ b365389f5ddf        ecs-agent                                                   
 <p>To fix this I modified my existing Docker Compose:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span>elasticsearch:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>image:<span style="color:#bbb"> </span>docker.elastic.co/elasticsearch/elasticsearch:<span style="color:#666">7.5.0</span><span style="color:#bbb">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">elasticsearch</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">image</span>:<span style="color:#bbb"> </span>docker.elastic.co/elasticsearch/elasticsearch:7.5.0<span style="color:#bbb">
 </span><span style="color:#bbb"></span>…<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>environment:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>xpack.security.enabled:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;false&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">      </span>ES_JAVA_OPTS:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;-Xms1g -Xmx1g&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">      </span>discovery.type:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;single-node&#34;</span></code></pre></div>
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">environment</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">xpack.security.enabled</span>:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;false&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">ES_JAVA_OPTS</span>:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;-Xms1g -Xmx1g&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">discovery.type</span>:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;single-node&#34;</span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>To add in some <code>ulimits</code> as well as the <code>node.store.allow_mmap</code> config:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span>elasticsearch:<span style="color:#bbb">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">elasticsearch</span>:<span style="color:#bbb">
 </span><span style="color:#bbb"></span>…<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>ulimits:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>nofile:<span style="color:#bbb">
-</span><span style="color:#bbb">        </span>soft:<span style="color:#bbb"> </span><span style="color:#666">65535</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>hard:<span style="color:#bbb"> </span><span style="color:#666">65535</span><span style="color:#bbb">
-</span><span style="color:#bbb">      </span>memlock:<span style="color:#bbb">
-</span><span style="color:#bbb">        </span>soft:<span style="color:#bbb"> </span>-<span style="color:#666">1</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>hard:<span style="color:#bbb"> </span>-<span style="color:#666">1</span><span style="color:#bbb">        
-</span><span style="color:#bbb">    </span>environment:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>ES_JAVA_OPTS:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;-Xms1g -Xmx1g&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">      </span>xpack.security.enabled:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;false&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">      </span>discovery.type:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;single-node&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">      </span>node.store.allow_mmap:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;false&#34;</span></code></pre></div>
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">ulimits</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">nofile</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#008000;font-weight:bold">soft</span>:<span style="color:#bbb"> </span><span style="color:#666">65535</span><span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#008000;font-weight:bold">hard</span>:<span style="color:#bbb"> </span><span style="color:#666">65535</span><span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">memlock</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#008000;font-weight:bold">soft</span>:<span style="color:#bbb"> </span>-<span style="color:#666">1</span><span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#008000;font-weight:bold">hard</span>:<span style="color:#bbb"> </span>-<span style="color:#666">1</span><span style="color:#bbb">        
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">environment</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">ES_JAVA_OPTS</span>:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;-Xms1g -Xmx1g&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">xpack.security.enabled</span>:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;false&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">discovery.type</span>:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;single-node&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#008000;font-weight:bold">node.store.allow_mmap</span>:<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;false&#34;</span></code></pre></div>
 </div>
 </div>
 </div>
@@ -898,68 +898,68 @@ b365389f5ddf        ecs-agent                                                   
 <h2 id="_files">Files</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>I&#8217;ve not even tried to work out how to mount an external file or folder into a container on ECS. For better or worse, I tend to embed stuff inline in <code>command</code> section anyway, such as this to pre-create Elasticsearch dynamic mappings:</p>
+<p>I’ve not even tried to work out how to mount an external file or folder into a container on ECS. For better or worse, I tend to embed stuff inline in <code>command</code> section anyway, such as this to pre-create Elasticsearch dynamic mappings:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span>elasticsearch:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>image:<span style="color:#bbb"> </span>docker.elastic.co/elasticsearch/elasticsearch:<span style="color:#666">7.5.0</span><span style="color:#bbb">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">elasticsearch</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">image</span>:<span style="color:#bbb"> </span>docker.elastic.co/elasticsearch/elasticsearch:7.5.0<span style="color:#bbb">
 </span><span style="color:#bbb"></span>…<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>command:<span style="color:#bbb"> 
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>bash<span style="color:#bbb"> 
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>-c<span style="color:#bbb"> 
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span><span style="color:#ba2121;font-style:italic">|
-</span><span style="color:#ba2121;font-style:italic">        # Start up Elasticsearch</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>/usr/local/bin/docker-entrypoint.sh<span style="color:#bbb"> </span>&amp;<span style="color:#bbb"> 
-</span><span style="color:#bbb">        </span><span style="color:#408080;font-style:italic">#</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>echo<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;Waiting for Elasticsearch to start ⏳&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>while<span style="color:#bbb"> </span>[<span style="color:#bbb"> </span>$$(curl<span style="color:#bbb"> </span>-s<span style="color:#bbb"> </span>-o<span style="color:#bbb"> </span>/dev/<span style="color:#008000;font-weight:bold">null</span><span style="color:#bbb"> </span>-w<span style="color:#bbb"> </span>%{http_code}<span style="color:#bbb"> </span>http://localhost:<span style="color:#666">9200</span>/)<span style="color:#bbb"> </span>-ne<span style="color:#bbb"> </span><span style="color:#666">200</span><span style="color:#bbb"> </span>]<span style="color:#bbb"> </span>;<span style="color:#bbb"> </span>do<span style="color:#bbb"> 
-</span><span style="color:#bbb">          </span>echo<span style="color:#bbb"> </span>-e<span style="color:#bbb"> </span>$$(date)<span style="color:#bbb"> </span><span style="color:#ba2121">&#34; Elasticsearch listener HTTP state: &#34;</span><span style="color:#bbb"> </span>$$(curl<span style="color:#bbb"> </span>-s<span style="color:#bbb"> </span>-o<span style="color:#bbb"> </span>/dev/<span style="color:#008000;font-weight:bold">null</span><span style="color:#bbb"> </span>-w<span style="color:#bbb"> </span>%{http_code}<span style="color:#bbb"> </span>http://localhost:<span style="color:#666">9200</span>/)<span style="color:#bbb"> </span><span style="color:#ba2121">&#34; (waiting for 200)&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">          </span>sleep<span style="color:#bbb"> </span><span style="color:#666">5</span><span style="color:#bbb"> 
-</span><span style="color:#bbb">        </span>done<span style="color:#bbb">
-</span><span style="color:#bbb">        </span><span style="color:#408080;font-style:italic"># Create dynamic mapping</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>curl<span style="color:#bbb"> </span>-s<span style="color:#bbb"> </span>-XPUT<span style="color:#bbb"> </span><span style="color:#ba2121">&#34;http://localhost:9200/_template/kafkaconnect/&#34;</span><span style="color:#bbb"> </span>-H<span style="color:#bbb"> </span><span style="color:#ba2121">&#39;Content-Type: application/json&#39;</span><span style="color:#bbb"> </span>-d<span style="color:#ba2121">&#39;
-</span><span style="color:#ba2121">                  {
-</span><span style="color:#ba2121">                    &#34;template&#34;: &#34;*&#34;,
-</span><span style="color:#ba2121">                    &#34;settings&#34;: { &#34;number_of_shards&#34;: 1, &#34;number_of_replicas&#34;: 0 },
-</span><span style="color:#ba2121">                    &#34;mappings&#34;: { &#34;dynamic_templates&#34;: [ { &#34;dates&#34;: { &#34;match&#34;: &#34;*_TS&#34;, &#34;mapping&#34;: { &#34;type&#34;: &#34;date&#34; } } } ]  }
-</span><span style="color:#ba2121">                  }&#39;</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span><span style="color:#408080;font-style:italic"># Don&#39;t die cos then the container stops 🤦‍♂️</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>sleep<span style="color:#bbb"> </span>infinity</code></pre></div>
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">command</span>:<span style="color:#bbb"> 
+</span><span style="color:#bbb">      </span>- bash <span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- -c <span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#ba2121;font-style:italic">|
+</span><span style="color:#ba2121;font-style:italic">        # Start up Elasticsearch
+</span><span style="color:#ba2121;font-style:italic">        /usr/local/bin/docker-entrypoint.sh &amp; 
+</span><span style="color:#ba2121;font-style:italic">        #
+</span><span style="color:#ba2121;font-style:italic">        echo &#34;Waiting for Elasticsearch to start ⏳&#34;
+</span><span style="color:#ba2121;font-style:italic">        while [ $$(curl -s -o /dev/null -w %{http_code} http://localhost:9200/) -ne 200 ] ; do 
+</span><span style="color:#ba2121;font-style:italic">          echo -e $$(date) &#34; Elasticsearch listener HTTP state: &#34; $$(curl -s -o /dev/null -w %{http_code} http://localhost:9200/) &#34; (waiting for 200)&#34;
+</span><span style="color:#ba2121;font-style:italic">          sleep 5 
+</span><span style="color:#ba2121;font-style:italic">        done
+</span><span style="color:#ba2121;font-style:italic">        # Create dynamic mapping
+</span><span style="color:#ba2121;font-style:italic">        curl -s -XPUT &#34;http://localhost:9200/_template/kafkaconnect/&#34; -H &#39;Content-Type: application/json&#39; -d&#39;
+</span><span style="color:#ba2121;font-style:italic">                  {
+</span><span style="color:#ba2121;font-style:italic">                    &#34;template&#34;: &#34;*&#34;,
+</span><span style="color:#ba2121;font-style:italic">                    &#34;settings&#34;: { &#34;number_of_shards&#34;: 1, &#34;number_of_replicas&#34;: 0 },
+</span><span style="color:#ba2121;font-style:italic">                    &#34;mappings&#34;: { &#34;dynamic_templates&#34;: [ { &#34;dates&#34;: { &#34;match&#34;: &#34;*_TS&#34;, &#34;mapping&#34;: { &#34;type&#34;: &#34;date&#34; } } } ]  }
+</span><span style="color:#ba2121;font-style:italic">                  }&#39;
+</span><span style="color:#ba2121;font-style:italic">        # Don&#39;t die cos then the container stops 🤦‍♂️
+</span><span style="color:#ba2121;font-style:italic">        sleep infinity</span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>In the case of some SQL that I needed to run on MySQL (and previously mounted externally) I ended up using a <a href="http://tldp.org/LDP/abs/html/here-docs.html">here-doc</a>, which is not so pretty but it works:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span>mysql:<span style="color:#bbb">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#bbb">  </span><span style="color:#008000;font-weight:bold">mysql</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#408080;font-style:italic"># *-----------------------------*</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#408080;font-style:italic"># To connect to the DB: </span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#408080;font-style:italic">#   docker exec -it mysql bash -c &#39;mysql -u root -p$MYSQL_ROOT_PASSWORD&#39;</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#408080;font-style:italic"># or</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#408080;font-style:italic">#   docker exec -it mysql bash -c &#39;mysql -u $MYSQL_USER -p$MYSQL_PASSWORD demo&#39;</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#408080;font-style:italic"># *-----------------------------*</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span>image:<span style="color:#bbb"> </span>mysql:<span style="color:#666">8.0</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span>container_name:<span style="color:#bbb"> </span>mysql<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>ports:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span><span style="color:#666">3306</span>:<span style="color:#666">3306</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span>environment:<span style="color:#bbb">
-</span><span style="color:#bbb">     </span>-<span style="color:#bbb"> </span>MYSQL_ROOT_PASSWORD=Admin123<span style="color:#bbb">
-</span><span style="color:#bbb">     </span>-<span style="color:#bbb"> </span>MYSQL_USER=connect_user<span style="color:#bbb">
-</span><span style="color:#bbb">     </span>-<span style="color:#bbb"> </span>MYSQL_PASSWORD=asgard<span style="color:#bbb">
-</span><span style="color:#bbb">    </span>command:<span style="color:#bbb"> 
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>bash<span style="color:#bbb"> 
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span>-c<span style="color:#bbb"> 
-</span><span style="color:#bbb">      </span>-<span style="color:#bbb"> </span><span style="color:#ba2121;font-style:italic">|
-</span><span style="color:#ba2121;font-style:italic">        cat&gt;/docker-entrypoint-initdb.d/z99_dump.sql &lt;&lt;EOF</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>create<span style="color:#bbb"> </span>table<span style="color:#bbb"> </span>CUSTOMERS<span style="color:#bbb"> </span>(<span style="color:#bbb">
-</span><span style="color:#bbb">                </span>id<span style="color:#bbb"> </span>INT<span style="color:#bbb"> </span>PRIMARY<span style="color:#bbb"> </span>KEY,<span style="color:#bbb">
-</span><span style="color:#bbb">                </span>first_name<span style="color:#bbb"> </span>VARCHAR(<span style="color:#666">50</span>)<span style="color:#bbb">
-</span><span style="color:#bbb">        </span>);<span style="color:#bbb">
-</span><span style="color:#bbb">        </span>insert<span style="color:#bbb"> </span>into<span style="color:#bbb"> </span>CUSTOMERS<span style="color:#bbb"> </span>(id,<span style="color:#bbb"> </span>first_name)<span style="color:#bbb"> </span>values<span style="color:#bbb"> </span>(<span style="color:#666">1</span>,<span style="color:#bbb"> </span><span style="color:#ba2121">&#39;Rick&#39;</span>);<span style="color:#bbb">
-</span><span style="color:#bbb">        </span>EOF<span style="color:#bbb">
-</span><span style="color:#bbb">        </span><span style="color:#408080;font-style:italic"># Launch mysql</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>docker-entrypoint.sh<span style="color:#bbb"> </span>mysqld<span style="color:#bbb">
-</span><span style="color:#bbb">        </span><span style="color:#408080;font-style:italic">#</span><span style="color:#bbb">
-</span><span style="color:#bbb">        </span>sleep<span style="color:#bbb"> </span>infinity</code></pre></div>
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">image</span>:<span style="color:#bbb"> </span>mysql:8.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">container_name</span>:<span style="color:#bbb"> </span>mysql<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#666">3306</span>:<span style="color:#666">3306</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">environment</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">     </span>- MYSQL_ROOT_PASSWORD=Admin123<span style="color:#bbb">
+</span><span style="color:#bbb">     </span>- MYSQL_USER=connect_user<span style="color:#bbb">
+</span><span style="color:#bbb">     </span>- MYSQL_PASSWORD=asgard<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#008000;font-weight:bold">command</span>:<span style="color:#bbb"> 
+</span><span style="color:#bbb">      </span>- bash <span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- -c <span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#ba2121;font-style:italic">|
+</span><span style="color:#ba2121;font-style:italic">        cat&gt;/docker-entrypoint-initdb.d/z99_dump.sql &lt;&lt;EOF
+</span><span style="color:#ba2121;font-style:italic">        create table CUSTOMERS (
+</span><span style="color:#ba2121;font-style:italic">                id INT PRIMARY KEY,
+</span><span style="color:#ba2121;font-style:italic">                first_name VARCHAR(50)
+</span><span style="color:#ba2121;font-style:italic">        );
+</span><span style="color:#ba2121;font-style:italic">        insert into CUSTOMERS (id, first_name) values (1, &#39;Rick&#39;);
+</span><span style="color:#ba2121;font-style:italic">        EOF
+</span><span style="color:#ba2121;font-style:italic">        # Launch mysql
+</span><span style="color:#ba2121;font-style:italic">        docker-entrypoint.sh mysqld
+</span><span style="color:#ba2121;font-style:italic">        #
+</span><span style="color:#ba2121;font-style:italic">        sleep infinity</span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>In this case note that the command to launch MySQL requires both the original <code>Cmd</code> and <code>EntryPoint</code> of the image:</p>
@@ -979,17 +979,17 @@ $ docker inspect --format<span style="color:#666">=</span><span style="color:#ba
 <h2 id="_conclusion">Conclusion</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Is ECS the answer to my dreams? Not entirely. It&#8217;s still a bit fiddly and I&#8217;ve definitely got that feeling that I&#8217;m using it for something it&#8217;s not really intended for. But for now I think it&#8217;s <em>OK enough</em>.</p>
+<p>Is ECS the answer to my dreams? Not entirely. It’s still a bit fiddly and I’ve definitely got that feeling that I’m using it for something it’s not really intended for. But for now I think it’s <em>OK enough</em>.</p>
 </div>
 <div class="paragraph">
-<p>If I take a step back, <strong>I can now take a Docker Compose that runs locally and also run it on &lt;x&gt; number of instances in the cloud</strong>, and that&#8217;s pretty useful.</p>
+<p>If I take a step back, <strong>I can now take a Docker Compose that runs locally and also run it on &lt;x&gt; number of instances in the cloud</strong>, and that’s pretty useful.</p>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/02/notbad.gif" alt="notbad">
+<img src="/images/2020/02/notbad.gif" alt="notbad"/>
 </div>
 </div>
-<hr>
+<hr/>
 <div class="paragraph">
 <p><strong>Interested in learning ksqlDB? Check out <a href="https://ksqldb.io" class="bare">https://ksqldb.io</a>, and come to my <a href="https://qconlondon.com/london2020/workshop/kafka">QCon workshop</a> or <a href="https://kafka-tutorials.confluent.io/?utm_campaign=rmoff&amp;utm_term=ecs-rmoff-blog">try it out for yourself now</a>!</strong></p>
 </div>
@@ -1005,11 +1005,9 @@ $ docker inspect --format<span style="color:#666">=</span><span style="color:#ba
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

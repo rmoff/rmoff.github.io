@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Streaming Data from MySQL into Kafka with Kafka Connect and Debezium" />
@@ -84,88 +84,52 @@
 		<main role="main">
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
-	
-
-<p><a href="http://debezium.io/">Debezium</a> is a CDC tool that can stream changes from MySQL, MongoDB, and PostgreSQL into Kafka, using Kafka Connect. In this article we&rsquo;ll see how to set it up and examine the format of the data. A subsequent article will show using this realtime stream of data from a RDBMS and join it to data originating from other sources, using KSQL.</p>
-
+	<p><a href="http://debezium.io/">Debezium</a> is a CDC tool that can stream changes from MySQL, MongoDB, and PostgreSQL into Kafka, using Kafka Connect. In this article we&rsquo;ll see how to set it up and examine the format of the data. A subsequent article will show using this realtime stream of data from a RDBMS and join it to data originating from other sources, using KSQL.</p>
 <p>The software versions used here are:</p>
-
 <ul>
 <li>Confluent Platform 4.0</li>
 <li>Debezium 0.7.2</li>
 <li>MySQL 5.7.19 with <a href="https://dev.mysql.com/doc/sakila/en/sakila-installation.html">Sakila sample database</a> installed</li>
 </ul>
-
 <h3 id="install-debezium">Install Debezium</h3>
-
 <p>To use it, you need the relevant JAR for the source system (e.g. MySQL), and make that JAR available to Kafka Connect. Here we&rsquo;ll set it up for MySQL.</p>
-
 <p>Download <code>debezium-connector-mysql-0.7.2-plugin.tar.gz</code> jar from <a href="https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/">https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/</a></p>
-
 <p>Unpack the <code>.tar.gz</code> into its own folder, for example <code>/u01/plugins</code> so that you have:</p>
-
 <pre><code>/u01/plugins/debezium-connector-mysql/mysql-binlog-connector-java-0.13.0.jar
 /u01/plugins/debezium-connector-mysql/debezium-core-0.7.2.jar
 /u01/plugins/debezium-connector-mysql/mysql-binlog-connector-java-0.13.0.jar
 /u01/plugins/debezium-connector-mysql/mysql-connector-java-5.1.40.jar
 /u01/plugins/debezium-connector-mysql/debezium-connector-mysql-0.7.2.jar
-</code></pre>
-
-<p>Now configure Kafka Connect to pick up the Debezium plugin, by updating the Kafka Connect worker config.</p>
-
+</code></pre><p>Now configure Kafka Connect to pick up the Debezium plugin, by updating the Kafka Connect worker config.</p>
 <p>Edit <code>./etc/kafka/connect-distributed.properties</code> and append to <code>plugin.path</code> the value for the <em>folder containing the Debezium JAR</em>. For example:</p>
-
 <pre><code>plugin.path=share/java,/u01/plugins/
-</code></pre>
-
-<p><code>plugin.path</code> is based on this expected structure: <img src="/images/2018/03/KafkaConnect_pluginpath.png" alt="" /></p>
-
+</code></pre><p><code>plugin.path</code> is based on this expected structure: <img src="/images/2018/03/KafkaConnect_pluginpath.png" alt=""></p>
 <h3 id="mysql-config">MySQL config</h3>
-
 <p>Debezium uses MySQL&rsquo;s binlog facility to extract events, and you need to configure MySQL to enable it. Here is the bare-basics necessary to get this working - fine for demo purposes, but not a substitute for an actual MySQL DBA doing this properly :)</p>
-
 <p>Doc: <a href="https://dev.mysql.com/doc/refman/5.7/en/server-configuration.html">Server Config reference</a></p>
-
 <p>Check current state of binlog replication:</p>
-
 <pre><code>$ mysqladmin variables -uroot|grep log_bin
 | log_bin                                                  | OFF
 [...]
-</code></pre>
-
-<p>Enable binlog <a href="http://debezium.io/docs/connectors/mysql/#enabling-the-binlog">per the doc</a>. On the Mac I&rsquo;d installed MySQL with homebrew, and enabled binlog by creating the following file at <code>/usr/local/opt/mysql/my.cnf</code></p>
-
+</code></pre><p>Enable binlog <a href="http://debezium.io/docs/connectors/mysql/#enabling-the-binlog">per the doc</a>. On the Mac I&rsquo;d installed MySQL with homebrew, and enabled binlog by creating the following file at <code>/usr/local/opt/mysql/my.cnf</code></p>
 <pre><code>[mysqld]
 server-id         = 42
 log_bin           = mysql-bin
 binlog_format     = row
 binlog_row_image  = full
 expire_logs_days  = 10
-</code></pre>
-
-<p>I restarted <code>mysqld</code> with:</p>
-
+</code></pre><p>I restarted <code>mysqld</code> with:</p>
 <pre><code>brew services restart mysql
-</code></pre>
-
-<p>and verified that binlog was now enabled:</p>
-
+</code></pre><p>and verified that binlog was now enabled:</p>
 <pre><code>$ mysqladmin variables -uroot|grep log_bin
 | log_bin                                                  | ON
 [...]
-</code></pre>
-
-<p>Create user with required permissions;</p>
-
+</code></pre><p>Create user with required permissions;</p>
 <pre><code>$ mysql -uroot
 
 mysql&gt; GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium' IDENTIFIED BY 'dbz';
-</code></pre>
-
-<h3 id="kafka-connect-setup">Kafka Connect setup</h3>
-
+</code></pre><h3 id="kafka-connect-setup">Kafka Connect setup</h3>
 <p>Load the connector configuration into Kafka Connect using the REST API:</p>
-
 <pre><code>curl -i -X POST -H &quot;Accept:application/json&quot; \
     -H  &quot;Content-Type:application/json&quot; http://localhost:8083/connectors/ \
     -d '{
@@ -183,66 +147,40 @@ mysql&gt; GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION C
             &quot;include.schema.changes&quot;: &quot;true&quot;
        }
     }'
-</code></pre>
-
-<p>Now check that the connector is running successfully:</p>
-
+</code></pre><p>Now check that the connector is running successfully:</p>
 <pre><code>curl -s &quot;http://localhost:8083/connectors&quot; | jq '.[]' | \
 xargs -I{connector_name} curl -s &quot;http://localhost:8083/connectors/&quot;{connector_name}&quot;/status&quot; | \
 jq -c -M '[.name,.connector.state,.tasks[].state] | \
 join(&quot;:|:&quot;)'| column -s : -t| sed 's/\&quot;//g'| sort
 
 mysql-connector  |  RUNNING  |  RUNNING
-</code></pre>
-
-<p>If it&rsquo;s <code>FAILED</code> then check the Connect Worker log for errors - often this will be down to mistakes with the plugin&rsquo;s JAR path or availability, so check that carefully.</p>
-
+</code></pre><p>If it&rsquo;s <code>FAILED</code> then check the Connect Worker log for errors - often this will be down to mistakes with the plugin&rsquo;s JAR path or availability, so check that carefully.</p>
 <p>Assuming it&rsquo;s <code>RUNNING</code>, you should see in the Connect Worker logs something like this, indicating that Debezium has successfully pulled data from MySQL:</p>
-
 <pre><code>[2018-02-09 15:27:40,268] INFO Starting snapshot for jdbc:mysql://localhost:3306/?useInformationSchema=true&amp;nullCatalogMeansCurrent=false&amp;useSSL=false&amp;useUnicode=true&amp;characterEncoding=UTF-8&amp;characterSetResults=UTF-8&amp;zeroDateTimeBehavior=convertToNull with user 'debezium' (io.debezium.connector.mysql.SnapshotReader:220)
 [...]
 [2018-02-09 15:27:57,297] INFO Step 8: scanned 97354 rows in 24 tables in 00:00:15.617 (io.debezium.connector.mysql.SnapshotReader:579)
 [2018-02-09 15:27:57,297] INFO Step 9: committing transaction (io.debezium.connector.mysql.SnapshotReader:611)
 [2018-02-09 15:27:57,299] INFO Completed snapshot in 00:00:17.032 (io.debezium.connector.mysql.SnapshotReader:661)
-</code></pre>
-
-<h3 id="inspect-the-mysql-data-in-kafka">Inspect the MySQL data in Kafka</h3>
-
+</code></pre><h3 id="inspect-the-mysql-data-in-kafka">Inspect the MySQL data in Kafka</h3>
 <p>Use <code>kafka-topics</code> to see all the topics created by Debezium:</p>
-
 <pre><code>kafka-topics --zookeeper localhost:2181 --list
-</code></pre>
-
-<p>Each <strong>table</strong> in the database becomes one <strong>topic</strong> in Kafka. You&rsquo;ll see that the topic name is in the format of <code>database.schema.table</code>:</p>
-
+</code></pre><p>Each <strong>table</strong> in the database becomes one <strong>topic</strong> in Kafka. You&rsquo;ll see that the topic name is in the format of <code>database.schema.table</code>:</p>
 <pre><code>fullfillment.sakila.actor
 fullfillment.sakila.address
 fullfillment.sakila.category
 [...]
-</code></pre>
-
-<p>Now let&rsquo;s look at the messages. Each <strong>table row</strong> becomes a <strong>message</strong> on a kafka topic.</p>
-
+</code></pre><p>Now let&rsquo;s look at the messages. Each <strong>table row</strong> becomes a <strong>message</strong> on a kafka topic.</p>
 <p>Run the Avro Console consumer:  (using the excellent <a href="https://stedolan.github.io/jq/">jq</a> for easy formatting of the JSON)</p>
-
 <pre><code>./bin/kafka-avro-console-consumer \
 --bootstrap-server localhost:9092 \
 --property schema.registry.url=http://localhost:8081 \
 --topic fullfillment.sakila.customer \
 --from-beginning | jq '.'
-</code></pre>
-
-<p>This will show the current contents of the topic. Leave the above command running, and in a separate window make a change to the table in MySQL, for example, an update:</p>
-
+</code></pre><p>This will show the current contents of the topic. Leave the above command running, and in a separate window make a change to the table in MySQL, for example, an update:</p>
 <pre><code>mysql&gt; UPDATE CUSTOMER SET FIRST_NAME='Rick' WHERE CUSTOMER_ID=603;
-</code></pre>
-
-<p>In the Kafka consumer you&rsquo;ll see the change record come through pretty much instantaneously.</p>
-
-<script src="https://asciinema.org/a/vzt7YhIBHdcuYz9Zp4UsYPuaS.js" id="asciicast-vzt7YhIBHdcuYz9Zp4UsYPuaS" async></script>
-
+</code></pre><p>In the Kafka consumer you&rsquo;ll see the change record come through pretty much instantaneously.</p>
+<!-- raw HTML omitted -->
 <p>The records from Debezium look like this:</p>
-
 <pre><code>{
   &quot;before&quot;: null,
   &quot;after&quot;: {
@@ -282,16 +220,10 @@ fullfillment.sakila.category
     &quot;long&quot;: 1518190060267
   }
 }
-</code></pre>
-
-<p>Note the structure of the messages - you get an <code>before</code> and <code>after</code> view of the record, plus a bunch of metadata (<code>source</code>, <code>op</code>, <code>ts_ms</code>). Depending on what you&rsquo;re using the CDC events for, you&rsquo;ll want to retain some or all of this structure.</p>
-
+</code></pre><p>Note the structure of the messages - you get an <code>before</code> and <code>after</code> view of the record, plus a bunch of metadata (<code>source</code>, <code>op</code>, <code>ts_ms</code>). Depending on what you&rsquo;re using the CDC events for, you&rsquo;ll want to retain some or all of this structure.</p>
 <h3 id="event-message-flattening-with-single-message-transform">Event Message Flattening with Single Message Transform</h3>
-
 <p>For simply streaming into Kafka the <em>current</em> state of the record, it can be useful to take just the <code>after</code> section of the message. Kafka Connect includes functionality called Single Message Transform (SMT). As the name suggests, it enables you to transform single messages! You can read more about it and examples of its usage <a href="https://www.confluent.io/blog/simplest-useful-kafka-connect-data-pipeline-world-thereabouts-part-3/">here</a>. As well as the <a href="http://kafka.apache.org/documentation.html#connect_transforms">Transforms that ship with Apache Kafka</a>, you can write your own using the <a href="https://kafka.apache.org/10/javadoc/org/apache/kafka/connect/transforms/Transformation.html">documented API</a>. This is exactly what the Debezium project have done, shipping their own SMT as part of it, providing an easy way to <a href="http://debezium.io/docs/configuration/event-flattening/">flatten the events that Debezium emits</a>.</p>
-
 <p>Using SMT you can amend the message inbound/outbound from Kafka to show just the new record:</p>
-
 <pre><code>{
   &quot;c1&quot;: {
     &quot;int&quot;: 100
@@ -302,10 +234,7 @@ fullfillment.sakila.category
   &quot;create_ts&quot;: &quot;2018-01-23T22:47:09Z&quot;,
   &quot;update_ts&quot;: &quot;2018-02-09T15:35:48Z&quot;
 }
-</code></pre>
-
-<p>instead of the full change:</p>
-
+</code></pre><p>instead of the full change:</p>
 <pre><code>{
   &quot;before&quot;: {
     &quot;fullfillment.demo.foobar.Value&quot;: {
@@ -355,12 +284,8 @@ fullfillment.sakila.category
     &quot;long&quot;: 1518190548539
   }
 }
-</code></pre>
-
-<p>SMT can also be used to modify the target topic (which unmodified is <code>server.database.table</code>), using the <code>RegexRouter</code> transform.</p>
-
+</code></pre><p>SMT can also be used to modify the target topic (which unmodified is <code>server.database.table</code>), using the <code>RegexRouter</code> transform.</p>
 <p>With these two SMT included, this is how our configuration looks now:</p>
-
 <pre><code>{
   &quot;name&quot;: &quot;mysql-connector-flattened&quot;,
   &quot;config&quot;: {
@@ -381,10 +306,7 @@ fullfillment.sakila.category
     &quot;transforms.changetopic.replacement&quot;:&quot;$1-smt&quot;
   }
 }
-</code></pre>
-
-<hr />
-
+</code></pre><hr>
 <p>To see how streaming events from a RDBMS such as MySQL into Kafka can be even more powerful when combined with KSQL for stream processing check out <a href="https://www.confluent.io/blog/ksql-in-action-enriching-csv-events-with-data-from-rdbms-into-AWS/">KSQL in Action: Enriching CSV Events with Data from RDBMS into AWS</a>.</p>
 
 </article>
@@ -397,11 +319,9 @@ fullfillment.sakila.category
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

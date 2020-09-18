@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Common mistakes made when configuring multiple Kafka Connect workers" />
@@ -115,7 +115,7 @@
 <p>You need to guarantee locality of task execution, such as picking up a log file from a folder on a specific machine</p>
 </li>
 <li>
-<p>You don&#8217;t care about scale or fault-tolerance ;-)</p>
+<p>You don’t care about scale or fault-tolerance ;-)</p>
 </li>
 <li>
 <p>You like re-learning how to configure something when you realise that you <em>do</em> care about scale or fault-tolerance X-D</p>
@@ -123,11 +123,11 @@
 </ul>
 </div>
 <div class="paragraph">
-<p>My last snarky point on the list is why even if you&#8217;re just playing around with Kafka Connect on a laptop, learning it in Distributed mode means you learn it once, and then you&#8217;re all set. If you start with Standalone and its <code>.properties</code> method of passing configuration files to the worker at startup, and then come to use Distributed you have to re-learn how to use the REST interface etc.</p>
+<p>My last snarky point on the list is why even if you’re just playing around with Kafka Connect on a laptop, learning it in Distributed mode means you learn it once, and then you’re all set. If you start with Standalone and its <code>.properties</code> method of passing configuration files to the worker at startup, and then come to use Distributed you have to re-learn how to use the REST interface etc.</p>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2019/11/connect.png" alt="connect">
+<img src="/images/2019/11/connect.png" alt="connect"/>
 </div>
 </div>
 <div class="paragraph">
@@ -140,57 +140,57 @@
 <h2 id="_mistake_1_rest_advertised_host_name_set_to_localhost">Mistake 1: <code>rest.advertised.host.name</code> set to <code>localhost</code></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>The <code>rest.advertised.host.name</code> (or if you&#8217;re using Docker, <code>CONNECT_REST_ADVERTISED_HOST_NAME</code>) is how a Connect worker communicates with other workers in the cluster. If you set it to <code>localhost</code> then each worker in the cluster will only ever be able to contact itself when you use the REST interface, e.g. to send configuration updates. If the worker happens to be the leader of the connect cluster then the command will work, but if it&#8217;s not then you&#8217;ll get this:</p>
+<p>The <code>rest.advertised.host.name</code> (or if you’re using Docker, <code>CONNECT_REST_ADVERTISED_HOST_NAME</code>) is how a Connect worker communicates with other workers in the cluster. If you set it to <code>localhost</code> then each worker in the cluster will only ever be able to contact itself when you use the REST interface, e.g. to send configuration updates. If the worker happens to be the leader of the connect cluster then the command will work, but if it’s not then you’ll get this:</p>
 </div>
 <div class="literalblock">
 <div class="content">
-<pre>{"error_code":409,"message":"Cannot complete request because of a conflicting operation (e.g. worker rebalance)"}⏎</pre>
+<pre>{&#34;error_code&#34;:409,&#34;message&#34;:&#34;Cannot complete request because of a conflicting operation (e.g. worker rebalance)&#34;}⏎</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>If you front your Kafka Connect workers with a load balancer with a random/round-robin policy then you&#8217;ll see the above error "randomly", since you&#8217;ll only get it if you happen to be forwarded to a worker that is not the leader.</p>
+<p>If you front your Kafka Connect workers with a load balancer with a random/round-robin policy then you’ll see the above error &#34;randomly&#34;, since you’ll only get it if you happen to be forwarded to a worker that is not the leader.</p>
 </div>
 <div class="paragraph">
-<p>The second problem with doing this is that even though you might get connectors running successfully (if you send the config REST call to a worker that is the leader) the tasks that run across the cluster will all be identified as running on <code>localhost</code>, which makes it impossible to determine which worker they&#8217;re on. Here&#8217;s an example of a connector running a six tasks across three workers:</p>
+<p>The second problem with doing this is that even though you might get connectors running successfully (if you send the config REST call to a worker that is the leader) the tasks that run across the cluster will all be identified as running on <code>localhost</code>, which makes it impossible to determine which worker they’re on. Here’s an example of a connector running a six tasks across three workers:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=info&amp;expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
 </span><span style="color:#b62;font-weight:bold"></span>            jq <span style="color:#ba2121">&#39;.&#34;source-datagen-01&#34;.status.tasks&#39;</span>
 <span style="color:#666">[</span>
 <span style="color:#666">{</span>
-    <span style="color:#ba2121">&#34;id&#34;</span>: <span style="color:#666">0</span>,
+    <span style="color:#ba2121">&#34;id&#34;</span>: 0,
     <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
     <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
 <span style="color:#666">}</span>,
 <span style="color:#666">{</span>
-    <span style="color:#ba2121">&#34;id&#34;</span>: <span style="color:#666">1</span>,
+    <span style="color:#ba2121">&#34;id&#34;</span>: 1,
     <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
     <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
 <span style="color:#666">}</span>,
 <span style="color:#666">{</span>
-    <span style="color:#ba2121">&#34;id&#34;</span>: <span style="color:#666">2</span>,
+    <span style="color:#ba2121">&#34;id&#34;</span>: 2,
     <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
     <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
 <span style="color:#666">}</span>,
 <span style="color:#666">{</span>
-    <span style="color:#ba2121">&#34;id&#34;</span>: <span style="color:#666">3</span>,
+    <span style="color:#ba2121">&#34;id&#34;</span>: 3,
     <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
     <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
 <span style="color:#666">}</span>,
 <span style="color:#666">{</span>
-    <span style="color:#ba2121">&#34;id&#34;</span>: <span style="color:#666">4</span>,
+    <span style="color:#ba2121">&#34;id&#34;</span>: 4,
     <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
     <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
 <span style="color:#666">}</span>,
 <span style="color:#666">{</span>
-    <span style="color:#ba2121">&#34;id&#34;</span>: <span style="color:#666">5</span>,
+    <span style="color:#ba2121">&#34;id&#34;</span>: 5,
     <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
     <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
 <span style="color:#666">}</span>
 <span style="color:#666">]</span></code></pre></div>
 </div>
 <div class="paragraph">
-<p><strong>FIX</strong>: make sure <code>rest.advertised.host.name</code> / <code>CONNECT_REST_ADVERTISED_HOST_NAME</code> is set to <em>the hostname of the worker that is resolvable to the other workers</em>. If you&#8217;ve got a private network (e.g. Docker, VPC, etc) then this is the <strong>internal</strong> hostname/IP of the workers. It is nothing to do with the <strong>external</strong> hostname that you might access it by through a load balancer etc.</p>
+<p><strong>FIX</strong>: make sure <code>rest.advertised.host.name</code> / <code>CONNECT_REST_ADVERTISED_HOST_NAME</code> is set to <em>the hostname of the worker that is resolvable to the other workers</em>. If you’ve got a private network (e.g. Docker, VPC, etc) then this is the <strong>internal</strong> hostname/IP of the workers. It is nothing to do with the <strong>external</strong> hostname that you might access it by through a load balancer etc.</p>
 </div>
 </div>
 </div>
@@ -198,17 +198,17 @@
 <h2 id="_mistake_2_rest_advertised_host_name_set_to_something_not_resolvable_by_the_workers">Mistake 2: <code>rest.advertised.host.name</code> set to something not resolvable by the workers</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>This is a variation on the above problem. The <code>rest.advertised.host.name</code> (or if you&#8217;re using Docker, <code>CONNECT_REST_ADVERTISED_HOST_NAME</code>) is how a Connect worker communicates with other workers in the cluster. It needs to be something that can be <em>resolved by the other workers</em>.</p>
+<p>This is a variation on the above problem. The <code>rest.advertised.host.name</code> (or if you’re using Docker, <code>CONNECT_REST_ADVERTISED_HOST_NAME</code>) is how a Connect worker communicates with other workers in the cluster. It needs to be something that can be <em>resolved by the other workers</em>.</p>
 </div>
 <div class="paragraph">
-<p>A problem that can arise is if you set this to an address that may be resolvable outside the Kafka Connect cluster (e.g. an external DNS hostname) but which isn&#8217;t within the cluster&#8217;s network.</p>
+<p>A problem that can arise is if you set this to an address that may be resolvable outside the Kafka Connect cluster (e.g. an external DNS hostname) but which isn’t within the cluster’s network.</p>
 </div>
 <div class="paragraph">
-<p>If you do this then similarly to above, if you send the REST call to the worker that happens to be the leader of the cluster then things will work - but if it&#8217;s not the leader you&#8217;ll get</p>
+<p>If you do this then similarly to above, if you send the REST call to the worker that happens to be the leader of the cluster then things will work - but if it’s not the leader you’ll get</p>
 </div>
 <div class="literalblock">
 <div class="content">
-<pre>{"error_code":500,"message":"IO Error trying to forward REST request: java.net.UnknownHostException: foobar2: Name or service not known"}⏎</pre>
+<pre>{&#34;error_code&#34;:500,&#34;message&#34;:&#34;IO Error trying to forward REST request: java.net.UnknownHostException: foobar2: Name or service not known&#34;}⏎</pre>
 </div>
 </div>
 <div class="paragraph">
@@ -218,7 +218,7 @@
 <p>Since Kafka Connect uses Kafka topics to distribute configuration, if you <em>do</em> send the REST call to the leader then it writes the config to the topic which the other workers then pick up - hence the connector will still execute.</p>
 </div>
 <div class="paragraph">
-<p><strong>FIX</strong>: make sure <code>rest.advertised.host.name</code> / <code>CONNECT_REST_ADVERTISED_HOST_NAME</code> is set to <em>the hostname of the worker that is resolvable to the other workers</em>. If you&#8217;ve got a private network (e.g. Docker, VPC, etc) then this is the <strong>internal</strong> hostname/IP of the workers. It is nothing to do with the <strong>external</strong> hostname that you might access it by through a load balancer etc.</p>
+<p><strong>FIX</strong>: make sure <code>rest.advertised.host.name</code> / <code>CONNECT_REST_ADVERTISED_HOST_NAME</code> is set to <em>the hostname of the worker that is resolvable to the other workers</em>. If you’ve got a private network (e.g. Docker, VPC, etc) then this is the <strong>internal</strong> hostname/IP of the workers. It is nothing to do with the <strong>external</strong> hostname that you might access it by through a load balancer etc.</p>
 </div>
 </div>
 </div>
@@ -226,10 +226,10 @@
 <h2 id="_mistake_3_sharing_the_same_kafka_topics_for_different_kafka_connect_clusters">Mistake 3: Sharing the same Kafka topics for different Kafka Connect clusters</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Kafka Connect uses Kafka topics to share and persist information about connector configuration, offsets, and the status of tasks. For each Kafka Connect cluster that you run, you need <strong>a unique set of three Kafka topics</strong>. If you try to share them, even having set a different <code>group.id</code> for your Kafka Connect workers, you&#8217;ll find that each cluster will start running the other&#8217;s connectors too.</p>
+<p>Kafka Connect uses Kafka topics to share and persist information about connector configuration, offsets, and the status of tasks. For each Kafka Connect cluster that you run, you need <strong>a unique set of three Kafka topics</strong>. If you try to share them, even having set a different <code>group.id</code> for your Kafka Connect workers, you’ll find that each cluster will start running the other’s connectors too.</p>
 </div>
 <div class="paragraph">
-<p>You can see why by examining the config topic; it doesn&#8217;t include the <code>group.id</code> in the key for the messages that share the configuration (<em>perhaps it should</em>?), which means that any worker reading from this topic will assume that it&#8217;s for it to run and share amongst its cluster</p>
+<p>You can see why by examining the config topic; it doesn’t include the <code>group.id</code> in the key for the messages that share the configuration (<em>perhaps it should</em>?), which means that any worker reading from this topic will assume that it’s for it to run and share amongst its cluster</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b localhost:9092 -t _kafka-connect-configs -o beginning -f <span style="color:#ba2121">&#39;key: %k, payload: %s\n&#39;</span> -u -C
@@ -264,11 +264,9 @@ key: commit-source-datagen-01, payload: <span style="color:#666">{</span><span s
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

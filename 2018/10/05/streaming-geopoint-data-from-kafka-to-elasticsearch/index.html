@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Streaming geopoint data from Kafka to Elasticsearch" />
@@ -85,7 +85,6 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<p>Using the <a href="https://www.confluent.io/connector/kafka-connect-elasticsearch/">Elasticsearch Kafka Connect connector</a> to stream events from a Kafka topic to Elasticsearch.</p>
-
 <pre><code>curl -X &quot;POST&quot; &quot;http://kafka-connect:8083/connectors/&quot; \
      -H &quot;Content-Type: application/json&quot; \
      -d '{
@@ -103,10 +102,7 @@
     &quot;connection.url&quot;: &quot;http://elasticsearch:9200&quot;
   }
 }'
-</code></pre>
-
-<p>Dynamic mapping setup in Elasticsearch (before running the Connector) to force columns to a given type:</p>
-
+</code></pre><p>Dynamic mapping setup in Elasticsearch (before running the Connector) to force columns to a given type:</p>
 <pre><code>curl -XPUT &quot;http://elasticsearch:9200/_template/kafkaconnect/&quot; -H 'Content-Type: application/json' -d'
 {
   &quot;index_patterns&quot;: &quot;*&quot;,
@@ -154,10 +150,7 @@
     }
   }
 }'
-</code></pre>
-
-<p>Sample JSON message from Kafka: (pretty-printed)</p>
-
+</code></pre><p>Sample JSON message from Kafka: (pretty-printed)</p>
 <pre><code>{
   &quot;ACCOUNT_ID&quot;: &quot;a898&quot;,
   &quot;TXN1_TIMESTAMP&quot;: 1538733229153,
@@ -175,15 +168,10 @@
   &quot;DISTANCE_BETWEEN_TXNS&quot;: 114.42848872962888,
   &quot;MS_DIFFERENCE&quot;: -28868
 }
-</code></pre>
-
-<p>Note that the case of all columns is uppercase which causes problems trying to stream this to Elasticsearch. Kafka Connect worker log shows:</p>
-
+</code></pre><p>Note that the case of all columns is uppercase which causes problems trying to stream this to Elasticsearch. Kafka Connect worker log shows:</p>
 <pre><code>WARN Failed to execute batch 5560 of 19 records with attempt 2/6, will attempt retry after 111 ms. Failure reason: Bulk request failed: [{&quot;type&quot;:&quot;mapper_parsing_exception&quot;,&quot;reason&quot;:&quot;failed to parse&quot;,&quot;caused_by&quot;:{&quot;type&quot;:&quot;parse_exception&quot;,&quot;reason&quot;:&quot;field must be either [lat], [lon] or [geohash]&quot;}}
 </code></pre>
-
 <p>Taking the JSON message from the Kafka topic and manually sending it to Elasticsearch replicates the probem:</p>
-
 <pre><code>curl -XPOST &quot;http://elasticsearch:9200/atm_possible_fraud/kafkaconnect&quot; -H 'Content-Type: application/json' -d'
 {&quot;ACCOUNT_ID&quot;:&quot;a898&quot;,&quot;TXN1_TIMESTAMP&quot;:1538733229153,&quot;TXN2_TIMESTAMP&quot;:1538733200285,&quot;TXN1_LOCATION&quot;:{&quot;LON&quot;:-122.4026113,&quot;LAT&quot;:37.7911278},&quot;TXN2_LOCATION&quot;:{&quot;LON&quot;:-121.4943199,&quot;LAT&quot;:38.5320738},&quot;TXN1_AMOUNT&quot;:400,&quot;TXN2_AMOUNT&quot;:50,&quot;DISTANCE_BETWEEN_TXNS&quot;:114.42848872962888,&quot;MS_DIFFERENCE&quot;:-28868}'
 
@@ -205,9 +193,7 @@
 &quot;status&quot;: 400
 }
 </code></pre>
-
-<p>So Elasticsearch is sensitive to the <em>case</em> of the <code>lat</code>, <code>lon</code> columns. The fix (<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/geo-point.html[per">https://www.elastic.co/guide/en/elasticsearch/reference/current/geo-point.html[per</a> the examples here]) is to force the column names to lower case, or concatenate the lat/long into a single string):</p>
-
+<p>So Elasticsearch is sensitive to the <em>case</em> of the <code>lat</code>, <code>lon</code> columns. The fix (<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/geo-point.html%5Bper">https://www.elastic.co/guide/en/elasticsearch/reference/current/geo-point.html[per</a> the examples here]) is to force the column names to lower case, or concatenate the lat/long into a single string):</p>
 <pre><code>curl -XPOST &quot;http://elasticsearch:9200/atm_possible_fraud/kafkaconnect&quot; -H 'Content-Type: application/json' -d'
 {&quot;ACCOUNT_ID&quot;:&quot;a898&quot;,
 &quot;TXN1_TIMESTAMP&quot;:1538733229153,
@@ -219,17 +205,13 @@
 &quot;DISTANCE_BETWEEN_TXNS&quot;:114.42848872962888,
 &quot;MS_DIFFERENCE&quot;:-28868}'
 </code></pre>
-
 <p>To implement this, I used KSQL to wrangle the data from a <code>STRUCT</code> (with uppercase names) to a lat/long string:</p>
-
 <pre><code>CREATE STREAM ATM_POSSIBLE_FRAUD_02 AS \
 SELECT CAST(X.location-&gt;lat AS STRING) + ',' + CAST(X.location-&gt;lon AS STRING) AS TXN1_LOCATION
 [...]
 FROM   ATM_TXNS X 
 </code></pre>
-
 <p>Now the JSON messages look like this:</p>
-
 <pre><code>{
   &quot;ACCOUNT_ID&quot;: &quot;a182&quot;,
   &quot;TXN1_TIMESTAMP&quot;: 1538735677504,
@@ -241,10 +223,7 @@ FROM   ATM_TXNS X
   &quot;DISTANCE_BETWEEN_TXNS&quot;: 18.628023818908343,
   &quot;MS_DIFFERENCE&quot;: 24
 }
-</code></pre>
-
-<p>And the Kafka Connect -&gt; Elasticsearch pipeline works just great. Here&rsquo;s the resulting Elasticsearch index and sample document:</p>
-
+</code></pre><p>And the Kafka Connect -&gt; Elasticsearch pipeline works just great. Here&rsquo;s the resulting Elasticsearch index and sample document:</p>
 <pre><code>{
   &quot;atm_possible_fraud&quot;: {
     &quot;aliases&quot;: {},
@@ -303,9 +282,7 @@ FROM   ATM_TXNS X
     }
   }
 }
-</code></pre>
-
-<pre><code>  {
+</code></pre><pre><code>  {
     &quot;_index&quot;: &quot;atm_possible_fraud&quot;,
     &quot;_type&quot;: &quot;type.name=kafkaconnect&quot;,
     &quot;_id&quot;: &quot;ATM_POSSIBLE_FRAUD2+0+7742&quot;,
@@ -333,11 +310,9 @@ FROM   ATM_TXNS X
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Monitoring Sonos with ksqlDB, InfluxDB, and Grafana" />
@@ -85,15 +85,15 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<div class="paragraph">
-<p>I&#8217;m quite a fan of Sonos audio equipment but recently had some trouble with some of the devices glitching and even cutting out whilst playing. Under the covers Sonos stuff is running Linux (of course) and exposes some diagnostics through a rudimentary frontend that you can access at <code>http://&lt;sonos player IP&gt;:1400/support/review</code>:</p>
+<p>I’m quite a fan of Sonos audio equipment but recently had some trouble with some of the devices glitching and even cutting out whilst playing. Under the covers Sonos stuff is running Linux (of course) and exposes some diagnostics through a rudimentary frontend that you can access at <code>http://&lt;sonos player IP&gt;:1400/support/review</code>:</p>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/01/sonos00.png" alt="Sonos Network Matrix">
+<img src="/images/2020/01/sonos00.png" alt="Sonos Network Matrix"/>
 </div>
 </div>
 <div class="paragraph">
-<p>Whilst this gives you the current state, you can&#8217;t get historical data on it. It <em>felt</em> like the problems were happening "all the time", but <strong>were they actually</strong>? For that, we need some cold, hard, data! Something like this, in fact:</p>
+<p>Whilst this gives you the current state, you can’t get historical data on it. It <em>felt</em> like the problems were happening &#34;all the time&#34;, but <strong>were they actually</strong>? For that, we need some cold, hard, data! Something like this, in fact:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#666">+</span><span style="color:#408080;font-style:italic">---------------------+---------+----------+---------------+
@@ -106,18 +106,18 @@
 [<span style="">…</span>]</code></pre></div>
 </div>
 <div class="paragraph">
-<p>Summaries are nice, but so&#8217;s a plot of the data over time:</p>
+<p>Summaries are nice, but so’s a plot of the data over time:</p>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/01/sonos01.png" alt="Sonos connectivity data over time">
+<img src="/images/2020/01/sonos01.png" alt="Sonos connectivity data over time"/>
 </div>
 </div>
 <div class="paragraph">
-<p>In this article I&#8217;ll walk through how to collect this data and process it using some of my favourite tools including ksqlDB, InfluxDB, and Grafana.</p>
+<p>In this article I’ll walk through how to collect this data and process it using some of my favourite tools including ksqlDB, InfluxDB, and Grafana.</p>
 </div>
 <div class="paragraph">
-<p>Which data are we going to collect? For now it&#8217;s based on two metrics of interest here - <code>Noise Floor</code> and <code>OFDM ANI level</code>. Why these two? Well, if we open up the code behind the Network Matrix shown above, we can see the Javascript that defines the colour of the cells evaluates these two:</p>
+<p>Which data are we going to collect? For now it’s based on two metrics of interest here - <code>Noise Floor</code> and <code>OFDM ANI level</code>. Why these two? Well, if we open up the code behind the Network Matrix shown above, we can see the Javascript that defines the colour of the cells evaluates these two:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-javascript" data-lang="javascript">[<span style="">…</span>]
@@ -158,7 +158,7 @@
 </ul>
 </div>
 <div class="paragraph">
-<p>Why Kafka? Because we&#8217;re doing all of this with streams of events. We want to have a low-latency pipeline from event to dashboard, and we also want to be able to replay and re-use the data.</p>
+<p>Why Kafka? Because we’re doing all of this with streams of events. We want to have a low-latency pipeline from event to dashboard, and we also want to be able to replay and re-use the data.</p>
 </div>
 </div>
 </div>
@@ -166,7 +166,7 @@
 <h2 id="_ingest_diagnostics_data_from_sonos_into_kafka">Ingest diagnostics data from Sonos into Kafka</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>We&#8217;re going to go full-MacGyver for part of this, since Sonos does not offer a nice API. The diagnostics that Sonos devices serve up on the <code>http://&lt;sonos player IP&gt;:1400/support/review</code> interface (I&#8217;ll not actually call it an API, since it isn&#8217;t really) are XML-wrapped plaintext. So whilst XML may actually be nicer than YAML to work with (who knew), plain text is not so nice to work with. Fancy parsing this for key/value pairs? It&#8217;s going to be all hand-crafted code needed:</p>
+<p>We’re going to go full-MacGyver for part of this, since Sonos does not offer a nice API. The diagnostics that Sonos devices serve up on the <code>http://&lt;sonos player IP&gt;:1400/support/review</code> interface (I’ll not actually call it an API, since it isn’t really) are XML-wrapped plaintext. So whilst XML may actually be nicer than YAML to work with (who knew), plain text is not so nice to work with. Fancy parsing this for key/value pairs? It’s going to be all hand-crafted code needed:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -185,26 +185,26 @@ PHY errors since last reading/reset: 3882</code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p>To pull the data from Sonos you just need to hit one of the devices, since it serves up the stats for all the others too. I&#8217;m using <a href="https://github.com/kislyuk/yq"><code>xq</code></a> here which is an XML version of the superb <a href="https://stedolan.github.io/jq/"><code>jq</code></a> tool (which is for JSON). It means that I can stream data from <code>curl</code> into <code>xq</code> and parse the document structure for fields and values that I want, as well as starting to manipulate the data into more of a structure for processing (such as splitting the <code>status</code> data shown above into an array).</p>
+<p>To pull the data from Sonos you just need to hit one of the devices, since it serves up the stats for all the others too. I’m using <a href="https://github.com/kislyuk/yq"><code>xq</code></a> here which is an XML version of the superb <a href="https://stedolan.github.io/jq/"><code>jq</code></a> tool (which is for JSON). It means that I can stream data from <code>curl</code> into <code>xq</code> and parse the document structure for fields and values that I want, as well as starting to manipulate the data into more of a structure for processing (such as splitting the <code>status</code> data shown above into an array).</p>
 </div>
 <div class="paragraph">
-<p>Once it&#8217;s parsed the data it pipes it into <code>kafkacat</code> which writes it to a Kafka topic, as well as echo&#8217;ing it to the terminal.</p>
+<p>Once it’s parsed the data it pipes it into <code>kafkacat</code> which writes it to a Kafka topic, as well as echo’ing it to the terminal.</p>
 </div>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-bash" data-lang="bash">while [ 1 -eq 1 ];do
-    curl -s 'http://192.168.10.98:1400/support/review' | \
-        xq -c '.ZPNetworkInfo.ZPSupportInfo[] |
+    curl -s &#39;http://192.168.10.98:1400/support/review&#39; | \
+        xq -c &#39;.ZPNetworkInfo.ZPSupportInfo[] |
             {ZPInfo: .ZPInfo.ZoneName,
             data: [(.File[] |
-                    select (."@name" == "/proc/ath_rincon/status") |
-                    ."#text" |
-                    split("\n")[] |
-                    select((. | contains("OFDM")) or (.|contains("Noise")) or (.|contains("PHY"))))]
-                }' | \
+                    select (.&#34;@name&#34; == &#34;/proc/ath_rincon/status&#34;) |
+                    .&#34;#text&#34; |
+                    split(&#34;\n&#34;)[] |
+                    select((. | contains(&#34;OFDM&#34;)) or (.|contains(&#34;Noise&#34;)) or (.|contains(&#34;PHY&#34;))))]
+                }&#39; | \
             docker exec -i kafkacat kafkacat \
                 -b kafka-1:39092,kafka-2:49092,kafka-3:59092 \
-                -t sonos-metrics -P -T | jq '.'
+                -t sonos-metrics -P -T | jq &#39;.&#39;
     sleep 20
 done</code></pre>
 </div>
@@ -215,7 +215,7 @@ done</code></pre>
 <h2 id="_query_the_streams_of_data_in_ksqldb">Query the streams of data in ksqlDB</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Now the data&#8217;s in Kafka we can examine and process it with ksqlDB. First up we need to create a stream on top of the topic—which is just declaring the schema for the data:</p>
+<p>Now the data’s in Kafka we can examine and process it with ksqlDB. First up we need to create a stream on top of the topic—which is just declaring the schema for the data:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> STREAM SONOS_RAW (ZPINFO STRING, <span style="color:#008000;font-weight:bold">DATA</span> <span style="color:#008000">ARRAY</span><span style="color:#666">&lt;</span><span style="color:#008000">VARCHAR</span><span style="color:#666">&gt;</span>,RAWDATA STRING) 
@@ -266,7 +266,7 @@ ksql<span style="color:#666">&gt;</span></code></pre></div>
 <h2 id="_transform_the_data_in_ksqldb">Transform the data in ksqlDB</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>The actual data that we want to pull out for now is just the device name (<code>ZPINFO</code>), <code>Noise Floor</code>, and <code>OFDM ANI level</code>. We&#8217;ll do this with some data wrangling along the same lines as shown above.</p>
+<p>The actual data that we want to pull out for now is just the device name (<code>ZPINFO</code>), <code>Noise Floor</code>, and <code>OFDM ANI level</code>. We’ll do this with some data wrangling along the same lines as shown above.</p>
 </div>
 <div class="paragraph">
 <p>A key thing to note is that the <code>CREATE STREAM</code> here is now writing the results of this query to a new stream, underpinned by a new Kafka topic:</p>
@@ -284,7 +284,7 @@ ksql<span style="color:#666">&gt;</span></code></pre></div>
     EMIT CHANGES ;</code></pre></div>
 </div>
 <div class="paragraph">
-<p>Note the schemas includes a <code>MAP</code> for the tags, which we&#8217;ll use to load into InfluxDB shortly.</p>
+<p>Note the schemas includes a <code>MAP</code> for the tags, which we’ll use to load into InfluxDB shortly.</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">DESCRIBE</span> SONOS_HEALTH_METRICS;
@@ -345,37 +345,37 @@ Format:JSON
 <h2 id="_transform_the_message_structure_to_load_into_influxdb">Transform the message structure to load into InfluxDB</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>In a moment we&#8217;re going to stream all this data into InfluxDB, but first we need to do a little <a href="https://libquotes.com/linus-torvalds/quote/lbr1k4j"><code>random jiggling</code></a> to get the data into an appropriate format.</p>
+<p>In a moment we’re going to stream all this data into InfluxDB, but first we need to do a little <a href="https://libquotes.com/linus-torvalds/quote/lbr1k4j"><code>random jiggling</code></a> to get the data into an appropriate format.</p>
 </div>
 <div class="admonitionblock warning">
 <table>
-<tr>
+<tbody><tr>
 <td class="icon">
 <div class="title">Warning</div>
 </td>
 <td class="content">
-This is not part of a normal ksqlDB pipeline! It&#8217;s just a hacky workaround to deal with some slightly misaligned interfaces.
+This is not part of a normal ksqlDB pipeline! It’s just a hacky workaround to deal with some slightly misaligned interfaces.
 </td>
 </tr>
-</table>
+</tbody></table>
 </div>
 <div class="paragraph">
-<p>In a nutshell, the InfluxDB connector needs the data to either have a schema embedded in the JSON, or the Avro schema to be constructed a certain way (<code>map</code> not <code>array</code>). Here we&#8217;ll interpolate the JSON-with-schema shell with the payload value, using kafkacat:</p>
+<p>In a nutshell, the InfluxDB connector needs the data to either have a schema embedded in the JSON, or the Avro schema to be constructed a certain way (<code>map</code> not <code>array</code>). Here we’ll interpolate the JSON-with-schema shell with the payload value, using kafkacat:</p>
 </div>
 <div class="paragraph">
 <p><code>kafkacat</code> reads from the topic, pipes it into <code>jq</code> which adds the schema definition, and then pipes it to another instance of <code>kafkacat</code> which writes it to a new topic.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">docker exec -it kafkacat /bin/sh -c 'kafkacat -b kafka-1:39092,kafka-2:49092,kafka-3:59092 -q -u -X auto.offset.reset=latest -G sonos_rmoff_cg_01 sonos_metrics_01 |jq -c '"'"'. |
-{   schema: { type: "struct", optional: false, version: 1, fields: [
-            { field: "tags", type: "map", keys: {type: "string", optional: false}, values: {type: "string", optional: false}, optional: false },
-            { field: "AVG_NOISE_FLOOR_DBM", type: "double", optional: true},
-            { field: "NOISE_FLOOR_DBM0", type: "double", optional: true},
-            { field: "NOISE_FLOOR_DBM1", type: "double", optional: true},
-            { field: "NOISE_FLOOR_DBM2", type: "double", optional: true},
-            { field: "OFDM_ANI_LEVEL", type: "double", optional: true},
-            { field: "OFDM_ANI_LEVEL_ADJUSTED", type: "double", optional: true}]},
+<pre class="highlight"><code class="language-bash" data-lang="bash">docker exec -it kafkacat /bin/sh -c &#39;kafkacat -b kafka-1:39092,kafka-2:49092,kafka-3:59092 -q -u -X auto.offset.reset=latest -G sonos_rmoff_cg_01 sonos_metrics_01 |jq -c &#39;&#34;&#39;&#34;&#39;. |
+{   schema: { type: &#34;struct&#34;, optional: false, version: 1, fields: [
+            { field: &#34;tags&#34;, type: &#34;map&#34;, keys: {type: &#34;string&#34;, optional: false}, values: {type: &#34;string&#34;, optional: false}, optional: false },
+            { field: &#34;AVG_NOISE_FLOOR_DBM&#34;, type: &#34;double&#34;, optional: true},
+            { field: &#34;NOISE_FLOOR_DBM0&#34;, type: &#34;double&#34;, optional: true},
+            { field: &#34;NOISE_FLOOR_DBM1&#34;, type: &#34;double&#34;, optional: true},
+            { field: &#34;NOISE_FLOOR_DBM2&#34;, type: &#34;double&#34;, optional: true},
+            { field: &#34;OFDM_ANI_LEVEL&#34;, type: &#34;double&#34;, optional: true},
+            { field: &#34;OFDM_ANI_LEVEL_ADJUSTED&#34;, type: &#34;double&#34;, optional: true}]},
     payload: {
         tags:  .TAGS ,
         AVG_NOISE_FLOOR_DBM: .AVG_NOISE_FLOOR_DBM,
@@ -385,8 +385,8 @@ This is not part of a normal ksqlDB pipeline! It&#8217;s just a hacky workaround
         OFDM_ANI_LEVEL: .OFDM_ANI_LEVEL,
         OFDM_ANI_LEVEL_ADJUSTED: .OFDM_ANI_LEVEL_ADJUSTED
         }
-}'"'"' | \
-kafkacat -b kafka-1:39092,kafka-2:49092,kafka-3:59092 -t sonos_metrics_01_json_with_schema -P -T'</code></pre>
+}&#39;&#34;&#39;&#34;&#39; | \
+kafkacat -b kafka-1:39092,kafka-2:49092,kafka-3:59092 -t sonos_metrics_01_json_with_schema -P -T&#39;</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -395,15 +395,15 @@ kafkacat -b kafka-1:39092,kafka-2:49092,kafka-3:59092 -t sonos_metrics_01_json_w
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-javascript" data-lang="javascript">{
-  "TAGS": {
-    "DEVICE": "Kitchen"
+  &#34;TAGS&#34;: {
+    &#34;DEVICE&#34;: &#34;Kitchen&#34;
   },
-  "AVG_NOISE_FLOOR_DBM": 104.33333333333333,
-  "NOISE_FLOOR_DBM0": -104,
-  "NOISE_FLOOR_DBM1": -109,
-  "NOISE_FLOOR_DBM2": -100,
-  "OFDM_ANI_LEVEL": 5,
-  "OFDM_ANI_LEVEL_ADJUSTED": 3
+  &#34;AVG_NOISE_FLOOR_DBM&#34;: 104.33333333333333,
+  &#34;NOISE_FLOOR_DBM0&#34;: -104,
+  &#34;NOISE_FLOOR_DBM1&#34;: -109,
+  &#34;NOISE_FLOOR_DBM2&#34;: -100,
+  &#34;OFDM_ANI_LEVEL&#34;: 5,
+  &#34;OFDM_ANI_LEVEL_ADJUSTED&#34;: 3
 }</code></pre>
 </div>
 </div>
@@ -413,24 +413,24 @@ kafkacat -b kafka-1:39092,kafka-2:49092,kafka-3:59092 -t sonos_metrics_01_json_w
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-javascript" data-lang="javascript">{
-    "schema": { "type": "struct", "optional": false, "version": 1, "fields": [
-        {"field": "tags", "type": "map", "keys": { "type": "string", "optional": false }, "values": { "type": "string", "optional": false }, "optional": false },
-        {"field": "AVG_NOISE_FLOOR_DBM", "type": "double", "optional": true },
-        { "field": "NOISE_FLOOR_DBM0", "type": "double", "optional": true },
-        { "field": "NOISE_FLOOR_DBM1", "type": "double", "optional": true },
-        { "field": "NOISE_FLOOR_DBM2", "type": "double", "optional": true },
-        { "field": "OFDM_ANI_LEVEL", "type": "double", "optional": true },
-        { "field": "OFDM_ANI_LEVEL_ADJUSTED", "type": "double", "optional": true }
+    &#34;schema&#34;: { &#34;type&#34;: &#34;struct&#34;, &#34;optional&#34;: false, &#34;version&#34;: 1, &#34;fields&#34;: [
+        {&#34;field&#34;: &#34;tags&#34;, &#34;type&#34;: &#34;map&#34;, &#34;keys&#34;: { &#34;type&#34;: &#34;string&#34;, &#34;optional&#34;: false }, &#34;values&#34;: { &#34;type&#34;: &#34;string&#34;, &#34;optional&#34;: false }, &#34;optional&#34;: false },
+        {&#34;field&#34;: &#34;AVG_NOISE_FLOOR_DBM&#34;, &#34;type&#34;: &#34;double&#34;, &#34;optional&#34;: true },
+        { &#34;field&#34;: &#34;NOISE_FLOOR_DBM0&#34;, &#34;type&#34;: &#34;double&#34;, &#34;optional&#34;: true },
+        { &#34;field&#34;: &#34;NOISE_FLOOR_DBM1&#34;, &#34;type&#34;: &#34;double&#34;, &#34;optional&#34;: true },
+        { &#34;field&#34;: &#34;NOISE_FLOOR_DBM2&#34;, &#34;type&#34;: &#34;double&#34;, &#34;optional&#34;: true },
+        { &#34;field&#34;: &#34;OFDM_ANI_LEVEL&#34;, &#34;type&#34;: &#34;double&#34;, &#34;optional&#34;: true },
+        { &#34;field&#34;: &#34;OFDM_ANI_LEVEL_ADJUSTED&#34;, &#34;type&#34;: &#34;double&#34;, &#34;optional&#34;: true }
         ]
     },
-    "payload": {
-        "tags": { "device": "Dining Room" },
-        "AVG_NOISE_FLOOR_DBM": -0,
-        "NOISE_FLOOR_DBM0": 0,
-        "NOISE_FLOOR_DBM1": 0,
-        "NOISE_FLOOR_DBM2": 0,
-        "OFDM_ANI_LEVEL": null,
-        "OFDM_ANI_LEVEL_ADJUSTED": null
+    &#34;payload&#34;: {
+        &#34;tags&#34;: { &#34;device&#34;: &#34;Dining Room&#34; },
+        &#34;AVG_NOISE_FLOOR_DBM&#34;: -0,
+        &#34;NOISE_FLOOR_DBM0&#34;: 0,
+        &#34;NOISE_FLOOR_DBM1&#34;: 0,
+        &#34;NOISE_FLOOR_DBM2&#34;: 0,
+        &#34;OFDM_ANI_LEVEL&#34;: null,
+        &#34;OFDM_ANI_LEVEL_ADJUSTED&#34;: null
     }
 }</code></pre>
 </div>
@@ -449,13 +449,13 @@ kafkacat -b kafka-1:39092,kafka-2:49092,kafka-3:59092 -t sonos_metrics_01_json_w
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-sql" data-lang="sql">CREATE SINK CONNECTOR SINK_INFLUX_01 WITH (
-        'connector.class'               = 'io.confluent.influxdb.InfluxDBSinkConnector',
-        'value.converter'               = 'org.apache.kafka.connect.json.JsonConverter',
-        'value.converter.schemas.enable'= 'true',
-        'topics'                        = 'sonos_metrics_01_json_with_schema',
-        'influxdb.url'                  = 'http://influxdb:8086',
-        'influxdb.db'                   = 'sonos',
-        'measurement.name.format'       = 'metrics'
+        &#39;connector.class&#39;               = &#39;io.confluent.influxdb.InfluxDBSinkConnector&#39;,
+        &#39;value.converter&#39;               = &#39;org.apache.kafka.connect.json.JsonConverter&#39;,
+        &#39;value.converter.schemas.enable&#39;= &#39;true&#39;,
+        &#39;topics&#39;                        = &#39;sonos_metrics_01_json_with_schema&#39;,
+        &#39;influxdb.url&#39;                  = &#39;http://influxdb:8086&#39;,
+        &#39;influxdb.db&#39;                   = &#39;sonos&#39;,
+        &#39;measurement.name.format&#39;       = &#39;metrics&#39;
   );</code></pre>
 </div>
 </div>
@@ -488,7 +488,7 @@ name: metrics
 tags: <span style="color:#19177c">device</span><span style="color:#666">=</span>Bedroom
 <span style="color:#008000">time</span>                last
 ----                ----
-<span style="color:#666">1579608296503000000</span> <span style="color:#666">103</span>.66666666666667
+<span style="color:#666">1579608296503000000</span> 103.66666666666667
 
 name: metrics
 tags: <span style="color:#19177c">device</span><span style="color:#666">=</span>Dining Room
@@ -500,7 +500,7 @@ name: metrics
 tags: <span style="color:#19177c">device</span><span style="color:#666">=</span>Kitchen
 <span style="color:#008000">time</span>                last
 ----                ----
-<span style="color:#666">1579608296491000000</span> <span style="color:#666">104</span>.33333333333333</code></pre></div>
+<span style="color:#666">1579608296491000000</span> 104.33333333333333</code></pre></div>
 </div>
 </div>
 </div>
@@ -508,26 +508,26 @@ tags: <span style="color:#19177c">device</span><span style="color:#666">=</span>
 <h2 id="_visualisation">Visualisation</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Grafana is the tool I&#8217;m more familiar with, and plays nicely with InfluxDB.</p>
+<p>Grafana is the tool I’m more familiar with, and plays nicely with InfluxDB.</p>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/01/sonos01.png" alt="Sonos data plotted in Grafana">
+<img src="/images/2020/01/sonos01.png" alt="Sonos data plotted in Grafana"/>
 </div>
 </div>
 <div class="paragraph">
-<p>I&#8217;ve taken the thresholds that the Sonos network matrix javascript code (quoted above) uses to determine good/warning/bad and overlaid these on the charts and used them to background colour the current values.</p>
+<p>I’ve taken the thresholds that the Sonos network matrix javascript code (quoted above) uses to determine good/warning/bad and overlaid these on the charts and used them to background colour the current values.</p>
 </div>
-<iframe src="https://snapshot.raintank.io/dashboard-solo/snapshot/CcjhhhJZy2sVCqYylAAlxF62cx6DaFgi?orgId=2&from=1579644113369&to=1579652250260&var-Device=Bedroom&var-Device=Kitchen&panelId=7" width="550" height="200" frameborder="0"></iframe>
+<iframe src="https://snapshot.raintank.io/dashboard-solo/snapshot/CcjhhhJZy2sVCqYylAAlxF62cx6DaFgi?orgId=2&amp;from=1579644113369&amp;to=1579652250260&amp;var-Device=Bedroom&amp;var-Device=Kitchen&amp;panelId=7" width="550" height="200" frameborder="0"></iframe>
 <div class="paragraph">
 <p>You can try the Grafana dashboard <a href="https://snapshot.raintank.io/dashboard/snapshot/qBALXdQGwjU37KTO8Q1zAZ7o8IjaGisB">here</a>.</p>
 </div>
 <div class="paragraph">
-<p>It&#8217;s worth noting that in recent years Influx have developed their own visualisation tool, Chronograf, which is pretty nice too</p>
+<p>It’s worth noting that in recent years Influx have developed their own visualisation tool, Chronograf, which is pretty nice too</p>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/01/sonos02.png" alt="Sonos data plotted in Chronograf">
+<img src="/images/2020/01/sonos02.png" alt="Sonos data plotted in Chronograf"/>
 </div>
 </div>
 </div>
@@ -624,7 +624,7 @@ Query terminated</code></pre></div>
 <p>Then run through the article as shown, and enjoy!</p>
 </div>
 <div class="paragraph">
-<p>You&#8217;ll find Grafana at <a href="http://localhost:3000" class="bare">http://localhost:3000</a> (login <code>admin</code>/<code>admin</code>) and Chronograf at <a href="http://localhost:8888/" class="bare">http://localhost:8888/</a>.</p>
+<p>You’ll find Grafana at <a href="http://localhost:3000" class="bare">http://localhost:3000</a> (login <code>admin</code>/<code>admin</code>) and Chronograf at <a href="http://localhost:8888/" class="bare">http://localhost:8888/</a>.</p>
 </div>
 </div>
 </div>
@@ -681,7 +681,7 @@ Query terminated</code></pre></div>
 <p>So I started this article with a teaser about a problem with my Sonos equipment, and how I wanted to try and troubleshoot it. What did I learn (other than plain-text is a crappy way to share metrics and is a PITA to parse)?</p>
 </div>
 <div class="paragraph">
-<p>Well, whilst doing all this data stuff, I also moved all but one of my Sonos devices to "SonosNet", and away from wired connections. I&#8217;m using Powerline connectors in my house for hard wiring, and it&#8217;s not always great. Turns out the Sonos devices on their own wifi network work much better. So now I have a single Sonos device that&#8217;s wired into my router, and the rest just use a wifi link between themselves (separate from my home wifi network). This seems to have fixed the problem that I had with "burbling" and cutouts.</p>
+<p>Well, whilst doing all this data stuff, I also moved all but one of my Sonos devices to &#34;SonosNet&#34;, and away from wired connections. I’m using Powerline connectors in my house for hard wiring, and it’s not always great. Turns out the Sonos devices on their own wifi network work much better. So now I have a single Sonos device that’s wired into my router, and the rest just use a wifi link between themselves (separate from my home wifi network). This seems to have fixed the problem that I had with &#34;burbling&#34; and cutouts.</p>
 </div>
 </div>
 </div>
@@ -689,9 +689,9 @@ Query terminated</code></pre></div>
 <h2 id="_footnote">Footnote</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Turns out the timing of this blog <a href="https://www.theverge.com/2019/12/30/21042871/sonos-recycle-mode-trade-up-program-controversy">wasn&#8217;t so great</a>:</p>
+<p>Turns out the timing of this blog <a href="https://www.theverge.com/2019/12/30/21042871/sonos-recycle-mode-trade-up-program-controversy">wasn’t so great</a>:</p>
 </div>
-<blockquote class="twitter-tweet"><p lang="en" dir="ltr">Thread! I just got a letter from <a href="https://twitter.com/Sonos?ref_src=twsrc%5Etfw">@Sonos</a> about one of my old speakers. At face value it seems innocuous, but read between the lines and it&#39;s actually fairly threatening. <a href="https://t.co/b0DZCrBuwW">pic.twitter.com/b0DZCrBuwW</a></p>&mdash; Sean Bonner Ⓥ (@seanbonner) <a href="https://twitter.com/seanbonner/status/1219760460028760065?ref_src=twsrc%5Etfw">January 21, 2020</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">Thread! I just got a letter from <a href="https://twitter.com/Sonos?ref_src=twsrc%5Etfw">@Sonos</a> about one of my old speakers. At face value it seems innocuous, but read between the lines and it&#39;s actually fairly threatening. <a href="https://t.co/b0DZCrBuwW">pic.twitter.com/b0DZCrBuwW</a></p>— Sean Bonner Ⓥ (@seanbonner) <a href="https://twitter.com/seanbonner/status/1219760460028760065?ref_src=twsrc%5Etfw">January 21, 2020</a></blockquote> <script async="" src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 </div>
 </div>
 
@@ -705,11 +705,9 @@ Query terminated</code></pre></div>
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

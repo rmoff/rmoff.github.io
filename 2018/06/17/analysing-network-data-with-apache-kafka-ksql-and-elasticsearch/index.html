@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Analysing Network Data with Apache Kafka, KSQL, and Elasticsearch" />
@@ -85,83 +85,55 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<p>In <a href="http://cnfl.io/syslogs-filtering">this article</a> I demonstrated how to use KSQL to filter streams of network event data. As well as filtering, KSQL can be used to easily <a href="https://www.confluent.io/blog/real-time-syslog-processing-apache-kafka-ksql-enriching-events-with-external-data/">enrich streams</a>. In this article we&rsquo;ll see how this enriched data can be used to drive analysis in Elasticsearch and Kibana—and how KSQL again came into use for building some stream processing as a result of the discovery made.</p>
-
 <p>The data came from my home <a href="https://www.ubnt.com/">Ubiquiti</a> router, and took two forms:</p>
-
 <ol>
 <li>A stream of network events from the router, sent over <a href="https://www.confluent.io/blog/real-time-syslog-processing-apache-kafka-ksql-part-1-filtering">syslog</a> to Apache Kafka</li>
 <li>Device information that the router stores in an internal MongoDB database, streamed into Kafka using <a href="https://rmoff.net/2018/03/27/streaming-data-from-mongodb-into-kafka-with-kafka-connect-and-debezium/">Debezium and Kafka Connect</a></li>
 </ol>
-
 <p>With <a href="https://www.confluent.io/blog/real-time-syslog-processing-apache-kafka-ksql-enriching-events-with-external-data/">KSQL I denormalised the two sets of data</a>, enriching each network event with full details of the associated device, based on the device&rsquo;s ID stored in each network event. The device information came from MongoDB, a copy of which was in a Kafka topic along with any changes that subsequently occurred in the MongoDB data (courtesy of CDC and Debezium).</p>
-
 <p>From the Kibana dashboard I built, I noticed an interesting pattern. Around 29th April, there is a huge peak in activity relative to the rest of the time.</p>
-
-<p><img src="/images/2018/06/ubnt_analyse_01.png" alt="ubnt_analyse_01.png" /></p>
-
+<p><img src="/images/2018/06/ubnt_analyse_01.png" alt="ubnt_analyse_01.png"></p>
 <p>I wonder what&rsquo;s causing this? Let&rsquo;s drill into the data a bit more. Looking closely at the device type and Access Point, we can see it&rsquo;s the &ldquo;Attic&rdquo; AP, and &ldquo;Espressi&rdquo; device types</p>
-
-<p><img src="/images/2018/06/ubnt_analyse_02.png" alt="images/ubnt_analyse_02.png" />
-<img src="/images/2018/06/ubnt_analyse_03.png" alt="images/ubnt_analyse_03.png" /></p>
-
+<p><img src="/images/2018/06/ubnt_analyse_02.png" alt="images/ubnt_analyse_02.png">
+<img src="/images/2018/06/ubnt_analyse_03.png" alt="images/ubnt_analyse_03.png"></p>
 <p>Using Kibana&rsquo;s filtering to isolate the data to just these two facets, it&rsquo;s clear that it&rsquo;s just a particular device that&rsquo;s so busy</p>
-
-<p><img src="/images/2018/06/ubnt_analyse_04.png" alt="images/ubnt_analyse_04.png" /></p>
-
+<p><img src="/images/2018/06/ubnt_analyse_04.png" alt="images/ubnt_analyse_04.png"></p>
 <p>&ldquo;Attic lights plug&rdquo; is, as the name suggests, a wifi plug that I have controlling the lights in the attic of my house. But why&rsquo;s it got so much activity, compared to usual? Let&rsquo;s look at the times again:</p>
-
-<p><img src="/images/2018/06/ubnt_analyse_05.png" alt="images/ubnt_analyse_05.png" /></p>
-
+<p><img src="/images/2018/06/ubnt_analyse_05.png" alt="images/ubnt_analyse_05.png"></p>
 <p>Roughly 10:00 on the 28th April, through to c.18:00 on the 30th April. The missing data here necessary for the automatic correlation is the howls of complaint from my kids when Netflix wouldn&rsquo;t work this weekend—my home internet connection was down!</p>
-
 <p>So from the looks of it, this wifi plug is not at all happy when it can&rsquo;t &lsquo;phone home&rsquo;, and so tries reconnecting to the AP again…and again…and again!</p>
-
-<p><img src="/images/2018/06/ubnt_analyse_07.png" alt="images/ubnt_analyse_07.png" /></p>
-
+<p><img src="/images/2018/06/ubnt_analyse_07.png" alt="images/ubnt_analyse_07.png"></p>
 <p>The frequency works out at just under one connection attempt per minute, as can be seen from this graph:</p>
-
-<p><img src="/images/2018/06/ubnt_analyse_06.png" alt="images/ubnt_analyse_06.png" /></p>
-
+<p><img src="/images/2018/06/ubnt_analyse_06.png" alt="images/ubnt_analyse_06.png"></p>
 <p>So yay for dataviz and analytics. But—what can we do with this new-found knowledge? Watching a dashboard to look for this happening again is not so useful. Since we know what the pattern is, perhaps we can encode this into an application, and have an automatic alert tell me when it looks like my broadband&rsquo;s gone offline?</p>
-
 <p>The pattern we want to catch is:</p>
-
 <ul>
 <li>A particular device (&ldquo;Attic lights plug&rdquo;)</li>
 <li>Connecting to an Access Point</li>
 <li>At a rate of once per minute—or to not make it too sensitive, let&rsquo;s say more than twice in a five minute period</li>
 </ul>
-
 <p>Traditionally, doing this kind of realtime detection against a stream of inbound data would require some serious coding beyond the scope of many. Even seasoned programmers might not be familiar with the latest stream processing libraries. But what almost all programmers, developers, and even hand-crafted artisanal data engineers are familiar with is SQL! Let&rsquo;s see what the above English statement of the pattern looks like in KSQL:</p>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">SELECT</span> USER_DEVICE_NAME, <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> AP_CONNECT_COUNT <span style="">\</span>
+<span style="color:#008000;font-weight:bold">FROM</span> UBNT_AP_USER_DEVICE_CONNECTS WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">5</span> MINUTES) <span style="">\</span>
+<span style="color:#008000;font-weight:bold">WHERE</span> USER_DEVICE_NAME<span style="color:#666">=</span><span style="color:#ba2121">&#39;Attic lights plug&#39;</span> <span style="">\</span>
+<span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> USER_DEVICE_NAME <span style="">\</span>
+<span style="color:#008000;font-weight:bold">HAVING</span> <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>)<span style="color:#666">&gt;</span><span style="color:#666">2</span>;
 
-<pre><code class="language-sql">ksql&gt; SELECT USER_DEVICE_NAME, COUNT(*) AS AP_CONNECT_COUNT \
-FROM UBNT_AP_USER_DEVICE_CONNECTS WINDOW TUMBLING (SIZE 5 MINUTES) \
-WHERE USER_DEVICE_NAME='Attic lights plug' \
-GROUP BY USER_DEVICE_NAME \
-HAVING COUNT(*)&gt;2;
-
-Attic lights plug | 7
-Attic lights plug | 8
-Attic lights plug | 7
-Attic lights plug | 7
-Attic lights plug | 5
-Attic lights plug | 6
-</code></pre>
-
-<p>We can persist this as a Kafka topic, so that any new instances of this condition being met (i.e. a signal that my internet might be down!), are written to a Kafka topic that I can use to drive an alert:</p>
-
-<pre><code class="language-sql">CREATE TABLE OFFLINE_WARNING_SIGNAL AS \
-SELECT USER_DEVICE_NAME, COUNT(*) AS AP_CONNECT_COUNT \
-FROM UBNT_AP_USER_DEVICE_CONNECTS WINDOW TUMBLING (SIZE 5 MINUTES) \
-WHERE USER_DEVICE_NAME='Attic lights plug' \
-GROUP BY USER_DEVICE_NAME \
-HAVING COUNT(*)&gt;2;
-</code></pre>
-
-<p>Now I have a Kafka topic (<code>OFFLINE_WARNING_SIGNAL</code>) that I can do something like hook up to a Python driven alert as <a href="https://www.confluent.io/blog/real-time-syslog-processing-with-apache-kafka-and-ksql-part-2-event-driven-alerting-with-slack/">illustrated here</a>. All this driven with a simple SQL expression, in effect giving us a full-blown stream processing application!</p>
-
-<p><img src="/images/2018/06/slack_notify_01.jpg" alt="iOS Slack Alert" /></p>
-
+Attic lights plug <span style="color:#666">|</span> <span style="color:#666">7</span>
+Attic lights plug <span style="color:#666">|</span> <span style="color:#666">8</span>
+Attic lights plug <span style="color:#666">|</span> <span style="color:#666">7</span>
+Attic lights plug <span style="color:#666">|</span> <span style="color:#666">7</span>
+Attic lights plug <span style="color:#666">|</span> <span style="color:#666">5</span>
+Attic lights plug <span style="color:#666">|</span> <span style="color:#666">6</span>
+</code></pre></div><p>We can persist this as a Kafka topic, so that any new instances of this condition being met (i.e. a signal that my internet might be down!), are written to a Kafka topic that I can use to drive an alert:</p>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#008000;font-weight:bold">CREATE</span> <span style="color:#008000;font-weight:bold">TABLE</span> OFFLINE_WARNING_SIGNAL <span style="color:#008000;font-weight:bold">AS</span> <span style="">\</span>
+<span style="color:#008000;font-weight:bold">SELECT</span> USER_DEVICE_NAME, <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>) <span style="color:#008000;font-weight:bold">AS</span> AP_CONNECT_COUNT <span style="">\</span>
+<span style="color:#008000;font-weight:bold">FROM</span> UBNT_AP_USER_DEVICE_CONNECTS WINDOW TUMBLING (<span style="color:#008000;font-weight:bold">SIZE</span> <span style="color:#666">5</span> MINUTES) <span style="">\</span>
+<span style="color:#008000;font-weight:bold">WHERE</span> USER_DEVICE_NAME<span style="color:#666">=</span><span style="color:#ba2121">&#39;Attic lights plug&#39;</span> <span style="">\</span>
+<span style="color:#008000;font-weight:bold">GROUP</span> <span style="color:#008000;font-weight:bold">BY</span> USER_DEVICE_NAME <span style="">\</span>
+<span style="color:#008000;font-weight:bold">HAVING</span> <span style="color:#008000;font-weight:bold">COUNT</span>(<span style="color:#666">*</span>)<span style="color:#666">&gt;</span><span style="color:#666">2</span>;
+</code></pre></div><p>Now I have a Kafka topic (<code>OFFLINE_WARNING_SIGNAL</code>) that I can do something like hook up to a Python driven alert as <a href="https://www.confluent.io/blog/real-time-syslog-processing-with-apache-kafka-and-ksql-part-2-event-driven-alerting-with-slack/">illustrated here</a>. All this driven with a simple SQL expression, in effect giving us a full-blown stream processing application!</p>
+<p><img src="/images/2018/06/slack_notify_01.jpg" alt="iOS Slack Alert"></p>
 <p>How cool is that: expressing patterns of interest in data, and building it into a real-time stream processing application, all using SQL!</p>
 
 </article>
@@ -174,11 +146,9 @@ HAVING COUNT(*)&gt;2;
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

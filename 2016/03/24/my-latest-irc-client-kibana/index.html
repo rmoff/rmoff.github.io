@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="My latest IRC client : Kibana" />
@@ -85,131 +85,102 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<p>OK, maybe that&rsquo;s not entirely true. But my <em>read-only</em> client, certainly.</p>
-
-<p><img src="/images/2016/03/2016-03-24_21-15-30.png" alt="" /></p>
-
+<p><img src="/images/2016/03/2016-03-24_21-15-30.png" alt=""></p>
 <p>I was perusing the <a href="https://www.elastic.co/guide/en/logstash/current/input-plugins.html">Logstash input plugins</a> recently when I noticed that there was one for <a href="https://www.elastic.co/guide/en/logstash/current/plugins-inputs-irc.html">IRC</a>. Being a fan of IRC and a regular on the <a href="http://rmoff.net/2016/03/03/obihackers-irc-channel/">#obihackers</a> channel, I thought this could be fun and yet another great example of how easy <a href="http://elastic.co">the Elastic stack</a> is to work with.</p>
-
 <p>Installation is a piece of cake:</p>
-
-<pre><code class="language-shell">wget https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/zip/elasticsearch/2.2.1/elasticsearch-2.2.1.zip
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">wget https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/zip/elasticsearch/2.2.1/elasticsearch-2.2.1.zip
 wget https://download.elastic.co/logstash/logstash/logstash-2.2.2.zip
 wget https://download.elastic.co/kibana/kibana/kibana-4.4.2-linux-x64.tar.gz
-unzip \*.zip
+unzip <span style="color:#b62;font-weight:bold">\*</span>.zip
 tar -xf kibana-4.4.2-linux-x64.tar.gz
 sudo mv elasticsearch-2.2.1 logstash-2.2.2 kibana-4.4.2-linux-x64 /opt
-</code></pre>
-
-<p>(you&rsquo;ll also need Oracle JDK installed if not already, <a href="http://www.jamescoyle.net/how-to/1897-download-oracle-java-from-the-terminal-with-wget">here&rsquo;s a handy way to get it from the CLI</a>).</p>
-
+</code></pre></div><p>(you&rsquo;ll also need Oracle JDK installed if not already, <a href="http://www.jamescoyle.net/how-to/1897-download-oracle-java-from-the-terminal-with-wget">here&rsquo;s a handy way to get it from the CLI</a>).</p>
 <p>Start up Elasticsearch and Kibana:</p>
-
-<pre><code class="language-shell">/opt/elasticsearch-2.2.1/bin/elasticsearch
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">/opt/elasticsearch-2.2.1/bin/elasticsearch
 /opt/kibana-4.4.2-linux-x64/bin/kibana
-</code></pre>
-
-<p><em>Use <a href="https://en.wikipedia.org/wiki/GNU_Screen">screen</a>, cos it&rsquo;s awesome, to run these in parallel on the same SSH connection.</em></p>
-
-<p><img src="/images/2016/03/2016-03-24_21-00-03.png" alt="" /></p>
-
+</code></pre></div><p><em>Use <a href="https://en.wikipedia.org/wiki/GNU_Screen">screen</a>, cos it&rsquo;s awesome, to run these in parallel on the same SSH connection.</em></p>
+<p><img src="/images/2016/03/2016-03-24_21-00-03.png" alt=""></p>
 <p>Now create a file (e.g. <code>logtash-irc.conf</code>) to hold the Logstash configuration. It&rsquo;s very simple - connect to the IRC server, on a given channel, then add geographical attributes to each message based on the host of the user, and then dump the whole lot to both <code>stdout</code> and Elasticsearch:</p>
-
-<pre><code class="language-ruby"># @rmoff / March 24, 2016
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ruby" data-lang="ruby"><span style="color:#408080;font-style:italic"># @rmoff / March 24, 2016</span>
 input {
     irc {
-        channels =&gt; &quot;#obihackers&quot;
-        host =&gt; &quot;chat.freenode.net&quot;
+        channels <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;#obihackers&#34;</span>
+        host <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;chat.freenode.net&#34;</span>
     }
 }
 
 filter {
     geoip {
-        source =&gt; &quot;host&quot;
+        source <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;host&#34;</span>
     }
 }
 
 output {
     stdout {
-        codec =&gt; &quot;rubydebug&quot;
+        codec <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;rubydebug&#34;</span>
     }
     elasticsearch {
-        hosts =&gt; &quot;localhost&quot;
-        index =&gt; &quot;logstash-irc-%{+YYYY.MM.dd}&quot;
+        hosts <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;localhost&#34;</span>
+        index <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;logstash-irc-%{+YYYY.MM.dd}&#34;</span>
     }
 }
-</code></pre>
-
-<p>Now set Logstash running:</p>
-
-<pre><code class="language-shell">/opt/logstash-2.2.2/bin/logstash -f logstash-irc.conf
-</code></pre>
-
-<p>Now any message to the channel will get picked up by the bot, sent to Elasticsearch, and echoed to <code>stdout</code>:</p>
-
-<pre><code class="language-ruby">{
-       &quot;message&quot; =&gt; &quot;ChristianBerg: LOL, never thought that before&quot;,
-      &quot;@version&quot; =&gt; &quot;1&quot;,
-    &quot;@timestamp&quot; =&gt; &quot;2016-03-24T15:52:47.616Z&quot;,
-          &quot;user&quot; =&gt; &quot;rmoff!~rmoff@12345&quot;,
-       &quot;command&quot; =&gt; &quot;PRIVMSG&quot;,
-       &quot;channel&quot; =&gt; &quot;#obihackers&quot;,
-          &quot;nick&quot; =&gt; &quot;rmoff&quot;,
-        &quot;server&quot; =&gt; &quot;chat.freenode.net:6667&quot;,
-          &quot;host&quot; =&gt; &quot;host-12345&quot;,
-         &quot;geoip&quot; =&gt; {
-                      &quot;ip&quot; =&gt; &quot;1.2.3.4&quot;,
-           &quot;country_code2&quot; =&gt; &quot;GB&quot;,
-           &quot;country_code3&quot; =&gt; &quot;GBR&quot;,
-            &quot;country_name&quot; =&gt; &quot;United Kingdom&quot;,
-          &quot;continent_code&quot; =&gt; &quot;EU&quot;,
-             &quot;region_name&quot; =&gt; &quot;B4&quot;,
-               &quot;city_name&quot; =&gt; &quot;Shipley&quot;,
-                &quot;latitude&quot; =&gt; 53.83330000000001,
-               &quot;longitude&quot; =&gt; -1.766699999999986,
-                &quot;timezone&quot; =&gt; &quot;Europe/London&quot;,
-        &quot;real_region_name&quot; =&gt; &quot;Bradford&quot;,
-                &quot;location&quot; =&gt; [
-            [0] -1.766699999999986,
-            [1] 53.83330000000001
-        ]
+</code></pre></div><p>Now set Logstash running:</p>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">/opt/logstash-2.2.2/bin/logstash -f logstash-irc.conf
+</code></pre></div><p>Now any message to the channel will get picked up by the bot, sent to Elasticsearch, and echoed to <code>stdout</code>:</p>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ruby" data-lang="ruby">{
+       <span style="color:#ba2121">&#34;message&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;ChristianBerg: LOL, never thought that before&#34;</span>,
+      <span style="color:#ba2121">&#34;@version&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;1&#34;</span>,
+    <span style="color:#ba2121">&#34;@timestamp&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;2016-03-24T15:52:47.616Z&#34;</span>,
+          <span style="color:#ba2121">&#34;user&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;rmoff!~rmoff@12345&#34;</span>,
+       <span style="color:#ba2121">&#34;command&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;PRIVMSG&#34;</span>,
+       <span style="color:#ba2121">&#34;channel&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;#obihackers&#34;</span>,
+          <span style="color:#ba2121">&#34;nick&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;rmoff&#34;</span>,
+        <span style="color:#ba2121">&#34;server&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;chat.freenode.net:6667&#34;</span>,
+          <span style="color:#ba2121">&#34;host&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;host-12345&#34;</span>,
+         <span style="color:#ba2121">&#34;geoip&#34;</span> <span style="color:#666">=&gt;</span> {
+                      <span style="color:#ba2121">&#34;ip&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;1.2.3.4&#34;</span>,
+           <span style="color:#ba2121">&#34;country_code2&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;GB&#34;</span>,
+           <span style="color:#ba2121">&#34;country_code3&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;GBR&#34;</span>,
+            <span style="color:#ba2121">&#34;country_name&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;United Kingdom&#34;</span>,
+          <span style="color:#ba2121">&#34;continent_code&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;EU&#34;</span>,
+             <span style="color:#ba2121">&#34;region_name&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;B4&#34;</span>,
+               <span style="color:#ba2121">&#34;city_name&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;Shipley&#34;</span>,
+                <span style="color:#ba2121">&#34;latitude&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#666">53</span><span style="color:#666">.</span><span style="color:#666">83330000000001</span>,
+               <span style="color:#ba2121">&#34;longitude&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#666">-</span><span style="color:#666">1</span><span style="color:#666">.</span><span style="color:#666">766699999999986</span>,
+                <span style="color:#ba2121">&#34;timezone&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;Europe/London&#34;</span>,
+        <span style="color:#ba2121">&#34;real_region_name&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;Bradford&#34;</span>,
+                <span style="color:#ba2121">&#34;location&#34;</span> <span style="color:#666">=&gt;</span> <span style="color:#666">[</span>
+            <span style="color:#666">[</span><span style="color:#666">0</span><span style="color:#666">]</span> <span style="color:#666">-</span><span style="color:#666">1</span><span style="color:#666">.</span><span style="color:#666">766699999999986</span>,
+            <span style="color:#666">[</span><span style="color:#666">1</span><span style="color:#666">]</span> <span style="color:#666">53</span><span style="color:#666">.</span><span style="color:#666">83330000000001</span>
+        <span style="color:#666">]</span>
     }
 }
-</code></pre>
-
-<p>You can quickly check that the data&rsquo;s making it into Elasticsearch by running:</p>
-
-<pre><code class="language-shell">curl -XGET 'http://localhost:9200/logstash-irc-*/_search?pretty'
-</code></pre>
-
-<p>You should get something like this back:</p>
-
-<pre><code class="language-json">{
-  &quot;took&quot; : 6,
-  &quot;timed_out&quot; : false,
-  &quot;_shards&quot; : {
-    &quot;total&quot; : 5,
-    &quot;successful&quot; : 5,
-    &quot;failed&quot; : 0
+</code></pre></div><p>You can quickly check that the data&rsquo;s making it into Elasticsearch by running:</p>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -XGET <span style="color:#ba2121">&#39;http://localhost:9200/logstash-irc-*/_search?pretty&#39;</span>
+</code></pre></div><p>You should get something like this back:</p>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+  <span style="color:#008000;font-weight:bold">&#34;took&#34;</span> : <span style="color:#666">6</span>,
+  <span style="color:#008000;font-weight:bold">&#34;timed_out&#34;</span> : <span style="color:#008000;font-weight:bold">false</span>,
+  <span style="color:#008000;font-weight:bold">&#34;_shards&#34;</span> : {
+    <span style="color:#008000;font-weight:bold">&#34;total&#34;</span> : <span style="color:#666">5</span>,
+    <span style="color:#008000;font-weight:bold">&#34;successful&#34;</span> : <span style="color:#666">5</span>,
+    <span style="color:#008000;font-weight:bold">&#34;failed&#34;</span> : <span style="color:#666">0</span>
   },
-  &quot;hits&quot; : {
-    &quot;total&quot; : 278,
-    &quot;max_score&quot; : 1.0,
-    &quot;hits&quot; : [ {
-      &quot;_index&quot; : &quot;logstash-irc-2016.03.24&quot;,
-      &quot;_type&quot; : &quot;logs&quot;,
-      &quot;_id&quot; : &quot;AVOpXg1lfUfBfaUyS5CU&quot;,
-      &quot;_score&quot; : 1.0,
-      &quot;_source&quot; : {
-        &quot;message&quot; : &quot;rmoff: I can't even get an IP from hugh_jass&quot;,
-        &quot;@version&quot; : &quot;1&quot;,
-        &quot;@timestamp&quot; : &quot;2016-03-24T11:58:57.401Z&quot;,
-[...]
-</code></pre>
-
-<p>Now the data&rsquo;s in Elasticsearch, it&rsquo;s a piece of cake to knock up a quick dashboard in Kibana with auto-refresh switched on, showing the current channel activity and some key stats for the day:</p>
-
-<p><img src="/images/2016/03/2016-03-24_21-13-16.png" alt="" /></p>
-
+  <span style="color:#008000;font-weight:bold">&#34;hits&#34;</span> : {
+    <span style="color:#008000;font-weight:bold">&#34;total&#34;</span> : <span style="color:#666">278</span>,
+    <span style="color:#008000;font-weight:bold">&#34;max_score&#34;</span> : <span style="color:#666">1.0</span>,
+    <span style="color:#008000;font-weight:bold">&#34;hits&#34;</span> : [ {
+      <span style="color:#008000;font-weight:bold">&#34;_index&#34;</span> : <span style="color:#ba2121">&#34;logstash-irc-2016.03.24&#34;</span>,
+      <span style="color:#008000;font-weight:bold">&#34;_type&#34;</span> : <span style="color:#ba2121">&#34;logs&#34;</span>,
+      <span style="color:#008000;font-weight:bold">&#34;_id&#34;</span> : <span style="color:#ba2121">&#34;AVOpXg1lfUfBfaUyS5CU&#34;</span>,
+      <span style="color:#008000;font-weight:bold">&#34;_score&#34;</span> : <span style="color:#666">1.0</span>,
+      <span style="color:#008000;font-weight:bold">&#34;_source&#34;</span> : {
+        <span style="color:#008000;font-weight:bold">&#34;message&#34;</span> : <span style="color:#ba2121">&#34;rmoff: I can&#39;t even get an IP from hugh_jass&#34;</span>,
+        <span style="color:#008000;font-weight:bold">&#34;@version&#34;</span> : <span style="color:#ba2121">&#34;1&#34;</span>,
+        <span style="color:#008000;font-weight:bold">&#34;@timestamp&#34;</span> : <span style="color:#ba2121">&#34;2016-03-24T11:58:57.401Z&#34;</span>,
+<span style="">[...]</span>
+</code></pre></div><p>Now the data&rsquo;s in Elasticsearch, it&rsquo;s a piece of cake to knock up a quick dashboard in Kibana with auto-refresh switched on, showing the current channel activity and some key stats for the day:</p>
+<p><img src="/images/2016/03/2016-03-24_21-13-16.png" alt=""></p>
 <p>If you&rsquo;ve not built a Kibana dashboard before, check out <a href="https://www.elastic.co/blog/visualising-oracle-performance-data-with-the-elastic-stack">other</a> <a href="http://www.rittmanmead.com/2015/04/using-the-elk-stack-to-analyse-donors-choose-data/">articles</a> I&rsquo;ve written which walk through the process.</p>
 
 </article>
@@ -222,11 +193,9 @@ output {
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

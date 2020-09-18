@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Monitoring Logstash Ingest Rates with Elasticsearch, Kibana, and Timelion" />
@@ -84,112 +84,72 @@
 		<main role="main">
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
-	
-
-<p>Yesterday I wrote about <a href="http://rmoff.net/2016/05/12/monitoring-logstash-ingest-rates-with-influxdb-and-grafana/">Monitoring Logstash Ingest Rates with InfluxDB and Grafana</a>, in which InfluxDB provided the data store for the ingest rate data, and Grafana the frontend.</p>
-
+	<p>Yesterday I wrote about <a href="http://rmoff.net/2016/05/12/monitoring-logstash-ingest-rates-with-influxdb-and-grafana/">Monitoring Logstash Ingest Rates with InfluxDB and Grafana</a>, in which InfluxDB provided the data store for the ingest rate data, and Grafana the frontend.</p>
 <p><a href="https://twitter.com/warkolm/">Mark Walkom</a> reminded me on twitter that the next release of Logstash will add more functionality in this area - and that it&rsquo;ll integrate back into the Elastic stack:</p>
-
-<p><blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr"><a href="https://twitter.com/rmoff">@rmoff</a> nice, LS 5.0 will have APIs exposing metrics too. they’ll be integrated back into Marvel/Monitoring! :)</p>&mdash; Mark Walkom (@warkolm) <a href="https://twitter.com/warkolm/status/730900473226485764">May 12, 2016</a></blockquote>
-<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<!-- raw HTML omitted -->
 <p>Which then got me thinking &ndash; why add in InfluxDB and Grafana, if you&rsquo;re already using another datastore and front end (Elasticsearch and Kibana)? Well, I touched on this yesterday, and I would still opt for InfluxDB &amp; Grafana when deploying a metrics-based monitoring solution. But, if your primary focus is on text based data (such as log files), rather than metrics alone, Elastic stack will be just great for you. And so in this scenario, let&rsquo;s bring the ingest rate monitoring back in house!</p>
-
 <h3 id="logstash-configuration">Logstash Configuration</h3>
-
 <p>This is the same <a href="http://rmoff.net/2016/05/12/monitoring-logstash-ingest-rates-with-influxdb-and-grafana/">as before</a>, except the <strong>output</strong> stanza points to Elasticsearch:</p>
-
-<pre><code class="language-ruby">input {
-    # Input code goes here
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ruby" data-lang="ruby">input {
+    <span style="color:#408080;font-style:italic"># Input code goes here</span>
 }
 filter {
-    # Any other filter code goes here
-    # 
-    # [...] 
-    #
+    <span style="color:#408080;font-style:italic"># Any other filter code goes here</span>
+    <span style="color:#408080;font-style:italic"># </span>
+    <span style="color:#408080;font-style:italic"># [...] </span>
+    <span style="color:#408080;font-style:italic">#</span>
     metrics {
-        meter =&gt; &quot;events&quot;
-        add_tag =&gt; &quot;metric&quot;
+        meter <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;events&#34;</span>
+        add_tag <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;metric&#34;</span>
     }
 }
 
 output {
-    if &quot;metric&quot; in [tags] {
-        elasticsearch { hosts =&gt; 'localhost'
-                        index =&gt; &quot;logstash-metrics&quot;
+    <span style="color:#008000;font-weight:bold">if</span> <span style="color:#ba2121">&#34;metric&#34;</span> <span style="color:#008000;font-weight:bold">in</span> <span style="color:#666">[</span>tags<span style="color:#666">]</span> {
+        elasticsearch { hosts <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#39;localhost&#39;</span>
+                        index <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;logstash-metrics&#34;</span>
         }
-    } else {
-    # Output code goes here
-    # 
-    # [...] 
-    #
+    } <span style="color:#008000;font-weight:bold">else</span> {
+    <span style="color:#408080;font-style:italic"># Output code goes here</span>
+    <span style="color:#408080;font-style:italic"># </span>
+    <span style="color:#408080;font-style:italic"># [...] </span>
+    <span style="color:#408080;font-style:italic">#</span>
     }
 }
-</code></pre>
-
-<p>After making this change, restart your Logstash agent.</p>
-
-<h3 id="checking-the-data-s-arriving">Checking the data&rsquo;s arriving</h3>
-
+</code></pre></div><p>After making this change, restart your Logstash agent.</p>
+<h3 id="checking-the-datas-arriving">Checking the data&rsquo;s arriving</h3>
 <p>I&rsquo;ve been working with Elastic stack for a few years now, and can&rsquo;t believe that it&rsquo;s only recently I&rsquo;ve discovered <a href="https://www.elastic.co/guide/en/sense/current/installing.html">Sense</a>. It&rsquo;s a plugin for Kibana, and makes working with the Elasticsearch REST API a real pleasure:</p>
-
-<p><img src="/images/2016/05/Sense_-_Kibana.png" alt="Sense" /></p>
-
+<p><img src="/images/2016/05/Sense_-_Kibana.png" alt="Sense"></p>
 <p>So we can see in the new Elasticsearch index <strong>logstash-metrics</strong> the data&rsquo;s coming through. All good - now onto the graphs!</p>
-
 <h3 id="graphing-it-in-kibana">Graphing it in Kibana</h3>
-
 <p>You&rsquo;ve two options for visualising the data here - the Line Chart, or <a href="https://www.elastic.co/blog/timelion-timeline">Timelion</a>. Timelion is still in beta, but longer-term will absolutely be the right choice for this kind of visualisation. So, let&rsquo;s do both!</p>
-
 <p>The Line Chart is pretty simple. Set the metric aggregation to <strong>Max</strong> (instead of <em>Count</em>), and choose the relevant metric field. I&rsquo;ve gone for <code>rate_1m</code> and added a second Y-axis metric for <code>rate_5m</code>. On the X-axis it&rsquo;s just split out as a date histogram:</p>
-
-<p><img src="/images/2016/05/lsir14.png" alt="Kibana Line Chart" /></p>
-
+<p><img src="/images/2016/05/lsir14.png" alt="Kibana Line Chart"></p>
 <p>The Timelion chart is a tad more complex to build, but ultimately better. Since I&rsquo;ve got Timelion installed and am running Kibana 4.5, &ldquo;Timeseries&rdquo; shows up as a Visualisation option for me when I create a new one. To start with the blank configuration is a bit daunting:</p>
-
-<p><img src="/images/2016/05/Visualize_-_Kibana.png" alt="" /></p>
-
+<p><img src="/images/2016/05/Visualize_-_Kibana.png" alt=""></p>
 <p>Set the Interval to <strong>other</strong> and then <code>5s</code> in the box that appears. Amend the Timelion Expression to</p>
-
 <pre><code>.es(index=logstash-metrics)
 </code></pre>
-
 <p>Hit the play button:</p>
-
-<p><img src="/images/2016/05/Visualize_-_Kibana-1.png" alt="" /></p>
-
+<p><img src="/images/2016/05/Visualize_-_Kibana-1.png" alt=""></p>
 <p>Ah - not quite what we expected. That&rsquo;s because we&rsquo;re seeing by default a <strong>Count</strong>, which is generally 1 per Interval. Let&rsquo;s fix that:</p>
-
 <pre><code>.es(index=logstash-metrics,metric=max:events.rate_1m)
 </code></pre>
-
-<p><img src="/images/2016/05/Visualize_-_Kibana-2.png" alt="Kibana Timelion" /></p>
-
+<p><img src="/images/2016/05/Visualize_-_Kibana-2.png" alt="Kibana Timelion"></p>
 <p>Tada!</p>
-
 <p>But, let&rsquo;s not stop there, let&rsquo;s see what Timelion can do. A second series? Sure:</p>
-
 <pre><code>.es(index=logstash-metrics,metric=max:events.rate_1m), .es(index=logstash-metrics,metric=max:events.rate_5m)
 </code></pre>
-
-<p><img src="/images/2016/05/Visualize_-_Kibana-3.png" alt="" /></p>
-
+<p><img src="/images/2016/05/Visualize_-_Kibana-3.png" alt=""></p>
 <p>Looks good - but which is which? And how about a title for the chart? <strong>label</strong> and <strong>title</strong> functions to the rescue!</p>
-
 <pre><code>.es(index=logstash-metrics,metric=max:events.rate_1m).label(&quot;1 minute moving average&quot;), .es(index=logstash-metrics,metric=max:events.rate_5m).label(&quot;5 minute moving average&quot;).title(&quot;Events per second&quot;)
 </code></pre>
-
-<p><img src="/images/2016/05/Visualize_-_Kibana_and_untitled_and_1__screen.png" alt="" /></p>
-
+<p><img src="/images/2016/05/Visualize_-_Kibana_and_untitled_and_1__screen.png" alt=""></p>
 <p>Let&rsquo;s save the visualisation, and include it on the dashboard with our actual data:</p>
-
-<p><img src="/images/2016/05/Dashboard_-_Kibana.png" alt="" /></p>
-
-<hr />
-
+<p><img src="/images/2016/05/Dashboard_-_Kibana.png" alt=""></p>
+<hr>
 <p>So - ingest rate monitoring within the Elastic stack? Done. Ingest rate monitoring if you&rsquo;re also using InfluxDB &amp; Grafana? <a href="http://rmoff.net/2016/05/12/monitoring-logstash-ingest-rates-with-influxdb-and-grafana/">Done</a>! And just to round off all permutations - you want to store your data in Elasticsearch, but just love how Grafana looks? Not a problem, since <a href="http://docs.grafana.org/datasources/elasticsearch/">Grafana support Elasticsearch as a data source</a>:</p>
-
-<p><img src="/images/2016/05/Grafana_-_Twitter_Ingest_Monitor.png" alt="Grafana visualising Elasticsearch data" /></p>
+<p><img src="/images/2016/05/Grafana_-_Twitter_Ingest_Monitor.png" alt="Grafana visualising Elasticsearch data"></p>
 
 </article>
 
@@ -201,11 +161,9 @@ output {
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Streaming Data from MongoDB into Kafka with Kafka Connect and Debezium" />
@@ -84,41 +84,25 @@
 		<main role="main">
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
-	
-
-<p><em>Disclaimer: I am not a MongoDB person. These steps may or may not be appropriate and proper. But they worked for me :) Feel free to post in comments if I&rsquo;m doing something wrong</em></p>
-
-<h3 id="mongodb-config-enabling-replica-sets">MongoDB config - enabling replica sets</h3>
-
+	<p><em>Disclaimer: I am not a MongoDB person. These steps may or may not be appropriate and proper. But they worked for me :) Feel free to post in comments if I&rsquo;m doing something wrong</em></p>
+<h3 id="mongodb-config---enabling-replica-sets">MongoDB config - enabling replica sets</h3>
 <p>For Debezium to be able to stream changes from MongoDB, Mongo needs to have replication configured:</p>
-
 <p>Docs: <a href="https://docs.mongodb.com/manual/replication/">Replication</a> / <a href="https://docs.mongodb.com/manual/tutorial/convert-standalone-to-replica-set/">Convert a Standalone to a Replica Set</a></p>
-
 <p>Stop Mongo:</p>
-
 <pre><code>rmoff@proxmox01 ~&gt; sudo service mongod stop
-</code></pre>
-
-<p>Add replica set config to <code>/etc/mongod.conf</code>:</p>
-
+</code></pre><p>Add replica set config to <code>/etc/mongod.conf</code>:</p>
 <pre><code>[source,yaml]
 ----
 replication:
    replSetName: mongo01
 ----
-</code></pre>
-
-<p>Optionally, also set the bindIp so that it listens on all IPs, not just loopback:</p>
-
+</code></pre><p>Optionally, also set the bindIp so that it listens on all IPs, not just loopback:</p>
 <pre><code>[source,yaml]
 ----
 net:
   bindIp: 0.0.0.0
 ----
-</code></pre>
-
-<p>Start Mongo, and initiate the replica set:</p>
-
+</code></pre><p>Start Mongo, and initiate the replica set:</p>
 <pre><code>rmoff@proxmox01 ~&gt; sudo service mongod start
 rmoff@proxmox01 ~&gt; mongo --host 127.0.0.1:27017
 MongoDB shell version v3.6.3
@@ -138,36 +122,21 @@ connecting to: mongodb://127.0.0.1:27017/
         }
 }
 mongo01:PRIMARY&gt;
-</code></pre>
-
-<p>Check <code>/var/log/mongodb/mongod.log</code>, should see replica set config success and oplog get created:</p>
-
+</code></pre><p>Check <code>/var/log/mongodb/mongod.log</code>, should see replica set config success and oplog get created:</p>
 <pre><code>2018-03-07T13:12:26.007+0000 I REPL     [conn1] replSetInitiate admin command received from client
 2018-03-07T13:12:26.007+0000 I REPL     [conn1] creating replication oplog of size: 2864MB...
 2018-03-07T13:12:26.048+0000 I REPL     [conn1] New replica set config in use: { _id: &quot;mongo01&quot;, version: 1, protocolVersion: 1, members: [ { _id: 0, host: &quot;127.0.0.1:27017&quot;, arbiterOnly: false, buildIndexes: true, hidden: false, priority: 1.0, tags: {}, slaveDelay: 0, votes: 1 } ], settings: { chainingAllowed: true, heartbeatIntervalMillis: 2000, heartbeatTimeoutSecs: 10, electionTimeoutMillis: 10000, catchUpTimeoutMillis: -1, catchUpTakeoverDelayMillis: 30000, getLastErrorModes: {}, getLastErrorDefaults: { w: 1, wtimeout: 0 }, replicaSetId: ObjectId('5a9fe53ac81eed28a3bf207a') } }
-</code></pre>
-
-<h3 id="setting-up-debezium-to-stream-changes-from-mongodb-into-apache-kafka">Setting up Debezium to stream changes from MongoDB into Apache Kafka</h3>
-
+</code></pre><h3 id="setting-up-debezium-to-stream-changes-from-mongodb-into-apache-kafka">Setting up Debezium to stream changes from MongoDB into Apache Kafka</h3>
 <p>There&rsquo;s a <a href="http://debezium.io/docs/connectors/mongodb/">detailed explanation of how Debezium CDC works with Debezium</a> on the Debezium doc site.</p>
-
 <h4 id="install-debezium-mongo-plugin">Install Debezium Mongo plugin</h4>
-
 <pre><code>mkdir ~/connect-jars
 cd ~/connect-jars/
 wget https://repo1.maven.org/maven2/io/debezium/debezium-connector-mongodb/0.7.4/debezium-connector-mongodb-0.7.4-plugin.tar.gz
 tar -xf debezium-connector-mongodb-0.7.4-plugin.tar.gz
-</code></pre>
-
-<p>Add the plugin folder (e.g. <code>/home/rmoff/connect-jars</code>) to the Connect worker config file (e.g. <code>./etc/schema-registry/connect-avro-distributed.properties</code>)</p>
-
+</code></pre><p>Add the plugin folder (e.g. <code>/home/rmoff/connect-jars</code>) to the Connect worker config file (e.g. <code>./etc/schema-registry/connect-avro-distributed.properties</code>)</p>
 <pre><code>plugin.path=share/java,/home/rmoff/connect-jars
-</code></pre>
-
-<h4 id="configure-debezium-mongodb-connector">Configure Debezium MongoDB connector</h4>
-
+</code></pre><h4 id="configure-debezium-mongodb-connector">Configure Debezium MongoDB connector</h4>
 <p>Config file (<code>/home/rmoff/connect-config/mongodb.json</code>):</p>
-
 <pre><code>{
   &quot;name&quot;: &quot;mongodb-connector&quot;,
   &quot;config&quot;: {
@@ -177,25 +146,16 @@ tar -xf debezium-connector-mongodb-0.7.4-plugin.tar.gz
     &quot;database.whitelist&quot;: &quot;ace&quot;
   }
 }
-</code></pre>
-
-<p>Load connector:</p>
-
+</code></pre><p>Load connector:</p>
 <pre><code>curl -i -X POST -H &quot;Accept:application/json&quot; \
     -H  &quot;Content-Type:application/json&quot; http://localhost:8084/connectors/ \
     -d @/home/rmoff/connect-config/mongodb.json
-</code></pre>
-
-<p>Check Connect worker stdout:</p>
-
+</code></pre><p>Check Connect worker stdout:</p>
 <pre><code>[2018-03-07 13:33:35,303] INFO Beginning initial sync of 'mongo01' at {sec=1520429608, ord=1, h=-4885990198351632203} (io.debezium.connector.mongodb.Replicator:247)
 [2018-03-07 13:33:35,324] INFO Preparing to use 1 thread(s) to sync 39 collection(s): mongo01.ace.wlangroup, mongo01.ace.extension, mongo01.ace.stat, mongo01.ace.networkconf, mongo01.ace.voucher, mongo01.ace.hotspotpackage, mongo01.ace.hotspotop, mongo01.ace.alarm, mongo01.ace.heatmap, mongo01.ace.map, mongo01.ace.dpigroup, mongo01.ace.setting, mongo01.ace.usergroup, mongo01.ace.verification, mongo01.ace.payment, mongo01.ace.heatmappoint, mongo01.ace.scheduletask, mongo01.ace.guest, mongo01.ace.admin, mongo01.ace.radiusprofile, mongo01.ace.portalfile, mongo01.ace.mediafile, mongo01.ace.device, mongo01.ace.firewallgroup, mongo01.ace.site, mongo01.ace.task, mongo01.ace.dynamicdns, mongo01.ace.portconf, mongo01.ace.wlanconf, mongo01.ace.rogue, mongo01.ace.routing, mongo01.ace.firewallrule, mongo01.ace.event, mongo01.ace.hotspot2conf, mongo01.ace.broadcastgroup, mongo01.ace.portforward, mongo01.ace.privilege, mongo01.ace.account, mongo01.ace.user (io.debezium.connector.mongodb.Replicator:276)
 [2018-03-07 13:33:35,326] INFO Creating thread debezium-mongodbconnector-ubnt-copy-mongo01-0 (io.debezium.util.Threads:247)
 [2018-03-07 13:33:35,327] INFO Starting initial sync of 'mongo01.ace.wlangroup' (io.debezium.connector.mongodb.Replicator:286)
-</code></pre>
-
-<p>Check topics:</p>
-
+</code></pre><p>Check topics:</p>
 <pre><code>rmoff@proxmox01 ~/connect-jars&gt; kafka-topics --zookeeper localhost:2181 --list
 ubnt.ace.admin
 ubnt.ace.alarm
@@ -217,11 +177,8 @@ ubnt.ace.user
 ubnt.ace.usergroup
 ubnt.ace.wlanconf
 ubnt.ace.wlangroup
-</code></pre>
-
-<p>Check data</p>
-
-<pre><code class="language-$">{
+</code></pre><p>Check data</p>
+<pre><code class="language-$" data-lang="$">{
   &quot;after&quot;: {\&quot;_id\&quot; : {\&quot;$oid\&quot; : \&quot;58385328e4b001431e4e497a\&quot;},\&quot;adopted\&quot; : true,\&quot;board_rev\&quot; : 18,\&quot;cfgversion\&quot; : \&quot;xxxxxxxxxxxxx\&quot;,\&quot;config_network\&quot; : {\&quot;ip\&quot; : \&quot;192.168.10.12\&quot;,\&quot;type\&quot; : \&quot;dhcp\&quot;},\&quot;ethernet_table\&quot; : [{\&quot;mac\&quot; : \&quot;xx:xx:xx:xx:xx:xx\&quot;,\&quot;num_port\&quot; : 1,\&quot;name\&quot; : \&quot;eth0\&quot;}],\&quot;fw_caps\&quot; : 75,\&quot;has_eth1\&quot; : false,\&quot;has_speaker\&quot; : false,\&quot;inform_ip\&quot; : \&quot;192.168.10.172\&quot;,\&quot;inform_url\&quot; : \&quot;http://192.168.10.172:8080/inform\&quot;,\&quot;ip\&quot; : \&quot;192.168.10.68\&quot;,\&quot;led_override\&quot; : \&quot;on\&quot;,\&quot;mac\&quot; : \&quot;xx:xx:xx:xx:xx:xx\&quot;,\&quot;model\&quot; : \&quot;BZ2\&quot;,\&quot;name\&quot; : \&quot;Unifi AP - Study\&quot;,\&quot;port_table\&quot; : [],\&quot;radio_table\&quot; : [{\&quot;radio\&quot; : \&quot;ng\&quot;,\&quot;min_txpower\&quot; : 5,\&quot;max_txpower\&quot; : 23,\&quot;builtin_antenna\&quot; : true,\&quot;builtin_ant_gain\&quot; : 0,\&quot;nss\&quot; : 2,\&quot;name\&quot; : \&quot;wifi0\&quot;}],\&quot;serial\&quot; : \&quot;xxx\&quot;,\&quot;site_id\&quot; : \&quot;xxx\&quot;,\&quot;type\&quot; : \&quot;uap\&quot;,\&quot;version\&quot; : \&quot;3.7.40.6115\&quot;,\&quot;vwire_table\&quot; : [],\&quot;wifi_caps\&quot; : 117,\&quot;wlangroup_id_ng\&quot; : \&quot;xx\&quot;,\&quot;x_authkey\&quot; : \&quot;xx\&quot;,\&quot;x_fingerprint\&quot; : \&quot;xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:3e:39:08:45\&quot;,\&quot;x_ssh_hostkey\&quot; : \&quot;xx/xx=\&quot;,\&quot;x_ssh_hostkey_fingerprint\&quot; : \&quot;xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx\&quot;,\&quot;x_vwirekey\&quot; : \&quot;xx\&quot;,\&quot;map_id\&quot; : \&quot;xx\&quot;,\&quot;x\&quot; : 880.3939455186993,\&quot;y\&quot; : 966.2397514041841,\&quot;locked\&quot; : true,\&quot;wlan_overrides\&quot; : []}&quot;
   },
   &quot;patch&quot;: null,
@@ -232,22 +189,16 @@ ubnt.ace.wlangroup
     &quot;name&quot;: &quot;ubnt&quot;,
     &quot;rs&quot;: &quot;mongo01&quot;,
     &quot;ns&quot;: &quot;ace.device&quot;,
-</code></pre>
-
-<p>Note that the MongoDB document is not as fields in the Kafka message, but instead everything is in the payload as a <code>string</code> field as escaped JSON.</p>
-
+</code></pre><p>Note that the MongoDB document is not as fields in the Kafka message, but instead everything is in the payload as a <code>string</code> field as escaped JSON.</p>
 <p>Debezium does provide a <a href="http://debezium.io/docs/configuration/mongodb-event-flattening/">Single Message Transform (SMT) to flatten the MongoDB record</a> out like this, but in using it I hit a bug (<a href="https://issues.jboss.org/browse/DBZ-649">DBZ-649</a>) that seems to be down to the MongoDB collection documents having different fields between documents. The reported error was <code>org.apache.kafka.connect.errors.DataException: &lt;field&gt; is not a valid field name</code>.</p>
-
 <p>However, using KSQL&rsquo;s <code>EXTRACTJSONFIELD</code> you can still work with the data as-is:</p>
-
-<pre><code class="language-sql">ksql&gt; CREATE STREAM DEVICE (after VARCHAR) WITH (KAFKA_TOPIC='ubnt.ace.device-07',VALUE_FORMAT='JSON');
-ksql&gt; select EXTRACTJSONFIELD(after,'$.name'),EXTRACTJSONFIELD(after,'$.ip') from device;
-Unifi AP - Study | 192.168.10.68
-Unifi AP - Attic | 192.168.10.67
-ubnt.moffatt.me | 77.102.5.159
-Unifi AP - Pantry | 192.168.10.71
-</code></pre>
-
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql">ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">CREATE</span> STREAM DEVICE (<span style="color:#008000;font-weight:bold">after</span> <span style="color:#008000">VARCHAR</span>) <span style="color:#008000;font-weight:bold">WITH</span> (KAFKA_TOPIC<span style="color:#666">=</span><span style="color:#ba2121">&#39;ubnt.ace.device-07&#39;</span>,VALUE_FORMAT<span style="color:#666">=</span><span style="color:#ba2121">&#39;JSON&#39;</span>);
+ksql<span style="color:#666">&gt;</span> <span style="color:#008000;font-weight:bold">select</span> EXTRACTJSONFIELD(<span style="color:#008000;font-weight:bold">after</span>,<span style="color:#ba2121">&#39;$.name&#39;</span>),EXTRACTJSONFIELD(<span style="color:#008000;font-weight:bold">after</span>,<span style="color:#ba2121">&#39;$.ip&#39;</span>) <span style="color:#008000;font-weight:bold">from</span> device;
+Unifi AP <span style="color:#666">-</span> Study <span style="color:#666">|</span> <span style="color:#666">192</span>.<span style="color:#666">168</span>.<span style="color:#666">10</span>.<span style="color:#666">68</span>
+Unifi AP <span style="color:#666">-</span> Attic <span style="color:#666">|</span> <span style="color:#666">192</span>.<span style="color:#666">168</span>.<span style="color:#666">10</span>.<span style="color:#666">67</span>
+ubnt.moffatt.me <span style="color:#666">|</span> <span style="color:#666">77</span>.<span style="color:#666">102</span>.<span style="color:#666">5</span>.<span style="color:#666">159</span>
+Unifi AP <span style="color:#666">-</span> Pantry <span style="color:#666">|</span> <span style="color:#666">192</span>.<span style="color:#666">168</span>.<span style="color:#666">10</span>.<span style="color:#666">71</span>
+</code></pre></div>
 </article>
 
 		</main>
@@ -258,11 +209,9 @@ Unifi AP - Pantry | 192.168.10.71
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

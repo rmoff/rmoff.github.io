@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Automatically restarting failed Kafka Connect tasks" />
@@ -85,10 +85,10 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<div class="paragraph">
-<p>Here&#8217;s a hacky way to automatically restart Kafka Connect connectors if they fail. Restarting automatically only makes sense if it&#8217;s a transient failure; if there&#8217;s a problem with your pipeline (e.g. bad records or a mis-configured server) then you don&#8217;t gain anything from this. You might want to check out <a href="https://www.confluent.io/blog/kafka-connect-deep-dive-error-handling-dead-letter-queues">Kafka Connect&#8217;s error handling and dead letter queues</a> too.</p>
+<p>Here’s a hacky way to automatically restart Kafka Connect connectors if they fail. Restarting automatically only makes sense if it’s a transient failure; if there’s a problem with your pipeline (e.g. bad records or a mis-configured server) then you don’t gain anything from this. You might want to check out <a href="https://www.confluent.io/blog/kafka-connect-deep-dive-error-handling-dead-letter-queues">Kafka Connect’s error handling and dead letter queues</a> too.</p>
 </div>
 <div class="paragraph">
-<p>Let&#8217;s say you&#8217;ve got a couple of connectors set up, pulling data from MySQL with Debezium and streaming it to Elasticsearch. The MySQL source is a bit flaky and goes offline periodically. You can view the status of all your connectors and tasks:</p>
+<p>Let’s say you’ve got a couple of connectors set up, pulling data from MySQL with Debezium and streaming it to Elasticsearch. The MySQL source is a bit flaky and goes offline periodically. You can view the status of all your connectors and tasks:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors&#34;</span>| <span style="color:#b62;font-weight:bold">\
@@ -101,7 +101,7 @@ sink-elastic-orders-00     |  RUNNING  |  RUNNING
 source-debezium-orders-00  |  RUNNING  |  FAILED</code></pre></div>
 </div>
 <div class="paragraph">
-<p>If a connector&#8217;s task(s) are failed you can restart them using the <a href="https://docs.confluent.io/current/connect/references/restapi.html#post&#8212;&#8203;connectors-(string-name)-tasks-(int-taskid)-restart">REST API</a>:</p>
+<p>If a connector’s task(s) are failed you can restart them using the <a href="https://docs.confluent.io/current/connect/references/restapi.html#post—​connectors-(string-name)-tasks-(int-taskid)-restart">REST API</a>:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -X POST http://localhost:8083/connectors/source-debezium-orders-00/tasks/0/restart</code></pre></div>
@@ -120,7 +120,7 @@ sink-elastic-orders-00     |  RUNNING  |  RUNNING
 source-debezium-orders-00  |  RUNNING  |  RUNNING</code></pre></div>
 </div>
 <div class="paragraph">
-<p>But, manually watching and restarting tasks isn&#8217;t fun, so let&#8217;s automate it. Here&#8217;s a bit of bash that will restart any failed tasks. It&#8217;s the same pattern as above for iterating through the connectors on Kafka Connect&#8217;s REST API, coupled with <code>jq</code> 's ability to filter data (<code>select(.tasks[].state=="FAILED")</code>)</p>
+<p>But, manually watching and restarting tasks isn’t fun, so let’s automate it. Here’s a bit of bash that will restart any failed tasks. It’s the same pattern as above for iterating through the connectors on Kafka Connect’s REST API, coupled with <code>jq</code> &#39;s ability to filter data (<code>select(.tasks[].state==&#34;FAILED&#34;)</code>)</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#bc7a00">#!/usr/bin/env bash
@@ -130,7 +130,7 @@ source-debezium-orders-00  |  RUNNING  |  RUNNING</code></pre></div>
 <span style="color:#408080;font-style:italic"># Set the path so cron can find jq, necessary for cron depending on your default PATH</span>
 <span style="color:#008000">export</span> <span style="color:#19177c">PATH</span><span style="color:#666">=</span><span style="color:#19177c">$PATH</span>:/usr/local/bin/
 
-<span style="color:#408080;font-style:italic"># What time is it Mr Wolf?</span> 
+<span style="color:#408080;font-style:italic"># What time is it Mr Wolf? </span>
 date 
 
 <span style="color:#408080;font-style:italic"># List current connectors and status</span>
@@ -139,8 +139,8 @@ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand
 </span><span style="color:#b62;font-weight:bold"></span>           column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
 
 <span style="color:#408080;font-style:italic"># Restart any connector tasks that are FAILED</span>
-<span style="color:#408080;font-style:italic"># Works for Apache Kafka &gt;= 2.3.0</span> 
-<span style="color:#408080;font-style:italic"># Thanks to @jocelyndrean for this enhanced code snippet that also supports</span> 
+<span style="color:#408080;font-style:italic"># Works for Apache Kafka &gt;= 2.3.0 </span>
+<span style="color:#408080;font-style:italic"># Thanks to @jocelyndrean for this enhanced code snippet that also supports </span>
 <span style="color:#408080;font-style:italic">#  multiple tasks in a connector</span>
 curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
 </span><span style="color:#b62;font-weight:bold"></span>  jq -c -M <span style="color:#ba2121">&#39;map({name: .status.name } +  {tasks: .status.tasks}) | .[] | {task: ((.tasks[]) + {name: .name})}  | select(.task.state==&#34;FAILED&#34;) | {name: .task.name, task_id: .task.id|tostring} | (&#34;/connectors/&#34;+ .name + &#34;/tasks/&#34; + .task_id + &#34;/restart&#34;)&#39;</span> | <span style="color:#b62;font-weight:bold">\
@@ -150,14 +150,14 @@ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand
 <p>Which as any hacky admin will know can be scheduled to run with a crontab such as this:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">*/5 * * * * /u01/connectors/restart_failed_connector_tasks.sh <span style="color:#666">2</span>&gt;&amp;<span style="color:#666">1</span> &gt;&gt; /u01/connectors/connect_monitor.log</code></pre></div>
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">*/5 * * * * /u01/connectors/restart_failed_connector_tasks.sh 2&gt;&amp;<span style="color:#666">1</span> &gt;&gt; /u01/connectors/connect_monitor.log</code></pre></div>
 </div>
 <div class="paragraph">
 <p>Now every five minutes the script will look for any <code>FAILED</code> tasks and send a REST call to restart them.</p>
 </div>
-<hr>
+<hr/>
 <div class="paragraph">
-<p>If you&#8217;re using Apache Kafka &lt; 2.3.0 then the enhanced REST API for <code>connectors</code> is not available so you will need something like this:</p>
+<p>If you’re using Apache Kafka &lt; 2.3.0 then the enhanced REST API for <code>connectors</code> is not available so you will need something like this:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#408080;font-style:italic"># List current connectors and status</span>
@@ -182,11 +182,9 @@ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors&#34;</
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Mount VMDK/OVF/OVA on Amazon Web Services (AWS) EC2" />
@@ -85,16 +85,12 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<p>So you&rsquo;ve got a Linux VM that you want to access the contents of in EC2 - how do you do it? Let&rsquo;s see how. First up, convert the VMDK to raw image file. If you&rsquo;ve got a <code>ova</code>/<code>ovf</code> then just untar it first (<code>tar -xvf my_vm.ova</code>), from which you should get the VMDK. With that, convert it using <code>qemu-img</code>:</p>
-
 <pre><code>$ time qemu-img convert -f vmdk -O raw SampleAppv607p-appliance-disk1.vmdk SampleAppv607p-appliance-disk1.raw
 
 real    16m36.740s
 user    6m44.136s
 sys     0m11.000s
-</code></pre>
-
-<p>Inspect the image file:</p>
-
+</code></pre><p>Inspect the image file:</p>
 <pre><code>$ file /u01/stage/vm/extract/SampleAppv607p-appliance-disk1.raw
 /u01/stage/vm/extract/SampleAppv607p-appliance-disk1.raw: DOS/MBR boot sector; GRand Unified Bootloader, stage1 version 0x3, boot drive 0x80, 1st sector stage2 0x8480e, GRUB version 0.94
 
@@ -110,57 +106,36 @@ Disk identifier: 0x000274a9
                                                    Device Boot      Start         End      Blocks   Id  System
 /u01/stage/vm/extract/SampleAppv607p-appliance-disk1.raw1   *        2048     1026047      512000   83  Linux
 /u01/stage/vm/extract/SampleAppv607p-appliance-disk1.raw2         1026048   419430399   209202176   8e  Linux LVM
-</code></pre>
-
-<p>Mounting it straight out won&rsquo;t work:</p>
-
+</code></pre><p>Mounting it straight out won&rsquo;t work:</p>
 <pre><code>$ sudo mount /u01/stage/vm/extract/SampleAppv607p-appliance-disk1.raw /mnt/sampleapp/
 mount: wrong fs type, bad option, bad superblock on /dev/loop1,
        missing codepage or helper program, or other error
 
        In some cases useful info is found in syslog - try
        dmesg | tail or so.
-</code></pre>
-
-<p>Using the offset (<strong>2048</strong>) from <code>fdisk</code> output above, mount the first partition:</p>
-
+</code></pre><p>Using the offset (<strong>2048</strong>) from <code>fdisk</code> output above, mount the first partition:</p>
 <pre><code>$ sudo mkdir /mnt/sampleapp
 $ sudo mount -o offset=$((2048 * 512)) /u01/stage/vm/extract/SampleAppv607p-appliance-disk1.raw /mnt/sampleapp/
-</code></pre>
-
-<p>Success!</p>
-
+</code></pre><p>Success!</p>
 <pre><code>$ ls -l sampleapp/
 total 134841
 -rw-r--r--. 1 root root   106308 Oct 14  2014 config-2.6.32-504.el6.x86_64
 -rw-r--r--. 1 root root   107139 Mar 22  2016 config-2.6.32-573.22.1.el6.x86_64
 -rw-r--r--. 1 root root   131020 Mar 23  2016 config-3.8.13-118.4.2.el6uek.x86_64
 [...]
-</code></pre>
-
-<p>Now to mount the rest of the disk. Not so simple, as it uses Logical Volume Management (LVM):</p>
-
+</code></pre><p>Now to mount the rest of the disk. Not so simple, as it uses Logical Volume Management (LVM):</p>
 <pre><code>$ sudo mount -o offset=$((1026048 * 512)) /u01/stage/vm/extract/SampleAppv607p-appliance-disk1.raw /mnt/sampleapp/
 mount: unknown filesystem type 'LVM2_member'
-</code></pre>
-
-<p>Courtesy of <a href="http://www.hutsky.cz/blog/2014/06/mount-a-disk-image-containing-lvm/">this article</a>, we use <code>losetup</code> to make the volumes available via the loop device, run as root. We can skip the use of <code>kpartx</code> by using the <code>-P</code> flag on <code>losetup</code>:</p>
-
+</code></pre><p>Courtesy of <a href="http://www.hutsky.cz/blog/2014/06/mount-a-disk-image-containing-lvm/">this article</a>, we use <code>losetup</code> to make the volumes available via the loop device, run as root. We can skip the use of <code>kpartx</code> by using the <code>-P</code> flag on <code>losetup</code>:</p>
 <pre><code># losetup -P /dev/loop0 /u01/stage/vm/extract/SampleAppv607p-appliance-disk1.raw
-</code></pre>
-
-<p>And then activate the volume groups:</p>
-
+</code></pre><p>And then activate the volume groups:</p>
 <pre><code># vgscan
   Reading all physical volumes.  This may take a while...
   Found volume group &quot;vg_demo&quot; using metadata type lvm2
 
 # vgchange -ay vg_demo
   3 logical volume(s) in volume group &quot;vg_demo&quot; now active
-</code></pre>
-
-<p>Finally, mount each volume group:</p>
-
+</code></pre><p>Finally, mount each volume group:</p>
 <pre><code># ls -l /dev/mapper/
 total 0
 crw------- 1 root root 10, 236 Feb 14 10:21 control
@@ -173,29 +148,20 @@ lrwxrwxrwx 1 root root       7 Feb 14 14:21 vg_demo-lv_swap -&gt; ../dm-3
 # mkdir sampleapp/home sampleapp/root
 # mount /dev/mapper/vg_demo-lv_root /mnt/sampleapp/root/
 # mount /dev/mapper/vg_demo-lv_home /mnt/sampleapp/home/
-</code></pre>
-
-<hr />
-
+</code></pre><hr>
 <p>To unmount the image:</p>
-
 <pre><code># umount /mnt/sampleapp/home/
 # umount /mnt/sampleapp/root/
 # umount /mnt/sampleapp/
 # losetup -d /dev/loop0
-</code></pre>
-
-<hr />
-
+</code></pre><hr>
 <p>Convert back to VMDK:</p>
-
 <pre><code>[ec2-user@ip-10-0-1-238 extract]$ time qemu-img convert -f raw -O vmdk SampleAppv607p-appliance-disk1.raw SampleAppv607p-appliance-disk1-mod.vmdk
 
 real    19m34.931s
 user    0m4.780s
 sys     3m25.332s
 </code></pre>
-
 </article>
 
 		</main>
@@ -206,11 +172,9 @@ sys     3m25.332s
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

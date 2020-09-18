@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Oracle GoldenGate -&gt; Kafka Connect - &ldquo;Failed to serialize Avro data&rdquo;" />
@@ -85,43 +85,26 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<p><strong>tl;dr</strong> <em>Make sure that <code>key.converter.schema.registry.url</code> and <code>value.converter.schema.registry.url</code> are specified, and that there are no trailing whitespaces.</em></p>
-
-<hr />
-
+<hr>
 <p>I&rsquo;ve been building on <a href="https://www.confluent.io/blog/streaming-data-oracle-using-oracle-goldengate-kafka-connect/">previous work</a> I&rsquo;ve done with Oracle GoldenGate and Kafka Connect, looking at how to have the change records from the Oracle database come through to Kafka in Avro format rather than the default JSON that the <a href="https://java.net/projects/oracledi/downloads/directory/GoldenGate/Oracle%20GoldenGate%20Adapter%20for%20Kafka%20Connect">sample configuration</a> gives.</p>
-
 <p>Simply changing the Kafka Connect OGG configuration file (<code>confluent.properties</code>) from</p>
-
 <pre><code>value.converter=org.apache.kafka.connect.json.JsonConverter
 key.converter=org.apache.kafka.connect.json.JsonConverter
 </code></pre>
-
 <p>to</p>
-
 <pre><code>value.converter=io.confluent.connect.avro.AvroConverter
 key.converter=io.confluent.connect.avro.AvroConverter
 </code></pre>
-
 <p>isn&rsquo;t enough - the OGG replicat abends with the error (in <code>ggserr.log</code>) :</p>
-
 <pre><code>2016-11-29 20:50:23  ERROR   OGG-15051  Oracle GoldenGate Delivery, rconf.prm:  Java or JNI exception:
 oracle.goldengate.util.GGException: org.apache.kafka.common.config.ConfigException: Missing Schema registry url!
-</code></pre>
-
-<p>A similar configuration attempt (OGG -&gt; Kafka Connect Avro) can be found on the <a href="https://groups.google.com/forum/#!msg/confluent-platform/hTaL0z9WJhA/ZA5fb-DJBAAJ">Confluent Platform Google Group</a>, where the advice is to make sure that the schema registry URL is configured. I already had <code>schema.registry.url</code> in my config, but added the  <a href="https://groups.google.com/d/msg/confluent-platform/hTaL0z9WJhA/0Yf0c0GTBQAJ">sample config given</a>:</p>
-
+</code></pre><p>A similar configuration attempt (OGG -&gt; Kafka Connect Avro) can be found on the <a href="https://groups.google.com/forum/#!msg/confluent-platform/hTaL0z9WJhA/ZA5fb-DJBAAJ">Confluent Platform Google Group</a>, where the advice is to make sure that the schema registry URL is configured. I already had <code>schema.registry.url</code> in my config, but added the  <a href="https://groups.google.com/d/msg/confluent-platform/hTaL0z9WJhA/0Yf0c0GTBQAJ">sample config given</a>:</p>
 <pre><code>key.converter.schema.registry.url=http://localhost:18081
 value.converter.schema.registry.url=http://localhost:18081 
-</code></pre>
-
-<p>Note that my schema registry is running on 18081 (not 8081).</p>
-
+</code></pre><p>Note that my schema registry is running on 18081 (not 8081).</p>
 <p>I then got the replicat abending with a different error:</p>
-
 <p><code>org.apache.kafka.connect.errors.DataException: Failed to serialize Avro data</code>.</p>
-
 <p>The replicat RPT (in OGG&rsquo;s <code>dirrpt</code> folder) shows</p>
-
 <pre><code>Exception in thread &quot;main&quot; org.apache.kafka.connect.errors.DataException: Failed to serialize Avro data:
         at io.confluent.connect.avro.AvroConverter.fromConnectData(AvroConverter.java:92)
         at oracle.goldengate.kafkaconnect.GGProducer.send(GGProducer.java:64)
@@ -141,17 +124,10 @@ Caused by: java.lang.NumberFormatException: For input string: &quot;18081 &quot;
         at java.net.URLStreamHandler.parseURL(URLStreamHandler.java:216)
         at java.net.URL.&lt;init&gt;(URL.java:622)
         ... 21 more
-</code></pre>
-
-<p>The schema registry URL is evidently valid at some level, because in the schema registry stdout I can see a POST being made when the OGG replicat runs:</p>
-
+</code></pre><p>The schema registry URL is evidently valid at some level, because in the schema registry stdout I can see a POST being made when the OGG replicat runs:</p>
 <pre><code>[2016-11-25 03:12:53,591] INFO 127.0.0.1 - - [25/Nov/2016:03:12:53 +0000] &quot;POST /subjects/ORCL.SOE.LOGON-key/versions HTTP/1.1&quot; 200 9  15 (io.confluent.rest-utils.requests:77)
-</code></pre>
-
-<p>Looking at the error in the above note <code>MalformedURLException: For input string: &quot;18081 &quot;</code> and the space suffix on 18081.</p>
-
+</code></pre><p>Looking at the error in the above note <code>MalformedURLException: For input string: &quot;18081 &quot;</code> and the space suffix on 18081.</p>
 <p>Going back to the RPT output some more:</p>
-
 <pre><code>  Contents of Kafka producer configuration file
     key [schema.registry.url]  value [http://localhost:18081]
     key [key.converter]  value [io.confluent.connect.avro.AvroConverter]
@@ -163,9 +139,7 @@ Caused by: java.lang.NumberFormatException: For input string: &quot;18081 &quot;
     key [key.serializer]  value [org.apache.kafka.common.serialization.ByteArraySerializer]
     key [internal.key.converter]  value [org.apache.kafka.connect.json.JsonConverter]
     key [internal.value.converter]  value [org.apache.kafka.connect.json.JsonConverter]
-</code></pre>
-
-<p>Note the <strong>trailing space</strong> on the configuration value for <code>value.converter.schema.registry.url</code>! After removing the trailing space from <code>confluent.properties</code>, all was well, and OGG successfully sends data to Kafka in Avro format.</p>
+</code></pre><p>Note the <strong>trailing space</strong> on the configuration value for <code>value.converter.schema.registry.url</code>! After removing the trailing space from <code>confluent.properties</code>, all was well, and OGG successfully sends data to Kafka in Avro format.</p>
 
 </article>
 
@@ -177,11 +151,9 @@ Caused by: java.lang.NumberFormatException: For input string: &quot;18081 &quot;
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

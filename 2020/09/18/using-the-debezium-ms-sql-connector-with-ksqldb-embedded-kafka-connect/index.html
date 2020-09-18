@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Using the Debezium MS SQL connector with ksqlDB embedded Kafka Connect</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/09/18/using-the-debezium-ms-sql-connector-with-ksqldb-embedded-kafka-connect/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.75.1" />
+
+		
+		<meta property="og:title" content="Using the Debezium MS SQL connector with ksqlDB embedded Kafka Connect" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/09/IMG_6749.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/09/18/using-the-debezium-ms-sql-connector-with-ksqldb-embedded-kafka-connect/" />
+		<meta property="og:site_name" content="Using the Debezium MS SQL connector with ksqlDB embedded Kafka Connect" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/09/IMG_6749.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Using the Debezium MS SQL connector with ksqlDB embedded Kafka Connect</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-09-18T10:00:05&#43;01:00">Sep 18, 2020</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/ms-sql" class="no-underline category near-white dim">MS SQL</a>, <a href="https://rmoff.net/categories/debezium" class="no-underline category near-white dim">Debezium</a>, <a href="https://rmoff.net/categories/confluent-hub" class="no-underline category near-white dim">Confluent Hub</a>, <a href="https://rmoff.net/categories/ksqldb" class="no-underline category near-white dim">KsqlDB</a>, <a href="https://rmoff.net/categories/docker-compose" class="no-underline category near-white dim">Docker Compose</a>
+								<span class="display-print">at https://rmoff.net/2020/09/18/using-the-debezium-ms-sql-connector-with-ksqldb-embedded-kafka-connect/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="@rmoff" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>Prompted by <a href="https://stackoverflow.com/questions/63946368/how-to-use-the-debezium-sql-server-connector-with-ksqldb-embedded-connect">a question on StackOverflow</a> I thought I’d take a quick look at setting up <a href="https://ksqldb.io">ksqlDB</a> to ingest CDC events from Microsoft SQL Server using <a href="https://debezium.io/">Debezium</a>. Some of this is based on my previous article, <a href="https://rmoff.net/2019/11/20/streaming-data-from-sql-server-to-kafka-to-snowflake-with-kafka-connect/">Streaming data from SQL Server to Kafka to Snowflake ❄️ with Kafka Connect</a>.</p>
+</div>
+<div class="sect1">
+<h2 id="_setting_up_the_docker_compose">Setting up the Docker Compose</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>I like standalone, repeatable, demo code. For that reason I love using Docker Compose and I embed everything in there - connector installation, the kitchen sink - the works.</p>
+</div>
+<div class="paragraph">
+<p>You can find the complete <a href="https://github.com/confluentinc/demo-scene/blob/master/mssql-to-kafka-with-ksqldb/docker-compose.yml">Docker Compose file on GitHub</a>.</p>
+</div>
+<div class="sect2">
+<h3 id="_installing_connectors_in_ksqldb_without_confluent_hub_client">Installing connectors in ksqlDB without Confluent Hub client</h3>
+<div class="paragraph">
+<p>I’ll usually take advantage of the <code>command:</code> stanza in a Docker Compose service to do things like connector installation, <a href="https://rmoff.net/2018/12/15/docker-tips-and-tricks-with-ksql-and-kafka/">as detailed here</a>. In ksqlDB 0.11 the Confluent Hub client is absent so I’ve had to take a slightly hackier route. If you head over to <a href="https://hub.confluent.io">Confluent Hub</a> and download the connector you want (in this case Debezium MS SQL) you can check the network console to get the direct URL, in this case</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">https://d1i4a15mxbxib1.cloudfront.net/api/plugins/debezium/debezium-connector-sqlserver/versions/1.2.2/debezium-debezium-connector-sqlserver-1.2.2.zip</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now, this URL is liable to change but for now, it works :) (I realise that this runs contrary to making a demo repeatable, but what’s life if we can’t live on the edge a bit)</p>
+</div>
+<div class="paragraph">
+<p>With this code we can download and install the connector within the ksqlDB Docker container when it spins up</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">curl https://d1i4a15mxbxib1.cloudfront.net/api/plugins/debezium/debezium-connector-sqlserver/versions/1.2.2/debezium-debezium-connector-sqlserver-1.2.2.zip <span style="color: #000080">-o</span> /tmp/kafka-connect-mssql.zip
+yum <span style="color: #0086B3">install</span> <span style="color: #000080">-y</span> unzip
+unzip /tmp/kafka-connect-mssql.zip <span style="color: #000080">-d</span> /usr/share/java/</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>There’s a wrinkle in the plan here which is that the latest version of the container runs as a non-root user, and <code>sudo</code> is not installed (<a href="https://xkcd.com/149/">no sandwiches for me</a>). To hack around this we elevate the container to run as root user in the Docker Compose spec:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="yaml">  <span style="color: #008080">ksqldb</span><span style="background-color: #f8f8f8">:</span>
+    <span style="color: #008080">image</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">confluentinc/ksqldb-server:0.11.0</span>
+    <span style="color: #008080">container_name</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">ksqldb</span>
+    <span style="color: #008080">user</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">root</span>
+    <span style="color: #d14">…</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now when the container launches it downloads the connector, installs <code>unzip</code> and unzips the connector archive directly into the <code>plugin.path</code> in which Kafka Connect (running embedded in ksqlDB) will look for it.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+The &#39;proper&#39; way to do this is either bake your own ksqlDB image with the connector plugin already installed, or to download the connector to the host machine, and mount it into the ksqlDB container. Both of these are fine, but involve more moving parts and stuff to go wrong than a standalone Docker Compose file for my purposes :)
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_running_the_stack">Running the stack</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Spin up the <a href="https://github.com/confluentinc/demo-scene/blob/master/mssql-to-kafka-with-ksqldb/docker-compose.yml">Docker Compose file</a></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">docker-compose up <span style="color: #000080">-d</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then launch ksqlDB - this seemingly complex snippet simply waits for ksqlDB to be available before launching the CLI:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">docker <span style="color: #0086B3">exec</span> <span style="color: #000080">-it</span> ksqldb bash <span style="color: #000080">-c</span> <span style="color: #d14">&#39;echo -e &#34;\n\n  Waiting for ksqlDB to be available before launching CLI\n&#34;; while : ; do curl_status=$(curl -s -o /dev/null -w %{http_code} http://ksqldb:8088/info) ; echo -e $(date) &#34; ksqlDB server listener HTTP state: &#34; $curl_status &#34; (waiting for 200)&#34; ; if [ $curl_status -eq 200 ] ; then  break ; fi ; sleep 5 ; done ; ksql http://ksqldb:8088&#39;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In a separate terminal, once ksqlDB has finished starting (i.e. once the ksqlDB CLI starts from the above command) make sure that the MS SQL connector has installed correctly:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">docker <span style="color: #0086B3">exec </span>ksqldb curl <span style="color: #000080">-s</span> localhost:8083/connector-plugins</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You should see</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #000000;font-weight: bold">[{</span><span style="color: #d14">&#34;class&#34;</span>:<span style="color: #d14">&#34;io.debezium.connector.sqlserver.SqlServerConnector&#34;</span>,<span style="color: #d14">&#34;type&#34;</span>:<span style="color: #d14">&#34;source&#34;</span>,<span style="color: #d14">&#34;version&#34;</span>:<span style="color: #d14">&#34;1.2.2.Final&#34;</span><span style="color: #000000;font-weight: bold">}]</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_configuring_ms_sql_for_cdc">Configuring MS SQL for CDC</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>When the MS SQL container starts a couple of scripts are run to set up the database for CDC and add some test data. If you’re not using the Docker Compose then you need to run these yourself:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">USE</span> <span style="background-color: #f8f8f8">[</span><span style="background-color: #f8f8f8">master</span><span style="background-color: #f8f8f8">]</span>
+<span style="color: #000000;font-weight: bold">GO</span>
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">DATABASE</span> <span style="background-color: #f8f8f8">demo</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">GO</span>
+<span style="background-color: #f8f8f8">USE</span> <span style="background-color: #f8f8f8">[</span><span style="background-color: #f8f8f8">demo</span><span style="background-color: #f8f8f8">]</span>
+<span style="color: #000000;font-weight: bold">EXEC</span> <span style="background-color: #f8f8f8">sys</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">sp_cdc_enable_db</span>
+<span style="color: #000000;font-weight: bold">GO</span>
+
+<span style="color: #999988;font-style: italic">-- Run this to confirm that CDC is now enabled:</span>
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">name</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">is_cdc_enabled</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">sys</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">databases</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">GO</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">use</span> <span style="background-color: #f8f8f8">[</span><span style="background-color: #f8f8f8">demo</span><span style="background-color: #f8f8f8">];</span>
+
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">demo</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">dbo</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ORDERS</span> <span style="background-color: #f8f8f8">(</span> <span style="background-color: #f8f8f8">order_id</span> <span style="color: #0086B3">INT</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">customer_id</span> <span style="color: #0086B3">INT</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">order_ts</span> <span style="color: #0086B3">DATE</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">order_total_usd</span> <span style="color: #0086B3">DECIMAL</span><span style="background-color: #f8f8f8">(</span><span style="color: #009999">5</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">2</span><span style="background-color: #f8f8f8">),</span> <span style="background-color: #f8f8f8">item</span> <span style="color: #0086B3">VARCHAR</span><span style="background-color: #f8f8f8">(</span><span style="color: #009999">50</span><span style="background-color: #f8f8f8">)</span> <span style="background-color: #f8f8f8">);</span>
+<span style="color: #000000;font-weight: bold">GO</span>
+
+<span style="color: #000000;font-weight: bold">EXEC</span> <span style="background-color: #f8f8f8">sys</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">sp_cdc_enable_table</span>
+<span style="color: #000000;font-weight: bold">@</span><span style="background-color: #f8f8f8">source_schema</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">N</span><span style="color: #d14">&#39;dbo&#39;</span><span style="background-color: #f8f8f8">,</span>
+<span style="color: #000000;font-weight: bold">@</span><span style="background-color: #f8f8f8">source_name</span>   <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">N</span><span style="color: #d14">&#39;ORDERS&#39;</span><span style="background-color: #f8f8f8">,</span>
+<span style="color: #000000;font-weight: bold">@</span><span style="background-color: #f8f8f8">role_name</span>     <span style="color: #000000;font-weight: bold">=</span> <span style="color: #000000;font-weight: bold">NULL</span><span style="background-color: #f8f8f8">,</span>
+<span style="color: #000000;font-weight: bold">@</span><span style="background-color: #f8f8f8">supports_net_changes</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #009999">0</span>
+<span style="color: #000000;font-weight: bold">GO</span>
+
+<span style="color: #999988;font-style: italic">-- At this point you should get a row returned from this query</span>
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">name</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #000000;font-weight: bold">Schema_Name</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">tb</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">name</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #000000;font-weight: bold">Table_Name</span> <span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">tb</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">object_id</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">tb</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">type</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">tb</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">type_desc</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">tb</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">is_tracked_by_cdc</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">sys</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">tables</span> <span style="background-color: #f8f8f8">tb</span> <span style="color: #000000;font-weight: bold">INNER</span> <span style="color: #000000;font-weight: bold">JOIN</span> <span style="background-color: #f8f8f8">sys</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">schemas</span> <span style="background-color: #f8f8f8">s</span> <span style="color: #000000;font-weight: bold">on</span> <span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">schema_id</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">tb</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">schema_id</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">tb</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">is_tracked_by_cdc</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #009999">1</span>
+<span style="color: #000000;font-weight: bold">GO</span>
+<span style="color: #999988;font-style: italic">-- h/t William Prigol Lopes https://stackoverflow.com/a/61698148/350613</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_adding_a_sql_server_connector_in_ksqldb">Adding a SQL Server connector in ksqlDB</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>You should now have the ksqlDB prompt open</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">                  <span style="color: #000000;font-weight: bold">===========================================</span>
+                  <span style="color: #000000;font-weight: bold">=</span>       _              _ ____  ____       <span style="color: #000000;font-weight: bold">=</span>
+                  <span style="color: #000000;font-weight: bold">=</span>      | | _____  __ _| |  _ <span style="color: #d14">\|</span> __ <span style="color: #000000;font-weight: bold">)</span>      <span style="color: #000000;font-weight: bold">=</span>
+                  <span style="color: #000000;font-weight: bold">=</span>      | |/ / __|/ _<span style="color: #d14">`</span> | | | | |  _ <span style="color: #d14">\ </span>     <span style="color: #000000;font-weight: bold">=</span>
+                  <span style="color: #000000;font-weight: bold">=</span>      |   &lt;<span style="color: #d14">\_</span>_ <span style="color: #d14">\ </span><span style="color: #000000;font-weight: bold">(</span>_| | | |_| | |_<span style="color: #000000;font-weight: bold">)</span> |     <span style="color: #000000;font-weight: bold">=</span>
+                  <span style="color: #000000;font-weight: bold">=</span>      |_|<span style="color: #d14">\_\_</span>__/<span style="color: #d14">\_</span>_, |_|____/|____/      <span style="color: #000000;font-weight: bold">=</span>
+                  <span style="color: #000000;font-weight: bold">=</span>                   |_|                   <span style="color: #000000;font-weight: bold">=</span>
+                  <span style="color: #000000;font-weight: bold">=</span>  Event Streaming Database purpose-built <span style="color: #000000;font-weight: bold">=</span>
+                  <span style="color: #000000;font-weight: bold">=</span>        <span style="color: #000000;font-weight: bold">for </span>stream processing apps       <span style="color: #000000;font-weight: bold">=</span>
+                  <span style="color: #000000;font-weight: bold">===========================================</span>
+
+Copyright 2017-2020 Confluent Inc.
+
+CLI v0.11.0, Server v0.11.0 located at http://ksqldb:8088
+
+Having trouble? Type <span style="color: #d14">&#39;help&#39;</span> <span style="color: #000000;font-weight: bold">(</span><span style="color: #000000;font-weight: bold">case</span><span style="color: #000080">-insensitive</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">for </span>a rundown of how things work!
+
+ksql&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>From the ksqlDB prompt create the connector:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">SOURCE</span> <span style="background-color: #f8f8f8">CONNECTOR</span> <span style="background-color: #f8f8f8">SOURCE_MSSQL_ORDERS_01</span> <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span>
+      <span style="color: #d14">&#39;connector.class&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;io.debezium.connector.sqlserver.SqlServerConnector&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;database.hostname&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;mssql&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;database.port&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;1433&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;database.user&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;sa&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;database.password&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;Admin123&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;database.dbname&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;demo&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;database.server.name&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;mssql&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;table.whitelist&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;dbo.orders&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;database.history.kafka.bootstrap.servers&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;broker:29092&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;database.history.kafka.topic&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;dbz_dbhistory.mssql.asgard-01&#39;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#39;decimal.handling.mode&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;double&#39;</span>
+<span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Check that it’s running successfully</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SHOW</span> <span style="background-color: #f8f8f8">CONNECTORS</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"> <span style="background-color: #f8f8f8">Connector</span> <span style="background-color: #f8f8f8">Name</span>         <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">Type</span>   <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">Class</span>                                              <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Status</span>
+<span style="color: #999988;font-style: italic">--------------------------------------------------------------------------------------------------------------------</span>
+ <span style="background-color: #f8f8f8">SOURCE_MSSQL_ORDERS_01</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">SOURCE</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">io</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">debezium</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">connector</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">sqlserver</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">SqlServerConnector</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">RUNNING</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">1</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">1</span> <span style="background-color: #f8f8f8">tasks</span> <span style="background-color: #f8f8f8">RUNNING</span><span style="background-color: #f8f8f8">)</span>
+<span style="color: #999988;font-style: italic">--------------------------------------------------------------------------------------------------------------------</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If it’s <strong>not</strong> (e.g. if the Status is <code>WARNING</code>) then run <code>docker logs -f ksqldb</code> and page through to find the <code>ERROR</code>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_using_ms_sql_data_in_ksqldb">Using MS SQL data in ksqlDB</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>With the connector running and the data flowing you can declare a stream against it</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="background-color: #f8f8f8">STREAM</span> <span style="background-color: #f8f8f8">ORDERS</span> <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">KAFKA_TOPIC</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;mssql.dbo.ORDERS&#39;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">VALUE_FORMAT</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;AVRO&#39;</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then start to explore the data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;auto.offset.reset&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;earliest&#39;</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">SOURCE</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">NAME</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">SOURCE</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="color: #000000;font-weight: bold">SCHEMA</span> <span style="color: #000000;font-weight: bold">+</span> <span style="color: #d14">&#39;.&#39;</span> <span style="color: #000000;font-weight: bold">+</span> <span style="color: #000000;font-weight: bold">SOURCE</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="color: #008080">&#34;TABLE&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">OP</span><span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">BEFORE</span><span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">AFTER</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">ORDERS</span> <span style="background-color: #f8f8f8">EMIT</span> <span style="background-color: #f8f8f8">CHANGES</span> <span style="color: #000000;font-weight: bold">LIMIT</span> <span style="color: #009999">2</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">+-----------------------+-----------------------+-------+---------+-----------------------+
+|NAME                   |KSQL_COL_0             |OP     |BEFORE   |AFTER                  |
++-----------------------+-----------------------+-------+---------+-----------------------+
+|mssql                  |dbo.ORDERS             |r      |null     |<span style="color: #000000;font-weight: bold">{</span><span style="color: #008080">ORDER_ID</span><span style="color: #000000;font-weight: bold">=</span>1, CUSTOMER_I|
+|                       |                       |       |         |D<span style="color: #000000;font-weight: bold">=</span>7, <span style="color: #008080">ORDER_TS</span><span style="color: #000000;font-weight: bold">=</span>18256, OR|
+|                       |                       |       |         |DER_TOTAL_USD<span style="color: #000000;font-weight: bold">=</span>2.1, ITEM|
+|                       |                       |       |         |<span style="color: #000000;font-weight: bold">=</span>Proper Job<span style="color: #000000;font-weight: bold">}</span>           |
+|mssql                  |dbo.ORDERS             |r      |null     |<span style="color: #000000;font-weight: bold">{</span><span style="color: #008080">ORDER_ID</span><span style="color: #000000;font-weight: bold">=</span>2, CUSTOMER_I|
+|                       |                       |       |         |D<span style="color: #000000;font-weight: bold">=</span>8, <span style="color: #008080">ORDER_TS</span><span style="color: #000000;font-weight: bold">=</span>18236, OR|
+|                       |                       |       |         |DER_TOTAL_USD<span style="color: #000000;font-weight: bold">=</span>0.23, ITE|
+|                       |                       |       |         |M<span style="color: #000000;font-weight: bold">=</span>Wainwright<span style="color: #000000;font-weight: bold">}</span>          |</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note the use of the <code>→</code> operator to access the nested fields.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">AFTER</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">ORDER_ID</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">AFTER</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">CUSTOMER_ID</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">AFTER</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">ORDER_TOTAL_USD</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">ORDERS</span> <span style="background-color: #f8f8f8">EMIT</span> <span style="background-color: #f8f8f8">CHANGES</span> <span style="color: #000000;font-weight: bold">LIMIT</span> <span style="color: #009999">5</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">+-------------+--------------+------------------+
+|ORDER_ID     |CUSTOMER_ID   |ORDER_TOTAL_USD   |
++-------------+--------------+------------------+
+|1            |7             |2.1               |
+|2            |8             |0.23              |
+|3            |12            |4.3               |
+|4            |7             |4.88              |
+|5            |14            |3.89              |
+Limit Reached
+Query terminated</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_capturing_changes_from_ms_sql">Capturing changes from MS SQL</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>So far we’ve just seen the snapshot/bootstrap ingest of data from MS SQL into Kafka/ksqlDB. Let’s make some changes in MS SQL and see how they show up in ksqlDB.</p>
+</div>
+<div class="paragraph">
+<p>Launch the MS SQL CLI</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">docker <span style="color: #0086B3">exec</span> <span style="color: #000080">-it</span> mssql bash <span style="color: #000080">-c</span> <span style="color: #d14">&#39;/opt/mssql-tools/bin/sqlcmd -l 30 -d demo -S localhost -U sa -P $SA_PASSWORD&#39;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Make some changes to the data</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">DELETE</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">ORDERS</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">ORDER_ID</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">UPDATE</span> <span style="background-color: #f8f8f8">ORDERS</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="background-color: #f8f8f8">ORDER_TOTAL_USD</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">ORDER_TOTAL_USD</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">9</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">ORDER_ID</span> <span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">2</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">ORDERS</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">order_id</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">customer_id</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">order_ts</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">order_total_usd</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">item</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">values</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">9</span><span style="background-color: #f8f8f8">,</span> <span style="color: #009999">5</span><span style="background-color: #f8f8f8">,</span> <span style="color: #d14">&#39;2019-11-29T11:10:39Z&#39;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #d14">&#39;2.24&#39;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #d14">&#39;Black Sheep Ale&#39;</span><span style="background-color: #f8f8f8">);</span>
+<span style="color: #000000;font-weight: bold">GO</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Check out the data in ksqlDB</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">OP</span><span style="background-color: #f8f8f8">,</span>
+       <span style="color: #000000;font-weight: bold">SOURCE</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="color: #000000;font-weight: bold">SCHEMA</span> <span style="color: #000000;font-weight: bold">+</span> <span style="color: #d14">&#39;.&#39;</span> <span style="color: #000000;font-weight: bold">+</span> <span style="color: #000000;font-weight: bold">SOURCE</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="color: #008080">&#34;TABLE&#34;</span><span style="background-color: #f8f8f8">,</span>
+       <span style="color: #000000;font-weight: bold">BEFORE</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">ORDER_ID</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">B_ORDER_ID</span><span style="background-color: #f8f8f8">,</span>
+       <span style="color: #000000;font-weight: bold">AFTER</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">ORDER_ID</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">A_ORDER_ID</span><span style="background-color: #f8f8f8">,</span>
+       <span style="color: #000000;font-weight: bold">BEFORE</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">ORDER_TOTAL_USD</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">B_ORDER_TOTAL_USD</span><span style="background-color: #f8f8f8">,</span>
+       <span style="color: #000000;font-weight: bold">AFTER</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">ORDER_TOTAL_USD</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">A_ORDER_TOTAL_USD</span><span style="background-color: #f8f8f8">,</span>
+       <span style="color: #000000;font-weight: bold">BEFORE</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">ITEM</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">B_ITEM</span><span style="background-color: #f8f8f8">,</span>
+       <span style="color: #000000;font-weight: bold">AFTER</span><span style="color: #000000;font-weight: bold">-&gt;</span><span style="background-color: #f8f8f8">ITEM</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">A_ITEM</span>
+  <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">ORDERS</span>
+  <span style="color: #000000;font-weight: bold">WHERE</span> <span style="color: #000000;font-weight: bold">NOT</span> <span style="background-color: #f8f8f8">OP</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;r&#39;</span>
+  <span style="background-color: #f8f8f8">EMIT</span> <span style="background-color: #f8f8f8">CHANGES</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">-----+-------------+------------+-----------+-------------------+------------------+---------------------+---------------------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">OP</span>   <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">KSQL_COL_0</span>   <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">B_ORDER_ID</span>  <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">A_ORDER_ID</span> <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">B_ORDER_TOTAL_USD</span>  <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">A_ORDER_TOTAL_USD</span> <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">B_ITEM</span>               <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">A_ITEM</span>               <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">-----+-------------+------------+-----------+-------------------+------------------+---------------------+---------------------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">d</span>    <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">dbo</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ORDERS</span>   <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">1</span>           <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">null</span>       <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">1</span>                <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">null</span>              <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Proper</span> <span style="background-color: #f8f8f8">Job</span>           <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">null</span>                 <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">u</span>    <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">dbo</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ORDERS</span>   <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2</span>           <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2</span>          <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">23</span>               <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">21</span>              <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Wainwright</span>           <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Wainwright</span>           <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">c</span>    <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">dbo</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ORDERS</span>   <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">null</span>        <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">9</span>          <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">null</span>               <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">24</span>              <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">null</span>                 <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Black</span> <span style="background-color: #f8f8f8">Sheep</span> <span style="background-color: #f8f8f8">Ale</span>      <span style="color: #000000;font-weight: bold">|</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Things to note:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The <code>d</code> deletion message gives you access to the row state before it was deleted</p>
+</li>
+<li>
+<p>The <code>u</code> update message gives you the field values before they were updated (<code>ORDER_TOTAL_USD</code>)</p>
+</li>
+<li>
+<p>The <code>c</code> creation message has null values in the <code>BEFORE</code> object because there were no values before the row was created :)</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>

@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Learning Golang (some rough notes) - S02E06 - Putting the Producer in a function and handling errors in a Go routine" />
@@ -92,7 +92,7 @@
 <p>When I set out to <a href="/2020/06/25/learning-golang-some-rough-notes-s01e00/">learn Go</a> one of the aims I had in mind was to write a version of <a href="https://github.com/rmoff/kafka-listeners/blob/master/python/python_kafka_test_client.py">this little Python utility</a> which accompanies a blog I wrote recently about <a href="https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc">understanding and diagnosing problems with Kafka advertised listeners</a>. Having successfully got <a href="/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/">Producer</a>, <a href="/2020/07/14/learning-golang-some-rough-notes-s02e04-kafka-go-consumer-function-based/">Consumer</a>, and <a href="/2020/07/14/learning-golang-some-rough-notes-s02e05-kafka-go-adminclient/">AdminClient</a> API examples working, it is now time to turn to that task.</p>
 </div>
 <div class="paragraph">
-<p>I&#8217;m quite keen to figure out how to do this <em>properly</em> and take the opportunity to learn. It would be easy enough to copy &amp; paste all my snippets together, ignore any error handling, and check the task off as done. But since I don&#8217;t have a strong background in coding, now seems a good chance to try and instill a little bit of rigour in what I&#8217;m doing.</p>
+<p>I’m quite keen to figure out how to do this <em>properly</em> and take the opportunity to learn. It would be easy enough to copy &amp; paste all my snippets together, ignore any error handling, and check the task off as done. But since I don’t have a strong background in coding, now seems a good chance to try and instill a little bit of rigour in what I’m doing.</p>
 </div>
 <div class="sect1">
 <h2 id="_command_line_arguments">Command line arguments</h2>
@@ -103,22 +103,22 @@
 <div class="listingblock">
 <div class="content">
 <pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">import</span> <span style="background-color: #f8f8f8">(</span>
-	<span style="color: #d14">"os"</span>
+	<span style="color: #d14">&#34;os&#34;</span>
 <span style="background-color: #f8f8f8">)</span>
 
 <span style="color: #000000;font-weight: bold">func</span> <span style="background-color: #f8f8f8">main</span><span style="background-color: #f8f8f8">()</span> <span style="background-color: #f8f8f8">{</span>
 
 	<span style="color: #999988;font-style: italic">// Read the first commandline argument to get the broker details</span>
 	<span style="background-color: #f8f8f8">broker</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">os</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Args</span><span style="background-color: #f8f8f8">[</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">]</span>
-	<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Broker: %v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">)</span></code></pre>
+	<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;Broker: %v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">)</span></code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p>I&#8217;m using VSCode for my IDE as it works very nicely with Go - both for writing code, and debugging it. To pass an argument to the command line as part of debugging go to <code>Run</code> &#8594; <code>Open Configurations</code> and in the JSON file set the argument(s) that you want to pass:</p>
+<p>I’m using VSCode for my IDE as it works very nicely with Go - both for writing code, and debugging it. To pass an argument to the command line as part of debugging go to <code>Run</code> → <code>Open Configurations</code> and in the JSON file set the argument(s) that you want to pass:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="color: #d14">"</span><span style="color: #d14">args</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">[</span><span style="color: #d14">"</span><span style="color: #d14">localhost:9092</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">]</span></code></pre>
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="color: #d14">&#34;</span><span style="color: #d14">args</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">[</span><span style="color: #d14">&#34;</span><span style="color: #d14">localhost:9092</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">]</span></code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -130,7 +130,7 @@
 </div>
 </div>
 <div class="paragraph">
-<p>But what if the user <em>doesn&#8217;t</em> specify the required commandline arguments?</p>
+<p>But what if the user <em>doesn’t</em> specify the required commandline arguments?</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -150,10 +150,10 @@ main.main()
 <span style="color: #000000;font-weight: bold">if</span> <span style="color: #0086B3">len</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">os</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Args</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">==</span> <span style="color: #009999">2</span> <span style="background-color: #f8f8f8">{</span>
     <span style="background-color: #f8f8f8">broker</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">os</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Args</span><span style="background-color: #f8f8f8">[</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">]</span>
 <span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
-    <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Println</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"(No broker specifed on commandline; defaulting to localhost:9092)"</span><span style="background-color: #f8f8f8">)</span>
-    <span style="background-color: #f8f8f8">broker</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">"localhost:9092"</span>
+    <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Println</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;(No broker specifed on commandline; defaulting to localhost:9092)&#34;</span><span style="background-color: #f8f8f8">)</span>
+    <span style="background-color: #f8f8f8">broker</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#34;localhost:9092&#34;</span>
 <span style="background-color: #f8f8f8">}</span>
-<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Broker: %v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">)</span></code></pre>
+<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;Broker: %v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">)</span></code></pre>
 </div>
 </div>
 </div>
@@ -187,7 +187,7 @@ main.main()
 <h2 id="_errors">Errors</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Following the same pattern as I explored <a href="/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/">here</a> I&#8217;m expecting to have something that looks like this:</p>
+<p>Following the same pattern as I explored <a href="/2020/07/10/learning-golang-some-rough-notes-s02e02-adding-error-handling-to-the-producer/">here</a> I’m expecting to have something that looks like this:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -196,15 +196,15 @@ main.main()
 
 <span style="color: #999988;font-style: italic">// Create AdminClient connection to check metadata</span>
 <span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">doAdmin</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">);</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">!=</span> <span style="color: #008080">nil</span> <span style="background-color: #f8f8f8">{</span>
-    <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"There was a problem with AdminClient :-(</span><span style="color: #d14">\n</span><span style="color: #d14">%v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
+    <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;There was a problem with AdminClient :-(</span><span style="color: #d14">\n</span><span style="color: #d14">%v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
 <span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
     <span style="color: #999988;font-style: italic">// Produce message</span>
     <span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">doProduce</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">topic</span><span style="background-color: #f8f8f8">);</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">!=</span> <span style="color: #008080">nil</span> <span style="background-color: #f8f8f8">{</span>
-        <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"There was a problem calling the producer :-(</span><span style="color: #d14">\n</span><span style="color: #d14">%v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
+        <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;There was a problem calling the producer :-(</span><span style="color: #d14">\n</span><span style="color: #d14">%v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
     <span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
         <span style="color: #999988;font-style: italic">// Consume message</span>
         <span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">doConsume</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">topic</span><span style="background-color: #f8f8f8">);</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">!=</span> <span style="color: #008080">nil</span> <span style="background-color: #f8f8f8">{</span>
-            <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"There was a problem calling the consumer :-(</span><span style="color: #d14">\n</span><span style="color: #d14">%v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
+            <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;There was a problem calling the consumer :-(</span><span style="color: #d14">\n</span><span style="color: #d14">%v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
         <span style="background-color: #f8f8f8">}</span>
     <span style="background-color: #f8f8f8">}</span>
 <span style="background-color: #f8f8f8">}</span>
@@ -219,7 +219,7 @@ main.main()
 <div class="content">
 <pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">func</span> <span style="background-color: #f8f8f8">doProduce</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">topic</span> <span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">)</span> <span style="color: #445588;font-weight: bold">error</span> <span style="background-color: #f8f8f8">{</span>
     <span style="color: #999988;font-style: italic">// If you hit an error then</span>
-    <span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">errors</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">New</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"OH NO! THERE WAS AN ERROR"</span><span style="background-color: #f8f8f8">)</span>
+    <span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">errors</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">New</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;OH NO! THERE WAS AN ERROR&#34;</span><span style="background-color: #f8f8f8">)</span>
 
     <span style="color: #999988;font-style: italic">// assuming everything has gone ok return no error</span>
     <span style="color: #000000;font-weight: bold">return</span> <span style="color: #008080">nil</span>
@@ -231,7 +231,7 @@ main.main()
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span></code></pre>
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;😢 Can&#39;t create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span></code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -239,7 +239,7 @@ main.main()
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">errors</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">New</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">))</span></code></pre>
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">errors</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">New</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;😢 Can&#39;t create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">))</span></code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -247,7 +247,7 @@ main.main()
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/07/error01.png" alt="error01">
+<img src="/images/2020/07/error01.png" alt="error01"/>
 </div>
 </div>
 <div class="paragraph">
@@ -255,7 +255,7 @@ main.main()
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2020/07/error02.png" alt="error02">
+<img src="/images/2020/07/error02.png" alt="error02"/>
 </div>
 </div>
 <div class="paragraph">
@@ -263,7 +263,7 @@ main.main()
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">errors</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">New</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">))</span></code></pre>
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">errors</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">New</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;😢 Can&#39;t create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">))</span></code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -271,7 +271,7 @@ main.main()
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span></code></pre>
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;😢 Can&#39;t create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span></code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -279,13 +279,13 @@ main.main()
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Errorf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span></code></pre>
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Errorf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;😢 Can&#39;t create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span></code></pre>
 </div>
 </div>
 <div class="sect2">
 <h3 id="_error_in_go_routines">Error in Go routines</h3>
 <div class="paragraph">
-<p>This all works, except in the Go routine within the function. In the case of the Producer code the Go routine is there to handle events such as message delivery reports, errors, etc. Since a Go routine is a function itself with no return variables, then we can&#8217;t <code>return</code> an error from within it. If you try to, you get this:</p>
+<p>This all works, except in the Go routine within the function. In the case of the Producer code the Go routine is there to handle events such as message delivery reports, errors, etc. Since a Go routine is a function itself with no return variables, then we can’t <code>return</code> an error from within it. If you try to, you get this:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -295,23 +295,23 @@ main.main()
 </div>
 </div>
 <div class="paragraph">
-<p>Now, maybe the code in your function will catch an error as a side effect of the error thrown in the Go routine, but it&#8217;s not great to rely on that happening. Instead we can provide a channel that the Go routine can write to if there&#8217;s an error, and then check that from our parent function and return an error if we find one. Something like this:</p>
+<p>Now, maybe the code in your function will catch an error as a side effect of the error thrown in the Go routine, but it’s not great to rely on that happening. Instead we can provide a channel that the Go routine can write to if there’s an error, and then check that from our parent function and return an error if we find one. Something like this:</p>
 </div>
 <div class="listingblock">
 <div class="content">
 <pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">package</span> <span style="background-color: #f8f8f8">main</span>
 
 <span style="color: #000000;font-weight: bold">import</span> <span style="background-color: #f8f8f8">(</span>
-	<span style="color: #d14">"errors"</span>
-	<span style="color: #d14">"fmt"</span>
-	<span style="color: #d14">"time"</span>
+	<span style="color: #d14">&#34;errors&#34;</span>
+	<span style="color: #d14">&#34;fmt&#34;</span>
+	<span style="color: #d14">&#34;time&#34;</span>
 <span style="background-color: #f8f8f8">)</span>
 
 <span style="color: #000000;font-weight: bold">func</span> <span style="background-color: #f8f8f8">main</span><span style="background-color: #f8f8f8">()</span> <span style="background-color: #f8f8f8">{</span>
 	<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">doThisThing</span><span style="background-color: #f8f8f8">();</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">!=</span> <span style="color: #008080">nil</span> <span style="background-color: #f8f8f8">{</span>
-		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"doThisThing failed.</span><span style="color: #d14">\n</span><span style="color: #d14">%v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
+		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;doThisThing failed.</span><span style="color: #d14">\n</span><span style="color: #d14">%v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
 	<span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
-		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"doThisThing worked.</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">)</span>
+		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;doThisThing worked.</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">)</span>
 
 	<span style="background-color: #f8f8f8">}</span>
 <span style="background-color: #f8f8f8">}</span>
@@ -322,41 +322,41 @@ main.main()
 
 	<span style="color: #000000;font-weight: bold">go</span> <span style="color: #000000;font-weight: bold">func</span><span style="background-color: #f8f8f8">()</span> <span style="background-color: #f8f8f8">{</span>
 
-		<span style="color: #999988;font-style: italic">// If we're all good then do stuff</span>
+		<span style="color: #999988;font-style: italic">// If we&#39;re all good then do stuff</span>
 		<span style="color: #999988;font-style: italic">// …</span>
 
 		<span style="color: #999988;font-style: italic">// If we hit an error then log an error</span>
-		<span style="background-color: #f8f8f8">ec</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"here is an error from the go routine :(</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">)</span>
-		<span style="background-color: #f8f8f8">ec</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"here is another error from the go routine :(</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">)</span>
+		<span style="background-color: #f8f8f8">ec</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;here is an error from the go routine :(</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">)</span>
+		<span style="background-color: #f8f8f8">ec</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;here is another error from the go routine :(</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">)</span>
 		<span style="color: #0086B3">close</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">)</span>
 	<span style="background-color: #f8f8f8">}()</span>
 
 	<span style="color: #999988;font-style: italic">// Do all our stuff in the function that we need to</span>
 	<span style="color: #999988;font-style: italic">// …</span>
 	<span style="background-color: #f8f8f8">time</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sleep</span><span style="background-color: #f8f8f8">(</span><span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">*</span> <span style="background-color: #f8f8f8">time</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Second</span><span style="background-color: #f8f8f8">)</span>
-	<span style="color: #999988;font-style: italic">// pretend we're doing stuff</span>
+	<span style="color: #999988;font-style: italic">// pretend we&#39;re doing stuff</span>
 	<span style="color: #999988;font-style: italic">// …</span>
 
-	<span style="color: #999988;font-style: italic">// When we're ready to return, check if the go routine has sent errors</span>
-	<span style="color: #999988;font-style: italic">// Note that we're relying on the Go routine to close the channel, otherwise</span>
+	<span style="color: #999988;font-style: italic">// When we&#39;re ready to return, check if the go routine has sent errors</span>
+	<span style="color: #999988;font-style: italic">// Note that we&#39;re relying on the Go routine to close the channel, otherwise</span>
 	<span style="color: #999988;font-style: italic">// we deadlock.</span>
 	<span style="color: #999988;font-style: italic">// If there are no errors then the channel is simply closed and we read no values.</span>
 	<span style="background-color: #f8f8f8">done</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="color: #008080">false</span>
 	<span style="color: #000000;font-weight: bold">var</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #445588;font-weight: bold">string</span>
 	<span style="color: #000000;font-weight: bold">for</span> <span style="color: #000000;font-weight: bold">!</span><span style="background-color: #f8f8f8">done</span> <span style="background-color: #f8f8f8">{</span>
 		<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">t</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">o</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">;</span> <span style="background-color: #f8f8f8">o</span> <span style="color: #000000;font-weight: bold">==</span> <span style="color: #008080">false</span> <span style="background-color: #f8f8f8">{</span>
-			<span style="color: #999988;font-style: italic">// o is false if we've read all the values and the channel is closed</span>
-			<span style="color: #999988;font-style: italic">// If that's the case, then we're done here</span>
+			<span style="color: #999988;font-style: italic">// o is false if we&#39;ve read all the values and the channel is closed</span>
+			<span style="color: #999988;font-style: italic">// If that&#39;s the case, then we&#39;re done here</span>
 			<span style="background-color: #f8f8f8">done</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #008080">true</span>
 		<span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
-			<span style="color: #999988;font-style: italic">// We've read a value so let's concatenate it with the others</span>
-			<span style="color: #999988;font-style: italic">// that we've got</span>
+			<span style="color: #999988;font-style: italic">// We&#39;ve read a value so let&#39;s concatenate it with the others</span>
+			<span style="color: #999988;font-style: italic">// that we&#39;ve got</span>
 			<span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">+=</span> <span style="background-color: #f8f8f8">t</span>
 		<span style="background-color: #f8f8f8">}</span>
 	<span style="background-color: #f8f8f8">}</span>
 
 	<span style="color: #000000;font-weight: bold">if</span> <span style="color: #0086B3">len</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #009999">0</span> <span style="background-color: #f8f8f8">{</span>
-		<span style="color: #999988;font-style: italic">// If we've got any errors, then return an error to the caller</span>
+		<span style="color: #999988;font-style: italic">// If we&#39;ve got any errors, then return an error to the caller</span>
 		<span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">errors</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">New</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
 	<span style="background-color: #f8f8f8">}</span>
 
@@ -397,17 +397,17 @@ Broker: localhost:9092
 
 --
 ✨ All messages flushed from the queue
-✅ Message 'foo / Thu, 16 Jul 2020 00:05:57 +0100' delivered to topic 'rmoff_test_00' (partition 0 at offset 11)
+✅ Message &#39;foo / Thu, 16 Jul 2020 00:05:57 +0100&#39; delivered to topic &#39;rmoff_test_00&#39; (partition 0 at offset 11)
 
 -=-=
 Wrapping up…
-👋 … and we're done.
+👋 … and we&#39;re done.
 Oh joy! Oh rejoice! Calling the producer worked *just fine*.</code></pre>
 </div>
 </div>
 </li>
 <li>
-<p>It doesn&#8217;t!</p>
+<p>It doesn’t!</p>
 <div class="listingblock">
 <div class="content">
 <pre class="rouge highlight" style="background-color: #f8f8f8"><code>ℹ️ No broker specified on commandline; defaulting to localhost:9092
@@ -433,19 +433,19 @@ There was a problem calling the producer :-(
 </ul>
 </div>
 <div class="paragraph">
-<p>Here&#8217;s the full code, and a <a href="/code/go/kafka/producer_function/docker-compose.yml">Docker Compose</a> you can use to try it with.</p>
+<p>Here’s the full code, and a <a href="/code/go/kafka/producer_function/docker-compose.yml">Docker Compose</a> you can use to try it with.</p>
 </div>
 <div class="listingblock">
 <div class="content">
 <pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="go"><span style="color: #000000;font-weight: bold">package</span> <span style="background-color: #f8f8f8">main</span>
 
 <span style="color: #000000;font-weight: bold">import</span> <span style="background-color: #f8f8f8">(</span>
-	<span style="color: #d14">"errors"</span>
-	<span style="color: #d14">"fmt"</span>
-	<span style="color: #d14">"os"</span>
-	<span style="color: #d14">"time"</span>
+	<span style="color: #d14">&#34;errors&#34;</span>
+	<span style="color: #d14">&#34;fmt&#34;</span>
+	<span style="color: #d14">&#34;os&#34;</span>
+	<span style="color: #d14">&#34;time&#34;</span>
 
-	<span style="color: #d14">"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"</span>
+	<span style="color: #d14">&#34;gopkg.in/confluentinc/confluent-kafka-go.v1/kafka&#34;</span>
 <span style="background-color: #f8f8f8">)</span>
 
 <span style="color: #000000;font-weight: bold">func</span> <span style="background-color: #f8f8f8">main</span><span style="background-color: #f8f8f8">()</span> <span style="background-color: #f8f8f8">{</span>
@@ -455,21 +455,21 @@ There was a problem calling the producer :-(
 	<span style="color: #000000;font-weight: bold">if</span> <span style="color: #0086B3">len</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">os</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Args</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">==</span> <span style="color: #009999">2</span> <span style="background-color: #f8f8f8">{</span>
 		<span style="background-color: #f8f8f8">broker</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">os</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Args</span><span style="background-color: #f8f8f8">[</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">]</span>
 	<span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
-		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"ℹ️ No broker specified on commandline; defaulting to localhost:9092</span><span style="color: #d14">\n\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">)</span>
-		<span style="background-color: #f8f8f8">broker</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">"localhost:9092"</span>
+		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;ℹ️ No broker specified on commandline; defaulting to localhost:9092</span><span style="color: #d14">\n\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">)</span>
+		<span style="background-color: #f8f8f8">broker</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#34;localhost:9092&#34;</span>
 	<span style="background-color: #f8f8f8">}</span>
-	<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Broker: %v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">)</span>
+	<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;Broker: %v</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">)</span>
 
-	<span style="color: #999988;font-style: italic">// Set the topic name that we'll use</span>
-	<span style="background-color: #f8f8f8">topic</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="color: #d14">"rmoff_test_00"</span>
+	<span style="color: #999988;font-style: italic">// Set the topic name that we&#39;ll use</span>
+	<span style="background-color: #f8f8f8">topic</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="color: #d14">&#34;rmoff_test_00&#34;</span>
 
 	<span style="color: #999988;font-style: italic">// Create Admin Connection</span>
 	<span style="color: #999988;font-style: italic">// doAdmin(broker)</span>
 	<span style="color: #999988;font-style: italic">// Produce message</span>
 	<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">doProduce</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">topic</span><span style="background-color: #f8f8f8">);</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">!=</span> <span style="color: #008080">nil</span> <span style="background-color: #f8f8f8">{</span>
-		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">There was a problem calling the producer :-(</span><span style="color: #d14">\n</span><span style="color: #d14">%v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
+		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;</span><span style="color: #d14">\n</span><span style="color: #d14">There was a problem calling the producer :-(</span><span style="color: #d14">\n</span><span style="color: #d14">%v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
 	<span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
-		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Println</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"Oh joy! Oh rejoice! Calling the producer worked *just fine*."</span><span style="background-color: #f8f8f8">)</span>
+		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Println</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;Oh joy! Oh rejoice! Calling the producer worked *just fine*.&#34;</span><span style="background-color: #f8f8f8">)</span>
 	<span style="background-color: #f8f8f8">}</span>
 	<span style="color: #999988;font-style: italic">// Consume message</span>
 	<span style="color: #999988;font-style: italic">// doConsume()</span>
@@ -485,20 +485,20 @@ There was a problem calling the producer :-(
 
 	<span style="color: #999988;font-style: italic">// Store the config</span>
 	<span style="background-color: #f8f8f8">c</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">ConfigMap</span><span style="background-color: #f8f8f8">{</span>
-		<span style="color: #d14">"bootstrap.servers"</span><span style="color: #000000;font-weight: bold">:</span> <span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">}</span>
+		<span style="color: #d14">&#34;bootstrap.servers&#34;</span><span style="color: #000000;font-weight: bold">:</span> <span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">}</span>
 
 	<span style="color: #999988;font-style: italic">// Check for errors in creating the Producer</span>
 	<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">p</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">NewProducer</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">c</span><span style="background-color: #f8f8f8">);</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">!=</span> <span style="color: #008080">nil</span> <span style="background-color: #f8f8f8">{</span>
 		<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">ke</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ok</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">);</span> <span style="background-color: #f8f8f8">ok</span> <span style="color: #000000;font-weight: bold">==</span> <span style="color: #008080">true</span> <span style="background-color: #f8f8f8">{</span>
 			<span style="color: #000000;font-weight: bold">switch</span> <span style="background-color: #f8f8f8">ec</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">ke</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Code</span><span style="background-color: #f8f8f8">();</span> <span style="background-color: #f8f8f8">ec</span> <span style="background-color: #f8f8f8">{</span>
 			<span style="color: #000000;font-weight: bold">case</span> <span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">ErrInvalidArg</span><span style="color: #000000;font-weight: bold">:</span>
-				<span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Errorf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer because you've configured it wrong (code: %d)!</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n\n</span><span style="color: #d14">To see the configuration options, refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
+				<span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Errorf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;😢 Can&#39;t create the producer because you&#39;ve configured it wrong (code: %d)!</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n\n</span><span style="color: #d14">To see the configuration options, refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
 			<span style="color: #000000;font-weight: bold">default</span><span style="color: #000000;font-weight: bold">:</span>
-				<span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Errorf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Can't create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
+				<span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Errorf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;😢 Can&#39;t create the producer (Kafka error code %d)</span><span style="color: #d14">\n\t</span><span style="color: #d14">Error: %v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ec</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
 			<span style="background-color: #f8f8f8">}</span>
 		<span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
-			<span style="color: #999988;font-style: italic">// It's not a kafka.Error</span>
-			<span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Errorf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Oh noes, there's a generic error creating the Producer! %v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">())</span>
+			<span style="color: #999988;font-style: italic">// It&#39;s not a kafka.Error</span>
+			<span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Errorf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;😢 Oh noes, there&#39;s a generic error creating the Producer! %v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">())</span>
 		<span style="background-color: #f8f8f8">}</span>
 
 	<span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
@@ -518,7 +518,7 @@ There was a problem calling the producer :-(
 		<span style="color: #999988;font-style: italic">//</span>
 		<span style="color: #999988;font-style: italic">// Build the message</span>
 		<span style="background-color: #f8f8f8">m</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">:</span> <span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="background-color: #f8f8f8">{</span><span style="background-color: #f8f8f8">Topic</span><span style="color: #000000;font-weight: bold">:</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">topic</span><span style="background-color: #f8f8f8">},</span>
-			<span style="background-color: #f8f8f8">Value</span><span style="color: #000000;font-weight: bold">:</span> <span style="background-color: #f8f8f8">[]</span><span style="color: #445588;font-weight: bold">byte</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"foo / %v"</span><span style="background-color: #f8f8f8">,</span>
+			<span style="background-color: #f8f8f8">Value</span><span style="color: #000000;font-weight: bold">:</span> <span style="background-color: #f8f8f8">[]</span><span style="color: #445588;font-weight: bold">byte</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;foo / %v&#34;</span><span style="background-color: #f8f8f8">,</span>
 				<span style="background-color: #f8f8f8">time</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Now</span><span style="background-color: #f8f8f8">()</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Format</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">time</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">RFC1123Z</span><span style="background-color: #f8f8f8">)))}</span>
 
 		<span style="color: #999988;font-style: italic">// Handle any events that we get</span>
@@ -529,20 +529,20 @@ There was a problem calling the producer :-(
 				<span style="color: #999988;font-style: italic">// are met - therefore we run it in a Go Routine.</span>
 				<span style="color: #000000;font-weight: bold">select</span> <span style="background-color: #f8f8f8">{</span>
 				<span style="color: #000000;font-weight: bold">case</span> <span style="background-color: #f8f8f8">ev</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Events</span><span style="background-color: #f8f8f8">()</span><span style="color: #000000;font-weight: bold">:</span>
-					<span style="color: #999988;font-style: italic">// Look at the type of Event we've received</span>
+					<span style="color: #999988;font-style: italic">// Look at the type of Event we&#39;ve received</span>
 					<span style="color: #000000;font-weight: bold">switch</span> <span style="background-color: #f8f8f8">ev</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">type</span><span style="background-color: #f8f8f8">)</span> <span style="background-color: #f8f8f8">{</span>
 
 					<span style="color: #000000;font-weight: bold">case</span> <span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Message</span><span style="color: #000000;font-weight: bold">:</span>
-						<span style="color: #999988;font-style: italic">// It's a delivery report</span>
+						<span style="color: #999988;font-style: italic">// It&#39;s a delivery report</span>
 						<span style="background-color: #f8f8f8">km</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">ev</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Message</span><span style="background-color: #f8f8f8">)</span>
 						<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span> <span style="color: #000000;font-weight: bold">!=</span> <span style="color: #008080">nil</span> <span style="background-color: #f8f8f8">{</span>
-							<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">**☠️ Failed to send message '%v' to topic '%v'</span><span style="color: #d14">\n\t</span><span style="color: #d14">Err: %v"</span><span style="background-color: #f8f8f8">,</span>
+							<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;</span><span style="color: #d14">\n</span><span style="color: #d14">**☠️ Failed to send message &#39;%v&#39; to topic &#39;%v&#39;</span><span style="color: #d14">\n\t</span><span style="color: #d14">Err: %v&#34;</span><span style="background-color: #f8f8f8">,</span>
 								<span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Value</span><span style="background-color: #f8f8f8">),</span>
 								<span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Topic</span><span style="background-color: #f8f8f8">),</span>
 								<span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">)</span>
 
 						<span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
-							<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"✅ Message '%v' delivered to topic '%v' (partition %d at offset %d)</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span>
+							<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;✅ Message &#39;%v&#39; delivered to topic &#39;%v&#39; (partition %d at offset %d)</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
 								<span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Value</span><span style="background-color: #f8f8f8">),</span>
 								<span style="color: #445588;font-weight: bold">string</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Topic</span><span style="background-color: #f8f8f8">),</span>
 								<span style="background-color: #f8f8f8">km</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">TopicPartition</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Partition</span><span style="background-color: #f8f8f8">,</span>
@@ -550,13 +550,13 @@ There was a problem calling the producer :-(
 						<span style="background-color: #f8f8f8">}</span>
 
 					<span style="color: #000000;font-weight: bold">case</span> <span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="color: #000000;font-weight: bold">:</span>
-						<span style="color: #999988;font-style: italic">// It's an error</span>
+						<span style="color: #999988;font-style: italic">// It&#39;s an error</span>
 						<span style="background-color: #f8f8f8">em</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">ev</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">kafka</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">)</span>
-						<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">**☠️ Uh oh, caught an error:</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">em</span><span style="background-color: #f8f8f8">)</span>
+						<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;</span><span style="color: #d14">\n</span><span style="color: #d14">**☠️ Uh oh, caught an error:</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">em</span><span style="background-color: #f8f8f8">)</span>
 
 					<span style="color: #000000;font-weight: bold">default</span><span style="color: #000000;font-weight: bold">:</span>
-						<span style="color: #999988;font-style: italic">// It's not anything we were expecting</span>
-						<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">**Got an event that's not a Message or Error 👻</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ev</span><span style="background-color: #f8f8f8">)</span>
+						<span style="color: #999988;font-style: italic">// It&#39;s not anything we were expecting</span>
+						<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;</span><span style="color: #d14">\n</span><span style="color: #d14">**Got an event that&#39;s not a Message or Error 👻</span><span style="color: #d14">\n\t</span><span style="color: #d14">%v</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ev</span><span style="background-color: #f8f8f8">)</span>
 
 					<span style="background-color: #f8f8f8">}</span>
 				<span style="color: #000000;font-weight: bold">case</span> <span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">termChan</span><span style="color: #000000;font-weight: bold">:</span>
@@ -570,54 +570,54 @@ There was a problem calling the producer :-(
 
 		<span style="color: #999988;font-style: italic">// Produce the message</span>
 		<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Produce</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">nil</span><span style="background-color: #f8f8f8">);</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">!=</span> <span style="color: #008080">nil</span> <span style="background-color: #f8f8f8">{</span>
-			<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"😢 Darn, there's an error producing the message! %v"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">())</span>
+			<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;😢 Darn, there&#39;s an error producing the message! %v&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">e</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">())</span>
 		<span style="background-color: #f8f8f8">}</span>
 
 		<span style="color: #999988;font-style: italic">// --</span>
 		<span style="color: #999988;font-style: italic">// Flush the Producer queue</span>
 		<span style="background-color: #f8f8f8">t</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="color: #009999">1000</span>
 		<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">r</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="background-color: #f8f8f8">p</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Flush</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">t</span><span style="background-color: #f8f8f8">);</span> <span style="background-color: #f8f8f8">r</span> <span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #009999">0</span> <span style="background-color: #f8f8f8">{</span>
-			<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">--</span><span style="color: #d14">\n</span><span style="color: #d14">⚠️ Failed to flush all messages after %d milliseconds. %d message(s) remain"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">t</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8">)</span>
+			<span style="background-color: #f8f8f8">errorChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Sprintf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;</span><span style="color: #d14">\n</span><span style="color: #d14">--</span><span style="color: #d14">\n</span><span style="color: #d14">⚠️ Failed to flush all messages after %d milliseconds. %d message(s) remain&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">t</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8">)</span>
 
 		<span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
-			<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Println</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">--</span><span style="color: #d14">\n</span><span style="color: #d14">✨ All messages flushed from the queue"</span><span style="background-color: #f8f8f8">)</span>
+			<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Println</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;</span><span style="color: #d14">\n</span><span style="color: #d14">--</span><span style="color: #d14">\n</span><span style="color: #d14">✨ All messages flushed from the queue&#34;</span><span style="background-color: #f8f8f8">)</span>
 		<span style="background-color: #f8f8f8">}</span>
 		<span style="color: #999988;font-style: italic">// --</span>
 		<span style="color: #999988;font-style: italic">// Stop listening to events and close the producer</span>
-		<span style="color: #999988;font-style: italic">// We're ready to finish</span>
+		<span style="color: #999988;font-style: italic">// We&#39;re ready to finish</span>
 		<span style="background-color: #f8f8f8">termChan</span> <span style="color: #000000;font-weight: bold">&lt;-</span> <span style="color: #008080">true</span>
 		<span style="color: #999988;font-style: italic">// wait for go-routine to terminate</span>
 		<span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">doneChan</span>
 		<span style="color: #999988;font-style: italic">// Now we can get ready to exit</span>
-		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">-=-=</span><span style="color: #d14">\n</span><span style="color: #d14">Wrapping up…</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">)</span>
+		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;</span><span style="color: #d14">\n</span><span style="color: #d14">-=-=</span><span style="color: #d14">\n</span><span style="color: #d14">Wrapping up…</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">)</span>
 
-		<span style="color: #999988;font-style: italic">// When we're ready to return, check if the go routine has sent errors</span>
-		<span style="color: #999988;font-style: italic">// Note that we're relying on the Go routine to close the channel, otherwise</span>
+		<span style="color: #999988;font-style: italic">// When we&#39;re ready to return, check if the go routine has sent errors</span>
+		<span style="color: #999988;font-style: italic">// Note that we&#39;re relying on the Go routine to close the channel, otherwise</span>
 		<span style="color: #999988;font-style: italic">// we deadlock.</span>
 		<span style="color: #999988;font-style: italic">// If there are no errors then the channel is simply closed and we read no values.</span>
 		<span style="background-color: #f8f8f8">done</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="color: #008080">false</span>
 		<span style="color: #000000;font-weight: bold">var</span> <span style="background-color: #f8f8f8">e</span> <span style="color: #445588;font-weight: bold">string</span>
 		<span style="color: #000000;font-weight: bold">for</span> <span style="color: #000000;font-weight: bold">!</span><span style="background-color: #f8f8f8">done</span> <span style="background-color: #f8f8f8">{</span>
 			<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">t</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">o</span> <span style="color: #000000;font-weight: bold">:=</span> <span style="color: #000000;font-weight: bold">&lt;-</span><span style="background-color: #f8f8f8">errorChan</span><span style="background-color: #f8f8f8">;</span> <span style="background-color: #f8f8f8">o</span> <span style="color: #000000;font-weight: bold">==</span> <span style="color: #008080">false</span> <span style="background-color: #f8f8f8">{</span>
-				<span style="color: #999988;font-style: italic">// o is false if we've read all the values and the channel is closed</span>
-				<span style="color: #999988;font-style: italic">// If that's the case, then we're done here</span>
+				<span style="color: #999988;font-style: italic">// o is false if we&#39;ve read all the values and the channel is closed</span>
+				<span style="color: #999988;font-style: italic">// If that&#39;s the case, then we&#39;re done here</span>
 				<span style="background-color: #f8f8f8">done</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #008080">true</span>
 			<span style="background-color: #f8f8f8">}</span> <span style="color: #000000;font-weight: bold">else</span> <span style="background-color: #f8f8f8">{</span>
-				<span style="color: #999988;font-style: italic">// We've read a value so let's concatenate it with the others</span>
-				<span style="color: #999988;font-style: italic">// that we've got</span>
+				<span style="color: #999988;font-style: italic">// We&#39;ve read a value so let&#39;s concatenate it with the others</span>
+				<span style="color: #999988;font-style: italic">// that we&#39;ve got</span>
 				<span style="background-color: #f8f8f8">e</span> <span style="color: #000000;font-weight: bold">+=</span> <span style="background-color: #f8f8f8">t</span>
 			<span style="background-color: #f8f8f8">}</span>
 		<span style="background-color: #f8f8f8">}</span>
 
 		<span style="color: #000000;font-weight: bold">if</span> <span style="color: #0086B3">len</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #009999">0</span> <span style="background-color: #f8f8f8">{</span>
-			<span style="color: #999988;font-style: italic">// If we've got any errors, then return an error to the caller</span>
+			<span style="color: #999988;font-style: italic">// If we&#39;ve got any errors, then return an error to the caller</span>
 
-			<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"❌ … returning an error</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">)</span>
+			<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;❌ … returning an error</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">)</span>
 			<span style="color: #000000;font-weight: bold">return</span> <span style="background-color: #f8f8f8">errors</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">New</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">e</span><span style="background-color: #f8f8f8">)</span>
 		<span style="background-color: #f8f8f8">}</span>
 
 		<span style="color: #999988;font-style: italic">// assuming everything has gone ok return no error</span>
-		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"👋 … and we're done.</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="background-color: #f8f8f8">)</span>
+		<span style="background-color: #f8f8f8">fmt</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">Printf</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#34;👋 … and we&#39;re done.</span><span style="color: #d14">\n</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">)</span>
 		<span style="color: #000000;font-weight: bold">return</span> <span style="color: #008080">nil</span>
 
 	<span style="background-color: #f8f8f8">}</span>
@@ -723,11 +723,9 @@ There was a problem calling the producer :-(
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

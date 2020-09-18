@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Running Dockerised Kafka Connect worker on GCP" />
@@ -85,7 +85,7 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<div class="paragraph">
-<p>I <a href="http://talks.rmoff.net/">talk and write about Kafka and Confluent Platform</a> a lot, and more and more of the demos that I&#8217;m building are around <a href="https://confluent.cloud">Confluent Cloud</a>. This means that I don&#8217;t have to run or manage my own Kafka brokers, Zookeeper, Schema Registry, KSQL servers, etc which makes things a ton easier. Whilst there are managed connectors on Confluent Cloud (S3 etc), I need to run my own Kafka Connect worker for those connectors not yet provided. An example is the MQTT source connector that I use in <a href="https://rmoff.dev/kssf19-ksql-video">this demo</a>. Up until now I&#8217;d either run this worker locally, or manually build a cloud VM. Locally is fine, as it&#8217;s all Docker, easily spun up in a single <code>docker-compose up -d</code> command. I wanted something that would keep running whilst my laptop was off, but that was as close to my local build as possible—enter GCP and its functionality to run a container on a VM automagically.</p>
+<p>I <a href="http://talks.rmoff.net/">talk and write about Kafka and Confluent Platform</a> a lot, and more and more of the demos that I’m building are around <a href="https://confluent.cloud">Confluent Cloud</a>. This means that I don’t have to run or manage my own Kafka brokers, Zookeeper, Schema Registry, KSQL servers, etc which makes things a ton easier. Whilst there are managed connectors on Confluent Cloud (S3 etc), I need to run my own Kafka Connect worker for those connectors not yet provided. An example is the MQTT source connector that I use in <a href="https://rmoff.dev/kssf19-ksql-video">this demo</a>. Up until now I’d either run this worker locally, or manually build a cloud VM. Locally is fine, as it’s all Docker, easily spun up in a single <code>docker-compose up -d</code> command. I wanted something that would keep running whilst my laptop was off, but that was as close to my local build as possible—enter GCP and its functionality to run a container on a VM automagically.</p>
 </div>
 <div class="paragraph">
 <p><strong>You can see <a href="https://github.com/confluentinc/demo-scene/blob/master/mqtt-tracker/launch-worker-container_gcloud.sh">the full script here</a></strong>. The rest of this article just walks through the how and why.</p>
@@ -94,15 +94,15 @@
 <h2 id="_the_script">The script</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Here&#8217;s a walk through of what the script&#8217;s doing and how to use it. First up, you need to create a <code>.env</code> file with your secrets and config in:</p>
+<p>Here’s a walk through of what the script’s doing and how to use it. First up, you need to create a <code>.env</code> file with your secrets and config in:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#19177c">CONFLUENTPLATFORM_VERSION</span><span style="color:#666">=</span><span style="color:#666">5</span>.4.0-beta1
-#   
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#19177c">CONFLUENTPLATFORM_VERSION</span><span style="color:#666">=</span>5.4.0-beta1
+<span style="color:#408080;font-style:italic">#   </span>
 <span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#666">=</span>
 <span style="color:#19177c">CCLOUD_API_KEY</span><span style="color:#666">=</span>
 <span style="color:#19177c">CCLOUD_API_SECRET</span><span style="color:#666">=</span>
-#
+<span style="color:#408080;font-style:italic">#</span>
 <span style="color:#19177c">CCLOUD_SCHEMA_REGISTRY_URL</span><span style="color:#666">=</span>
 <span style="color:#19177c">CCLOUD_SCHEMA_REGISTRY_API_KEY</span><span style="color:#666">=</span>
 <span style="color:#19177c">CCLOUD_SCHEMA_REGISTRY_API_SECRET</span><span style="color:#666">=</span></code></pre></div>
@@ -114,7 +114,7 @@
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#008000">source</span> .env</code></pre></div>
 </div>
 <div class="paragraph">
-<p>I&#8217;m running Kafka Connect in distributed mode, which <a href="http://rmoff.dev/ksldn19-kafka-connect">I generally recommend in all instances - even on a single node</a>. There&#8217;s no reason not to, and it makes it easier to understand (and work with IMO) to learn a single deployment method instead of two. Since I&#8217;m using distributed mode, all of the state for the worker is stored in Kafka itself. This is pretty cool, but it does mean that if you run multiple workers with the same persistence topics configured things will get funky. For that reason, I have a prefix for the worker and topics, which is based on the current timestamp—if you&#8217;re using this script yourself you might want to vary this (or not; YMMV):</p>
+<p>I’m running Kafka Connect in distributed mode, which <a href="http://rmoff.dev/ksldn19-kafka-connect">I generally recommend in all instances - even on a single node</a>. There’s no reason not to, and it makes it easier to understand (and work with IMO) to learn a single deployment method instead of two. Since I’m using distributed mode, all of the state for the worker is stored in Kafka itself. This is pretty cool, but it does mean that if you run multiple workers with the same persistence topics configured things will get funky. For that reason, I have a prefix for the worker and topics, which is based on the current timestamp—if you’re using this script yourself you might want to vary this (or not; YMMV):</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#19177c">epoch</span><span style="color:#666">=</span><span style="color:#008000;font-weight:bold">$(</span>date +%s<span style="color:#008000;font-weight:bold">)</span></code></pre></div>
@@ -142,15 +142,15 @@ docker run --rm --volume /tmp/config-<span style="color:#b68;font-weight:bold">$
 </span><span style="color:#b62;font-weight:bold"></span>    --replication-factor <span style="color:#666">3</span></code></pre></div>
 </div>
 <div class="paragraph">
-<p>Now that we&#8217;ve got the topic created, we can spin up the worker itself. Or, almost. Because first we need to build a file with the necessary environment variables in for the worker. You <em>can</em> pass environment variables directly in the <code>gcloud</code> invocation but it&#8217;s not a pretty sight</p>
+<p>Now that we’ve got the topic created, we can spin up the worker itself. Or, almost. Because first we need to build a file with the necessary environment variables in for the worker. You <em>can</em> pass environment variables directly in the <code>gcloud</code> invocation but it’s not a pretty sight</p>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2019/11/container_env.png" alt="container env">
+<img src="/images/2019/11/container_env.png" alt="container env"/>
 </div>
 </div>
 <div class="paragraph">
-<p>Even if it works, it&#8217;s not particularly maintainable. Whilst you can externalise the environment variables into a file that you pass in with <code>container-env-file</code> you can&#8217;t interpolate secure values in that file which means that you end up with a file which is both config and authentication credentials, which is not ideal. Hence, the config is inline in this script and interpolated with credentials held in environment variables (via <code>.env</code>) at runtime into a temporary file:</p>
+<p>Even if it works, it’s not particularly maintainable. Whilst you can externalise the environment variables into a file that you pass in with <code>container-env-file</code> you can’t interpolate secure values in that file which means that you end up with a file which is both config and authentication credentials, which is not ideal. Hence, the config is inline in this script and interpolated with credentials held in environment variables (via <code>.env</code>) at runtime into a temporary file:</p>
 </div>
 <div class="paragraph">
 <div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#19177c">PROPERTIES_FILE</span><span style="color:#666">=</span>/tmp/connect-worker-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span>_gcloud_env.properties
@@ -200,11 +200,11 @@ cat &gt; <span style="color:#b68;font-weight:bold">${</span><span style="color:#
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/2019/11/equiv.png" alt="equiv">
+<img src="/images/2019/11/equiv.png" alt="equiv"/>
 </div>
 </div>
 <div class="paragraph">
-<p>It&#8217;s fairly standard list of parameters, including <code>container-image</code> to refer to the docker image, <code>container-env-file</code> to point to the environment file that we built above—and then <code>container-command</code> and <code>container-arg</code> to run custom commands, which:</p>
+<p>It’s fairly standard list of parameters, including <code>container-image</code> to refer to the docker image, <code>container-env-file</code> to point to the environment file that we built above—and then <code>container-command</code> and <code>container-arg</code> to run custom commands, which:</p>
 </div>
 <div class="olist arabic">
 <ol class="arabic">
@@ -281,18 +281,18 @@ cat &gt; <span style="color:#b68;font-weight:bold">${</span><span style="color:#
 </span><span style="color:#ba2121">        sleep infinity&#39;</span></code></pre></div>
 </div>
 <div class="paragraph">
-<p>The bash script that&#8217;s embedded as an argument to <code>bash -c</code> is mostly as you&#8217;d run it natively, except some funky quoting to deal with single quotes within the command (that enclose the <code>-d</code> value of <code>curl</code>)—these are done with <code>'"'"'</code> which breaks down to:</p>
+<p>The bash script that’s embedded as an argument to <code>bash -c</code> is mostly as you’d run it natively, except some funky quoting to deal with single quotes within the command (that enclose the <code>-d</code> value of <code>curl</code>)—these are done with <code>&#39;&#34;&#39;&#34;&#39;</code> which breaks down to:</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><code>'</code> close the string</p>
+<p><code>&#39;</code> close the string</p>
 </li>
 <li>
-<p><code>"'"</code> quote a single quote</p>
+<p><code>&#34;&#39;&#34;</code> quote a single quote</p>
 </li>
 <li>
-<p><code>'</code> open the string</p>
+<p><code>&#39;</code> open the string</p>
 </li>
 </ul>
 </div>
@@ -318,7 +318,7 @@ cat &gt; <span style="color:#b68;font-weight:bold">${</span><span style="color:#
 </div>
 </div>
 <div class="paragraph">
-<p>Turns out I&#8217;d set <code>--no-address</code> when creating the VM and this caused the problem.</p>
+<p>Turns out I’d set <code>--no-address</code> when creating the VM and this caused the problem.</p>
 </div>
 <div class="paragraph">
 <p>To fix it, I just omitted this configuration which meant that the default allocation of an ephemeral IP address happened, and Docker started up nicely.</p>
@@ -329,14 +329,14 @@ cat &gt; <span style="color:#b68;font-weight:bold">${</span><span style="color:#
 <h2 id="_my_question_to_you">My question to you</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Is this an abomination? Am I struggling to do it in an elegant way because I&#8217;m just using the wrong technology? All I want to do is spin up a Connect worker using config and settings that I&#8217;ve built locally, following the philosophy of cattle-not-pets. Yes I can build a cloud VM and config Connect manually, but with all the context switching that I do I want something I can get working, check in to git, and come back to a month later and run without having to think about any of it.</p>
+<p>Is this an abomination? Am I struggling to do it in an elegant way because I’m just using the wrong technology? All I want to do is spin up a Connect worker using config and settings that I’ve built locally, following the philosophy of cattle-not-pets. Yes I can build a cloud VM and config Connect manually, but with all the context switching that I do I want something I can get working, check in to git, and come back to a month later and run without having to think about any of it.</p>
 </div>
 <div class="paragraph">
-<p>Should I be learning k8s, or is that over-engineering it? My gut feel is that it would be because I don&#8217;t need the orchestration and management bells and whistles of k8s—but perhaps they&#8217;re just an added benefit and I should take the leap? What about other options? I gave Terraform a <em>very</em> quick look but I&#8217;d prefer something closer to my local Docker builds—and I&#8217;m tied to Docker because it&#8217;s the standard platform on which a lot of developers are accepting of for trying demos and new technology. The more non-standard pieces, the higher the friction—we&#8217;ve all seen those demos that have a laundry list of pre-reqs to use, and we&#8217;ve all thought…sod it ;)</p>
+<p>Should I be learning k8s, or is that over-engineering it? My gut feel is that it would be because I don’t need the orchestration and management bells and whistles of k8s—but perhaps they’re just an added benefit and I should take the leap? What about other options? I gave Terraform a <em>very</em> quick look but I’d prefer something closer to my local Docker builds—and I’m tied to Docker because it’s the standard platform on which a lot of developers are accepting of for trying demos and new technology. The more non-standard pieces, the higher the friction—we’ve all seen those demos that have a laundry list of pre-reqs to use, and we’ve all thought…sod it ;)</p>
 </div>
 <div class="paragraph">
-<p>So—tell me if I&#8217;m wrong - <em>do</em> <code>@</code> me!
-I&#8217;m <strong><a href="https://twitter.com/rmoff/">@rmoff</a> on Twitter</strong></p>
+<p>So—tell me if I’m wrong - <em>do</em> <code>@</code> me!
+I’m <strong><a href="https://twitter.com/rmoff/">@rmoff</a> on Twitter</strong></p>
 </div>
 </div>
 </div>
@@ -350,11 +350,9 @@ I&#8217;m <strong><a href="https://twitter.com/rmoff/">@rmoff</a> on Twitter</st
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

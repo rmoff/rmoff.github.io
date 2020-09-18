@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Lifting the Lid on OBIEE 12c Web Services - Part 2" />
@@ -85,112 +85,79 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<p>In OBIEE 12c <code>data-model-cmd</code> is a wrapper for some java code which ultimately calls an internal RESTful web service in OBIEE 12c, <code>bi-lcm</code>. We saw in the <a href="http://rmoff.net/2016/05/24/lifting-the-lid-on-obiee-12c-web-services-part-1/">previous post</a> how these internal web services can be opened up slightly, and we&rsquo;re going to do the same again here. Which means, time for the same caveat:</p>
-
-<hr />
-
+<hr>
 <p><strong>None of these Web Services are documented, and they should therefore be assumed to be completely unsupported by Oracle. This article is purely for geek interest. Using undocumented APIs leaves you at risk of the API changing at any time.</strong></p>
-
-<hr />
-
+<hr>
 <p>With that out of the way, let&rsquo;s go! Firstly, a simple example of downloading the RPD. The way that OBIEE 12c works with RPDs is significantly different from previous versions, since there is now the concept of customisations and layering. You may have noticed <code>liverpd.rpd</code> or <code>default_diff.xml</code>, both of which are related to this. The nett result is that there is no longer a single RPD file uploaded to the server which can be downloaded again for editing, as there was in 11g and before. You now need to submit a request to OBIEE to retrieve the latest version of the RPD, which it will pull together on the fly and pass back to you. This is done using <code>data-model-cmd</code>:</p>
-
 <pre><code>$ /app/oracle/biee/user_projects/domains/bi/bitools/bin/data-model-cmd.sh downloadrpd -O ~/myRPD.rpd -W Admin123 -U weblogic -P Admin123 -SI ssi
 </code></pre>
-
 <p>This writes a local file, myRPD.rpd. In the background, it&rsquo;s calling <code>bi-lcm</code> to retrieve the file, as we can see from two diagnostic routes:</p>
-
 <ul>
-<li><p>First, my favourite, <code>sysdig</code>, sniffing any traffic on ports 7780 (managed server public listen port) and 7783 (managed server internal listen port, as used by intra-component REST calls etc):</p>
-
-<pre><code>sudo sysdig -s 2000 -A -c echo_fds &quot;(fd.port=7780 or fd.port=7783)&quot;
+<li>
+<p>First, my favourite, <code>sysdig</code>, sniffing any traffic on ports 7780 (managed server public listen port) and 7783 (managed server internal listen port, as used by intra-component REST calls etc):</p>
+<pre><code>  sudo sysdig -s 2000 -A -c echo_fds &quot;(fd.port=7780 or fd.port=7783)&quot;
 </code></pre>
-
 <p>This captures the following <code>POST</code> request:</p>
-
-<pre><code>POST /bi-lcm/v1/si/ssi/rpd/downloadrpd HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-Authorization: Basic d2VibG9naWM6QWRtaW4xMjM=
-User-Agent: Jersey/2.21.1 (HttpUrlConnection 1.8.0_51)
-Host: demo.us.oracle.com:7780
-Accept: text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2
-Connection: keep-alive
-Content-Length: 24
-</code></pre></li>
-
-<li><p>Just as useful, in this case, is the <code>bi-lcm</code> log file itself, <code>DOMAIN_HOME/servers/bi_server1/logs/bi-lcm-rest.log.0</code>:</p>
-
-<pre><code>47 &gt; POST http://demo.us.oracle.com:7780/bi-lcm/v1/si/ssi/rpd/downloadrpd
-47 &gt; Accept: text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2
-47 &gt; Authorization: Basic d2VibG9naWM6QWRtaW4xMjM=
-47 &gt; Connection: keep-alive
-47 &gt; Content-Length: 24
-47 &gt; Content-Type: application/x-www-form-urlencoded
-47 &gt; Host: demo.us.oracle.com:7780
-47 &gt; User-Agent: Jersey/2.21.1 (HttpUrlConnection 1.8.0_51)
-target-password=Admin123
-</code></pre></li>
+<pre><code>  POST /bi-lcm/v1/si/ssi/rpd/downloadrpd HTTP/1.1
+  Content-Type: application/x-www-form-urlencoded
+  Authorization: Basic d2VibG9naWM6QWRtaW4xMjM=
+  User-Agent: Jersey/2.21.1 (HttpUrlConnection 1.8.0_51)
+  Host: demo.us.oracle.com:7780
+  Accept: text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2
+  Connection: keep-alive
+  Content-Length: 24
+</code></pre>
+</li>
+<li>
+<p>Just as useful, in this case, is the <code>bi-lcm</code> log file itself, <code>DOMAIN_HOME/servers/bi_server1/logs/bi-lcm-rest.log.0</code>:</p>
+<pre><code>  47 &gt; POST http://demo.us.oracle.com:7780/bi-lcm/v1/si/ssi/rpd/downloadrpd
+  47 &gt; Accept: text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2
+  47 &gt; Authorization: Basic d2VibG9naWM6QWRtaW4xMjM=
+  47 &gt; Connection: keep-alive
+  47 &gt; Content-Length: 24
+  47 &gt; Content-Type: application/x-www-form-urlencoded
+  47 &gt; Host: demo.us.oracle.com:7780
+  47 &gt; User-Agent: Jersey/2.21.1 (HttpUrlConnection 1.8.0_51)
+  target-password=Admin123
+</code></pre>
+</li>
 </ul>
-
 <p>So the syntax of the RESTful call is pretty simple &ndash; call the <code>downloadrpd</code> endpoint, passing in the password that is to be used to encrypt the generated RPD. Authentication is done by Basic HTTP.</p>
-
 <p>What can we do with this? Two things - neither of which are spectacularly useful as such, but additional ways and means to achieve the same. It may be you&rsquo;ve got a bespoke code integration system that needs to integrate with a RESTful endpoint, or simply it&rsquo;s just another useful tool to have at one&rsquo;s disposal. Before we get into it, it&rsquo;s probably time for that caveat again:</p>
-
-<hr />
-
+<hr>
 <p><strong>None of these Web Services are documented, and they should therefore be assumed to be completely unsupported by Oracle. This article is purely for geek interest. Using undocumented APIs leaves you at risk of the API changing at any time.</strong></p>
-
-<hr />
-
+<hr>
 <p><a href="https://curl.haxx.se/"><code>cURL</code></a> is a commandline utility for sending HTTP (amongst other) requests. We can use it to request the RPD to be downloaded to any machine on which we can run cURL. Because it adheres to the *nix philosophy of making the output available as a pipe, we can redirect it to a file:  (<em>if you don&rsquo;t, you&rsquo;ll get a screen full of gibberish&hellip;</em>)</p>
-
-<pre><code class="language-bash">curl -X &quot;POST&quot; &quot;http://192.168.56.101:7780/bi-lcm/v1/si/ssi/rpd/downloadrpd&quot; \
---data-urlencode &quot;target-password=Admin123&quot; \
---basic --user weblogic:Admin123 \
-&gt; downloadedRPD.rpd
-</code></pre>
-
-<p>Note that I&rsquo;ve used <code>\</code> line continuation character to break the command over multiple lines simply for legibility.</p>
-
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">curl -X <span style="color:#ba2121">&#34;POST&#34;</span> <span style="color:#ba2121">&#34;http://192.168.56.101:7780/bi-lcm/v1/si/ssi/rpd/downloadrpd&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>--data-urlencode <span style="color:#ba2121">&#34;target-password=Admin123&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>--basic --user weblogic:Admin123 <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>&gt; downloadedRPD.rpd
+</code></pre></div><p>Note that I&rsquo;ve used <code>\</code> line continuation character to break the command over multiple lines simply for legibility.</p>
 <p>It&rsquo;s pretty clear, hopefully, how to parameterise this for your own use. The server and port are your OBIEE managed server and port (the same that <code>/analytics</code> is on). The rest are credentials, for the downloaded RPD, and to access the OBIEE system, respectively.</p>
-
 <p>Taking the same method, but via a web page, we can run this HTML file anywhere we want:</p>
-
-<pre><code class="language-html">&lt;html&gt;
-   &lt;head&gt;&lt;/head&gt;
-   &lt;body&gt;
-      &lt;FORM action=&quot;http://192.168.56.101:7780/bi-lcm/v1/si/ssi/rpd/downloadrpd&quot;
-         enctype=&quot;application/x-www-form-urlencoded&quot;
-         method=&quot;post&quot;&gt;
-         &lt;P&gt;
-           New password for downloaded RPD file? &lt;INPUT type=&quot;text&quot; name=&quot;target-password&quot;&gt;&lt;BR&gt;
-            &lt;INPUT type=&quot;submit&quot; value=&quot;Send&quot;&gt; &lt;INPUT type=&quot;reset&quot;&gt;
-      &lt;/FORM&gt;
-   &lt;/body&gt;
-&lt;/html&gt;
-</code></pre>
-
-<p>Load it into a web browser, enter a password for the generated RPD:</p>
-
-<p><img src="/images/2016/05/rpd_download_html.png" alt="" /></p>
-
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-html" data-lang="html">&lt;<span style="color:#008000;font-weight:bold">html</span>&gt;
+   &lt;<span style="color:#008000;font-weight:bold">head</span>&gt;&lt;/<span style="color:#008000;font-weight:bold">head</span>&gt;
+   &lt;<span style="color:#008000;font-weight:bold">body</span>&gt;
+      &lt;<span style="color:#008000;font-weight:bold">FORM</span> <span style="color:#7d9029">action</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;http://192.168.56.101:7780/bi-lcm/v1/si/ssi/rpd/downloadrpd&#34;</span>
+         <span style="color:#7d9029">enctype</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;application/x-www-form-urlencoded&#34;</span>
+         <span style="color:#7d9029">method</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;post&#34;</span>&gt;
+         &lt;<span style="color:#008000;font-weight:bold">P</span>&gt;
+           New password for downloaded RPD file? &lt;<span style="color:#008000;font-weight:bold">INPUT</span> <span style="color:#7d9029">type</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;text&#34;</span> <span style="color:#7d9029">name</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;target-password&#34;</span>&gt;&lt;<span style="color:#008000;font-weight:bold">BR</span>&gt;
+            &lt;<span style="color:#008000;font-weight:bold">INPUT</span> <span style="color:#7d9029">type</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;submit&#34;</span> <span style="color:#7d9029">value</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;Send&#34;</span>&gt; &lt;<span style="color:#008000;font-weight:bold">INPUT</span> <span style="color:#7d9029">type</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;reset&#34;</span>&gt;
+      &lt;/<span style="color:#008000;font-weight:bold">FORM</span>&gt;
+   &lt;/<span style="color:#008000;font-weight:bold">body</span>&gt;
+&lt;/<span style="color:#008000;font-weight:bold">html</span>&gt;
+</code></pre></div><p>Load it into a web browser, enter a password for the generated RPD:</p>
+<p><img src="/images/2016/05/rpd_download_html.png" alt=""></p>
 <p>and enter your credentials for OBIEE when prompted:</p>
-
-<p><img src="/images/2016/05/rpddl02.png" alt="" /></p>
-
+<p><img src="/images/2016/05/rpddl02.png" alt=""></p>
 <p>The RPD file is downloaded as <code>downloadrpd</code>, which you can rename to whatever you want.</p>
-
-<hr />
-
+<hr>
 <p>So, we can do <code>downloadrpd</code> &ndash; what about <code>uploadrpd</code>? Because that really would be useful for some people, being able to deploy an RPD without needing to dive into the commandline.</p>
-
 <p>Here&rsquo;s the <code>uploadrpd</code> command:</p>
-
-<pre><code class="language-bash">$ /app/oracle/biee/user_projects/domains/bi/bitools/bin/data-model-cmd.sh \ 
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ /app/oracle/biee/user_projects/domains/bi/bitools/bin/data-model-cmd.sh <span style="color:#b62;font-weight:bold">\ </span>
 uploadrpd -I /home/oracle/chng1.rpd -W Admin123 -U weblogic -P Admin123 -SI ssi
-</code></pre>
-
-<p>The resulting POST request looks like this:</p>
-
+</code></pre></div><p>The resulting POST request looks like this:</p>
 <pre><code>POST http://demo.us.oracle.com:7780/bi-lcm/v1/si/ssi/rpd/uploadrpd
 Accept: text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2
 Authorization: Basic d2VibG9naWM6QWRtaW4xMjM=
@@ -201,9 +168,7 @@ Host: demo.us.oracle.com:7780
 MIME-Version: 1.0
 User-Agent: Jersey/2.21.1 (HttpUrlConnection 1.8.0_51)
 </code></pre>
-
 <p>The upload has two parts; the RPD password, and the RPD itself.</p>
-
 <pre><code>--Boundary_1_1010953501_1464461679148
 Content-Type: text/plain
 Content-Disposition: form-data; name=&quot;rpd-password&quot;
@@ -215,87 +180,71 @@ Content-Disposition: form-data; filename=&quot;myRPD.rpd&quot;; modification-dat
 
 [whole bunch of encoded RPD binary file]
 </code></pre>
-
 <p><del>But - I couldn&rsquo;t replicate this HTTP request successfully; called manually through Paw, or cURL, or a manual webpage like the above, it would fail with the error:</del></p>
-
 <pre><code>oracle.bi.lcm.rest.si.rpd.RpdEndpointV1 SEVERE - Exception during RPD file upload: java.lang.NullPointerException
 </code></pre>
-
 <p><del>Or on other attempts:</del></p>
-
 <pre><code>java.net.SocketTimeoutException : Read time out after 30000 millis
 </code></pre>
-
 <p><del>My guess (based on ruling out all the other stuff) is it&rsquo;s down to how I was encoding the file and/or specifying its length. A challenge for <a href="https://oracleus.activeevents.com/2014/connect/fileDownload/session/75F302D730BDB9CA14ADAB3477574D4D/UGF9144_Berg-OOW_Neos_Voyage_2014.pdf">you Neos</a> out there to crack?</del></p>
-
 <p><strong>Update:</strong> <a href="https://twitter.com/fomin_andrew/status/739189964097851393">Neo has risen to the challenge</a>, showing that the force is strong in this one&hellip; Andrew Fomin (<a href="https://twitter.com/fomin_andrew">twitter</a> | <a href="https://bisoftdiary.com/">blog</a>) has figured out the correct syntax in order to use <code>curl</code> to upload an RPD:</p>
-
-<pre><code class="language-bash">curl -X POST \
-     &quot;http://192.168.1.41:7780/bi-lcm/v1/si/ssi/rpd/uploadrpd&quot; \
-     --form &quot;file=@myRPD.rpd;type=application/vnd.oracle.rpd&quot; \
-     --form &quot;rpd-password=Password01&quot; \
-     --basic --user weblogic:Admin123
-</code></pre>
-
-<p>The key bit in this is that the content-type of the upload RPD file is set to <code>application/vnd.oracle.rpd</code> &ndash; without this the upload fails.</p>
-
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">curl -X POST <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>     <span style="color:#ba2121">&#34;http://192.168.1.41:7780/bi-lcm/v1/si/ssi/rpd/uploadrpd&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>     --form <span style="color:#ba2121">&#34;file=@myRPD.rpd;type=application/vnd.oracle.rpd&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>     --form <span style="color:#ba2121">&#34;rpd-password=Password01&#34;</span> <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>     --basic --user weblogic:Admin123
+</code></pre></div><p>The key bit in this is that the content-type of the upload RPD file is set to <code>application/vnd.oracle.rpd</code> &ndash; without this the upload fails.</p>
 <p>When run, the JSON payload returned shows success (parsed here through <code>jq</code>):</p>
-
-<pre><code class="language-json">{
-  &quot;clazz&quot;: [
-    &quot;rpd-response&quot;
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+  <span style="color:#008000;font-weight:bold">&#34;clazz&#34;</span>: [
+    <span style="color:#ba2121">&#34;rpd-response&#34;</span>
   ],
-  &quot;links&quot;: [
+  <span style="color:#008000;font-weight:bold">&#34;links&#34;</span>: [
     {
-      &quot;href&quot;: &quot;http://192.168.1.41:7780/bi-lcm/v1/si/ssi/rpd/uploadrpd&quot;,
-      &quot;rel&quot;: [
-        &quot;self&quot;
+      <span style="color:#008000;font-weight:bold">&#34;href&#34;</span>: <span style="color:#ba2121">&#34;http://192.168.1.41:7780/bi-lcm/v1/si/ssi/rpd/uploadrpd&#34;</span>,
+      <span style="color:#008000;font-weight:bold">&#34;rel&#34;</span>: [
+        <span style="color:#ba2121">&#34;self&#34;</span>
       ]
     }
   ],
-  &quot;properties&quot;: {
-    &quot;entry&quot;: [
+  <span style="color:#008000;font-weight:bold">&#34;properties&#34;</span>: {
+    <span style="color:#008000;font-weight:bold">&#34;entry&#34;</span>: [
       {
-        &quot;key&quot;: &quot;si&quot;,
-        &quot;value&quot;: {
-          &quot;type&quot;: &quot;string&quot;,
-          &quot;value&quot;: &quot;ssi&quot;
+        <span style="color:#008000;font-weight:bold">&#34;key&#34;</span>: <span style="color:#ba2121">&#34;si&#34;</span>,
+        <span style="color:#008000;font-weight:bold">&#34;value&#34;</span>: {
+          <span style="color:#008000;font-weight:bold">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;string&#34;</span>,
+          <span style="color:#008000;font-weight:bold">&#34;value&#34;</span>: <span style="color:#ba2121">&#34;ssi&#34;</span>
         }
       },
       {
-        &quot;key&quot;: &quot;description&quot;,
-        &quot;value&quot;: {
-          &quot;type&quot;: &quot;string&quot;,
-          &quot;value&quot;: &quot;RPD upload completed successfully.&quot;
+        <span style="color:#008000;font-weight:bold">&#34;key&#34;</span>: <span style="color:#ba2121">&#34;description&#34;</span>,
+        <span style="color:#008000;font-weight:bold">&#34;value&#34;</span>: {
+          <span style="color:#008000;font-weight:bold">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;string&#34;</span>,
+          <span style="color:#008000;font-weight:bold">&#34;value&#34;</span>: <span style="color:#ba2121">&#34;RPD upload completed successfully.&#34;</span>
         }
       },
       {
-        &quot;key&quot;: &quot;desc_code&quot;,
-        &quot;value&quot;: {
-          &quot;type&quot;: &quot;string&quot;,
-          &quot;value&quot;: &quot;DESC_CODE_RPD_UPLOAD_SUCCESSFUL&quot;
+        <span style="color:#008000;font-weight:bold">&#34;key&#34;</span>: <span style="color:#ba2121">&#34;desc_code&#34;</span>,
+        <span style="color:#008000;font-weight:bold">&#34;value&#34;</span>: {
+          <span style="color:#008000;font-weight:bold">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;string&#34;</span>,
+          <span style="color:#008000;font-weight:bold">&#34;value&#34;</span>: <span style="color:#ba2121">&#34;DESC_CODE_RPD_UPLOAD_SUCCESSFUL&#34;</span>
         }
       },
       {
-        &quot;key&quot;: &quot;status&quot;,
-        &quot;value&quot;: {
-          &quot;type&quot;: &quot;string&quot;,
-          &quot;value&quot;: &quot;SUCCESS&quot;
+        <span style="color:#008000;font-weight:bold">&#34;key&#34;</span>: <span style="color:#ba2121">&#34;status&#34;</span>,
+        <span style="color:#008000;font-weight:bold">&#34;value&#34;</span>: {
+          <span style="color:#008000;font-weight:bold">&#34;type&#34;</span>: <span style="color:#ba2121">&#34;string&#34;</span>,
+          <span style="color:#008000;font-weight:bold">&#34;value&#34;</span>: <span style="color:#ba2121">&#34;SUCCESS&#34;</span>
         }
       }
     ]
   },
-  &quot;title&quot;: &quot;RPD-LCM response, SI=ssi, action=Upload RPD&quot;
+  <span style="color:#008000;font-weight:bold">&#34;title&#34;</span>: <span style="color:#ba2121">&#34;RPD-LCM response, SI=ssi, action=Upload RPD&#34;</span>
 }
-</code></pre>
-
-<p>Thanks Andrew!</p>
-
-<hr />
-
+</code></pre></div><p>Thanks Andrew!</p>
+<hr>
 <p><strong>None of these Web Services are documented, and they should therefore be assumed to be completely unsupported by Oracle. This article is purely for geek interest. Using undocumented APIs leaves you at risk of the API changing at any time.</strong></p>
-
-<hr />
+<hr>
 
 </article>
 
@@ -307,11 +256,9 @@ Content-Disposition: form-data; filename=&quot;myRPD.rpd&quot;; modification-dat
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

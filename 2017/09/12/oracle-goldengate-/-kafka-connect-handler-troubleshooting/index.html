@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Oracle GoldenGate / Kafka Connect Handler troubleshooting" />
@@ -85,48 +85,29 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<p>The Replicat was kapput:</p>
-
 <pre><code>GGSCI (localhost.localdomain) 3&gt; info rkconnoe
 
 REPLICAT   RKCONNOE  Last Started 2017-09-12 17:06   Status ABENDED
 Checkpoint Lag       00:00:00 (updated 00:46:34 ago)
 Log Read Checkpoint  File /u01/app/ogg/dirdat/oe000000
                      First Record  RBA 0
-</code></pre>
-
-<p>So checking the OGG error log <code>ggserr.log</code> showed</p>
-
+</code></pre><p>So checking the OGG error log <code>ggserr.log</code> showed</p>
 <pre><code>2017-09-12T17:06:17.572-0400  ERROR   OGG-15051  Oracle GoldenGate Delivery, rkconnoe.prm:  Java or JNI exception:
                               oracle.goldengate.util.GGException: Error detected handling operation added event.
 2017-09-12T17:06:17.572-0400  ERROR   OGG-01668  Oracle GoldenGate Delivery, rkconnoe.prm:  PROCESS ABENDING.
-</code></pre>
-
-<p>So checking the replicat log <code>dirrpt/RKCONNOE_info_log4j.log</code> showed:</p>
-
-<script src="https://gist.github.com/rmoff/3e1fe8153d3a72068af1fb612fe4b839.js"></script>
-
+</code></pre><p>So checking the replicat log <code>dirrpt/RKCONNOE_info_log4j.log</code> showed:</p>
+<!-- raw HTML omitted -->
 <p>Something odd going on here. From the above stack trace I focussed on</p>
-
 <pre><code>java.lang.NullPointerException at io.confluent.kafka.schemaregistry.client.rest.RestService.sendHttpRequest
 </code></pre>
-
 <p>So something to do with the <code>sendHttpRequest</code> to the Schema Registry. Checking the Schema Registry log showed:</p>
-
 <pre><code>[2017-09-12 16:50:59,372] WARN badMessage: 400 Unknown Version for HttpChannelOverHttp@27e54a61{r=0,c=false,a=IDLE,uri=} (org.eclipse.jetty.http.HttpParser:1317)
-</code></pre>
-
-<p>Most bizarre. A normal OGG Kafka Connect handler interaction with Schema Registry looks like this:</p>
-
+</code></pre><p>Most bizarre. A normal OGG Kafka Connect handler interaction with Schema Registry looks like this:</p>
 <pre><code>[2017-09-12 18:26:14,058] INFO 127.0.0.1 - - [12/Sep/2017:18:26:13 -0400] &quot;POST /subjects/ora-ogg-COUNTRIES-key/versions HTTP/1.1&quot; 200 8  468 (io.confluent.rest-utils.requests:77)
-</code></pre>
-
-<p>Let&rsquo;s dig a bit deeper. Since the debug log of the OGG Kafka Connect handler doesn&rsquo;t tell us anything more, let&rsquo;s see if we can spot anything in what is being sent to the Schema Registry in that HTTP call. Enter <code>tcpdump</code>.</p>
-
+</code></pre><p>Let&rsquo;s dig a bit deeper. Since the debug log of the OGG Kafka Connect handler doesn&rsquo;t tell us anything more, let&rsquo;s see if we can spot anything in what is being sent to the Schema Registry in that HTTP call. Enter <code>tcpdump</code>.</p>
 <pre><code>[oracle@localhost ~]$ sudo tcpdump -i venet0 -i lo -nnA 'port 8081'
 </code></pre>
-
 <p>Firstly, here&rsquo;s what we get when a successful message is processed by the OGG Kafka Connect handler (matching the above <code>POST</code> seen in the schema registry log):</p>
-
 <pre><code>18:26:13.496951 IP 127.0.0.1.10420 &gt; 127.0.0.1.8081: Flags [P.], seq 1:312, ack 1, win 342, options [nop,nop,TS val 1779726 ecr 1779721], length 311
 E..k6m@.@...........(....&amp;.c.ZR....V._.....
 ..(...( POST /subjects/ora-ogg-COUNTRIES-key/versions HTTP/1.1
@@ -138,10 +119,7 @@ Host: localhost:8081
 Accept: text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2
 Connection: keep-alive
 Content-Length: 23
-</code></pre>
-
-<p>and now here&rsquo;s what we see when the dodgy replicat abends and the schema registry logs <code>WARN badMessage: 400 Unknown Version</code>:</p>
-
+</code></pre><p>and now here&rsquo;s what we see when the dodgy replicat abends and the schema registry logs <code>WARN badMessage: 400 Unknown Version</code>:</p>
 <pre><code>17:06:17.533978 IP 127.0.0.1.10112 &gt; 127.0.0.1.8081: Flags [P.], seq 1:314, ack 1, win 342, options [nop,nop,TS val 1147447 ecr 1147444], length 313
 E..my0@.@..X........'...7W...#.^...V.a.....
 ...7...4POST /subjects/ora-ogg-SOE-LOGON  -key/versions HTTP/1.1
@@ -153,48 +131,28 @@ Host: localhost:8081
 Accept: text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2
 Connection: keep-alive
 Content-Length: 23
-</code></pre>
-
-<p>Check out the space between <code>LOGON</code> and <code>-key/versions</code> in the <code>POST</code> shown in the <code>tcpdump</code> output above – I&rsquo;m pretty sure that shouldn&rsquo;t be there. Where did it come from, and importantly, how do we get rid of it?</p>
-
+</code></pre><p>Check out the space between <code>LOGON</code> and <code>-key/versions</code> in the <code>POST</code> shown in the <code>tcpdump</code> output above – I&rsquo;m pretty sure that shouldn&rsquo;t be there. Where did it come from, and importantly, how do we get rid of it?</p>
 <p>The OGG Kafka Connect handler takes its configuration from the properties file that you define (<a href="http://docs.oracle.com/goldengate/bd123110/gg-bd/GADBD/using-kafka-connect-handler.htm#GADBD-GUID-23F5CCE3-845C-43F0-A08E-42C2BD1824FB">syntax here</a>). New in 12.3.1 is the ability to define key and topic <a href="http://docs.oracle.com/goldengate/bd123110/gg-bd/GADBD/using-kafka-connect-handler.htm#GADBD-GUID-A87CAFFA-DACF-43A0-8C6C-5C64B578D606">_templates</a>_. Here&rsquo;s the snippet from my properties file:</p>
-
 <pre><code>gg.handler.kafkaconnect.topicMappingTemplate=ora-ogg-${schemaName}-${tableName}
 gg.handler.kafkaconnect.keyMappingTemplate=${primaryKeys}
-</code></pre>
-
-<p>Looks pretty innocuous right? It&rsquo;s the same that I used for the replicat that <em>was</em> working. Or at least, I thought it was. Check out what it looks like in <code>vi</code> if I issue a <code>:set list</code> :</p>
-
+</code></pre><p>Looks pretty innocuous right? It&rsquo;s the same that I used for the replicat that <em>was</em> working. Or at least, I thought it was. Check out what it looks like in <code>vi</code> if I issue a <code>:set list</code> :</p>
 <pre><code>gg.handler.kafkaconnect.topicMappingTemplate=ora-ogg-${schemaName}-${tableName}  $
 gg.handler.kafkaconnect.keyMappingTemplate=${primaryKeys}$
-</code></pre>
-
-<p>Each of those dollar <code>$</code> are end of line characters; and you&rsquo;ll notice that on the first line there are spaces after the configuration value and before the end of line! Working backwards from this we can actually spot in the <code>dirrpt/RKCONNOE.rpt</code> this:</p>
-
+</code></pre><p>Each of those dollar <code>$</code> are end of line characters; and you&rsquo;ll notice that on the first line there are spaces after the configuration value and before the end of line! Working backwards from this we can actually spot in the <code>dirrpt/RKCONNOE.rpt</code> this:</p>
 <pre><code>DEBUG [main] (PropertyWrapper.java:375) - Setting property on 'class oracle.goldengate.handler.kafkaconnect.KafkaConnectHandler': 'topicMappingTemplate'='ora-ogg-${schemaName}-${tableName}  '
 </code></pre>
-
 <p>Note the trailing spaces! (to get DEBUG in the replicat log/report file, set <code>gg.log.level=DEBUG</code> in the handler properties configuration).</p>
-
-<hr />
-
+<hr>
 <p>To fix the problem, I just used some regex in vi:</p>
-
 <pre><code>:%s/ .$//g
 </code></pre>
-
 <p>(throughout the document, replace one or more spaces immediately before the end of line, with nothing - i.e. remove them.)</p>
-
 <p>Having updated the handler properties, I then restarted the replicat</p>
-
 <pre><code>GGSCI (localhost.localdomain) 2&gt; start rkconnoe
 
 Sending START request to MANAGER ...
 REPLICAT RKCONNOE starting
-</code></pre>
-
-<p>The replicat stayed running</p>
-
+</code></pre><p>The replicat stayed running</p>
 <pre><code>GGSCI (localhost.localdomain) 4&gt; info rkconnoe
 
 REPLICAT   RKCONNOE  Last Started 2017-09-12 18:45   Status RUNNING
@@ -202,10 +160,7 @@ Checkpoint Lag       00:00:00 (updated 00:00:03 ago)
 Process ID           19129
 Log Read Checkpoint  File /u01/app/ogg/dirdat/oe000000001
                      2017-09-12 16:48:33.849941  RBA 1482
-</code></pre>
-
-<p>And I got my data in Kafka Connect, streaming through from Oracle GoldenGate!</p>
-
+</code></pre><p>And I got my data in Kafka Connect, streaming through from Oracle GoldenGate!</p>
 <pre><code>kafka-avro-console-consumer \
 --bootstrap-server localhost:9092 \
 --property schema.registry.url=http://localhost:8081 \
@@ -241,7 +196,6 @@ Log Read Checkpoint  File /u01/app/ogg/dirdat/oe000000001
   }
 }
 </code></pre>
-
 </article>
 
 		</main>
@@ -252,11 +206,9 @@ Log Read Checkpoint  File /u01/app/ogg/dirdat/oe000000001
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			

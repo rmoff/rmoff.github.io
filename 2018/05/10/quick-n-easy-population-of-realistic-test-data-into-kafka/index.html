@@ -9,7 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.59.1" />
+		<meta name="generator" content="Hugo 0.75.1" />
 
 		
 		<meta property="og:title" content="Quick &lsquo;n Easy Population of Realistic Test Data into Kafka" />
@@ -85,85 +85,57 @@
 		
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
 	<p><strong>tl;dr</strong> Use <code>curl</code> to pull data from the Mockaroo REST endpoint, and pipe it into <code>kafkacat</code>, thus:</p>
-
 <pre><code>curl -s &quot;https://api.mockaroo.com/api/d5a195e0?count=2&amp;key=ff7856d0&quot;| \
 kafkacat -b localhost:9092 -t purchases -P
 </code></pre>
-
-<hr />
-
+<hr>
 <p>Three things I love…Kafka, <code>kafkacat</code>, and Mockaroo. And in this post I get to show all three 😁</p>
-
 <p><a href="https://mockaroo.com/">Mockaroo</a> is a very cool online service that lets you quickly mock up test data.
-<img src="/images/2018/05/2018-05-10_14-59-03.png" alt="" /></p>
-
+<img src="/images/2018/05/2018-05-10_14-59-03.png" alt=""></p>
 <p>What sets it apart from <code>SELECT RANDOM(100) FROM DUMMY;</code> is that it has lots of different classes of test data for you to choose from. Wanting to simulate some users? Here you go:
-<img src="/images/2018/05/2018-05-10_15-00-57.png" alt="" /></p>
-
+<img src="/images/2018/05/2018-05-10_15-00-57.png" alt=""></p>
 <p>So you can build up realistic datasets at a few clicks of the mouse, and then export them to a bunch of formats, including CSV, JSON, and even SQL <code>INSERT INTO</code> statements (and, of course, it also provides the <code>CREATE TABLE</code> DDL!).</p>
-
 <p>I&rsquo;ve used Mockaroo many times over the years, often as a source for analytics visualisation tools that I&rsquo;ve been working with. Now I&rsquo;m doing a bunch of work with <a href="https://www.confluent.io/product/ksql/">KSQL</a>, and want some useful test data with which to demonstrate certain queries and concepts. KSQL is the streaming SQL engine for Apache Kafka, and so as such I needed to get a bunch of test data into Kafka topics. First up, create my schema:</p>
-
-<p><img src="/images/2018/05/2018-05-10_15-03-51.png" alt="" /></p>
-
+<p><img src="/images/2018/05/2018-05-10_15-03-51.png" alt=""></p>
 <p>Set the output to <code>JSON</code> (make sure it&rsquo;s <strong>not</strong> as a JSON array).</p>
-
 <p>Mockaroo provides a REST endpoint from which you can pull the data for a given schema. To do this you need to save your schema, and you need to register (for free) to do this.</p>
-
 <p>With the REST endpoint you can get any number of records, using <code>curl</code>:</p>
-
-<pre><code class="language-javascript">$ curl -s &quot;https://api.mockaroo.com/api/d5a195e0?count=1&amp;key=ff7856d0&quot;|jq '.'
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-javascript" data-lang="javascript">$ curl <span style="color:#666">-</span>s <span style="color:#ba2121">&#34;https://api.mockaroo.com/api/d5a195e0?count=1&amp;key=ff7856d0&#34;</span><span style="color:#666">|</span>jq <span style="color:#ba2121">&#39;.&#39;</span>
 {
-  &quot;order_id&quot;: 1,
-  &quot;customer_name&quot;: &quot;Gustaf Lindro&quot;,
-  &quot;date_of_birth&quot;: &quot;1916-06-24T09:00:55Z&quot;,
-  &quot;product&quot;: &quot;Chicken - Ground&quot;,
-  &quot;order_total_usd&quot;: &quot;9.45&quot;,
-  &quot;town&quot;: &quot;Greensboro&quot;,
-  &quot;country&quot;: &quot;United States&quot;
+  <span style="color:#ba2121">&#34;order_id&#34;</span><span style="color:#666">:</span> <span style="color:#666">1</span>,
+  <span style="color:#ba2121">&#34;customer_name&#34;</span><span style="color:#666">:</span> <span style="color:#ba2121">&#34;Gustaf Lindro&#34;</span>,
+  <span style="color:#ba2121">&#34;date_of_birth&#34;</span><span style="color:#666">:</span> <span style="color:#ba2121">&#34;1916-06-24T09:00:55Z&#34;</span>,
+  <span style="color:#ba2121">&#34;product&#34;</span><span style="color:#666">:</span> <span style="color:#ba2121">&#34;Chicken - Ground&#34;</span>,
+  <span style="color:#ba2121">&#34;order_total_usd&#34;</span><span style="color:#666">:</span> <span style="color:#ba2121">&#34;9.45&#34;</span>,
+  <span style="color:#ba2121">&#34;town&#34;</span><span style="color:#666">:</span> <span style="color:#ba2121">&#34;Greensboro&#34;</span>,
+  <span style="color:#ba2121">&#34;country&#34;</span><span style="color:#666">:</span> <span style="color:#ba2121">&#34;United States&#34;</span>
 }
-</code></pre>
-
-<p>So now comes the Kafka bit. I&rsquo;m using the most-excellent <a href="https://github.com/edenhill/kafkacat/"><code>kafkacat</code></a> (<a href="https://docs.confluent.io/current/app-development/kafkacat-usage.html">about which you can read more here</a>), which is a very simple—yet powerful—command line tool for producing data to and consuming data from Kafka.</p>
-
+</code></pre></div><p>So now comes the Kafka bit. I&rsquo;m using the most-excellent <a href="https://github.com/edenhill/kafkacat/"><code>kafkacat</code></a> (<a href="https://docs.confluent.io/current/app-development/kafkacat-usage.html">about which you can read more here</a>), which is a very simple—yet powerful—command line tool for producing data to and consuming data from Kafka.</p>
 <p>When using <code>kafkacat</code> as a Producer you can do so interactively, feed it from flat files - or use <code>stdin</code> as the input. Therefore we can simply pipe the output of the Mockaroo REST call directly into it:</p>
-
 <pre><code>curl -s &quot;https://api.mockaroo.com/api/d5a195e0?count=2000&amp;key=ff7856d0&quot;|\
 kafkacat -b localhost:9092 -t purchases -P
-</code></pre>
-
-<p>This writes <code>2000</code> records from the given schema to the <code>purchases</code> topic, using the Kafka broker at <code>localhost:9092</code>.</p>
-
+</code></pre><p>This writes <code>2000</code> records from the given schema to the <code>purchases</code> topic, using the Kafka broker at <code>localhost:9092</code>.</p>
 <p>We can use <code>kafkacat</code> to inspect the topic (<code>-C</code>=run as consumer, <code>-c1</code>=read just one message):</p>
-
-<pre><code class="language-bash">kafkacat -b localhost:9092 -t purchases -C -c1|jq '.'
-{
-  &quot;order_id&quot;: 1,
-  &quot;customer_name&quot;: &quot;Maryanna Andryszczak&quot;,
-  &quot;date_of_birth&quot;: &quot;1922-06-06T02:21:59Z&quot;,
-  &quot;product&quot;: &quot;Nut - Walnut, Pieces&quot;,
-  &quot;order_total_usd&quot;: &quot;1.65&quot;,
-  &quot;town&quot;: &quot;Portland&quot;,
-  &quot;country&quot;: &quot;United States&quot;
-}
-</code></pre>
-
-<p>There you have it…a super-powerful but simple way to load test data into Kafka.</p>
-
-<hr />
-
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">kafkacat -b localhost:9092 -t purchases -C -c1|jq <span style="color:#ba2121">&#39;.&#39;</span>
+<span style="color:#666">{</span>
+  <span style="color:#ba2121">&#34;order_id&#34;</span>: 1,
+  <span style="color:#ba2121">&#34;customer_name&#34;</span>: <span style="color:#ba2121">&#34;Maryanna Andryszczak&#34;</span>,
+  <span style="color:#ba2121">&#34;date_of_birth&#34;</span>: <span style="color:#ba2121">&#34;1922-06-06T02:21:59Z&#34;</span>,
+  <span style="color:#ba2121">&#34;product&#34;</span>: <span style="color:#ba2121">&#34;Nut - Walnut, Pieces&#34;</span>,
+  <span style="color:#ba2121">&#34;order_total_usd&#34;</span>: <span style="color:#ba2121">&#34;1.65&#34;</span>,
+  <span style="color:#ba2121">&#34;town&#34;</span>: <span style="color:#ba2121">&#34;Portland&#34;</span>,
+  <span style="color:#ba2121">&#34;country&#34;</span>: <span style="color:#ba2121">&#34;United States&#34;</span>
+<span style="color:#666">}</span>
+</code></pre></div><p>There you have it…a super-powerful but simple way to load test data into Kafka.</p>
+<hr>
 <p>Courtesy of my colleague Chris Matta, you can also use <code>kafka-console-producer</code> in this way:</p>
-
 <pre><code>curl -s &quot;https://api.mockaroo.com/api/d5a195e0?count=20&amp;key=ff7856d0&quot; | \
 kafka-console-producer \
   --broker-list localhost:9092 \
   --topic users
 </code></pre>
-
-<hr />
-
+<hr>
 <p>Want to slow it down a bit, and loop forever? Use <code>while</code> to loop, and <code>awk</code> to inject some delay:</p>
-
 <pre><code>    while [ 1 -eq 1 ]
       do curl &quot;https://api.mockaroo.com/api/d5a195e0?count=5000&amp;key=ff7856d0&quot; | \
          awk '{print $$0;system(&quot;sleep 0.5&quot;);}' | \
@@ -181,11 +153,9 @@ kafka-console-producer \
 			
 			
 				
-					<hr />
-
-<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt" /></p>
-
-<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
 
 				
 			
