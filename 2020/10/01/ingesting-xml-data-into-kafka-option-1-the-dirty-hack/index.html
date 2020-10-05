@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Ingesting XML data into Kafka - Option 1: The Dirty Hack</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-1-the-dirty-hack/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.75.1" />
+
+		
+		<meta property="og:title" content="Ingesting XML data into Kafka - Option 1: The Dirty Hack" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/09/IMG_6833.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-1-the-dirty-hack/" />
+		<meta property="og:site_name" content="Ingesting XML data into Kafka - Option 1: The Dirty Hack" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/09/IMG_6833.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="/about-me/">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Ingesting XML data into Kafka - Option 1: The Dirty Hack</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-10-01T13:09:41&#43;01:00">Oct 1, 2020</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/xml" class="no-underline category near-white dim">XML</a>, <a href="https://rmoff.net/categories/kafkacat" class="no-underline category near-white dim">Kafkacat</a>, <a href="https://rmoff.net/categories/xq" class="no-underline category near-white dim">Xq</a>
+								<span class="display-print">at https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-1-the-dirty-hack/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://twitter.com/rmoff/" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p><em>👉 <a href="/2020/10/01/ingesting-xml-data-into-kafka-introduction/">Ingesting XML data into Kafka - Introduction</a></em></p>
+</div>
+<div class="paragraph">
+<p><strong>What would a blog post on <code>rmoff.net</code> be if it didn’t include the dirty hack option? 😁</strong></p>
+</div>
+<div class="paragraph">
+<p><em>The secret to dirty hacks is that they are often rather effective and when needs must, they can suffice. If you’re prototyping and need to <a href="https://www.urbandictionary.com/define.php?term=JFDI"><strong>JFDI</strong></a>, a dirty hack is just fine. If you’re looking for code to run in Production, then a dirty hack probably is not fine.</em></p>
+</div>
+<div class="paragraph">
+<p>Let’s assume we’ve got XML data sat somewhere that we can access with a shell tool that will output it to <code>stdout</code>. In this example it’s a REST endpoint somewhere that we can poll, <a href="https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/livecyclehireupdates.xml">like this</a> (courtesy of <a href="https://tfl.gov.uk/info-for/open-data-users/our-open-data">TfL OpenData</a>). We’re going to use the power of <a href="https://en.wikipedia.org/wiki/Pipeline_(Unix)">unix pipelines</a> to string together some powerful tools:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>curl</code> to pull the data from the REST endpoint</p>
+</li>
+<li>
+<p><a href="https://github.com/jeffbr13/xq"><code>xq</code></a> - like the well-known <a href="https://stedolan.github.io/jq/"><code>jq</code></a> tool, but for XML, and outputs JSON</p>
+</li>
+<li>
+<p><a href="https://github.com/edenhill/kafkacat"><code>kafkacat</code></a> - takes input from <code>stdin</code> and produces it to a Kafka topic</p>
+</li>
+</ul>
+</div>
+<div class="sect1">
+<h2 id="_wrangling_the_xml_data_and_streaming_it_into_kafka">Wrangling the XML data and streaming it into Kafka</h2>
+<div class="sectionbody">
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+You can try out all this code by spinning up this <a href="https://github.com/confluentinc/demo-scene/blob/master/xml-to-kafka/docker-compose.yml">Docker Compose</a>
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>Let’s start by checking what we actually want to send to Kafka. The raw payload from the <a href="https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/livecyclehireupdates.xml">REST endpoint</a> looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="xml"><span style="color: #999999;font-weight: bold">&lt;?xml version=&#34;1.0&#34; encoding=&#34;utf-8&#34;?&gt;</span>
+<span style="color: #000080">&lt;stations</span> <span style="color: #008080">lastUpdate=</span><span style="color: #d14">&#34;1601312340962&#34;</span> <span style="color: #008080">version=</span><span style="color: #d14">&#34;2.0&#34;</span><span style="color: #000080">&gt;</span>
+    <span style="color: #000080">&lt;station&gt;</span>
+        <span style="color: #000080">&lt;id&gt;</span>1<span style="color: #000080">&lt;/id&gt;</span>
+        <span style="color: #000080">&lt;name&gt;</span>River Street , Clerkenwell<span style="color: #000080">&lt;/name&gt;</span>
+        <span style="color: #000080">&lt;terminalName&gt;</span>001023<span style="color: #000080">&lt;/terminalName&gt;</span>
+        <span style="color: #000080">&lt;lat&gt;</span>51.52916347<span style="color: #000080">&lt;/lat&gt;</span>
+…
+    <span style="color: #000080">&lt;/station&gt;</span>
+    <span style="color: #000080">&lt;station&gt;</span>
+        <span style="color: #000080">&lt;id&gt;</span>2<span style="color: #000080">&lt;/id&gt;</span>
+        <span style="color: #000080">&lt;name&gt;</span>Phillimore Gardens, Kensington<span style="color: #000080">&lt;/name&gt;</span>
+        <span style="color: #000080">&lt;terminalName&gt;</span>001018<span style="color: #000080">&lt;/terminalName&gt;</span>
+        <span style="color: #000080">&lt;lat&gt;</span>51.49960695<span style="color: #000080">&lt;/lat&gt;</span>
+…
+…</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Using <code>xq</code> we use the same kind of construction as we would with <code>jq</code> to construct a target JSON object:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">curl <span style="color: #000080">--show-error</span> <span style="color: #000080">--silent</span> https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/livecyclehireupdates.xml | <span style="color: #d14">\</span>
+    xq <span style="color: #d14">&#39;.&#39;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This gives us a JSON structure that looks like this</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">stations</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">{</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">@lastUpdate</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">1601462461108</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">@version</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">2.0</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">station</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">[</span>
+      <span style="background-color: #f8f8f8">{</span>
+        <span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">1</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#34;</span><span style="color: #d14">name</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">River Street , Clerkenwell</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#34;</span><span style="color: #d14">terminalName</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">001023</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#34;</span><span style="color: #d14">lat</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">51.52916347</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #a61717;background-color: #e3d2d2">…</span>
+      <span style="background-color: #f8f8f8">},</span>
+      <span style="background-color: #f8f8f8">{</span>
+        <span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">2</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#34;</span><span style="color: #d14">name</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">Phillimore Gardens, Kensington</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#34;</span><span style="color: #d14">terminalName</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">001018</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#34;</span><span style="color: #d14">lat</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">51.49960695</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #a61717;background-color: #e3d2d2">…</span>
+      <span style="background-color: #f8f8f8">},</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We need to decide how to carve up the data, since we’ve effectively got a batch of data here and Kafka works on the concept of messages/records. Therefore we’re going to do this:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Take each <code>station</code> element as its own message</p>
+</li>
+<li>
+<p>Add in the <code>lastUpdate</code> value from the <code>stations</code> element into each <code>station</code> message (i.e. denormalise the payload somewhat)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>We can use some <code>xq</code> magic to do this, extracting each element from the station array into its own root-level object (<code>.stations.station[]</code>) and adding in the <code>lastUpdate</code> field (<code>+ {lastUpdate: .stations.&#34;@lastUpdate&#34;}</code>). If you want to learn more about the power of <code>jq</code> (on which <code>xq</code> is modelled) you can <a href="https://jqplay.org/s/kzU67eW4k0">try out this code here</a>.</p>
+</div>
+<div class="paragraph">
+<p>So with the source REST API data piped through <code>xq</code> we get this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">curl <span style="color: #000080">--show-error</span> <span style="color: #000080">--silent</span> https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/livecyclehireupdates.xml | <span style="color: #d14">\</span>
+    xq <span style="color: #d14">&#39;.stations.station[] + {lastUpdate: .stations.&#34;@lastUpdate&#34;}&#39;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">1</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">name</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">River Street , Clerkenwell</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">terminalName</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">001023</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">lat</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">51.52916347</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+<span style="color: #a61717;background-color: #e3d2d2">…</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">lastUpdate</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">1601462700830</span><span style="color: #d14">&#34;</span>
+<span style="background-color: #f8f8f8">}</span>
+<span style="background-color: #f8f8f8">{</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">2</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">name</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">Phillimore Gardens, Kensington</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">terminalName</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">001018</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">lat</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">51.49960695</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+<span style="color: #a61717;background-color: #e3d2d2">…</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">lastUpdate</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">1601462700830</span><span style="color: #d14">&#34;</span>
+<span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If we send the data to Kafka in this form using kafkacat we’ll end up with garbled data because each line will be taken as its own message (the line break would act as the default message delineator). To fix this we’ll use the <code>-c</code> flag with <code>xq</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">curl <span style="color: #000080">--show-error</span> <span style="color: #000080">--silent</span> https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/livecyclehireupdates.xml | <span style="color: #d14">\</span>
+    xq <span style="color: #000080">-c</span> <span style="color: #d14">&#39;.stations.station[] + {lastUpdate: .stations.&#34;@lastUpdate&#34;}&#39;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Here are our nicely wrangled and presented messages from the source XML, one message per line.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span><span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">1</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">name</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">River Street , Clerkenwell</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">terminalName</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">001023</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">lat</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">51.52916347</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #a61717;background-color: #e3d2d2">…</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">lastUpdate</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">1601462880994</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">}</span>
+<span style="background-color: #f8f8f8">{</span><span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">2</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">name</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">Phillimore Gardens, Kensington</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">terminalName</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">001018</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">lat</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">51.49960695</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #a61717;background-color: #e3d2d2">…</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">lastUpdate</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">1601462880994</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We’re now in a position to stream this into a Kafka topic, by adding <code>kafkacat</code> to the pipeline:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">curl <span style="color: #000080">--show-error</span> <span style="color: #000080">--silent</span> https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/livecyclehireupdates.xml | <span style="color: #d14">\</span>
+    xq <span style="color: #000080">-c</span> <span style="color: #d14">&#39;.stations.station[] + {lastUpdate: .stations.&#34;@lastUpdate&#34;}&#39;</span> | <span style="color: #d14">\</span>
+    kafkacat <span style="color: #000080">-b</span> localhost:9092 <span style="color: #000080">-t</span> livecyclehireupdates_01 <span style="color: #000080">-P</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We can use <code>kafkacat</code> as a consumer too (<code>-C</code>), here specifying <code>-c1</code> to consume just one message so that we can smoke-test the pipeline:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">kafkacat <span style="color: #000080">-b</span> localhost:9092 <span style="color: #000080">-t</span> livecyclehireupdates_01 <span style="color: #000080">-C</span> <span style="color: #000080">-c1</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span><span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">1</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">name</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">River Street , Clerkenwell</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">terminalName</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">001023</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">lat</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">51.52916347</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #a61717;background-color: #e3d2d2">…</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">lastUpdate</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">1601464200733</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>👍 looks good.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_about_keys">What about keys?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Kafka messages are key/value, and we’ve specified a value but no key. This is where the hack gets just that little bit more hacky. We’re going to use <code>xq</code> to write the <code>id</code> field from the XML payload as a prefix to each message, with a separator so that kafkacat can identify where the key ends and the value stops.</p>
+</div>
+<div class="paragraph">
+<p>I wrote a separate blog about <a href="/2020/09/30/setting-key-value-when-piping-from-jq-to-kafkacat/">how this technique works</a>, check it out if you want to know more about it.</p>
+</div>
+<div class="paragraph">
+<p>Our <code>xq</code> invocation now looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">xq <span style="color: #000080">-rc</span> <span style="color: #000080">--arg</span> sep <span style="color: #d14">$&#39;</span><span style="color: #d14">\x</span><span style="color: #d14">1c&#39;</span> <span style="color: #d14">&#39;.stations.station[] + { lastUpdate: .stations.&#34;@lastUpdate&#34;} |  [ .id + $sep, tostring] |  join(&#34;&#34;)&#39;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Which combined with kafkacat looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">curl <span style="color: #000080">--show-error</span> <span style="color: #000080">--silent</span> https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/livecyclehireupdates.xml | <span style="color: #d14">\</span>
+    xq <span style="color: #000080">-rc</span> <span style="color: #000080">--arg</span> sep <span style="color: #d14">$&#39;</span><span style="color: #d14">\x</span><span style="color: #d14">1c&#39;</span> <span style="color: #d14">&#39;.stations.station[] + { lastUpdate: .stations.&#34;@lastUpdate&#34;} |  [ .id + $sep, tostring] |  join(&#34;&#34;)&#39;</span> | <span style="color: #d14">\</span>
+    kafkacat <span style="color: #000080">-b</span> localhost:9092 <span style="color: #000080">-t</span> livecyclehireupdates_02 <span style="color: #000080">-P</span> <span style="color: #000080">-K</span><span style="color: #d14">$&#39;</span><span style="color: #d14">\x</span><span style="color: #d14">1c&#39;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Checking the data in the topic with kafkacat we can see that we’ve now set the key as we wanted, taking the value of the <code>id</code> field:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">kafkacat <span style="color: #000080">-b</span> localhost:9092 <span style="color: #d14">\</span>
+         <span style="color: #000080">-t</span> livecyclehireupdates_02 <span style="color: #d14">\</span>
+         <span style="color: #000080">-C</span> <span style="color: #000080">-c2</span> <span style="color: #d14">\</span>
+         <span style="color: #000080">-f</span> <span style="color: #d14">&#39;Key: %k, Payload: %s\n&#39;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">Key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">payload</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">{</span><span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">1</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">name</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">River Street , Clerkenwell</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">terminalName</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">001023</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">lat</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">51.52916347</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #a61717;background-color: #e3d2d2">…</span><span style="color: #d14">&#34;</span><span style="color: #d14">lastUpdate</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">1601485080861</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">}</span>
+<span style="color: #990000;font-weight: bold">Key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">payload</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">{</span><span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">2</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">name</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">Phillimore Gardens, Kensington</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">terminalName</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">001018</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#34;</span><span style="color: #d14">lat</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">51.49960695</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span><span style="color: #a61717;background-color: #e3d2d2">…</span><span style="color: #d14">&#34;</span><span style="color: #d14">lastUpdate</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #d14">&#34;</span><span style="color: #d14">1601485080861</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_weve_got_data_but_no_schema">We’ve got data, but no schema</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>So we now have a Kafka topic with the XML-sourced data in it, but held in plain JSON. For it to be really useful, we want it in a form that is usable by consumers with little-or-no input from the producer of the data, and for that we want to declare and store the schema. I’m going to use <a href="https://ksqldb.io">ksqlDB</a> for this - you can use other stream processing options such as Kafka Streams if you’d rather.</p>
+</div>
+<div class="paragraph">
+<p>To start with I’ll declare the schema itself, on top of the topic.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+You hopefully see straightaway why serialisation methods that include a schema declaration (Avro/Protobuf/JSON Schema) are easier for the consumer, if only because they don’t have to type the schema in!
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="background-color: #f8f8f8">STREAM</span> <span style="background-color: #f8f8f8">CYCLE_HIRE_SRC</span> <span style="background-color: #f8f8f8">(</span>
+     <span style="background-color: #f8f8f8">id</span>           <span style="color: #0086B3">VARCHAR</span> <span style="color: #000000;font-weight: bold">KEY</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">name</span>         <span style="color: #0086B3">VARCHAR</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">terminalName</span> <span style="color: #0086B3">VARCHAR</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">lat</span>          <span style="color: #0086B3">DOUBLE</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">long</span>         <span style="color: #0086B3">DOUBLE</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">installed</span>    <span style="color: #0086B3">VARCHAR</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">locked</span>       <span style="color: #0086B3">VARCHAR</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">installDate</span>  <span style="color: #0086B3">BIGINT</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">removalDate</span>  <span style="color: #0086B3">BIGINT</span>
+    <span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">temporary</span>    <span style="color: #0086B3">VARCHAR</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">nbBikes</span>      <span style="color: #0086B3">INT</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">nbEmptyDocks</span> <span style="color: #0086B3">INT</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">nbDocks</span>      <span style="color: #0086B3">INT</span>
+    <span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">lastUpdate</span>   <span style="color: #0086B3">BIGINT</span>
+<span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">KAFKA_TOPIC</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;livecyclehireupdates_02&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="background-color: #f8f8f8">VALUE_FORMAT</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;JSON&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #0086B3">TIMESTAMP</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;lastUpdate&#39;</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we can project certain fields from the topic to see the schema in action:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">TIMESTAMPTOSTRING</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ROWTIME</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#39;yyyy-MM-dd HH:mm:ss&#39;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#39;Europe/London&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">LASTUPDATE</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">ID</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">NAME</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">NBBIKES</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">NBEMPTYDOCKS</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">NBDOCKS</span>
+  <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">CYCLE_HIRE_SRC</span>
+  <span style="background-color: #f8f8f8">EMIT</span> <span style="background-color: #f8f8f8">CHANGES</span> <span style="color: #000000;font-weight: bold">LIMIT</span> <span style="color: #009999">5</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">---------------------+-------+-------------------------------------+----------+--------------+--------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">LASTUPDATE</span>           <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">ID</span>     <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">NAME</span>                                 <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">NBBIKES</span>   <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">NBEMPTYDOCKS</span>  <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">NBDOCKS</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">---------------------+-------+-------------------------------------+----------+--------------+--------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">10</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">01</span> <span style="color: #009999">14</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">45</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span>  <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">1</span>      <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">River</span> <span style="background-color: #f8f8f8">Street</span> <span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">Clerkenwell</span>           <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2</span>         <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">16</span>            <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">19</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">10</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">01</span> <span style="color: #009999">14</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">45</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span>  <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2</span>      <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Phillimore</span> <span style="background-color: #f8f8f8">Gardens</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">Kensington</span>       <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">13</span>        <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">24</span>            <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">37</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">10</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">01</span> <span style="color: #009999">14</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">45</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span>  <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">3</span>      <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Christopher</span> <span style="background-color: #f8f8f8">Street</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">Liverpool</span> <span style="background-color: #f8f8f8">Street</span> <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">6</span>         <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">26</span>            <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">32</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">10</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">01</span> <span style="color: #009999">14</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">45</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span>  <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">4</span>      <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">St</span><span style="background-color: #f8f8f8">.</span> <span style="background-color: #f8f8f8">Chad</span><span style="color: #d14">&#39;s Street, King&#39;</span><span style="background-color: #f8f8f8">s</span> <span style="color: #000000;font-weight: bold">Cross</span>      <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">14</span>        <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">7</span>             <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">23</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">10</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">01</span> <span style="color: #009999">14</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">45</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span>  <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">5</span>      <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Sedding</span> <span style="background-color: #f8f8f8">Street</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">Sloane</span> <span style="background-color: #f8f8f8">Square</span>        <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">26</span>        <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">0</span>             <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">27</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">Limit</span> <span style="background-color: #f8f8f8">Reached</span>
+<span style="background-color: #f8f8f8">Query</span> <span style="background-color: #f8f8f8">terminated</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A few things to note:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The <code>ID</code> field is taken from the Kafka message key - in theory we could have omitted it from the payload of the message</p>
+</li>
+<li>
+<p>We’re telling ksqlDB to use the <code>lastUpdate</code> field as the timestamp field for the messages. By default it will simply take the timestamp of the Kafka message itself (by default, when it hit the broker), so this is a useful thing to do, particularly if we do things like time-based windowing or joins. In the query above we’ve validated that it’s worked by showing the <code>ROWTIME</code> field in the selection.</p>
+</li>
+<li>
+<p>Whilst fields like <code>installed</code> and <code>locked</code> are boolean, they are seen as a string in the JSON model and so need declaring as such. We can fix this in subsequent processing.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>At this stage we could just build a stream processing application to continually serialise the data to a new topic with something like Protobuf:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #999988;font-style: italic">-- Make sure we process all records in the topic</span>
+<span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;auto.offset.reset&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;earliest&#39;</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="color: #999988;font-style: italic">-- Populate a new stream (and thus Kafka topic) with everything from</span>
+<span style="color: #999988;font-style: italic">-- the source stream, serialised to Protobuf</span>
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="background-color: #f8f8f8">STREAM</span> <span style="background-color: #f8f8f8">CYCLE_HIRE_PROTOBUF_01</span>
+    <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">KAFKA_TOPIC</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;livecyclehireupdates_protobuf_01&#39;</span><span style="background-color: #f8f8f8">,</span>
+          <span style="background-color: #f8f8f8">VALUE_FORMAT</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;PROTOBUF&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">CYCLE_HIRE_SRC</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Looking at the topics on the broker now we can see that there is a new topic <code>livecyclehireupdates_protobuf_01</code>. If we try to read the data as normal it won’t work, and we can see it looks &#39;weird&#39;, because it’s binary data being read by something that expects just normal strings:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">kafkacat <span style="color: #000080">-b</span> localhost:9092 <span style="color: #d14">\</span>
+         <span style="color: #000080">-t</span> livecyclehireupdates_protobuf_01 <span style="color: #d14">\</span>
+         <span style="color: #000080">-C</span> <span style="color: #000080">-c1</span>
+
+River Street , Clerkenwell001023I@!<span style="color: #d14">&#39;H&#39;</span><span style="color: #000000;font-weight: bold">*</span>true2false8˹%JfalsePX<span style="color: #d14">`</span>h.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The correct thing to do is use a Protobuf consumer against it to validate that the data is there and correct:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">kafka-protobuf-console-consumer <span style="color: #000080">--bootstrap-server</span> localhost:9092 <span style="color: #d14">\</span>
+                                <span style="color: #000080">--from-beginning</span> <span style="color: #d14">\</span>
+                                <span style="color: #000080">--topic</span> livecyclehireupdates_protobuf_01 <span style="color: #d14">\</span>
+                                <span style="color: #000080">--max-messages</span> 1
+
+<span style="color: #000000;font-weight: bold">{</span><span style="color: #d14">&#34;NAME&#34;</span>:<span style="color: #d14">&#34;River Street , Clerkenwell&#34;</span>,<span style="color: #d14">&#34;TERMINALNAME&#34;</span>:<span style="color: #d14">&#34;001023&#34;</span>,<span style="color: #d14">&#34;LAT&#34;</span>:51.52916347,<span style="color: #d14">&#34;LONG&#34;</span>:-0.109970527,<span style="color: #d14">&#34;INSTALLED&#34;</span>:<span style="color: #d14">&#34;true&#34;</span>,<span style="color: #d14">&#34;LOCKED&#34;</span>:<span style="color: #d14">&#34;false&#34;</span>,<span style="color: #d14">&#34;INSTALLDATE&#34;</span>:<span style="color: #d14">&#34;1278947280000&#34;</span>,<span style="color: #d14">&#34;REMOVALDATE&#34;</span>:<span style="color: #d14">&#34;0&#34;</span>,<span style="color: #d14">&#34;TEMPORARY&#34;</span>:<span style="color: #d14">&#34;false&#34;</span>,<span style="color: #d14">&#34;NBBIKES&#34;</span>:2,<span style="color: #d14">&#34;NBEMPTYDOCKS&#34;</span>:16,<span style="color: #d14">&#34;NBDOCKS&#34;</span>:19,<span style="color: #d14">&#34;LASTUPDATE&#34;</span>:<span style="color: #d14">&#34;1601559900874&#34;</span><span style="color: #000000;font-weight: bold">}</span>
+Processed a total of 1 messages</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_wrangling_the_data">Wrangling the data</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Above I’ve shown you how to simply apply a schema to a Kafka topic that’s in JSON format (it’d work with delimited data too) and serialise it to a new topic in a format that will store the schema in the Schema Registry for use by any consumer.</p>
+</div>
+<div class="paragraph">
+<p>There are a few things in the data though that would probably benefit from a bit of wrangling, such as:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Casting the boolean fields ingested as <code>VARCHAR</code> to <code>BOOLEAN</code></p>
+</li>
+<li>
+<p>Nesting the lat/long fields into a single location field</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>You can do that with ksqlDB to do that here too - meaning that anyone wanting to use the data downstream can do so on a cleansed datastream instead of the raw one.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="background-color: #f8f8f8">STREAM</span> <span style="background-color: #f8f8f8">CYCLE_HIRE_PROTOBUF_02</span>
+    <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">KAFKA_TOPIC</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;livecyclehireupdates_protobuf_02&#39;</span><span style="background-color: #f8f8f8">,</span>
+          <span style="background-color: #f8f8f8">VALUE_FORMAT</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;PROTOBUF&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">ID</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">NAME</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">TERMINALNAME</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">LASTUPDATE</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">STRUCT</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">LATITUDE</span> <span style="background-color: #f8f8f8">:</span><span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">LAT</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">LONGITUDE</span><span style="background-color: #f8f8f8">:</span><span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">LONG</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #000000;font-weight: bold">LOCATION</span><span style="background-color: #f8f8f8">,</span>
+           <span style="color: #000000;font-weight: bold">CAST</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">CASE</span>
+               <span style="color: #000000;font-weight: bold">WHEN</span> <span style="background-color: #f8f8f8">LCASE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">INSTALLED</span><span style="background-color: #f8f8f8">)</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;false&#39;</span> <span style="color: #000000;font-weight: bold">THEN</span> <span style="color: #000000;font-weight: bold">FALSE</span>
+               <span style="color: #000000;font-weight: bold">WHEN</span> <span style="background-color: #f8f8f8">LCASE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">INSTALLED</span><span style="background-color: #f8f8f8">)</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;true&#39;</span> <span style="color: #000000;font-weight: bold">THEN</span> <span style="color: #000000;font-weight: bold">TRUE</span>
+           <span style="color: #000000;font-weight: bold">END</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #0086B3">BOOLEAN</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">INSTALLED</span><span style="background-color: #f8f8f8">,</span>
+           <span style="color: #000000;font-weight: bold">CAST</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">CASE</span>
+               <span style="color: #000000;font-weight: bold">WHEN</span> <span style="background-color: #f8f8f8">LCASE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">LOCKED</span><span style="background-color: #f8f8f8">)</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;false&#39;</span> <span style="color: #000000;font-weight: bold">THEN</span> <span style="color: #000000;font-weight: bold">FALSE</span>
+               <span style="color: #000000;font-weight: bold">WHEN</span> <span style="background-color: #f8f8f8">LCASE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">LOCKED</span><span style="background-color: #f8f8f8">)</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;true&#39;</span> <span style="color: #000000;font-weight: bold">THEN</span> <span style="color: #000000;font-weight: bold">TRUE</span>
+           <span style="color: #000000;font-weight: bold">END</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #0086B3">BOOLEAN</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">LOCKED</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">INSTALLDATE</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">REMOVALDATE</span><span style="background-color: #f8f8f8">,</span>
+           <span style="color: #000000;font-weight: bold">CAST</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">CASE</span>
+               <span style="color: #000000;font-weight: bold">WHEN</span> <span style="background-color: #f8f8f8">LCASE</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">TEMPORARY</span><span style="background-color: #f8f8f8">)</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;false&#39;</span> <span style="color: #000000;font-weight: bold">THEN</span> <span style="color: #000000;font-weight: bold">FALSE</span>
+               <span style="color: #000000;font-weight: bold">WHEN</span> <span style="background-color: #f8f8f8">LCASE</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">TEMPORARY</span><span style="background-color: #f8f8f8">)</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;true&#39;</span> <span style="color: #000000;font-weight: bold">THEN</span> <span style="color: #000000;font-weight: bold">TRUE</span>
+           <span style="color: #000000;font-weight: bold">END</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #0086B3">BOOLEAN</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #000000;font-weight: bold">TEMPORARY</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">NBBIKES</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">NBEMPTYDOCKS</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">NBDOCKS</span>
+      <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">CYCLE_HIRE_SRC</span>
+      <span style="background-color: #f8f8f8">EMIT</span> <span style="background-color: #f8f8f8">CHANGES</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>From this we now have a nice Kafka topic (<code>livecyclehireupdates_protobuf_02</code>) that any consumer can use with full access to a schema to use however they want. The topic is driven by any changes to the source topic - call it streaming ETL, if you like.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SHOW</span> <span style="background-color: #f8f8f8">TOPICS</span><span style="background-color: #f8f8f8">;</span>
+
+ <span style="background-color: #f8f8f8">Kafka</span> <span style="background-color: #f8f8f8">Topic</span>                      <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Partitions</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Partition</span> <span style="background-color: #f8f8f8">Replicas</span>
+<span style="color: #999988;font-style: italic">--------------------------------------------------------------------</span>
+ <span style="background-color: #f8f8f8">livecyclehireupdates_02</span>          <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">1</span>          <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">1</span>
+ <span style="background-color: #f8f8f8">livecyclehireupdates_protobuf_02</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">1</span>          <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">1</span>
+<span style="color: #999988;font-style: italic">--------------------------------------------------------------------</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">NAME</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">LOCATION</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">INSTALLED</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">CYCLE_HIRE_PROTOBUF_02</span> <span style="background-color: #f8f8f8">EMIT</span> <span style="background-color: #f8f8f8">CHANGES</span> <span style="color: #000000;font-weight: bold">LIMIT</span> <span style="color: #009999">5</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">-------------------------------------+-----------------------------------------------+----------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">NAME</span>                                 <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">LOCATION</span>                                       <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">INSTALLED</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">-------------------------------------+-----------------------------------------------+----------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">River</span> <span style="background-color: #f8f8f8">Street</span> <span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">Clerkenwell</span>           <span style="color: #000000;font-weight: bold">|</span><span style="color: #a61717;background-color: #e3d2d2">{</span><span style="background-color: #f8f8f8">LATITUDE</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">51</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">52916347</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">LONGITUDE</span><span style="color: #000000;font-weight: bold">=-</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">109970527</span><span style="color: #a61717;background-color: #e3d2d2">}</span> <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">true</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Phillimore</span> <span style="background-color: #f8f8f8">Gardens</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">Kensington</span>       <span style="color: #000000;font-weight: bold">|</span><span style="color: #a61717;background-color: #e3d2d2">{</span><span style="background-color: #f8f8f8">LATITUDE</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">51</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">49960695</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">LONGITUDE</span><span style="color: #000000;font-weight: bold">=-</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">197574246</span><span style="color: #a61717;background-color: #e3d2d2">}</span> <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">true</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Christopher</span> <span style="background-color: #f8f8f8">Street</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">Liverpool</span> <span style="background-color: #f8f8f8">Street</span> <span style="color: #000000;font-weight: bold">|</span><span style="color: #a61717;background-color: #e3d2d2">{</span><span style="background-color: #f8f8f8">LATITUDE</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">51</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">52128377</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">LONGITUDE</span><span style="color: #000000;font-weight: bold">=-</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">084605692</span><span style="color: #a61717;background-color: #e3d2d2">}</span> <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">true</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">St</span><span style="background-color: #f8f8f8">.</span> <span style="background-color: #f8f8f8">Chad</span><span style="color: #d14">&#39;s Street, King&#39;</span><span style="background-color: #f8f8f8">s</span> <span style="color: #000000;font-weight: bold">Cross</span>      <span style="color: #000000;font-weight: bold">|</span><span style="color: #a61717;background-color: #e3d2d2">{</span><span style="background-color: #f8f8f8">LATITUDE</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">51</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">53005939</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">LONGITUDE</span><span style="color: #000000;font-weight: bold">=-</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">120973687</span><span style="color: #a61717;background-color: #e3d2d2">}</span> <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">true</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Sedding</span> <span style="background-color: #f8f8f8">Street</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">Sloane</span> <span style="background-color: #f8f8f8">Square</span>        <span style="color: #000000;font-weight: bold">|</span><span style="color: #a61717;background-color: #e3d2d2">{</span><span style="background-color: #f8f8f8">LATITUDE</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">51</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">49313</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">LONGITUDE</span><span style="color: #000000;font-weight: bold">=-</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">156876</span><span style="color: #a61717;background-color: #e3d2d2">}</span>       <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">true</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">Limit</span> <span style="background-color: #f8f8f8">Reached</span>
+<span style="background-color: #f8f8f8">Query</span> <span style="background-color: #f8f8f8">terminated</span></code></pre>
+</div>
+</div>
+<hr/>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_obligatory_ksqldb_materialised_view_demo">Obligatory ksqlDB materialised view demo</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>I can’t open up ksqlDB to show streaming ETL like the above without also showing materialised views. These are so cool because they let you take a stream of data in a Kafka topic, and build it into state that you can query, and is kept up to date automagically as any new messages arrive on the underlying topic.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">CYCLE_HIRE</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">ID</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">LATEST_BY_OFFSET</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">NAME</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">NAME</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">LATEST_BY_OFFSET</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">NBBIKES</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">NBBIKES</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">LATEST_BY_OFFSET</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">NBEMPTYDOCKS</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">NBEMPTYDOCKS</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">LATEST_BY_OFFSET</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">NBDOCKS</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">NBDOCKS</span><span style="background-color: #f8f8f8">,</span>
+           <span style="background-color: #f8f8f8">LATEST_BY_OFFSET</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">LASTUPDATE</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">LAST_UPDATE_TS</span>
+       <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">CYCLE_HIRE_PROTOBUF_02</span>
+       <span style="color: #000000;font-weight: bold">GROUP</span> <span style="color: #000000;font-weight: bold">BY</span> <span style="background-color: #f8f8f8">ID</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">TIMESTAMPTOSTRING</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">LAST_UPDATE_TS</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#39;yyyy-MM-dd HH:mm:ss&#39;</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#39;Europe/London&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">TS</span><span style="background-color: #f8f8f8">,</span>
+             <span style="background-color: #f8f8f8">NAME</span><span style="background-color: #f8f8f8">,</span>
+             <span style="background-color: #f8f8f8">NBBIKES</span><span style="background-color: #f8f8f8">,</span>
+             <span style="background-color: #f8f8f8">NBEMPTYDOCKS</span>
+        <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">CYCLE_HIRE</span>
+       <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">ID</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;42&#39;</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">------------------------+---------+-------------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">NAME</span>                    <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">NBBIKES</span>  <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">NBEMPTYDOCKS</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">------------------------+---------+-------------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Wenlock</span> <span style="background-color: #f8f8f8">Road</span> <span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">Hoxton</span>   <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2</span>        <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">26</span>           <span style="color: #000000;font-weight: bold">|</span>
+<span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is called a <em>pull</em> query and you can run it from any client application using the <a href="https://docs.ksqldb.io/en/latest/developer-guide/ksqldb-rest-api/streaming-endpoint/">REST API</a>. As new messages arrive, the materialised view updates automagically and is reflected whenever its subsequently queried. What about if you want to <em>know</em> as soon as they’re updated? For that you can use a <em>push</em> query, in which you effectively subscribe to any changes, denoted by the <code>EMIT CHANGES</code> clause. As with the pull query you can run this over the <a href="https://docs.ksqldb.io/en/latest/developer-guide/ksqldb-rest-api/streaming-endpoint/">REST API</a> too.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/10/push_pull_query.gif" alt="push pull query"/>
+</div>
+</div>
+<div class="paragraph">
+<p>In the above image the pull query is in the top half - note how the query exits once complete, and can be re-run to query the current state.
+The push query is in the lower half, and once run will emit any changes as soon as they are received.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_this_sounds_like_a_bit_of_a_hack_what_are_my_other_options_for_getting_xml_into_kafka">🤔 🧐 This sounds like a bit of a hack - what are my other options for getting XML into Kafka?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This was option 1, or perhaps I should have called it option zero. It’s okay, it does a job, but you’d not bet your call-out rota on it, right? Shell scripts and bits of string have a habit of working great right up until the moment <a href="https://twitter.com/MaxCRoser/status/1313046638915706880">they don’t</a> usually at 0400 in the morning on Christmas Day, or just before a high-profile business event like Black Friday…</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="https://imgs.xkcd.com/comics/dependency.png" alt="dependency"/>
+</div>
+</div>
+<div class="paragraph">
+<p>So, what are the other options to ingest XML into Kafka, and to do it properly?</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Option 2: <a href="/2020/10/01/ingesting-xml-data-into-kafka-option-2-kafka-connect-plus-single-message-transform/">Any Kafka Connect connector plus <code>kafka-connect-transform-xml</code> Single Message Transform</a></p>
+</li>
+<li>
+<p>Option 3: <a href="/2020/10/01/ingesting-xml-data-into-kafka-option-3-kafka-connect-filepulse-connector/">Kafka Connect FilePulse connector</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
