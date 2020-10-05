@@ -5,7 +5,7 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2020-10-01</lastBuildDate>
+    <lastBuildDate>2020-10-05</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
     <item>
@@ -111,6 +111,851 @@
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;🎥 &lt;a href=&#34;https://www.youtube.com/confluent&#34;&gt;Confluent&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>Streaming XML messages from IBM MQ into Kafka into MongoDB</title>
+      <link>https://rmoff.net/2020/10/05/streaming-xml-messages-from-ibm-mq-into-kafka-into-mongodb/</link>
+      <pubDate>2020-10-05</pubDate>
+      
+      <guid>https://rmoff.net/2020/10/05/streaming-xml-messages-from-ibm-mq-into-kafka-into-mongodb/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/10/IMG_6942.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s imagine we have XML data on a queue in IBM MQ, and we want to ingest it into Kafka to then use downstream, perhaps in an application or maybe to stream to a NoSQL store like MongoDB.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+This same pattern for ingesting XML will work with other connectors such as &lt;a href=&#34;https://www.confluent.io/hub/confluentinc/kafka-connect-jms&#34;&gt;JMS&lt;/a&gt; and &lt;a href=&#34;https://www.confluent.io/hub/confluentinc/kafka-connect-activemq&#34;&gt;ActiveMQ&lt;/a&gt;.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/10/xml-ibmmq-mongodb.gif&#34; alt=&#34;Streaming XML messages from IBM MQ through Apache Kafka into MongoDB&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’ve got a &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/xml-to-kafka/docker-compose.yml&#34;&gt;Docker Compose&lt;/a&gt; stack running that includes:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;IBM MQ&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Apache Kafka (deployed as Confluent Platform to include the all-important Schema Registry)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;MongoDB&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_loading_some_test_data_onto_ibm_mq&#34;&gt;Loading some test data onto IBM MQ&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s load some messages onto the queue from an XML file:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;docker exec --interactive ibmmq \
+  /opt/mqm/samp/bin/amqsput DEV.QUEUE.1 QM1 &amp;lt; data/note.xml&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/10/ibmmq.jpg&#34; alt=&#34;ibmmq&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_streaming_from_ibm_mq_to_kafka_and_translating_the_xml_messages&#34;&gt;Streaming from IBM MQ to Kafka and translating the XML messages&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now we can ingest this into Kafka using the &lt;a href=&#34;https://rmoff.net/2020/09/11/what-is-kafka-connect/&#34;&gt;Kafka Connect&lt;/a&gt; with the &lt;a href=&#34;https://www.confluent.io/hub/confluentinc/kafka-connect-ibmmq&#34;&gt;IbmMQSourceConnector&lt;/a&gt; plugin and &lt;a href=&#34;https://www.confluent.io/hub/jcustenborder/kafka-connect-transform-xml&#34;&gt;XML Transformation&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;curl -i -X PUT -H  &amp;#34;Content-Type:application/json&amp;#34; \
+    http://localhost:8083/connectors/source-ibmmq-note-01/config \
+    -d &amp;#39;{
+    &amp;#34;connector.class&amp;#34;: &amp;#34;io.confluent.connect.ibm.mq.IbmMQSourceConnector&amp;#34;,
+    &amp;#34;kafka.topic&amp;#34;:&amp;#34;ibmmq-note-01&amp;#34;,
+    &amp;#34;mq.hostname&amp;#34;:&amp;#34;ibmmq&amp;#34;,
+    &amp;#34;mq.port&amp;#34;:&amp;#34;1414&amp;#34;,
+    &amp;#34;mq.queue.manager&amp;#34;:&amp;#34;QM1&amp;#34;,
+    &amp;#34;mq.transport.type&amp;#34;:&amp;#34;client&amp;#34;,
+    &amp;#34;mq.channel&amp;#34;:&amp;#34;DEV.APP.SVRCONN&amp;#34;,
+    &amp;#34;mq.username&amp;#34;:&amp;#34;app&amp;#34;,
+    &amp;#34;mq.password&amp;#34;:&amp;#34;password123&amp;#34;,
+    &amp;#34;jms.destination.name&amp;#34;:&amp;#34;DEV.QUEUE.1&amp;#34;,
+    &amp;#34;jms.destination.type&amp;#34;:&amp;#34;queue&amp;#34;,
+    &amp;#34;confluent.license&amp;#34;:&amp;#34;&amp;#34;,
+    &amp;#34;confluent.topic.bootstrap.servers&amp;#34;:&amp;#34;broker:29092&amp;#34;,
+    &amp;#34;confluent.topic.replication.factor&amp;#34;:&amp;#34;1&amp;#34;,
+    &amp;#34;transforms&amp;#34;: &amp;#34;extractPayload,xml&amp;#34;,
+    &amp;#34;transforms.extractPayload.type&amp;#34;: &amp;#34;org.apache.kafka.connect.transforms.ExtractField$Value&amp;#34;,
+    &amp;#34;transforms.extractPayload.field&amp;#34;: &amp;#34;text&amp;#34;,
+    &amp;#34;transforms.xml.type&amp;#34;: &amp;#34;com.github.jcustenborder.kafka.connect.transform.xml.FromXml$Value&amp;#34;,
+    &amp;#34;transforms.xml.schema.path&amp;#34;: &amp;#34;file:///data/note.xsd&amp;#34;,
+    &amp;#34;value.converter&amp;#34;: &amp;#34;io.confluent.connect.avro.AvroConverter&amp;#34;,
+    &amp;#34;value.converter.schema.registry.url&amp;#34;:&amp;#34;http://schema-registry:8081&amp;#34;
+    }&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+&lt;code&gt;ExtractField&lt;/code&gt; is needed otherwise the XML transform will fail with &lt;code&gt;java.lang.UnsupportedOperationException: STRUCT is not a supported type.&lt;/code&gt; since it will be trying to operate on the entire payload from IBM MQ which includes fields other than the XML that we’re interested in.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The resulting Kafka topic holds the value of the &lt;code&gt;text&lt;/code&gt; field in the messages, serialised in Avro:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;docker exec kafkacat \
+    kafkacat                            \
+      -b broker:29092                   \
+      -r http://schema-registry:8081    \
+      -s key=s -s value=avro            \
+      -t ibmmq-note-01                  \
+      -C -o beginning -u -q -J | \
+    jq -c &amp;#39;.payload&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{&amp;#34;Note&amp;#34;:{&amp;#34;to&amp;#34;:&amp;#34;Tove&amp;#34;,&amp;#34;from&amp;#34;:&amp;#34;Jani&amp;#34;,&amp;#34;heading&amp;#34;:&amp;#34;Reminder 01&amp;#34;,&amp;#34;body&amp;#34;:&amp;#34;Don&amp;#39;t forget me this weekend!&amp;#34;}}
+{&amp;#34;Note&amp;#34;:{&amp;#34;to&amp;#34;:&amp;#34;Jani&amp;#34;,&amp;#34;from&amp;#34;:&amp;#34;Tove&amp;#34;,&amp;#34;heading&amp;#34;:&amp;#34;Reminder 02&amp;#34;,&amp;#34;body&amp;#34;:&amp;#34;Of course I won&amp;#39;t!&amp;#34;}}
+…&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To understand more about the concepts around getting XML data into Kafka &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-introduction/&#34;&gt;see here&lt;/a&gt;, and I’ve written about the specifics of Kafka Connect and the XML transformation /2020/10/01/ingesting-xml-data-into-kafka-option-2-kafka-connect-plus-single-message-transform/[here].&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_streaming_the_data_from_kafka_to_mongodb&#34;&gt;Streaming the data from Kafka to MongoDB&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We can then add another Kafka Connect connector to the pipeline, using the &lt;a href=&#34;https://www.confluent.io/hub/mongodb/kafka-connect-mongodb&#34;&gt;official plugin for Kafka Connect from MongoDB&lt;/a&gt;, which will stream data straight from a Kafka topic into MongoDB:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;curl -i -X PUT -H  &amp;#34;Content-Type:application/json&amp;#34; \
+    http://localhost:8083/connectors/sink-mongodb-note-01/config \
+    -d &amp;#39;{
+    &amp;#34;connector.class&amp;#34;: &amp;#34;com.mongodb.kafka.connect.MongoSinkConnector&amp;#34;,
+    &amp;#34;topics&amp;#34;:&amp;#34;ibmmq-note-01&amp;#34;,
+    &amp;#34;connection.uri&amp;#34;:&amp;#34;mongodb://mongodb:27017&amp;#34;,
+    &amp;#34;database&amp;#34;:&amp;#34;rmoff&amp;#34;,
+    &amp;#34;collection&amp;#34;:&amp;#34;notes&amp;#34;,
+    &amp;#34;value.converter&amp;#34;: &amp;#34;io.confluent.connect.avro.AvroConverter&amp;#34;,
+    &amp;#34;value.converter.schema.registry.url&amp;#34;:&amp;#34;http://schema-registry:8081&amp;#34;
+    }&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Check out the data in MongoDB:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;docker exec --interactive mongodb mongo localhost:27017 &amp;lt;&amp;lt;EOF
+use rmoff
+db.notes.find()
+EOF&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;MongoDB shell version v4.4.1
+connecting to: mongodb://localhost:27017/test?compressors=disabled&amp;amp;gssapiServiceName=mongodb
+Implicit session: session { &amp;#34;id&amp;#34; : UUID(&amp;#34;9aae83c4-0e25-43a9-aca5-7278d366423b&amp;#34;) }
+MongoDB server version: 4.4.1
+switched to db rmoff
+{ &amp;#34;_id&amp;#34; : ObjectId(&amp;#34;5f77b64eee00df1cc80135a1&amp;#34;), &amp;#34;to&amp;#34; : &amp;#34;Tove&amp;#34;, &amp;#34;from&amp;#34; : &amp;#34;Jani&amp;#34;, &amp;#34;heading&amp;#34; : &amp;#34;Reminder 01&amp;#34;, &amp;#34;body&amp;#34; : &amp;#34;Don&amp;#39;t forget me this weekend!&amp;#34; }
+{ &amp;#34;_id&amp;#34; : ObjectId(&amp;#34;5f77b64eee00df1cc80135a2&amp;#34;), &amp;#34;to&amp;#34; : &amp;#34;Jani&amp;#34;, &amp;#34;from&amp;#34; : &amp;#34;Tove&amp;#34;, &amp;#34;heading&amp;#34; : &amp;#34;Reminder 02&amp;#34;, &amp;#34;body&amp;#34; : &amp;#34;Of course I won&amp;#39;t!&amp;#34; }
+{ &amp;#34;_id&amp;#34; : ObjectId(&amp;#34;5f77b64eee00df1cc80135a3&amp;#34;), &amp;#34;to&amp;#34; : &amp;#34;Tove&amp;#34;, &amp;#34;from&amp;#34; : &amp;#34;Jani&amp;#34;, &amp;#34;heading&amp;#34; : &amp;#34;Reminder 03&amp;#34;, &amp;#34;body&amp;#34; : &amp;#34;Where are you?&amp;#34; }
+{ &amp;#34;_id&amp;#34; : ObjectId(&amp;#34;5f77b64eee00df1cc80135a4&amp;#34;), &amp;#34;to&amp;#34; : &amp;#34;Jani&amp;#34;, &amp;#34;from&amp;#34; : &amp;#34;Tove&amp;#34;, &amp;#34;heading&amp;#34; : &amp;#34;Reminder 04&amp;#34;, &amp;#34;body&amp;#34; : &amp;#34;I forgot ð¤·ââï¸&amp;#34; }
+bye&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s check that this is actually streaming, by sending another record to the MQ:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;echo &amp;#34;&amp;lt;note&amp;gt; &amp;lt;to&amp;gt;Tove&amp;lt;/to&amp;gt; &amp;lt;from&amp;gt;Jani&amp;lt;/from&amp;gt; &amp;lt;heading&amp;gt;Reminder 05&amp;lt;/heading&amp;gt; &amp;lt;body&amp;gt;Srsly?&amp;lt;/body&amp;gt; &amp;lt;/note&amp;gt;&amp;#34; | docker exec --interactive ibmmq /opt/mqm/samp/bin/amqsput DEV.QUEUE.1 QM1&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;Sample AMQSPUT0 start
+target queue is DEV.QUEUE.1
+Sample AMQSPUT0 end&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;And, behold, the new record in MongoDB:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;docker exec --interactive mongodb mongo localhost:27017 &amp;lt;&amp;lt;EOF
+use rmoff
+db.notes.find()
+EOF&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;MongoDB shell version v4.4.1
+connecting to: mongodb://localhost:27017/test?compressors=disabled&amp;amp;gssapiServiceName=mongodb
+Implicit session: session { &amp;#34;id&amp;#34; : UUID(&amp;#34;2641e93e-9c5d-4270-8f64-e52295a60309&amp;#34;) }
+MongoDB server version: 4.4.1
+switched to db rmoff
+{ &amp;#34;_id&amp;#34; : ObjectId(&amp;#34;5f77b64eee00df1cc80135a1&amp;#34;), &amp;#34;to&amp;#34; : &amp;#34;Tove&amp;#34;, &amp;#34;from&amp;#34; : &amp;#34;Jani&amp;#34;, &amp;#34;heading&amp;#34; : &amp;#34;Reminder 01&amp;#34;, &amp;#34;body&amp;#34; : &amp;#34;Don&amp;#39;t forget me this weekend!&amp;#34; }
+{ &amp;#34;_id&amp;#34; : ObjectId(&amp;#34;5f77b64eee00df1cc80135a2&amp;#34;), &amp;#34;to&amp;#34; : &amp;#34;Jani&amp;#34;, &amp;#34;from&amp;#34; : &amp;#34;Tove&amp;#34;, &amp;#34;heading&amp;#34; : &amp;#34;Reminder 02&amp;#34;, &amp;#34;body&amp;#34; : &amp;#34;Of course I won&amp;#39;t!&amp;#34; }
+{ &amp;#34;_id&amp;#34; : ObjectId(&amp;#34;5f77b64eee00df1cc80135a3&amp;#34;), &amp;#34;to&amp;#34; : &amp;#34;Tove&amp;#34;, &amp;#34;from&amp;#34; : &amp;#34;Jani&amp;#34;, &amp;#34;heading&amp;#34; : &amp;#34;Reminder 03&amp;#34;, &amp;#34;body&amp;#34; : &amp;#34;Where are you?&amp;#34; }
+{ &amp;#34;_id&amp;#34; : ObjectId(&amp;#34;5f77b64eee00df1cc80135a4&amp;#34;), &amp;#34;to&amp;#34; : &amp;#34;Jani&amp;#34;, &amp;#34;from&amp;#34; : &amp;#34;Tove&amp;#34;, &amp;#34;heading&amp;#34; : &amp;#34;Reminder 04&amp;#34;, &amp;#34;body&amp;#34; : &amp;#34;I forgot ð¤·ââï¸&amp;#34; }
+{ &amp;#34;_id&amp;#34; : ObjectId(&amp;#34;5f77b77cee00df1cc80135a6&amp;#34;), &amp;#34;to&amp;#34; : &amp;#34;Tove&amp;#34;, &amp;#34;from&amp;#34; : &amp;#34;Jani&amp;#34;, &amp;#34;heading&amp;#34; : &amp;#34;Reminder 05&amp;#34;, &amp;#34;body&amp;#34; : &amp;#34;Srsly?&amp;#34; }
+bye&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_what_if_my_datas_not_in_xml_what_if_we_want_other_fields_from_the_payload&#34;&gt;What if my data’s not in XML? What if we want other fields from the payload?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In the example above we’re taking data from the source system (IBM MQ) and Kafka Connect is applying a schema to the field called &lt;code&gt;text&lt;/code&gt; within it (the XML transformation does this, based on the supplied XSD). When it’s written to Kafka it’s serialised using the selected converter which since it’s Avro stores the schema in the Schema Registry. This is a Good Way of doing things, since we retain the schema for use by any consumer. We could use Protobuf or JSON Schema here too if we wanted. If this doesn’t all make sense to you then check out &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-introduction/&#34;&gt;Schemas, Schmeeeemas / Why not just JSON?&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But the full payload that comes through from IBM MQ looks like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code&gt;messageID=ID:414d5120514d3120202020202020202060e67a5f06352924
+messageType=text
+timestamp=1601893142430
+deliveryMode=1
+redelivered=false
+expiration=0
+priority=0
+properties={JMS_IBM_Format=Struct{propertyType=string,string=MQSTR   },
+            JMS_IBM_PutDate=Struct{propertyType=string,string=20201005},
+            JMS_IBM_Character_Set=Struct{propertyType=string,string=ISO-8859-1},
+            JMSXDeliveryCount=Struct{propertyType=integer,integer=1},
+            JMS_IBM_MsgType=Struct{propertyType=integer,integer=8},
+            JMSXUserID=Struct{propertyType=string,string=mqm         },
+            JMS_IBM_Encoding=Struct{propertyType=integer,integer=546},
+            JMS_IBM_PutTime=Struct{propertyType=string,string=10190243},
+            JMSXAppID=Struct{propertyType=string,string=amqsput                     },
+            JMS_IBM_PutApplType=Struct{propertyType=integer,integer=6}}
+text=&amp;lt;note&amp;gt; &amp;lt;to&amp;gt;Jani&amp;lt;/to&amp;gt; &amp;lt;from&amp;gt;Tove&amp;lt;/from&amp;gt; &amp;lt;heading&amp;gt;Reminder 02&amp;lt;/heading&amp;gt; &amp;lt;body&amp;gt;Of course I won&amp;#39;t!&amp;lt;/body&amp;gt; &amp;lt;/note&amp;gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If we want to retain some or all of these fields, we’re going to have to approach things a different way. As things stand, there is no Single Message Transform that I’m aware of that can take &lt;em&gt;both&lt;/em&gt; the non-XML fields &lt;em&gt;and&lt;/em&gt; the XML field and wrangle them into a single structured schema (which is the ideal outcome, or perhaps putting the non-XML fields into the Kafka message header). By default the &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-ibmmq/index.html&#34;&gt;IBM MQ Source Connector&lt;/a&gt; will write the full payload to a &lt;a href=&#34;https://docs.confluent.io/current/connect/kafka-connect-ibmmq/index.html#io-confluent-connect-jms-value&#34;&gt;schema&lt;/a&gt;. This means that you still use a schema-supporting serialisation method, but the &lt;code&gt;text&lt;/code&gt; payload field remains unparsed.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here’s an example:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;curl -i -X PUT -H  &amp;#34;Content-Type:application/json&amp;#34; \
+    http://localhost:8083/connectors/source-ibmmq-note-03/config \
+    -d &amp;#39;{
+    &amp;#34;connector.class&amp;#34;: &amp;#34;io.confluent.connect.ibm.mq.IbmMQSourceConnector&amp;#34;,
+    &amp;#34;kafka.topic&amp;#34;:&amp;#34;ibmmq-note-03&amp;#34;,
+    &amp;#34;mq.hostname&amp;#34;:&amp;#34;ibmmq&amp;#34;,
+    &amp;#34;mq.port&amp;#34;:&amp;#34;1414&amp;#34;,
+    &amp;#34;mq.queue.manager&amp;#34;:&amp;#34;QM1&amp;#34;,
+    &amp;#34;mq.transport.type&amp;#34;:&amp;#34;client&amp;#34;,
+    &amp;#34;mq.channel&amp;#34;:&amp;#34;DEV.APP.SVRCONN&amp;#34;,
+    &amp;#34;mq.username&amp;#34;:&amp;#34;app&amp;#34;,
+    &amp;#34;mq.password&amp;#34;:&amp;#34;password123&amp;#34;,
+    &amp;#34;jms.destination.name&amp;#34;:&amp;#34;DEV.QUEUE.1&amp;#34;,
+    &amp;#34;jms.destination.type&amp;#34;:&amp;#34;queue&amp;#34;,
+    &amp;#34;confluent.license&amp;#34;:&amp;#34;&amp;#34;,
+    &amp;#34;confluent.topic.bootstrap.servers&amp;#34;:&amp;#34;broker:29092&amp;#34;,
+    &amp;#34;confluent.topic.replication.factor&amp;#34;:&amp;#34;1&amp;#34;,
+    &amp;#34;value.converter&amp;#34;: &amp;#34;io.confluent.connect.avro.AvroConverter&amp;#34;,
+    &amp;#34;value.converter.schema.registry.url&amp;#34;:&amp;#34;http://schema-registry:8081&amp;#34;
+    }&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now the full IBM MQ message is written to a Kafka topic, serialised with a schema. We can deserialise it with something like kafkacat:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kafkacat                                \
+      -b broker:29092                   \
+      -r http://schema-registry:8081    \
+      -s key=s -s value=avro            \
+      -t ibmmq-note-03                  \
+      -C -c1 -o beginning -u -q -J | \
+    jq  &amp;#39;.&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
+  &amp;#34;topic&amp;#34;: &amp;#34;ibmmq-note-03&amp;#34;,
+  &amp;#34;partition&amp;#34;: 0,
+  &amp;#34;offset&amp;#34;: 0,
+  &amp;#34;tstype&amp;#34;: &amp;#34;create&amp;#34;,
+  &amp;#34;ts&amp;#34;: 1601894073400,
+  &amp;#34;broker&amp;#34;: 1,
+  &amp;#34;key&amp;#34;: &amp;#34;Struct{messageID=ID:414d5120514d3120202020202020202060e67a5f033a2924}&amp;#34;,
+  &amp;#34;payload&amp;#34;: {
+    &amp;#34;messageID&amp;#34;: &amp;#34;ID:414d5120514d3120202020202020202060e67a5f033a2924&amp;#34;,
+    &amp;#34;messageType&amp;#34;: &amp;#34;text&amp;#34;,
+    &amp;#34;timestamp&amp;#34;: 1601894073400,
+    &amp;#34;deliveryMode&amp;#34;: 1,
+    &amp;#34;properties&amp;#34;: {
+      &amp;#34;JMS_IBM_Format&amp;#34;: {
+        &amp;#34;propertyType&amp;#34;: &amp;#34;string&amp;#34;,
+        &amp;#34;boolean&amp;#34;: null,
+        &amp;#34;byte&amp;#34;: null,
+        &amp;#34;short&amp;#34;: null,
+        &amp;#34;integer&amp;#34;: null,
+        &amp;#34;long&amp;#34;: null,
+        &amp;#34;float&amp;#34;: null,
+        &amp;#34;double&amp;#34;: null,
+        &amp;#34;string&amp;#34;: {
+          &amp;#34;string&amp;#34;: &amp;#34;MQSTR   &amp;#34;
+        }
+      },
+    …
+    &amp;#34;map&amp;#34;: null,
+    &amp;#34;text&amp;#34;: {
+      &amp;#34;string&amp;#34;: &amp;#34;&amp;lt;note&amp;gt; &amp;lt;to&amp;gt;Tove&amp;lt;/to&amp;gt; &amp;lt;from&amp;gt;Jani&amp;lt;/from&amp;gt; &amp;lt;heading&amp;gt;Reminder 01&amp;lt;/heading&amp;gt; &amp;lt;body&amp;gt;Don&amp;#39;t forget me this weekend!&amp;lt;/body&amp;gt; &amp;lt;/note&amp;gt;&amp;#34;
+    }
+  }
+}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Observe that the &lt;code&gt;text&lt;/code&gt; field is just a string, holding [what happens to be] XML.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can use ksqlDB to work with the data, to an extent - although there’s currently no &lt;a href=&#34;https://github.com/confluentinc/ksql/issues/6357&#34;&gt;support for handing the XML&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;SELECT &amp;#34;PROPERTIES&amp;#34;[&amp;#39;JMSXAppID&amp;#39;]-&amp;gt;STRING as JMSXAppID,
+       &amp;#34;PROPERTIES&amp;#34;[&amp;#39;JMS_IBM_PutTime&amp;#39;]-&amp;gt;STRING as JMS_IBM_PutTime,
+       &amp;#34;PROPERTIES&amp;#34;[&amp;#39;JMSXDeliveryCount&amp;#39;]-&amp;gt;INTEGER as JMSXDeliveryCount,
+       &amp;#34;PROPERTIES&amp;#34;[&amp;#39;JMSXUserID&amp;#39;]-&amp;gt;STRING as JMSXUserID,
+       text
+  FROM IBMMQ_SOURCE
+  EMIT CHANGES;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;+-----------+-----------------+-------------------+------------+------------------------------------+
+|JMSXAPPID  |JMS_IBM_PUTTIME  |JMSXDELIVERYCOUNT  |JMSXUSERID  |TEXT                                |
++-----------+-----------------+-------------------+------------+------------------------------------+
+|amqsput    |10302905         |1                  |mqm         |&amp;lt;note&amp;gt; &amp;lt;to&amp;gt;Jani&amp;lt;/to&amp;gt; &amp;lt;from&amp;gt;Tove&amp;lt;/fro|
+|           |                 |                   |            |m&amp;gt; &amp;lt;heading&amp;gt;Reminder 02&amp;lt;/heading&amp;gt; &amp;lt;b|
+|           |                 |                   |            |ody&amp;gt;Of course I won&amp;#39;t!&amp;lt;/body&amp;gt; &amp;lt;/note|
+|           |                 |                   |            |&amp;gt;                                   |
+|amqsput    |10302905         |1                  |mqm         |&amp;lt;note&amp;gt; &amp;lt;to&amp;gt;Tove&amp;lt;/to&amp;gt; &amp;lt;from&amp;gt;Jani&amp;lt;/fro|
+|           |                 |                   |            |m&amp;gt; &amp;lt;heading&amp;gt;Reminder 03&amp;lt;/heading&amp;gt; &amp;lt;b|
+|           |                 |                   |            |ody&amp;gt;Where are you?&amp;lt;/body&amp;gt; &amp;lt;/note&amp;gt;   |&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>Ingesting XML data into Kafka - Option 3: Kafka Connect FilePulse connector</title>
+      <link>https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-3-kafka-connect-filepulse-connector/</link>
+      <pubDate>2020-10-01</pubDate>
+      
+      <guid>https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-3-kafka-connect-filepulse-connector/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/09/IMG_6861.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;👉 &lt;em&gt;&lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-introduction/&#34;&gt;Ingesting XML data into Kafka - Introduction&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We saw in the &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-1-the-dirty-hack/&#34;&gt;first post&lt;/a&gt; how to hack together an ingestion pipeline for XML into Kafka using a source such as &lt;code&gt;curl&lt;/code&gt; piped through &lt;code&gt;xq&lt;/code&gt; to wrangle the XML and stream it into Kafka using &lt;code&gt;kafkacat&lt;/code&gt;, optionally using ksqlDB to apply and register a schema for it.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-2-kafka-connect-plus-single-message-transform/&#34;&gt;second one&lt;/a&gt; showed the use of any Kafka Connect source connector plus the &lt;code&gt;kafka-connect-transform-xml&lt;/code&gt; Single Message Transformation. Now we’re going to take a look at a source connector from the community that can also be used to ingest XML data into Kafka.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;a href=&#34;https://streamthoughts.github.io/kafka-connect-file-pulse/&#34;&gt;FilePulse&lt;/a&gt; is an Apache 2.0 licensed connector written by &lt;a href=&#34;https://twitter.com/fhussonnois&#34;&gt;Florian Hussonnois&lt;/a&gt;. It supports ingestion from flat files in lots of different formats, including XML. Florian wrote a useful blog about it &lt;a href=&#34;https://dev.to/fhussonnois/streaming-data-into-kafka-s01-e02-loading-xml-file-529i&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_ingesting_xml_data_into_kafka_with_kafka_connect_and_the_filepulse_connector&#34;&gt;Ingesting XML data into Kafka with Kafka Connect and the FilePulse connector&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Using a &lt;a href=&#34;https://raw.githubusercontent.com/jcustenborder/kafka-connect-transform-xml/master/src/test/resources/com/github/jcustenborder/kafka/connect/transform/xml/books.xml&#34;&gt;simple XML source file&lt;/a&gt; I first tried this, &lt;del&gt;copied from&lt;/del&gt; based on &lt;a href=&#34;https://dev.to/fhussonnois/streaming-data-into-kafka-s01-e02-loading-xml-file-529i&#34;&gt;the tutorial&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Accept:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
+    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/source-filepulse-xml-00/config \&lt;/span&gt;
+    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
+        &amp;#34;connector.class&amp;#34;:&amp;#34;io.streamthoughts.kafka.connect.filepulse.source.FilePulseSourceConnector&amp;#34;,
+        &amp;#34;fs.scan.directory.path&amp;#34;:&amp;#34;/data/&amp;#34;,
+        &amp;#34;fs.scan.interval.ms&amp;#34;:&amp;#34;10000&amp;#34;,
+        &amp;#34;fs.scan.filters&amp;#34;:&amp;#34;io.streamthoughts.kafka.connect.filepulse.scanner.local.filter.RegexFileListFilter&amp;#34;,
+        &amp;#34;file.filter.regex.pattern&amp;#34;:&amp;#34;.*&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;.xml$&amp;#34;,
+        &amp;#34;offset.strategy&amp;#34;:&amp;#34;name&amp;#34;,
+        &amp;#34;task.reader.class&amp;#34;: &amp;#34;io.streamthoughts.kafka.connect.filepulse.reader.XMLFileInputReader&amp;#34;,
+        &amp;#34;topic&amp;#34;:&amp;#34;books-00&amp;#34;,
+        &amp;#34;internal.kafka.reporter.bootstrap.servers&amp;#34;: &amp;#34;broker:29092&amp;#34;,
+        &amp;#34;internal.kafka.reporter.topic&amp;#34;:&amp;#34;_connect-file-pulse-status&amp;#34;,
+        &amp;#34;fs.cleanup.policy.class&amp;#34;: &amp;#34;io.streamthoughts.kafka.connect.filepulse.clean.LogCleanupPolicy&amp;#34;,
+        &amp;#34;tasks.max&amp;#34;: 1
+    }&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This failed at the point at which Kafka Connect tried to serialise the root element (&lt;code&gt;x:books&lt;/code&gt;) to Avro&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;Caused by: org.apache.avro.SchemaParseException: Illegal character &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in&lt;/span&gt;: X:books
+        at org.apache.avro.Schema.validateName&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;Schema.java:1530&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+        at org.apache.avro.Schema.access&lt;span style=&#34;color: #008080&#34;&gt;$400&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;Schema.java:87&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+        at org.apache.avro.Schema&lt;span style=&#34;color: #008080&#34;&gt;$Name&lt;/span&gt;.&amp;lt;init&amp;gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;Schema.java:673&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+        at org.apache.avro.Schema.createRecord&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;Schema.java:212&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The XML looks like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;xml&#34;&gt;&lt;span style=&#34;color: #999999;font-weight: bold&#34;&gt;&amp;lt;?xml version=&amp;#34;1.0&amp;#34;?&amp;gt;&lt;/span&gt;
+&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;x:books&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;xmlns:x=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;urn:books&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #000080&#34;&gt;&amp;gt;&lt;/span&gt;
+    &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;book&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;id=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;bk001&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #000080&#34;&gt;&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;author&amp;gt;&lt;/span&gt;Writer&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/author&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;title&amp;gt;&lt;/span&gt;The First Book&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/title&amp;gt;&lt;/span&gt;
+…&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Since we don’t want that root element anyway we can use an XPath to specify which bits we do want, with the &lt;code&gt;xpath.expression&lt;/code&gt; configuration element.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;A useful way to figure out your XPath is to run &lt;code&gt;xmllint --shell &amp;lt;your xml file&amp;gt;&lt;/code&gt; and navigate around the structure to figure it out. The great thing about &lt;del&gt;old&lt;/del&gt; established technologies is that there’s a ton of resources on Google from people hitting the same problems in the past - &lt;a href=&#34;https://mail.gnome.org/archives/xml/2010-January/msg00028.html&#34;&gt;this from 2010&lt;/a&gt; helped me out in writing this! My XPath expression was simply &lt;code&gt;/*/book&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Accept:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
+    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/source-filepulse-xml-01/config \&lt;/span&gt;
+    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
+        &amp;#34;connector.class&amp;#34;:&amp;#34;io.streamthoughts.kafka.connect.filepulse.source.FilePulseSourceConnector&amp;#34;,
+        &amp;#34;fs.scan.directory.path&amp;#34;:&amp;#34;/data/&amp;#34;,
+        &amp;#34;fs.scan.interval.ms&amp;#34;:&amp;#34;10000&amp;#34;,
+        &amp;#34;fs.scan.filters&amp;#34;:&amp;#34;io.streamthoughts.kafka.connect.filepulse.scanner.local.filter.RegexFileListFilter&amp;#34;,
+        &amp;#34;file.filter.regex.pattern&amp;#34;:&amp;#34;.*&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;.xml$&amp;#34;,
+        &amp;#34;offset.strategy&amp;#34;:&amp;#34;name&amp;#34;,
+        &amp;#34;task.reader.class&amp;#34;: &amp;#34;io.streamthoughts.kafka.connect.filepulse.reader.XMLFileInputReader&amp;#34;,
+        &amp;#34;xpath.expression&amp;#34;: &amp;#34;/*/book&amp;#34;,
+        &amp;#34;topic&amp;#34;:&amp;#34;books-01&amp;#34;,
+        &amp;#34;internal.kafka.reporter.bootstrap.servers&amp;#34;: &amp;#34;broker:29092&amp;#34;,
+        &amp;#34;internal.kafka.reporter.topic&amp;#34;:&amp;#34;_connect-file-pulse-status&amp;#34;,
+        &amp;#34;fs.cleanup.policy.class&amp;#34;: &amp;#34;io.streamthoughts.kafka.connect.filepulse.clean.LogCleanupPolicy&amp;#34;,
+        &amp;#34;tasks.max&amp;#34;: 1
+    }&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This worked, and we can confirm that using a consumer against the topic - here I’m using ksqlDB just cos it’s quicker:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;ksql&amp;gt; PRINT &amp;#39;books-01&amp;#39; FROM BEGINNING;
+Key format: ¯\_(ツ)_/¯ - no data processed
+Value format: AVRO or KAFKA_STRING
+rowtime: 2020/10/02 11:26:45.222 Z, key: &amp;lt;null&amp;gt;, value: {&amp;#34;id&amp;#34;: &amp;#34;bk001&amp;#34;, &amp;#34;author&amp;#34;: &amp;#34;Writer&amp;#34;, &amp;#34;title&amp;#34;: &amp;#34;The First Book&amp;#34;, &amp;#34;genre&amp;#34;: &amp;#34;Fiction&amp;#34;, &amp;#34;price&amp;#34;: &amp;#34;44.95&amp;#34;, &amp;#34;pub_date&amp;#34;: &amp;#34;2000-10-01&amp;#34;, &amp;#34;review&amp;#34;: &amp;#34;An amazing story of nothing.&amp;#34;}
+rowtime: 2020/10/02 11:26:45.226 Z, key: &amp;lt;null&amp;gt;, value: {&amp;#34;id&amp;#34;: &amp;#34;bk002&amp;#34;, &amp;#34;author&amp;#34;: &amp;#34;Poet&amp;#34;, &amp;#34;title&amp;#34;: &amp;#34;The Poet&amp;#39;s First Poem&amp;#34;, &amp;#34;genre&amp;#34;: &amp;#34;Poem&amp;#34;, &amp;#34;price&amp;#34;: &amp;#34;24.95&amp;#34;, &amp;#34;pub_date&amp;#34;: &amp;#34;2000-10-01&amp;#34;, &amp;#34;review&amp;#34;: &amp;#34;Least poetic poems.&amp;#34;}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The value has been serialised as Avro, with the schema inferred from the XML itself. We can verify it by looking it up from the Schema Registry:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;docker &lt;span style=&#34;color: #0086B3&#34;&gt;exec&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;--tty&lt;/span&gt; schema-registry &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+    curl &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;http://localhost:8081/subjects/books-01-value/versions/1&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+    jq &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.schema|fromjson[1]&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;record&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ConnectDefault&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;namespace&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;io.confluent.connect.avro&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;fields&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;],&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;default&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;author&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;],&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;default&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;title&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;],&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;default&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
+    &lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;…&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Avro is set as the default converter in my Kafka Connect worker configuration; I could override it if I wanted to use Protobuf, for example, by setting the necessary &lt;code&gt;value.converter&lt;/code&gt; configuration:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Accept:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
+    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/source-filepulse-xml-02/config \&lt;/span&gt;
+    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
+        &amp;#34;connector.class&amp;#34;:&amp;#34;io.streamthoughts.kafka.connect.filepulse.source.FilePulseSourceConnector&amp;#34;,
+        &amp;#34;fs.scan.directory.path&amp;#34;:&amp;#34;/data/&amp;#34;,
+        &amp;#34;fs.scan.interval.ms&amp;#34;:&amp;#34;10000&amp;#34;,
+        &amp;#34;fs.scan.filters&amp;#34;:&amp;#34;io.streamthoughts.kafka.connect.filepulse.scanner.local.filter.RegexFileListFilter&amp;#34;,
+        &amp;#34;file.filter.regex.pattern&amp;#34;:&amp;#34;.*&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;.xml$&amp;#34;,
+        &amp;#34;offset.strategy&amp;#34;:&amp;#34;name&amp;#34;,
+        &amp;#34;task.reader.class&amp;#34;: &amp;#34;io.streamthoughts.kafka.connect.filepulse.reader.XMLFileInputReader&amp;#34;,
+        &amp;#34;xpath.expression&amp;#34;: &amp;#34;/*/book&amp;#34;,
+        &amp;#34;topic&amp;#34;:&amp;#34;books-02&amp;#34;,
+        &amp;#34;internal.kafka.reporter.bootstrap.servers&amp;#34;: &amp;#34;broker:29092&amp;#34;,
+        &amp;#34;internal.kafka.reporter.topic&amp;#34;:&amp;#34;_connect-file-pulse-status&amp;#34;,
+        &amp;#34;fs.cleanup.policy.class&amp;#34;: &amp;#34;io.streamthoughts.kafka.connect.filepulse.clean.LogCleanupPolicy&amp;#34;,
+        &amp;#34;tasks.max&amp;#34;: 1,
+        &amp;#34;value.converter&amp;#34;:&amp;#34;io.confluent.connect.protobuf.ProtobufConverter&amp;#34;,
+        &amp;#34;value.converter.schema.registry.url&amp;#34;:&amp;#34;http://schema-registry:8081&amp;#34;
+    }&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This time the data’s written as Protobuf, which we can validate also from ksqlDB (it takes a best-guess at the serialisation method when it reads the messages, and automagically picks the appropriate deserialiser):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ksql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PRINT&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;books-02&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;BEGINNING&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Key&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;format&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;¯\&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;_&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;ツ&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;_&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;¯&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;no&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;processed&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Value&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;format&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PROTOBUF&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;or&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;KAFKA_STRING&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;rowtime&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;02&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;11&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;31&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;34&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;066&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Z&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;value&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;bk001&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;author&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;Writer&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;title&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;The First Book&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;genre&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;Fiction&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;price&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;44.95&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;pub_date&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;2000-10-01&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;review&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;An amazing story of nothing.&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;rowtime&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2020&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;02&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;11&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;31&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;34&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;068&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Z&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;value&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;bk002&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;author&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;Poet&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;title&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;The Poet&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;s First Poem&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;genre&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;Poem&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;price&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;24.95&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;pub_date&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;2000-10-01&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;review&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;Least poetic poems.&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_a_bit_of_ksqldb&#34;&gt;A bit of ksqlDB&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With the data streaming into a Kafka topic from flat file, we can do this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ksql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;BOOKS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;KAFKA_TOPIC&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;books-02&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;VALUE_FORMAT&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;PROTOBUF&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;
+
+ &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Message&lt;/span&gt;
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----------------&lt;/span&gt;
+ &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Stream&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;created&lt;/span&gt;
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----------------&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ksql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ksql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;auto.offset.reset&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;earliest&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Successfully&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;changed&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;local&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;property&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;auto.offset.reset&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;to&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;earliest&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Use&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;the&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;UNSET&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;command&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;to&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;revert&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;your&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;change&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ksql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;BOOKS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;EMIT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CHANGES&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;LIMIT&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;--------+---------+-----------------------+---------+--------+------------+----------------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ID&lt;/span&gt;      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;AUTHOR&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TITLE&lt;/span&gt;                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;GENRE&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PRICE&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUB_DATE&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;REVIEW&lt;/span&gt;                      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;--------+---------+-----------------------+---------+--------+------------+----------------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;bk001&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Writer&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;The&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;First&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Book&lt;/span&gt;         &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Fiction&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;44&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;95&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2000&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;An&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;amazing&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;story&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;of&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;nothing&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;bk002&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Poet&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;The&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Poet&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s First Poem  |Poem     |24.95   |2000-10-01  |Least poetic poems.         |
+Limit Reached
+Query terminated&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;hr/&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For more permutations of XML ingest with FilePulse check out &lt;a href=&#34;https://dev.to/fhussonnois/streaming-data-into-kafka-s01-e02-loading-xml-file-529i&#34;&gt;this blog&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_what_are_my_other_options_for_getting_xml_into_kafka&#34;&gt;What are my other options for getting XML into Kafka?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;FilePulse worked great here, and it clearly has a &lt;a href=&#34;https://streamthoughts.github.io/kafka-connect-file-pulse/docs/developer-guide/&#34;&gt;lot of flexibility&lt;/a&gt; its processing and file handling options. It’s also really handy that it can infer the schema of the payload from the XML without requiring an XSD.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But what if your data isn’t in a flat file? Unfortunately in this situation you will need to reach for another option:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Option 1: &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-1-the-dirty-hack/&#34;&gt;The Dirty Hack&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Option 2: &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-2-kafka-connect-plus-single-message-transform/&#34;&gt;Any Kafka Connect connector plus &lt;code&gt;kafka-connect-transform-xml&lt;/code&gt; Single Message Transform&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>Ingesting XML data into Kafka - Option 2: Kafka Connect plus Single Message Transform</title>
+      <link>https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-2-kafka-connect-plus-single-message-transform/</link>
+      <pubDate>2020-10-01</pubDate>
+      
+      <guid>https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-2-kafka-connect-plus-single-message-transform/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/09/IMG_6861.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We previously looked at the background to &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-introduction/&#34;&gt;getting XML into Kafka&lt;/a&gt;, and potentially &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-1-the-dirty-hack/&#34;&gt;how [not] to do it&lt;/a&gt;. Now let’s look at the &lt;em&gt;proper&lt;/em&gt; way to build a streaming ingestion pipeline for XML into Kafka, using Kafka Connect.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you’re unfamiliar with Kafka Connect, check out this &lt;a href=&#34;https://rmoff.dev/what-is-kafka-connect&#34;&gt;quick intro to Kafka Connect here&lt;/a&gt;. Kafka Connect’s excellent plugable architecture means that we can pair any &lt;strong&gt;source connector&lt;/strong&gt; to read XML from wherever we have it (for example, a flat file, or a MQ, or anywhere else), with a &lt;strong&gt;Single Message Transform&lt;/strong&gt; to transform the XML into a payload with a schema, and finally a &lt;strong&gt;converter&lt;/strong&gt; to serialise the data in a form that we would like to use such as Avro or Protobuf.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_show_me_️️&#34;&gt;👀 Show me 🕵️‍♂️&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-note&#34; title=&#34;Note&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+You can try out all this code by spinning up this &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/xml-to-kafka/docker-compose.yml&#34;&gt;Docker Compose&lt;/a&gt;
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here’s an example reading XML from a file using the &lt;code&gt;FileStreamSourceConnector&lt;/code&gt; (note that this connector plugin is just an example one and not recommended for production use). The output from the source connector is routed through the XML &lt;code&gt;transform&lt;/code&gt; that’s configured with the corresponding XSD.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;curl&#34;&gt;curl -i -X PUT -H  &amp;#34;Content-Type:application/json&amp;#34; \
+    http://localhost:8083/connectors/source-file-note-01/config \
+    -d &amp;#39;{
+    &amp;#34;connector.class&amp;#34;: &amp;#34;org.apache.kafka.connect.file.FileStreamSourceConnector&amp;#34;,
+    &amp;#34;tasks.max&amp;#34;: &amp;#34;1&amp;#34;,
+    &amp;#34;file&amp;#34;: &amp;#34;/data/note.xml&amp;#34;,
+    &amp;#34;topic&amp;#34;: &amp;#34;note-01&amp;#34;,
+    &amp;#34;transforms&amp;#34;: &amp;#34;xml&amp;#34;,
+    &amp;#34;transforms.xml.type&amp;#34;: &amp;#34;com.github.jcustenborder.kafka.connect.transform.xml.FromXml$Value&amp;#34;,
+    &amp;#34;transforms.xml.schema.path&amp;#34;: &amp;#34;file:///data/note.xsd&amp;#34;,
+    &amp;#34;value.converter&amp;#34;: &amp;#34;io.confluent.connect.avro.AvroConverter&amp;#34;,
+    &amp;#34;value.converter.schema.registry.url&amp;#34;:&amp;#34;http://schema-registry:8081&amp;#34;
+    }&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The source file looks like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;xml&#34;&gt;&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;note&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;to&amp;gt;&lt;/span&gt;Tove&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/to&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;from&amp;gt;&lt;/span&gt;Jani&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/from&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;heading&amp;gt;&lt;/span&gt;Reminder 01&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/heading&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;body&amp;gt;&lt;/span&gt;Don&amp;#39;t forget me this weekend!&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/body&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/note&amp;gt;&lt;/span&gt;
+&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;note&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;to&amp;gt;&lt;/span&gt;Jani&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/to&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;from&amp;gt;&lt;/span&gt;Tove&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/from&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;heading&amp;gt;&lt;/span&gt;Reminder 02&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/heading&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;body&amp;gt;&lt;/span&gt;Of course I won&amp;#39;t!&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/body&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/note&amp;gt;&lt;/span&gt;
+&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;note&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;to&amp;gt;&lt;/span&gt;Tove&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/to&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;from&amp;gt;&lt;/span&gt;Jani&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/from&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;heading&amp;gt;&lt;/span&gt;Reminder 03&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/heading&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;body&amp;gt;&lt;/span&gt;Where are you?&lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/body&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;&amp;lt;/note&amp;gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With this connector running the XML is ingested from the source file and written to the &lt;code&gt;note-01&lt;/code&gt; topic:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;docker &lt;span style=&#34;color: #0086B3&#34;&gt;exec &lt;/span&gt;kafkacat kafkacat                      &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; broker:29092                            &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-r&lt;/span&gt; http://schema-registry:8081             &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; avro                                    &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-t&lt;/span&gt; note-01                                 &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-C&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-o&lt;/span&gt; beginning &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-q&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-J&lt;/span&gt; | jq &lt;span style=&#34;color: #000080&#34;&gt;-c&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;note-01&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;partition&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;offset&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;tstype&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;create&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1601649227632&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;payload&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Note&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;to&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Tove&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;from&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Jani&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;heading&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Reminder 01&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;body&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Don&amp;#39;t forget me this weekend!&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}}}&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;note-01&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;partition&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;offset&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;tstype&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;create&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1601649227633&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;payload&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Note&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;to&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Jani&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;from&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Tove&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;heading&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Reminder 02&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;body&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Of course I won&amp;#39;t!&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}}}&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;note-01&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;partition&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;offset&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;tstype&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;create&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1601649227633&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;payload&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Note&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;to&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Tove&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;from&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Jani&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;heading&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Reminder 03&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;body&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Where are you?&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}}}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We’re using Avro to serialise the data here (per &lt;code&gt;value.converter&lt;/code&gt;, usually set as a global value in the Kafka Connect worker but included here for clarity), and the purpose of the XML transformation was that it applied the schema as declared in the XSD to the data. Taking one of the messages from the topic and pretty-printing it, it looks like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;note-01&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;partition&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;offset&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;tstype&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;create&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;1601649227632&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;payload&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Note&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;to&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Tove&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;from&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Jani&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;heading&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Reminder 01&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;body&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Don&amp;#39;t forget me this weekend!&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
+  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Without this, and if we just ingested the XML into the Kafka topic, it would look like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;note-03&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;partition&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;offset&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;tstype&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;create&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;1601649524495&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;broker&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;payload&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;lt;note&amp;gt; &amp;lt;to&amp;gt;Tove&amp;lt;/to&amp;gt; &amp;lt;from&amp;gt;Jani&amp;lt;/from&amp;gt; &amp;lt;heading&amp;gt;Reminder 01&amp;lt;/heading&amp;gt; &amp;lt;body&amp;gt;Don&amp;#39;t forget me this weekend!&amp;lt;/body&amp;gt; &amp;lt;/note&amp;gt;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The difference is a payload with a schema that’s ready to be processed by another application, Kafka Connect, or ksqlDB - and a Kafka message that’s a lump of raw XML still.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_notes_on_kafka_connect_transform_xml&#34;&gt;Notes on &lt;code&gt;kafka-connect-transform-xml&lt;/code&gt;&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’ve had a &lt;a href=&#34;https://github.com/jcustenborder/kafka-connect-transform-xml/issues/29&#34;&gt;a&lt;/a&gt; &lt;a href=&#34;https://github.com/jcustenborder/kafka-connect-transform-xml/issues/33&#34;&gt;few&lt;/a&gt; &lt;a href=&#34;https://github.com/jcustenborder/kafka-connect-transform-xml/issues/36&#34;&gt;challenges&lt;/a&gt; getting the SMT to work, in particular with certain schemas. Some things to watch out for:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;You need to have a clear understanding of two things about how Kafka Connect works:&lt;/p&gt;
+&lt;div class=&#34;olist arabic&#34;&gt;
+&lt;ol class=&#34;arabic&#34;&gt;
+&lt;li&gt;
+&lt;p&gt;The source connector will pass a message that it’s read to the Transformation. At this point so far as the XML SMT is concerned it needs to be a complete XML payload. Therefore, for example, if you are using the FileStreamSourceConnector you’ll need to ensure that full XML document is on a single line, since the source connector treats line breaks as message separators, and so the SMT would get a fragment of XML&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The SMT will process the whole of the value part of the message. If you have XML as a field within it (for example, reading from a database using the JDBC Source connector, and one field in the table is XML) you’ll need to use the &lt;a href=&#34;https://docs.confluent.io/current/connect/transforms/extractfield.html#extractfield&#34;&gt;&lt;code&gt;ExtractField&lt;/code&gt;&lt;/a&gt; transformation in addition (and first) to the XML transform.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To troubleshoot the connector check the Kafka Connect worker log in which you’ll usually see an error explaining the problem. Sometimes you might need to dig deeper and for that there are a couple of useful loggers within the worker that you can &lt;a href=&#34;https://rmoff.net/2020/01/16/changing-the-logging-level-for-kafka-connect-dynamically/&#34;&gt;bump up&lt;/a&gt; to see more of what’s going on:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;curl &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-X&lt;/span&gt; PUT http://localhost:8083/admin/loggers/org.apache.kafka.connect.runtime.TransformationChain &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{&amp;#34;level&amp;#34;: &amp;#34;TRACE&amp;#34;}&amp;#39;&lt;/span&gt; | jq &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;
+curl &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-X&lt;/span&gt; PUT http://localhost:8083/admin/loggers/com.github.jcustenborder.kafka.connect &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{&amp;#34;level&amp;#34;: &amp;#34;TRACE&amp;#34;}&amp;#39;&lt;/span&gt; | jq &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With these set you’ll now capture the details of where Kafka Connect passes the payload to the transformation, which is very useful for sense-checking if the SMT has the correct data with which to work:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;TRACE [source-file-note-02|task-0] Applying transformation
+com.github.jcustenborder.kafka.connect.transform.xml.FromXml$Value to
+SourceRecord{sourcePartition={filename=/data/note.xml}, sourceOffset={position=443}}
+ConnectRecord{topic=&amp;#39;note-02&amp;#39;, kafkaPartition=null, key=null, keySchema=null, value=&amp;lt;note&amp;gt;
+&amp;lt;to&amp;gt;Jani&amp;lt;/to&amp;gt; &amp;lt;from&amp;gt;Tove&amp;lt;/from&amp;gt; &amp;lt;heading&amp;gt;Reminder 04&amp;lt;/heading&amp;gt; &amp;lt;body&amp;gt;I forgot 🤷‍♂️
+&amp;lt;/body&amp;gt; &amp;lt;/note&amp;gt;, valueSchema=Schema{STRING}, timestamp=1601649677317,
+headers=ConnectHeaders(headers=)}
+(org.apache.kafka.connect.runtime.TransformationChain:47)&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You also get to see how the SMT itself is handling the data:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;TRACE [source-file-note-02|task-0] process() - input.value() has as schema. schema = Schema{STRING} (com.github.jcustenborder.kafka.connect.utils.transformation.BaseKeyValueTransformation:140)
+TRACE [source-file-note-02|task-0] toString() - field = &amp;#39;to&amp;#39; value = &amp;#39;Jani&amp;#39; (com.github.jcustenborder.kafka.connect.xml.ConnectableHelper:87)
+TRACE [source-file-note-02|task-0] toString() - field = &amp;#39;from&amp;#39; value = &amp;#39;Tove&amp;#39; (com.github.jcustenborder.kafka.connect.xml.ConnectableHelper:87)
+TRACE [source-file-note-02|task-0] toString() - field = &amp;#39;heading&amp;#39; value = &amp;#39;Reminder 04&amp;#39; (com.github.jcustenborder.kafka.connect.xml.ConnectableHelper:87)
+TRACE [source-file-note-02|task-0] toString() - field = &amp;#39;body&amp;#39; value = &amp;#39;I forgot 🤷‍♂️&amp;#39; (com.github.jcustenborder.kafka.connect.xml.ConnectableHelper:87)&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_building_something_useful_streaming_xml_messages_from_ibm_mq_into_kafka_into_mongodb&#34;&gt;Building something useful: Streaming XML messages from IBM MQ into Kafka into MongoDB&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s imagine we have XML data on a queue in IBM MQ, and we want to ingest it into Kafka to then use downstream, perhaps in an application or maybe to stream to a NoSQL store like MongoDB.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2020/10/xml-ibmmq-mongodb.gif&#34; alt=&#34;Streaming XML messages from IBM MQ through Apache Kafka into MongoDB&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The configuration to ingest from IBM MQ into Kafka using the &lt;a href=&#34;https://www.confluent.io/hub/confluentinc/kafka-connect-ibmmq&#34;&gt;IbmMQSourceConnector&lt;/a&gt; and &lt;a href=&#34;https://www.confluent.io/hub/jcustenborder/kafka-connect-transform-xml&#34;&gt;XML Transformation&lt;/a&gt; looks like this (note the use of the &lt;code&gt;ExtractField&lt;/code&gt; transformation as discussed above):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/source-ibmmq-note-01/config \&lt;/span&gt;
+    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
+    &amp;#34;connector.class&amp;#34;: &amp;#34;io.confluent.connect.ibm.mq.IbmMQSourceConnector&amp;#34;,
+    &amp;#34;kafka.topic&amp;#34;:&amp;#34;ibmmq-note-01&amp;#34;,
+    &amp;#34;mq.hostname&amp;#34;:&amp;#34;ibmmq&amp;#34;,
+    &amp;#34;mq.port&amp;#34;:&amp;#34;1414&amp;#34;,
+    &amp;#34;mq.queue.manager&amp;#34;:&amp;#34;QM1&amp;#34;,
+    &amp;#34;mq.transport.type&amp;#34;:&amp;#34;client&amp;#34;,
+    &amp;#34;mq.channel&amp;#34;:&amp;#34;DEV.APP.SVRCONN&amp;#34;,
+    &amp;#34;mq.username&amp;#34;:&amp;#34;app&amp;#34;,
+    &amp;#34;mq.password&amp;#34;:&amp;#34;password123&amp;#34;,
+    &amp;#34;jms.destination.name&amp;#34;:&amp;#34;DEV.QUEUE.1&amp;#34;,
+    &amp;#34;jms.destination.type&amp;#34;:&amp;#34;queue&amp;#34;,
+    &amp;#34;confluent.license&amp;#34;:&amp;#34;&amp;#34;,
+    &amp;#34;confluent.topic.bootstrap.servers&amp;#34;:&amp;#34;broker:29092&amp;#34;,
+    &amp;#34;confluent.topic.replication.factor&amp;#34;:&amp;#34;1&amp;#34;,
+    &amp;#34;transforms&amp;#34;: &amp;#34;extractPayload,xml&amp;#34;,
+    &amp;#34;transforms.extractPayload.type&amp;#34;: &amp;#34;org.apache.kafka.connect.transforms.ExtractField$Value&amp;#34;,
+    &amp;#34;transforms.extractPayload.field&amp;#34;: &amp;#34;text&amp;#34;,
+    &amp;#34;transforms.xml.type&amp;#34;: &amp;#34;com.github.jcustenborder.kafka.connect.transform.xml.FromXml$Value&amp;#34;,
+    &amp;#34;transforms.xml.schema.path&amp;#34;: &amp;#34;file:///data/note.xsd&amp;#34;,
+    &amp;#34;value.converter&amp;#34;: &amp;#34;io.confluent.connect.avro.AvroConverter&amp;#34;,
+    &amp;#34;value.converter.schema.registry.url&amp;#34;:&amp;#34;http://schema-registry:8081&amp;#34;
+    }&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For more details on this see &lt;a href=&#34;https://rmoff.net/2020/10/05/streaming-xml-messages-from-ibm-mq-into-kafka-into-mongodb/&#34;&gt;this article&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_is_this_my_best_option_for_getting_data_into_kafka&#34;&gt;Is this my best option for getting data into Kafka?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I reckon it is. The plug &amp;#39;n play nature of the Kafka Connect components means that you can happily pair up your &lt;strong&gt;connector&lt;/strong&gt; for the source (be it IBM MQ, JMS, Oracle, or anywhere else you have you data) with the XML &lt;strong&gt;transformation&lt;/strong&gt;, and then serialise the resulting data how you choose (Avro/Protobuf/JSON Schema recommended) using the appropriate &lt;strong&gt;converter&lt;/strong&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The only downside to the XML transform other than a few glitches is that it &lt;strong&gt;requires&lt;/strong&gt; an XSD, rather than being able to infer and work with XPath in the way the &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-3-kafka-connect-filepulse-connector/&#34;&gt;Kafka Connect FilePulse connector&lt;/a&gt; does.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The other two options are either &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-1-the-dirty-hack/&#34;&gt;a bit of a hack&lt;/a&gt;, or the &lt;a href=&#34;https://rmoff.net/2020/10/01/ingesting-xml-data-into-kafka-option-3-kafka-connect-filepulse-connector/&#34;&gt;Kafka Connect FilePulse connector&lt;/a&gt;. The latter is good but constrained to flat-file input only.&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
@@ -1309,463 +2154,6 @@ message key               character variable,
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;&lt;em&gt;What are your go-to sources for real data? &lt;a href=&#34;https://twitter.com/rmoff/&#34;&gt;Let me know&lt;/a&gt; and I’ll add them to this list.&lt;/em&gt;&lt;/p&gt;
 &lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Using the Debezium MS SQL connector with ksqlDB embedded Kafka Connect</title>
-      <link>https://rmoff.net/2020/09/18/using-the-debezium-ms-sql-connector-with-ksqldb-embedded-kafka-connect/</link>
-      <pubDate>2020-09-18</pubDate>
-      
-      <guid>https://rmoff.net/2020/09/18/using-the-debezium-ms-sql-connector-with-ksqldb-embedded-kafka-connect/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/09/IMG_6723.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Prompted by &lt;a href=&#34;https://stackoverflow.com/questions/63946368/how-to-use-the-debezium-sql-server-connector-with-ksqldb-embedded-connect&#34;&gt;a question on StackOverflow&lt;/a&gt; I thought I’d take a quick look at setting up &lt;a href=&#34;https://ksqldb.io&#34;&gt;ksqlDB&lt;/a&gt; to ingest CDC events from Microsoft SQL Server using &lt;a href=&#34;https://debezium.io/&#34;&gt;Debezium&lt;/a&gt;. Some of this is based on my previous article, &lt;a href=&#34;https://rmoff.net/2019/11/20/streaming-data-from-sql-server-to-kafka-to-snowflake-with-kafka-connect/&#34;&gt;Streaming data from SQL Server to Kafka to Snowflake ❄️ with Kafka Connect&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_setting_up_the_docker_compose&#34;&gt;Setting up the Docker Compose&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I like standalone, repeatable, demo code. For that reason I love using Docker Compose and I embed everything in there - connector installation, the kitchen sink - the works.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can find the complete &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/mssql-to-kafka-with-ksqldb/docker-compose.yml&#34;&gt;Docker Compose file on GitHub&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_installing_connectors_in_ksqldb_without_confluent_hub_client&#34;&gt;Installing connectors in ksqlDB without Confluent Hub client&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I’ll usually take advantage of the &lt;code&gt;command:&lt;/code&gt; stanza in a Docker Compose service to do things like connector installation, &lt;a href=&#34;https://rmoff.net/2018/12/15/docker-tips-and-tricks-with-ksql-and-kafka/&#34;&gt;as detailed here&lt;/a&gt;. In ksqlDB 0.11 the Confluent Hub client is absent so I’ve had to take a slightly hackier route. If you head over to &lt;a href=&#34;https://hub.confluent.io&#34;&gt;Confluent Hub&lt;/a&gt; and download the connector you want (in this case Debezium MS SQL) you can check the network console to get the direct URL, in this case&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;https://d1i4a15mxbxib1.cloudfront.net/api/plugins/debezium/debezium-connector-sqlserver/versions/1.2.2/debezium-debezium-connector-sqlserver-1.2.2.zip&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now, this URL is liable to change but for now, it works :) (I realise that this runs contrary to making a demo repeatable, but what’s life if we can’t live on the edge a bit)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;With this code we can download and install the connector within the ksqlDB Docker container when it spins up&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;curl https://d1i4a15mxbxib1.cloudfront.net/api/plugins/debezium/debezium-connector-sqlserver/versions/1.2.2/debezium-debezium-connector-sqlserver-1.2.2.zip &lt;span style=&#34;color: #000080&#34;&gt;-o&lt;/span&gt; /tmp/kafka-connect-mssql.zip
-yum &lt;span style=&#34;color: #0086B3&#34;&gt;install&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-y&lt;/span&gt; unzip
-unzip /tmp/kafka-connect-mssql.zip &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; /usr/share/java/&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;There’s a wrinkle in the plan here which is that the latest version of the container runs as a non-root user, and &lt;code&gt;sudo&lt;/code&gt; is not installed (&lt;a href=&#34;https://xkcd.com/149/&#34;&gt;no sandwiches for me&lt;/a&gt;). To hack around this we elevate the container to run as root user in the Docker Compose spec:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;yaml&#34;&gt;  &lt;span style=&#34;color: #008080&#34;&gt;ksqldb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-    &lt;span style=&#34;color: #008080&#34;&gt;image&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;confluentinc/ksqldb-server:0.11.0&lt;/span&gt;
-    &lt;span style=&#34;color: #008080&#34;&gt;container_name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;ksqldb&lt;/span&gt;
-    &lt;span style=&#34;color: #008080&#34;&gt;user&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;root&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;…&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now when the container launches it downloads the connector, installs &lt;code&gt;unzip&lt;/code&gt; and unzips the connector archive directly into the &lt;code&gt;plugin.path&lt;/code&gt; in which Kafka Connect (running embedded in ksqlDB) will look for it.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;admonitionblock note&#34;&gt;
-&lt;table&gt;
-&lt;tbody&gt;&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;i class=&#34;fa icon-note&#34; title=&#34;Note&#34;&gt;&lt;/i&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-The &amp;#39;proper&amp;#39; way to do this is either bake your own ksqlDB image with the connector plugin already installed, or to download the connector to the host machine, and mount it into the ksqlDB container. Both of these are fine, but involve more moving parts and stuff to go wrong than a standalone Docker Compose file for my purposes :)
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;&lt;/table&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_running_the_stack&#34;&gt;Running the stack&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Spin up the &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/mssql-to-kafka-with-ksqldb/docker-compose.yml&#34;&gt;Docker Compose file&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;docker-compose up &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;and then launch ksqlDB - this seemingly complex snippet simply waits for ksqlDB to be available before launching the CLI:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;docker &lt;span style=&#34;color: #0086B3&#34;&gt;exec&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-it&lt;/span&gt; ksqldb bash &lt;span style=&#34;color: #000080&#34;&gt;-c&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;echo -e &amp;#34;\n\n  Waiting for ksqlDB to be available before launching CLI\n&amp;#34;; while : ; do curl_status=$(curl -s -o /dev/null -w %{http_code} http://ksqldb:8088/info) ; echo -e $(date) &amp;#34; ksqlDB server listener HTTP state: &amp;#34; $curl_status &amp;#34; (waiting for 200)&amp;#34; ; if [ $curl_status -eq 200 ] ; then  break ; fi ; sleep 5 ; done ; ksql http://ksqldb:8088&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;In a separate terminal, once ksqlDB has finished starting (i.e. once the ksqlDB CLI starts from the above command) make sure that the MS SQL connector has installed correctly:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;docker &lt;span style=&#34;color: #0086B3&#34;&gt;exec &lt;/span&gt;ksqldb curl &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; localhost:8083/connector-plugins&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You should see&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;class&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;io.debezium.connector.sqlserver.SqlServerConnector&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;type&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;source&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;version&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;1.2.2.Final&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_configuring_ms_sql_for_cdc&#34;&gt;Configuring MS SQL for CDC&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;When the MS SQL container starts a couple of scripts are run to set up the database for CDC and add some test data. If you’re not using the Docker Compose then you need to run these yourself:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;USE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;master&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;GO&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;DATABASE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;demo&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;GO&lt;/span&gt;
-&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;USE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;demo&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;EXEC&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sys&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sp_cdc_enable_db&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;GO&lt;/span&gt;
-
-&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-- Run this to confirm that CDC is now enabled:&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;is_cdc_enabled&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sys&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;databases&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;GO&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;use&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;demo&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;];&lt;/span&gt;
-
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;demo&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;dbo&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;order_id&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;customer_id&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;order_ts&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;DATE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;order_total_usd&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;DECIMAL&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;),&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;VARCHAR&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;50&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;GO&lt;/span&gt;
-
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;EXEC&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sys&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sp_cdc_enable_table&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;@&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;source_schema&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;N&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;dbo&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;@&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;source_name&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;N&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;ORDERS&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;@&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;role_name&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;@&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;supports_net_changes&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;GO&lt;/span&gt;
-
-&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-- At this point you should get a row returned from this query&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;s&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;name&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Schema_Name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;name&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Table_Name&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;object_id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;type&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;type_desc&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;is_tracked_by_cdc&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sys&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tables&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tb&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;INNER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;JOIN&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sys&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;schemas&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;s&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;on&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;s&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;schema_id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;schema_id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tb&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;is_tracked_by_cdc&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;GO&lt;/span&gt;
-&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-- h/t William Prigol Lopes https://stackoverflow.com/a/61698148/350613&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_adding_a_sql_server_connector_in_ksqldb&#34;&gt;Adding a SQL Server connector in ksqlDB&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You should now have the ksqlDB prompt open&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;===========================================&lt;/span&gt;
-                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;       _              _ ____  ____       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
-                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;      | | _____  __ _| |  _ &lt;span style=&#34;color: #d14&#34;&gt;\|&lt;/span&gt; __ &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
-                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;      | |/ / __|/ _&lt;span style=&#34;color: #d14&#34;&gt;`&lt;/span&gt; | | | | |  _ &lt;span style=&#34;color: #d14&#34;&gt;\ &lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
-                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;      |   &amp;lt;&lt;span style=&#34;color: #d14&#34;&gt;\_&lt;/span&gt;_ &lt;span style=&#34;color: #d14&#34;&gt;\ &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;_| | | |_| | |_&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt; |     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
-                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;      |_|&lt;span style=&#34;color: #d14&#34;&gt;\_\_&lt;/span&gt;__/&lt;span style=&#34;color: #d14&#34;&gt;\_&lt;/span&gt;_, |_|____/|____/      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
-                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;                   |_|                   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
-                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;  Event Streaming Database purpose-built &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
-                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for &lt;/span&gt;stream processing apps       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
-                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;===========================================&lt;/span&gt;
-
-Copyright 2017-2020 Confluent Inc.
-
-CLI v0.11.0, Server v0.11.0 located at http://ksqldb:8088
-
-Having trouble? Type &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;help&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;case&lt;/span&gt;&lt;span style=&#34;color: #000080&#34;&gt;-insensitive&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for &lt;/span&gt;a rundown of how things work!
-
-ksql&amp;gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;From the ksqlDB prompt create the connector:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SOURCE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CONNECTOR&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;SOURCE_MSSQL_ORDERS_01&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;connector.class&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;io.debezium.connector.sqlserver.SqlServerConnector&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;database.hostname&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;mssql&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;database.port&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;1433&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;database.user&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;sa&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;database.password&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;Admin123&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;database.dbname&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;demo&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;database.server.name&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;mssql&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;table.whitelist&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;dbo.orders&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;database.history.kafka.bootstrap.servers&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;broker:29092&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;database.history.kafka.topic&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;dbz_dbhistory.mssql.asgard-01&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;decimal.handling.mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;double&amp;#39;&lt;/span&gt;
-&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Check that it’s running successfully&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SHOW&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CONNECTORS&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Connector&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Name&lt;/span&gt;         &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Type&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Class&lt;/span&gt;                                              &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Status&lt;/span&gt;
-&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;--------------------------------------------------------------------------------------------------------------------&lt;/span&gt;
- &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;SOURCE_MSSQL_ORDERS_01&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SOURCE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;io&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;debezium&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;connector&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sqlserver&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;SqlServerConnector&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;RUNNING&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;tasks&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;RUNNING&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
-&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;--------------------------------------------------------------------------------------------------------------------&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;If it’s &lt;strong&gt;not&lt;/strong&gt; (e.g. if the Status is &lt;code&gt;WARNING&lt;/code&gt;) then run &lt;code&gt;docker logs -f ksqldb&lt;/code&gt; and page through to find the &lt;code&gt;ERROR&lt;/code&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_using_ms_sql_data_in_ksqldb&#34;&gt;Using MS SQL data in ksqlDB&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;With the connector running and the data flowing you can declare a stream against it&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;KAFKA_TOPIC&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;mssql.dbo.ORDERS&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;VALUE_FORMAT&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;AVRO&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;and then start to explore the data:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;auto.offset.reset&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;earliest&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
-
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SOURCE&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NAME&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SOURCE&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SCHEMA&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SOURCE&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;TABLE&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;OP&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;BEFORE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AFTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;EMIT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CHANGES&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;LIMIT&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;+-----------------------+-----------------------+-------+---------+-----------------------+
-|NAME                   |KSQL_COL_0             |OP     |BEFORE   |AFTER                  |
-+-----------------------+-----------------------+-------+---------+-----------------------+
-|mssql                  |dbo.ORDERS             |r      |null     |&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;ORDER_ID&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;1, CUSTOMER_I|
-|                       |                       |       |         |D&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;7, &lt;span style=&#34;color: #008080&#34;&gt;ORDER_TS&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;18256, OR|
-|                       |                       |       |         |DER_TOTAL_USD&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;2.1, ITEM|
-|                       |                       |       |         |&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;Proper Job&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;           |
-|mssql                  |dbo.ORDERS             |r      |null     |&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;ORDER_ID&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;2, CUSTOMER_I|
-|                       |                       |       |         |D&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;8, &lt;span style=&#34;color: #008080&#34;&gt;ORDER_TS&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;18236, OR|
-|                       |                       |       |         |DER_TOTAL_USD&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;0.23, ITE|
-|                       |                       |       |         |M&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;Wainwright&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;          |&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Note the use of the &lt;code&gt;→&lt;/code&gt; operator to access the nested fields.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AFTER&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_ID&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AFTER&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CUSTOMER_ID&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AFTER&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_TOTAL_USD&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;EMIT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CHANGES&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;LIMIT&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;+-------------+--------------+------------------+
-|ORDER_ID     |CUSTOMER_ID   |ORDER_TOTAL_USD   |
-+-------------+--------------+------------------+
-|1            |7             |2.1               |
-|2            |8             |0.23              |
-|3            |12            |4.3               |
-|4            |7             |4.88              |
-|5            |14            |3.89              |
-Limit Reached
-Query terminated&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_capturing_changes_from_ms_sql&#34;&gt;Capturing changes from MS SQL&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;So far we’ve just seen the snapshot/bootstrap ingest of data from MS SQL into Kafka/ksqlDB. Let’s make some changes in MS SQL and see how they show up in ksqlDB.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Launch the MS SQL CLI&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;docker &lt;span style=&#34;color: #0086B3&#34;&gt;exec&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-it&lt;/span&gt; mssql bash &lt;span style=&#34;color: #000080&#34;&gt;-c&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;/opt/mssql-tools/bin/sqlcmd -l 30 -d demo -S localhost -U sa -P $SA_PASSWORD&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Make some changes to the data&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;DELETE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_ID&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;UPDATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_TOTAL_USD&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_TOTAL_USD&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;9&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_ID&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;INSERT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;INTO&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;order_id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;customer_id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;order_ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;order_total_usd&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;values&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;9&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;2019-11-29T11:10:39Z&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;2.24&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;Black Sheep Ale&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;GO&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Check out the data in ksqlDB&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;OP&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SOURCE&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SCHEMA&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SOURCE&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;&amp;#34;TABLE&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;BEFORE&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_ID&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;B_ORDER_ID&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AFTER&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_ID&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;A_ORDER_ID&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;BEFORE&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_TOTAL_USD&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;B_ORDER_TOTAL_USD&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AFTER&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_TOTAL_USD&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;A_ORDER_TOTAL_USD&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;BEFORE&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ITEM&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;B_ITEM&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AFTER&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ITEM&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;A_ITEM&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NOT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;OP&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;r&amp;#39;&lt;/span&gt;
-  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;EMIT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CHANGES&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-----+-------------+------------+-----------+-------------------+------------------+---------------------+---------------------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;OP&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;KSQL_COL_0&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;B_ORDER_ID&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;A_ORDER_ID&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;B_ORDER_TOTAL_USD&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;A_ORDER_TOTAL_USD&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;B_ITEM&lt;/span&gt;               &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;A_ITEM&lt;/span&gt;               &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-----+-------------+------------+-----------+-------------------+------------------+---------------------+---------------------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;dbo&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;                &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;              &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Proper&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Job&lt;/span&gt;           &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;                 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;u&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;dbo&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;           &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;          &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;23&lt;/span&gt;               &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;21&lt;/span&gt;              &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Wainwright&lt;/span&gt;           &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Wainwright&lt;/span&gt;           &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;c&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;dbo&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;9&lt;/span&gt;          &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;               &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;24&lt;/span&gt;              &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;                 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Black&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Sheep&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Ale&lt;/span&gt;      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Things to note:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;The &lt;code&gt;d&lt;/code&gt; deletion message gives you access to the row state before it was deleted&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;The &lt;code&gt;u&lt;/code&gt; update message gives you the field values before they were updated (&lt;code&gt;ORDER_TOTAL_USD&lt;/code&gt;)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;The &lt;code&gt;c&lt;/code&gt; creation message has null values in the &lt;code&gt;BEFORE&lt;/code&gt; object because there were no values before the row was created :)&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-</description>
-    </item>
-    <item>
-      <title>Including content from external links with Asciidoc in Hugo</title>
-      <link>https://rmoff.net/2020/09/18/including-content-from-external-links-with-asciidoc-in-hugo/</link>
-      <pubDate>2020-09-18</pubDate>
-      
-      <guid>https://rmoff.net/2020/09/18/including-content-from-external-links-with-asciidoc-in-hugo/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/09/IMG_6725.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I use &lt;a href=&#34;https://gohugo.io/&#34;&gt;Hugo&lt;/a&gt; for my blog, hosted on GitHub pages. One of the reasons I’m really happy with it is that I can use Asciidoc to author my posts. I was writing a blog recently in which I wanted to include some code that’s hosted on GitHub. I could have copied &amp;amp; pasted it into the blog but that would be lame!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;With Asciidoc you can use the &lt;code&gt;include::&lt;/code&gt; directive to include both local files:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre&gt;    include::/tmp/go_routine_errors.go[]&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;as well as external URIs:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre&gt;    include::https://raw.githubusercontent.com/confluentinc/demo-scene/master/pipeline-to-the-cloud/data/mssql/b00_create_db_demo.sql[]&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Note that you can also use source code formatting for these included files:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre&gt;    [source,go]
-    ----
-    include::/tmp/go_routine_errors.go[]
-    ----&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;For content from URIs you need to make sure that the security permissions are set when Asciidoctor is invoked, &lt;a href=&#34;https://asciidoctor.org/docs/user-manual/#include-uri&#34;&gt;detailed here&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;For using it from Hugo you need to do two things:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;olist arabic&#34;&gt;
-&lt;ol class=&#34;arabic&#34;&gt;
-&lt;li&gt;
-&lt;p&gt;make sure you’re on a recent version (I was on 0.54 and scratching my head until I upgraded to v0.75)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;add to your site configuration the necessary security permissions to be passed to asciidoctor:&lt;/p&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;markup&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-  &lt;span style=&#34;color: #008080&#34;&gt;asciidocExt&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-    &lt;span style=&#34;color: #008080&#34;&gt;attributes&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;allow-uri-read&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
-    &lt;span style=&#34;color: #008080&#34;&gt;safeMode&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;unsafe&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/div&gt;
-</description>
-    </item>
-    <item>
-      <title>What is Kafka Connect?</title>
-      <link>https://rmoff.net/2020/09/11/what-is-kafka-connect/</link>
-      <pubDate>2020-09-11</pubDate>
-      
-      <guid>https://rmoff.net/2020/09/11/what-is-kafka-connect/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/09/IMG_6647.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;p&gt;Kafka Connect is the integration API for Apache Kafka. Check out this video for an overview of what Kafka Connect enables you to do, and how to do it.&lt;/p&gt;
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/RQn3tYvkeh8&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/download/&#34;&gt;💾Download&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://confluent.cloud/signup&#34;&gt;☁️ Confluent Cloud&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/playlist?list=PL5T99fPsK7ppB_AbZhBhTyKHtHWZLWIJ8&#34;&gt;📺 Kafka Connect connector deep-dive playlist&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://docs.confluent.io/current/connect/&#34;&gt;✍️Kafka Connect documentation&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/hub/&#34;&gt;🧩Confluent Hub&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h2 id=&#34;found-this-useful&#34;&gt;Found this useful?&lt;/h2&gt;
-&lt;p&gt;Make sure to follow me here on dev.to and &lt;a href=&#34;https://www.youtube.com/c/rmoff&#34;&gt;subscribe to my YouTube channel&lt;/a&gt; for more videos about Apache Kafka and Confluent Platform!&lt;/p&gt;
-&lt;h2 id=&#34;from-zero-to-hero-with-kafka-connect&#34;&gt;From Zero to Hero with Kafka Connect&lt;/h2&gt;
-&lt;p&gt;45 minute conference talk all about Kafka Connect with live demo!&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.devto.com/watch?v=Jkcp28ki82k&#34;&gt;🎥Recording&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://talks.rmoff.net/DQkDj3/from-zero-to-hero-with-kafka-connect&#34;&gt;📔Slides&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h2 id=&#34;kafka-connect-blogs&#34;&gt;Kafka Connect blogs&lt;/h2&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/blog/kafka-connect-deep-dive-error-handling-dead-letter-queues&#34;&gt;Kafka Connect Deep Dive – Error Handling and Dead Letter Queues&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/blog/kafka-connect-deep-dive-jdbc-source-connector&#34;&gt;Kafka Connect Deep Dive – JDBC Source Connector&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/blog/kafka-connect-deep-dive-converters-serialization-explained&#34;&gt;Kafka Connect Deep Dive – Converters and Serialization Explained&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/blog/no-more-silos-how-to-integrate-your-databases-with-apache-kafka-and-cdc&#34;&gt;No More Silos: How to Integrate Your Databases with Apache Kafka and CDC&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/blog/simplest-useful-kafka-connect-data-pipeline-world-thereabouts-part-1/&#34;&gt;The Simplest Useful Kafka Connect Data Pipeline in the World…or Thereabouts – Part 1&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/blog/the-simplest-useful-kafka-connect-data-pipeline-in-the-world-or-thereabouts-part-2/&#34;&gt;The Simplest Useful Kafka Connect Data Pipeline in the World…or Thereabouts – Part 2&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/blog/simplest-useful-kafka-connect-data-pipeline-world-thereabouts-part-3/&#34;&gt;The Simplest Useful Kafka Connect Data Pipeline in the World…or Thereabouts – Part 3&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/blog/cloud-analytics-for-on-premises-data-streams-with-kafka&#34;&gt;Pipeline to the Cloud – Streaming On-Premises Data for Cloud Analytics&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.confluent.io/blog/build-streaming-etl-solutions-with-kafka-and-rail-data&#34;&gt;🚂 On Track with Apache Kafka – Building a Streaming ETL Solution with Rail Data&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;</description>
     </item>
     
   </channel>
