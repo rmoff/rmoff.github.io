@@ -302,7 +302,7 @@ See <a href="https://kafka-tutorials.confluent.io/connect-add-key-to-source/ksql
 </div>
 </div>
 <div class="paragraph">
-<p>Now we do the fiddly bit - write a <code>null</code> for the value if the order <strong>has</strong> been logically deleted (<code>WHERE CANCELLED_IND = TRUE</code>). Most importantly, we use the <code>KAFKA</code> serialisation format.</p>
+<p>Now we do the fiddly bit - write a <code>null</code> for the value if the order <strong>has</strong> been logically deleted (<code>WHERE CANCELLED_IND = TRUE</code>). Most importantly, we use the <code>KAFKA</code> serialisation format (see below for an explanation why).</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -570,7 +570,13 @@ See <a href="https://kafka-tutorials.confluent.io/connect-add-key-to-source/ksql
 </div>
 </div>
 <div class="sect1">
-<h2 id="_footnote">Footnote</h2>
+<h2 id="_footnotes">Footnotes</h2>
+<div class="sectionbody">
+
+</div>
+</div>
+<div class="sect1">
+<h2 id="_compacted_topics">Compacted topics</h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>As mentioned at the begining, tombstones and compacted topics are often (but not always) two sides of the same coin. A compacted topic retains the latest <strong>value</strong> for every <strong>key</strong>, and so is a perfect way to retain state with which you might want to rehydrate a target datastore with. To configure the topic to be compacted run</p>
@@ -587,6 +593,24 @@ Completed updating config <span style="color: #000000;font-weight: bold">for </s
 </div>
 <div class="paragraph">
 <p>Note that log compaction does not run straight away, and there are other factors involved including things like active segments that will affect when you will actually be able to observe log compaction taking place.</p>
+</div>
+<div class="sect2">
+<h3 id="_why_does_the_value_formatkafka_trick_work">Why does the <code>VALUE_FORMAT=KAFKA</code> trick work?</h3>
+<div class="paragraph">
+<p>When ksqlDB writes to a target stream (and thus an underlying topic) it has to serialise the data, and this is controlled by the <code>VALUE_FORMAT</code> either explicitly stated in the DDL or inherited from the source stream. The serialisation will usually be something like Avro or Protobuf (which support schemas and thus the Schema Registry), or JSON (which doesn’t). Either way, it’ll write a payload _that includes the schema, since a ksqlDB stream is a Kafka topic <strong>plus schema</strong>. Here’s what it’d look like writing out <code>NULL</code> field with <code>VALUE_FORMAT=&#39;JSON&#39;</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">offset</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">5</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">key</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0001</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">payload</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">{</span><span style="color: #d14">\&#34;</span><span style="color: #d14">KSQL_COL_0</span><span style="color: #d14">\&#34;</span><span style="color: #d14">:null}</span><span style="color: #d14">&#34;</span>
+<span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>By using the <code>KAFKA</code> format the value is written as a primitive, with no envelope or schema. You can read more about serialisation formats <a href="https://docs.ksqldb.io/en/latest/developer-guide/serialization/#kafka">here</a></p>
+</div>
 </div>
 </div>
 </div>

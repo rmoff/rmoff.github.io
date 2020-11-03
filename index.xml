@@ -340,7 +340,7 @@ See &lt;a href=&#34;https://kafka-tutorials.confluent.io/connect-add-key-to-sour
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Now we do the fiddly bit - write a &lt;code&gt;null&lt;/code&gt; for the value if the order &lt;strong&gt;has&lt;/strong&gt; been logically deleted (&lt;code&gt;WHERE CANCELLED_IND = TRUE&lt;/code&gt;). Most importantly, we use the &lt;code&gt;KAFKA&lt;/code&gt; serialisation format.&lt;/p&gt;
+&lt;p&gt;Now we do the fiddly bit - write a &lt;code&gt;null&lt;/code&gt; for the value if the order &lt;strong&gt;has&lt;/strong&gt; been logically deleted (&lt;code&gt;WHERE CANCELLED_IND = TRUE&lt;/code&gt;). Most importantly, we use the &lt;code&gt;KAFKA&lt;/code&gt; serialisation format (see below for an explanation why).&lt;/p&gt;
 &lt;/div&gt;
 &lt;div class=&#34;listingblock&#34;&gt;
 &lt;div class=&#34;content&#34;&gt;
@@ -608,7 +608,13 @@ See &lt;a href=&#34;https://kafka-tutorials.confluent.io/connect-add-key-to-sour
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_footnote&#34;&gt;Footnote&lt;/h2&gt;
+&lt;h2 id=&#34;_footnotes&#34;&gt;Footnotes&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_compacted_topics&#34;&gt;Compacted topics&lt;/h2&gt;
 &lt;div class=&#34;sectionbody&#34;&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;As mentioned at the begining, tombstones and compacted topics are often (but not always) two sides of the same coin. A compacted topic retains the latest &lt;strong&gt;value&lt;/strong&gt; for every &lt;strong&gt;key&lt;/strong&gt;, and so is a perfect way to retain state with which you might want to rehydrate a target datastore with. To configure the topic to be compacted run&lt;/p&gt;
@@ -625,6 +631,24 @@ Completed updating config &lt;span style=&#34;color: #000000;font-weight: bold&#
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;Note that log compaction does not run straight away, and there are other factors involved including things like active segments that will affect when you will actually be able to observe log compaction taking place.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_why_does_the_value_formatkafka_trick_work&#34;&gt;Why does the &lt;code&gt;VALUE_FORMAT=KAFKA&lt;/code&gt; trick work?&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;When ksqlDB writes to a target stream (and thus an underlying topic) it has to serialise the data, and this is controlled by the &lt;code&gt;VALUE_FORMAT&lt;/code&gt; either explicitly stated in the DDL or inherited from the source stream. The serialisation will usually be something like Avro or Protobuf (which support schemas and thus the Schema Registry), or JSON (which doesn’t). Either way, it’ll write a payload _that includes the schema, since a ksqlDB stream is a Kafka topic &lt;strong&gt;plus schema&lt;/strong&gt;. Here’s what it’d look like writing out &lt;code&gt;NULL&lt;/code&gt; field with &lt;code&gt;VALUE_FORMAT=&amp;#39;JSON&amp;#39;&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;offset&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;u0000&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;u0000&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;u0000&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;u0001&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;payload&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;KSQL_COL_0&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;:null}&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;By using the &lt;code&gt;KAFKA&lt;/code&gt; format the value is written as a primitive, with no envelope or schema. You can read more about serialisation formats &lt;a href=&#34;https://docs.ksqldb.io/en/latest/developer-guide/serialization/#kafka&#34;&gt;here&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
