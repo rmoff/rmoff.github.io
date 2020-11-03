@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Kafka Connect, ksqlDB, and Kafka Tombstone messages</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/11/03/kafka-connect-ksqldb-and-kafka-tombstone-messages/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.75.1" />
+
+		
+		<meta property="og:title" content="Kafka Connect, ksqlDB, and Kafka Tombstone messages" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/11/IMG_6941.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/11/03/kafka-connect-ksqldb-and-kafka-tombstone-messages/" />
+		<meta property="og:site_name" content="Kafka Connect, ksqlDB, and Kafka Tombstone messages" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/11/IMG_6941.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Kafka Connect, ksqlDB, and Kafka Tombstone messages</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-11-03T17:14:33Z">Nov 3, 2020</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/kafka" class="no-underline category near-white dim">Kafka</a>, <a href="https://rmoff.net/categories/ksqldb" class="no-underline category near-white dim">KsqlDB</a>, <a href="https://rmoff.net/categories/tombstone" class="no-underline category near-white dim">Tombstone</a>, <a href="https://rmoff.net/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>, <a href="https://rmoff.net/categories/postgres" class="no-underline category near-white dim">Postgres</a>, <a href="https://rmoff.net/categories/elasticsearch" class="no-underline category near-white dim">Elasticsearch</a>, <a href="https://rmoff.net/categories/compacted-topic" class="no-underline category near-white dim">Compacted Topic</a>
+								<span class="display-print">at https://rmoff.net/2020/11/03/kafka-connect-ksqldb-and-kafka-tombstone-messages/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>As you may already realise, Kafka is not just a fancy message bus, or a pipe for big data. It’s an event stream platform! If this is news to you, I’ll wait here whilst you <a href="https://www.confluent.io/learn/kafka-tutorial/">read this</a> or <a href="https://rmoff.dev/kafka101">watch this</a>…</p>
+</div>
+<div class="paragraph">
+<p>One of the neat things that Kafka does with its messages is the concept of <strong>tombstone</strong> messages. These are messages with a <strong>null value</strong>. They’re usually used in conjunction with a key to indicate the logical deletion of a record. This could be within a Kafka topic itself in the case of compacted topics, or when used with Kafka Connect and sink connectors that support this semantic such as Elasticsearch or JDBC Sink.</p>
+</div>
+<img src="/images/2020/11/kafka_tombstone.jpg" style="margin: 0px 5px 5px 0px; float: right;
+            height:200px; border:1" title="Kafka Tombstone"/>
+<div class="paragraph">
+<p>Here I’m going to show you how you can use tombstone message with ksqlDB too. It’s not supported as a first-class concept yet, but it is possible with a bit of a <a href="https://www.wired.co.uk/article/heath-robinson-deserves-a-museum">Heath Robinson</a> approach.</p>
+</div>
+<div class="sect1">
+<h2 id="_the_scenario">The scenario</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>You’ve got a source database in which a field indicates the logical deletion of a record. You want to make that a hard deletion when the data is streamed to Elasticsearch.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_setup">Setup</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_source_database">Source database</h3>
+<div class="paragraph">
+<p>Create and populate the source table in Postgres:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">orders</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">order_id</span> <span style="color: #0086B3">INT</span><span style="background-color: #f8f8f8">,</span>
+                     <span style="background-color: #f8f8f8">order_total_usd</span> <span style="color: #0086B3">DECIMAL</span><span style="background-color: #f8f8f8">(</span><span style="color: #009999">5</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">2</span><span style="background-color: #f8f8f8">),</span>
+                     <span style="background-color: #f8f8f8">item</span> <span style="color: #0086B3">VARCHAR</span><span style="background-color: #f8f8f8">(</span><span style="color: #009999">50</span><span style="background-color: #f8f8f8">),</span>
+                     <span style="background-color: #f8f8f8">cancelled_ind</span> <span style="color: #0086B3">BOOLEAN</span><span style="background-color: #f8f8f8">,</span>
+                     <span style="background-color: #f8f8f8">update_ts</span> <span style="color: #0086B3">TIMESTAMP</span> <span style="color: #000000;font-weight: bold">DEFAULT</span> <span style="color: #000000;font-weight: bold">CURRENT_TIMESTAMP</span> <span style="background-color: #f8f8f8">);</span>
+
+<span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">orders</span> <span style="color: #000000;font-weight: bold">VALUES</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">34</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#39;Cake&#39;</span><span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">);</span>
+<span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">orders</span> <span style="color: #000000;font-weight: bold">VALUES</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">2</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">56</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">78</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#39;More Cake&#39;</span><span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">true</span><span style="background-color: #f8f8f8">);</span>
+<span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">orders</span> <span style="color: #000000;font-weight: bold">VALUES</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">3</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">910</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">11</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#39;Franzbrötchen&#39;</span><span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">postgres</span><span style="color: #000000;font-weight: bold">=#</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">orders</span><span style="background-color: #f8f8f8">;</span>
+ <span style="background-color: #f8f8f8">order_id</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">order_total_usd</span> <span style="color: #000000;font-weight: bold">|</span>     <span style="background-color: #f8f8f8">item</span>      <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">cancelled_ind</span> <span style="color: #000000;font-weight: bold">|</span>         <span style="background-color: #f8f8f8">update_ts</span>
+<span style="color: #999988;font-style: italic">----------+-----------------+---------------+---------------+----------------------------</span>
+        <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">34</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Cake</span>          <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">f</span>             <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">39298</span>
+        <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">56</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">78</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">More</span> <span style="background-color: #f8f8f8">Cake</span>     <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">t</span>             <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">396852</span>
+        <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="color: #009999">910</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">11</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Franzbr</span><span style="color: #a61717;background-color: #e3d2d2">ö</span><span style="background-color: #f8f8f8">tchen</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">f</span>             <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">885457</span>
+<span style="background-color: #f8f8f8">(</span><span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">rows</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Create a trigger to update the timestamp on modification (so that the CDC can identify the changed row - <a href="https://rmoff.dev/no-more-silos">learn more here</a>)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #999988;font-style: italic">-- Courtesy of https://techblog.covermymeds.com/databases/on-update-timestamps-mysql-vs-postgres/</span>
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">FUNCTION</span> <span style="color: #000000;font-weight: bold">public</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">update_updated_at_column</span><span style="background-color: #f8f8f8">()</span> <span style="color: #000000;font-weight: bold">RETURNS</span> <span style="color: #000000;font-weight: bold">trigger</span>
+    <span style="color: #000000;font-weight: bold">LANGUAGE</span> <span style="background-color: #f8f8f8">plpgsql</span>
+    <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #a61717;background-color: #e3d2d2">$$</span>
+  <span style="color: #000000;font-weight: bold">BEGIN</span>
+    <span style="color: #000000;font-weight: bold">NEW</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">update_ts</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">NOW</span><span style="background-color: #f8f8f8">();</span>
+    <span style="color: #000000;font-weight: bold">RETURN</span> <span style="color: #000000;font-weight: bold">NEW</span><span style="background-color: #f8f8f8">;</span>
+  <span style="color: #000000;font-weight: bold">END</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #a61717;background-color: #e3d2d2">$$</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">TRIGGER</span> <span style="background-color: #f8f8f8">customers_updated_at_modtime</span> <span style="color: #000000;font-weight: bold">BEFORE</span> <span style="color: #000000;font-weight: bold">UPDATE</span> <span style="color: #000000;font-weight: bold">ON</span> <span style="background-color: #f8f8f8">orders</span> <span style="color: #000000;font-weight: bold">FOR</span> <span style="color: #000000;font-weight: bold">EACH</span> <span style="color: #000000;font-weight: bold">ROW</span> <span style="color: #000000;font-weight: bold">EXECUTE</span> <span style="color: #000000;font-weight: bold">PROCEDURE</span> <span style="background-color: #f8f8f8">update_updated_at_column</span><span style="background-color: #f8f8f8">();</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Test the trigger:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">postgres</span><span style="color: #000000;font-weight: bold">=#</span> <span style="color: #000000;font-weight: bold">update</span> <span style="background-color: #f8f8f8">orders</span> <span style="color: #000000;font-weight: bold">set</span> <span style="background-color: #f8f8f8">item</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;Chocolate Cake&#39;</span> <span style="color: #000000;font-weight: bold">where</span> <span style="background-color: #f8f8f8">order_id</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">UPDATE</span> <span style="color: #009999">1</span>
+<span style="background-color: #f8f8f8">postgres</span><span style="color: #000000;font-weight: bold">=#</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">orders</span><span style="background-color: #f8f8f8">;</span>
+ <span style="background-color: #f8f8f8">order_id</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">order_total_usd</span> <span style="color: #000000;font-weight: bold">|</span>      <span style="background-color: #f8f8f8">item</span>      <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">cancelled_ind</span> <span style="color: #000000;font-weight: bold">|</span>         <span style="background-color: #f8f8f8">update_ts</span>
+<span style="color: #999988;font-style: italic">----------+-----------------+----------------+---------------+----------------------------</span>
+        <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">56</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">78</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">More</span> <span style="background-color: #f8f8f8">Cake</span>      <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">t</span>             <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">396852</span>
+        <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="color: #009999">910</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">11</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Franzbr</span><span style="color: #a61717;background-color: #e3d2d2">ö</span><span style="background-color: #f8f8f8">tchen</span>  <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">f</span>             <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">52</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">885457</span>
+        <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">34</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Chocolate</span> <span style="background-color: #f8f8f8">Cake</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">f</span>             <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">53</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">49</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">680009</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_ingest_into_kafka">Ingest into Kafka</h3>
+<div class="paragraph">
+<p>This uses the <a href="https://www.confluent.io/blog/kafka-connect-deep-dive-jdbc-source-connector/">Kafka Connect JDBC Source connector</a>. You can also use tools like Debezium for ingesting from RDBMS into Kafka. <a href="https://rmoff.dev/no-more-silos">This talk</a> covers the different tools and approaches available.</p>
+</div>
+<div class="paragraph">
+<p><em>I’m using ksqlDB to create the connector, but it’s using Kafka Connect in the background, and you can use the Kafka Connect REST API directly if you’d rather.</em></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">SOURCE</span> <span style="background-color: #f8f8f8">CONNECTOR</span> <span style="background-color: #f8f8f8">SOURCE_PG01</span> <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span>
+        <span style="color: #d14">&#39;connector.class&#39;</span>       <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;io.confluent.connect.jdbc.JdbcSourceConnector&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;connection.url&#39;</span>        <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;jdbc:postgresql://postgres:5432/&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;connection.user&#39;</span>       <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;postgres&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;connection.password&#39;</span>   <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;postgres&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;poll.interval.ms&#39;</span>      <span style="color: #000000;font-weight: bold">=</span> <span style="color: #009999">1000</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;mode&#39;</span>                  <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;timestamp&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;table.whitelist&#39;</span>       <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;orders&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;topic.prefix&#39;</span>          <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;timestamp.column.name&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;update_ts&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;validate.non.null&#39;</span>     <span style="color: #000000;font-weight: bold">=</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;numeric.mapping&#39;</span>       <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;best_fit&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms&#39;</span>                             <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;copyFieldToKey,extractKeyFromStruct,removeKeyFromValue&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms.copyFieldToKey.type&#39;</span>         <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;org.apache.kafka.connect.transforms.ValueToKey&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms.copyFieldToKey.fields&#39;</span>       <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;order_id&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms.extractKeyFromStruct.type&#39;</span>   <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;org.apache.kafka.connect.transforms.ExtractField$Key&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms.extractKeyFromStruct.field&#39;</span>  <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;order_id&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms.removeKeyFromValue.type&#39;</span>     <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;org.apache.kafka.connect.transforms.ReplaceField$Value&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms.removeKeyFromValue.blacklist&#39;</span><span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;order_id&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;key.converter&#39;</span>                          <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;org.apache.kafka.connect.converters.IntegerConverter&#39;</span><span style="background-color: #f8f8f8">);</span>
+
+ <span style="background-color: #f8f8f8">Message</span>
+<span style="color: #999988;font-style: italic">-------------------------------</span>
+ <span style="background-color: #f8f8f8">Created</span> <span style="background-color: #f8f8f8">connector</span> <span style="background-color: #f8f8f8">SOURCE_PG01</span>
+<span style="color: #999988;font-style: italic">-------------------------------</span></code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+See <a href="https://kafka-tutorials.confluent.io/connect-add-key-to-source/ksql.html">this explanation</a> for the <code>transforms</code>, but it’s basically setting the <code>order_id</code> as the key of the message
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SHOW</span> <span style="background-color: #f8f8f8">CONNECTORS</span><span style="background-color: #f8f8f8">;</span>
+
+ <span style="background-color: #f8f8f8">Connector</span> <span style="background-color: #f8f8f8">Name</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">Type</span>   <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">Class</span>                                         <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Status</span>
+<span style="color: #999988;font-style: italic">-------------------------------------------------------------------------------------------------------</span>
+ <span style="background-color: #f8f8f8">SOURCE_PG01</span>    <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">SOURCE</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">io</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">confluent</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">connect</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">jdbc</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">JdbcSourceConnector</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">RUNNING</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">1</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">1</span> <span style="background-color: #f8f8f8">tasks</span> <span style="background-color: #f8f8f8">RUNNING</span><span style="background-color: #f8f8f8">)</span>
+<span style="color: #999988;font-style: italic">-------------------------------------------------------------------------------------------------------</span>
+<span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Check the data as it arrives - note that the key is the <code>order_id</code> value, and it is not repeated in the value part of the message</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="background-color: #f8f8f8">PRINT</span> <span style="color: #d14">&#39;orders&#39;</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">BEGINNING</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">Key</span> <span style="background-color: #f8f8f8">format</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">KAFKA_INT</span> <span style="color: #000000;font-weight: bold">or</span> <span style="background-color: #f8f8f8">KAFKA_STRING</span>
+<span style="background-color: #f8f8f8">Value</span> <span style="background-color: #f8f8f8">format</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">AVRO</span>
+<span style="background-color: #f8f8f8">rowtime</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">59</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">23</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">628</span> <span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">:</span> <span style="color: #a61717;background-color: #e3d2d2">{</span><span style="color: #008080">&#34;order_total_usd&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">56</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">78</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;item&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;More Cake&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;cancelled_ind&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">true</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;update_ts&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604440372396</span><span style="color: #a61717;background-color: #e3d2d2">}</span>
+<span style="background-color: #f8f8f8">rowtime</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">59</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">23</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">629</span> <span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">3</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">:</span> <span style="color: #a61717;background-color: #e3d2d2">{</span><span style="color: #008080">&#34;order_total_usd&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">910</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">11</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;item&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;Franzbrötchen&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;cancelled_ind&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;update_ts&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604440372885</span><span style="color: #a61717;background-color: #e3d2d2">}</span>
+<span style="background-color: #f8f8f8">rowtime</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">59</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">23</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">629</span> <span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">:</span> <span style="color: #a61717;background-color: #e3d2d2">{</span><span style="color: #008080">&#34;order_total_usd&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">34</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;item&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;Chocolate Cake&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;cancelled_ind&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;update_ts&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604440429680</span><span style="color: #a61717;background-color: #e3d2d2">}</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_modelling_the_source_data_as_a_ksqldb_stream">Modelling the source data as a ksqlDB stream</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="background-color: #f8f8f8">STREAM</span> <span style="background-color: #f8f8f8">ORDERS_SRC</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ORDER_ID</span> <span style="color: #0086B3">INT</span> <span style="color: #000000;font-weight: bold">KEY</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">KAFKA_TOPIC</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;orders&#39;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">VALUE_FORMAT</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;AVRO&#39;</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;auto.offset.reset&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;earliest&#39;</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">ORDERS_SRC</span> <span style="background-color: #f8f8f8">EMIT</span> <span style="background-color: #f8f8f8">CHANGES</span> <span style="color: #000000;font-weight: bold">LIMIT</span> <span style="color: #009999">3</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----------+----------------+----------------+---------------+---------------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">ORDER_ID</span>  <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">ORDER_TOTAL_USD</span> <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">ITEM</span>            <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">CANCELLED_IND</span>  <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">UPDATE_TS</span>      <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----------+----------------+----------------+---------------+---------------+</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">2</span>         <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">56</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">78</span>           <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">More</span> <span style="background-color: #f8f8f8">Cake</span>       <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">true</span>           <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">1604440372396</span>  <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">3</span>         <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">910</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">11</span>          <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Franzbr</span><span style="color: #a61717;background-color: #e3d2d2">ö</span><span style="background-color: #f8f8f8">tchen</span>   <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">false</span>          <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">1604440372885</span>  <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">1</span>         <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">34</span>           <span style="color: #000000;font-weight: bold">|</span><span style="background-color: #f8f8f8">Chocolate</span> <span style="background-color: #f8f8f8">Cake</span>  <span style="color: #000000;font-weight: bold">|</span><span style="color: #000000;font-weight: bold">false</span>          <span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">1604440429680</span>  <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">Limit</span> <span style="background-color: #f8f8f8">Reached</span>
+<span style="background-color: #f8f8f8">Query</span> <span style="background-color: #f8f8f8">terminated</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_processing_the_data">Processing the data</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>First we populate a new topic with messages from the source in which the order has <strong>not</strong> been logically deleted (<code>WHERE CANCELLED_IND = FALSE</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;auto.offset.reset&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;earliest&#39;</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">CREATE</span> <span style="background-color: #f8f8f8">STREAM</span> <span style="background-color: #f8f8f8">ORDERS_NOT_DELETED</span>
+          <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">KAFKA_TOPIC</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;orders_processed&#39;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">VALUE_FORMAT</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;AVRO&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span>
+            <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">ORDERS_SRC</span>
+            <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">CANCELLED_IND</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #000000;font-weight: bold">FALSE</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Examine the output topic and note that the logically-deleted order is not present:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="background-color: #f8f8f8">PRINT</span> <span style="background-color: #f8f8f8">orders_processed</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">Key</span> <span style="background-color: #f8f8f8">format</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">KAFKA_INT</span> <span style="color: #000000;font-weight: bold">or</span> <span style="background-color: #f8f8f8">KAFKA_STRING</span>
+<span style="background-color: #f8f8f8">Value</span> <span style="background-color: #f8f8f8">format</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">AVRO</span>
+<span style="background-color: #f8f8f8">rowtime</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">59</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">23</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">629</span> <span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">3</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">:</span> <span style="color: #a61717;background-color: #e3d2d2">{</span><span style="color: #008080">&#34;ORDER_TOTAL_USD&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">910</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">11</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;ITEM&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;Franzbrötchen&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;CANCELLED_IND&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;UPDATE_TS&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604440372885</span><span style="color: #a61717;background-color: #e3d2d2">}</span>
+<span style="background-color: #f8f8f8">rowtime</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">59</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">23</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">629</span> <span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">:</span> <span style="color: #a61717;background-color: #e3d2d2">{</span><span style="color: #008080">&#34;ORDER_TOTAL_USD&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">34</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;ITEM&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;Chocolate Cake&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;CANCELLED_IND&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;UPDATE_TS&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604440429680</span><span style="color: #a61717;background-color: #e3d2d2">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we do the fiddly bit - write a <code>null</code> for the value if the order <strong>has</strong> been logically deleted (<code>WHERE CANCELLED_IND = TRUE</code>). Most importantly, we use the <code>KAFKA</code> serialisation format.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;auto.offset.reset&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;earliest&#39;</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">CREATE</span> <span style="background-color: #f8f8f8">STREAM</span> <span style="background-color: #f8f8f8">ORDERS_DELETED</span>
+          <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">KAFKA_TOPIC</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;orders_processed&#39;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">VALUE_FORMAT</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;KAFKA&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span>
+            <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">ORDER_ID</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">CAST</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">NULL</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #0086B3">VARCHAR</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">ORDERS_SRC</span>
+            <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">CANCELLED_IND</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #000000;font-weight: bold">TRUE</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><em>This bit might look a bit odd: <code>CAST(NULL AS VARCHAR)</code> but is necessary since ksqlDB needs a datatype even if it’s gonna be NULL. Without it you might hit <a href="https://github.com/confluentinc/ksql/issues/6566">this error</a>.</em></p>
+</div>
+<div class="paragraph">
+<p>Now when we look at the topic we can see a tombstone message for <code>order_id=2</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="background-color: #f8f8f8">PRINT</span> <span style="background-color: #f8f8f8">orders_processed</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">Key</span> <span style="background-color: #f8f8f8">format</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">KAFKA_INT</span> <span style="color: #000000;font-weight: bold">or</span> <span style="background-color: #f8f8f8">KAFKA_STRING</span>
+<span style="background-color: #f8f8f8">Value</span> <span style="background-color: #f8f8f8">format</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">AVRO</span>
+<span style="background-color: #f8f8f8">rowtime</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">59</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">23</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">629</span> <span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">3</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">:</span> <span style="color: #a61717;background-color: #e3d2d2">{</span><span style="color: #008080">&#34;ORDER_TOTAL_USD&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">910</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">11</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;ITEM&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;Franzbrötchen&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;CANCELLED_IND&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;UPDATE_TS&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604440372885</span><span style="color: #a61717;background-color: #e3d2d2">}</span>
+<span style="background-color: #f8f8f8">rowtime</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">59</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">23</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">629</span> <span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">:</span> <span style="color: #a61717;background-color: #e3d2d2">{</span><span style="color: #008080">&#34;ORDER_TOTAL_USD&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">34</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;ITEM&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;Chocolate Cake&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;CANCELLED_IND&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">&#34;UPDATE_TS&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604440429680</span><span style="color: #a61717;background-color: #e3d2d2">}</span>
+<span style="background-color: #f8f8f8">rowtime</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">03</span> <span style="color: #009999">21</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">59</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">23</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">628</span> <span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #000000;font-weight: bold">null</span><span style="color: #000000;font-weight: bold">&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you don’t quite believe me, we can double-check with <code>kafkacat</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">$</span> <span style="background-color: #f8f8f8">docker</span> <span style="background-color: #f8f8f8">exec</span> <span style="background-color: #f8f8f8">kafkacat</span> <span style="background-color: #f8f8f8">kafkacat</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">b</span> <span style="background-color: #f8f8f8">broker</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">29092</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">t</span> <span style="background-color: #f8f8f8">orders_processed</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">J</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">C</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">u</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">jq</span> <span style="color: #d14">&#39;</span><span style="color: #d14">{key, payload}</span><span style="color: #d14">&#39;</span>                                                                               <span style="color: #009999">130</span> <span style="color: #a61717;background-color: #e3d2d2">↵</span>
+<span style="background-color: #f8f8f8">{</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">key</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0003</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">payload</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0003</span><span style="color: #d14">\</span><span style="color: #d14">u0002{</span><span style="color: #d14">\</span><span style="color: #d14">u0014�G�p�@</span><span style="color: #d14">\</span><span style="color: #d14">u0002</span><span style="color: #d14">\</span><span style="color: #d14">u001cFranzbrötchen</span><span style="color: #d14">\</span><span style="color: #d14">u0002</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0002��Ɂ�]</span><span style="color: #d14">&#34;</span>
+<span style="background-color: #f8f8f8">}</span>
+<span style="background-color: #f8f8f8">{</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">key</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0001</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">payload</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0003</span><span style="color: #d14">\</span><span style="color: #d14">u0002�G�z</span><span style="color: #d14">\</span><span style="color: #d14">u0014�(@</span><span style="color: #d14">\</span><span style="color: #d14">u0002</span><span style="color: #d14">\</span><span style="color: #d14">u001cChocolate Cake</span><span style="color: #d14">\</span><span style="color: #d14">u0002</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0002��Ё�]</span><span style="color: #d14">&#34;</span>
+<span style="background-color: #f8f8f8">}</span>
+<span style="background-color: #f8f8f8">{</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">key</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0002</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">payload</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">null</span>
+<span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_testing_the_deletes">Testing the deletes</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In Postgres, logically delete an order (<code>order_id=3</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">UPDATE</span> <span style="background-color: #f8f8f8">orders</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="background-color: #f8f8f8">cancelled_ind</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #000000;font-weight: bold">TRUE</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">order_id</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">3</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In ksqlDB the topic shown through <code>PRINT</code> shows that there’s now a tombstone for this order:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">rowtime</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">03</span> <span style="color: #009999">22</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">15</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">40</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">179</span> <span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">key</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">3</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #000000;font-weight: bold">null</span><span style="color: #000000;font-weight: bold">&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and this is confirmed by kafkacat (which isn’t surprising, since they’re consuming from the same topic)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">key</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0000</span><span style="color: #d14">\</span><span style="color: #d14">u0003</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">payload</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">null</span>
+<span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_streaming_to_elasticsearch">Streaming to Elasticsearch</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>As with the source connector, I’m going to use ksqlDB to configure the connector, but you can use Kafka Connect directly if you’d rather. To learn more about streaming from Kafka to Elasticsearch see this <a href="https://rmoff.dev/kafka-elasticsearch">tutorial</a> and <a href="https://rmoff.dev/kafka-elasticsearch-video">video</a>.</p>
+</div>
+<div class="paragraph">
+
+<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+  <iframe src="https://www.youtube.com/embed/Cq-2eGxOCc8" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" allowfullscreen title="YouTube Video"></iframe>
+</div>
+
+</div>
+<div class="paragraph">
+<p>So that the timestamp field is correctly mapped in Elasticsearch I create a dynamic template first:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">curl <span style="color: #000080">-s</span> <span style="color: #000080">-XPUT</span> <span style="color: #d14">&#34;http://localhost:9200/_template/rmoff/&#34;</span> <span style="color: #000080">-H</span> <span style="color: #d14">&#39;Content-Type: application/json&#39;</span> <span style="color: #000080">-d</span><span style="color: #d14">&#39;
+          {
+            &#34;template&#34;: &#34;*&#34;,
+            &#34;mappings&#34;: { &#34;dynamic_templates&#34;: [ { &#34;dates&#34;: { &#34;match&#34;: &#34;*_TS&#34;, &#34;mapping&#34;: { &#34;type&#34;: &#34;date&#34; } } } ]  }
+          }&#39;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now create the sink connector:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">CREATE</span> <span style="background-color: #f8f8f8">SINK</span> <span style="background-color: #f8f8f8">CONNECTOR</span> <span style="background-color: #f8f8f8">SINK_ELASTIC_01</span> <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span>
+        <span style="color: #d14">&#39;connector.class&#39;</span>                     <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;io.confluent.connect.elasticsearch.ElasticsearchSinkConnector&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;topics&#39;</span>                              <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;orders_processed&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;key.converter&#39;</span>                       <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;org.apache.kafka.connect.converters.IntegerConverter&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;connection.url&#39;</span>                      <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;http://elasticsearch:9200&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;type.name&#39;</span>                           <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;_doc&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;key.ignore&#39;</span>                          <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;false&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;schema.ignore&#39;</span>                       <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;true&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;behavior.on.null.values&#39;</span>             <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;delete&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms&#39;</span>                               <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;setTimestampType0&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms.setTimestampType0.type&#39;</span>        <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;org.apache.kafka.connect.transforms.TimestampConverter$Value&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms.setTimestampType0.field&#39;</span>       <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;UPDATE_TS&#39;</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #d14">&#39;transforms.setTimestampType0.target.type&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;Timestamp&#39;</span>
+        <span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>behavior.on.null.values</code> defaults to <code>ignore</code>, so make sure to set it to <code>delete</code> if that’s what you want it to do</p>
+</li>
+<li>
+<p>To use the message key for indexing and identifying the document to delete, you need to set <code>key.ignore=false</code></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">ksql</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SHOW</span> <span style="background-color: #f8f8f8">CONNECTORS</span><span style="background-color: #f8f8f8">;</span>
+
+ <span style="background-color: #f8f8f8">Connector</span> <span style="background-color: #f8f8f8">Name</span>  <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">Type</span>   <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">Class</span>                                                         <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Status</span>
+<span style="color: #999988;font-style: italic">------------------------------------------------------------------------------------------------------------------------</span>
+ <span style="background-color: #f8f8f8">SOURCE_PG01</span>     <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">SOURCE</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">io</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">confluent</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">connect</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">jdbc</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">JdbcSourceConnector</span>                 <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">RUNNING</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">1</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">1</span> <span style="background-color: #f8f8f8">tasks</span> <span style="background-color: #f8f8f8">RUNNING</span><span style="background-color: #f8f8f8">)</span>
+ <span style="background-color: #f8f8f8">SINK_ELASTIC_01</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">SINK</span>   <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">io</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">confluent</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">connect</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">elasticsearch</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ElasticsearchSinkConnector</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">RUNNING</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">1</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">1</span> <span style="background-color: #f8f8f8">tasks</span> <span style="background-color: #f8f8f8">RUNNING</span><span style="background-color: #f8f8f8">)</span>
+<span style="color: #999988;font-style: italic">------------------------------------------------------------------------------------------------------------------------</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_testing_end_to_end">Testing end-to-end</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Current database state:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">postgres</span><span style="color: #000000;font-weight: bold">=#</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">orders</span> <span style="color: #000000;font-weight: bold">ORDER</span> <span style="color: #000000;font-weight: bold">BY</span> <span style="background-color: #f8f8f8">cancelled_ind</span><span style="background-color: #f8f8f8">;</span>
+ <span style="background-color: #f8f8f8">order_id</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">order_total_usd</span> <span style="color: #000000;font-weight: bold">|</span>      <span style="background-color: #f8f8f8">item</span>      <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">cancelled_ind</span> <span style="color: #000000;font-weight: bold">|</span>         <span style="background-color: #f8f8f8">update_ts</span>
+<span style="color: #999988;font-style: italic">----------+-----------------+----------------+---------------+----------------------------</span>
+        <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">34</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Chocolate</span> <span style="background-color: #f8f8f8">Cake</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">f</span>             <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span> <span style="color: #009999">22</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">13</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">34</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">981701</span>
+        <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">56</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">78</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">More</span> <span style="background-color: #f8f8f8">Cake</span>      <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">t</span>             <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span> <span style="color: #009999">22</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">12</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">57</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">781796</span>
+        <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="color: #009999">910</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">11</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">Franzbr</span><span style="color: #a61717;background-color: #e3d2d2">ö</span><span style="background-color: #f8f8f8">tchen</span>  <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">t</span>             <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2020</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">11</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span> <span style="color: #009999">22</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">15</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">39</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">808105</span>
+<span style="background-color: #f8f8f8">(</span><span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">rows</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Current Elasticsearch state:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">$</span> <span style="background-color: #f8f8f8">curl</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">s</span> <span style="background-color: #f8f8f8">http</span><span style="background-color: #f8f8f8">:</span><span style="color: #999988;font-style: italic">//localhost:9200/orders_processed/_search \</span>
+    <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">H</span> <span style="color: #d14">&#39;</span><span style="color: #d14">content-type: application/json</span><span style="color: #d14">&#39;</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">jq</span> <span style="color: #d14">&#39;</span><span style="color: #d14">.hits.hits</span><span style="color: #d14">&#39;</span>
+<span style="background-color: #f8f8f8">[</span>
+  <span style="background-color: #f8f8f8">{</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_index</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">orders_processed</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_type</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">_doc</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">1</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_score</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_source</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">{</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">ORDER_TOTAL_USD</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">12.34</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">ITEM</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">Chocolate Cake</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">CANCELLED_IND</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">UPDATE_TS</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604441614981</span>
+    <span style="background-color: #f8f8f8">}</span>
+  <span style="background-color: #f8f8f8">}</span>
+<span style="background-color: #f8f8f8">]</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Add a new order to the database:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">orders</span> <span style="color: #000000;font-weight: bold">VALUES</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">4</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">13</span><span style="background-color: #f8f8f8">,</span><span style="color: #d14">&#39;Parkin&#39;</span><span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This appears in Elasticsearch:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">$</span> <span style="background-color: #f8f8f8">curl</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">s</span> <span style="background-color: #f8f8f8">http</span><span style="background-color: #f8f8f8">:</span><span style="color: #999988;font-style: italic">//localhost:9200/orders_processed/_search \</span>
+    <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">H</span> <span style="color: #d14">&#39;</span><span style="color: #d14">content-type: application/json</span><span style="color: #d14">&#39;</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">jq</span> <span style="color: #d14">&#39;</span><span style="color: #d14">.hits.hits</span><span style="color: #d14">&#39;</span>
+<span style="background-color: #f8f8f8">[</span>
+  <span style="background-color: #f8f8f8">{</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_index</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">orders_processed</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_type</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">_doc</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">1</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_score</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_source</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">{</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">ORDER_TOTAL_USD</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">12.34</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">ITEM</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">Chocolate Cake</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">CANCELLED_IND</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">UPDATE_TS</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604441614981</span>
+    <span style="background-color: #f8f8f8">}</span>
+  <span style="background-color: #f8f8f8">},</span>
+  <span style="background-color: #f8f8f8">{</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_index</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">orders_processed</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_type</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">_doc</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">4</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_score</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#34;</span><span style="color: #d14">_source</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">{</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">ORDER_TOTAL_USD</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">12.13</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">ITEM</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">Parkin</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">CANCELLED_IND</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">UPDATE_TS</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604443348508</span>
+    <span style="background-color: #f8f8f8">}</span>
+  <span style="background-color: #f8f8f8">}</span>
+<span style="background-color: #f8f8f8">]</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Mark <code>order_id=1</code> as logically deleted in the database:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">UPDATE</span> <span style="background-color: #f8f8f8">orders</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="background-color: #f8f8f8">cancelled_ind</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #000000;font-weight: bold">TRUE</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">order_id</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Document no longer exists in Elasticsearch:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #a61717;background-color: #e3d2d2">$</span> <span style="background-color: #f8f8f8">curl</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">s</span> <span style="background-color: #f8f8f8">http</span><span style="background-color: #f8f8f8">:</span><span style="color: #000000;font-weight: bold">//</span><span style="background-color: #f8f8f8">localhost</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">9200</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">orders_processed</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">_search</span> <span style="color: #a61717;background-color: #e3d2d2">\</span>
+    <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">H</span> <span style="color: #d14">&#39;content-type: application/json&#39;</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">jq</span> <span style="color: #d14">&#39;.hits.hits&#39;</span>
+<span style="background-color: #f8f8f8">[</span>
+  <span style="color: #a61717;background-color: #e3d2d2">{</span>
+    <span style="color: #008080">&#34;_index&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;orders_processed&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #008080">&#34;_type&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;_doc&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #008080">&#34;_id&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;4&#34;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #008080">&#34;_score&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #008080">&#34;_source&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #a61717;background-color: #e3d2d2">{</span>
+      <span style="color: #008080">&#34;ORDER_TOTAL_USD&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">12</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">13</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #008080">&#34;ITEM&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #008080">&#34;Parkin&#34;</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #008080">&#34;CANCELLED_IND&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">false</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #008080">&#34;UPDATE_TS&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1604443348508</span>
+    <span style="color: #a61717;background-color: #e3d2d2">}</span>
+  <span style="color: #a61717;background-color: #e3d2d2">}</span>
+<span style="background-color: #f8f8f8">]</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_footnote">Footnote</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>As mentioned at the begining, tombstones and compacted topics are often (but not always) two sides of the same coin. A compacted topic retains the latest <strong>value</strong> for every <strong>key</strong>, and so is a perfect way to retain state with which you might want to rehydrate a target datastore with. To configure the topic to be compacted run</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #008080">$ </span>docker <span style="color: #0086B3">exec </span>broker kafka-configs <span style="color: #000080">--alter</span> <span style="color: #d14">\</span>
+                                   <span style="color: #000080">--bootstrap-server</span> broker:29092 <span style="color: #d14">\</span>
+                                   <span style="color: #000080">--entity-type</span> topics <span style="color: #d14">\</span>
+                                   <span style="color: #000080">--entity-name</span> orders_processed <span style="color: #d14">\</span>
+                                   <span style="color: #000080">--add-config</span> cleanup.policy<span style="color: #000000;font-weight: bold">=</span>compact
+Completed updating config <span style="color: #000000;font-weight: bold">for </span>topic orders_processed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that log compaction does not run straight away, and there are other factors involved including things like active segments that will affect when you will actually be able to observe log compaction taking place.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_try_it_out">Try it out!</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Grab the <a href="https://github.com/confluentinc/demo-scene/blob/master/ksqldb-tombstones/docker-compose.yml">Docker Compose</a> file from here, run <code>docker-compose up -d</code> and try this whole article out for yourself!</p>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
