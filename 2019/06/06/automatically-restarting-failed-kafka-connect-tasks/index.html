@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Automatically restarting failed Kafka Connect tasks</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2019/06/06/automatically-restarting-failed-kafka-connect-tasks/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.79.0" />
+
+		
+		<meta property="og:title" content="Automatically restarting failed Kafka Connect tasks" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2019/06/DSCF3097.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2019/06/06/automatically-restarting-failed-kafka-connect-tasks/" />
+		<meta property="og:site_name" content="Automatically restarting failed Kafka Connect tasks" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2019/06/DSCF3097.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Automatically restarting failed Kafka Connect tasks</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2019-06-06T17:51:44&#43;01:00">Jun 6, 2019</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>
+								<span class="display-print">at https://rmoff.net/2019/06/06/automatically-restarting-failed-kafka-connect-tasks/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>Here’s a hacky way to automatically restart Kafka Connect connectors if they fail. Restarting automatically only makes sense if it’s a transient failure; if there’s a problem with your pipeline (e.g. bad records or a mis-configured server) then you don’t gain anything from this. You might want to check out <a href="https://www.confluent.io/blog/kafka-connect-deep-dive-error-handling-dead-letter-queues">Kafka Connect’s error handling and dead letter queues</a> too.</p>
+</div>
+<div class="paragraph">
+<p>Let’s say you’ve got a couple of connectors set up, pulling data from MySQL with Debezium and streaming it to Elasticsearch. The MySQL source is a bit flaky and goes offline periodically. You can view the status of all your connectors and tasks:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors&#34;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  jq <span style="color:#ba2121">&#39;.[]&#39;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  xargs -I<span style="color:#666">{</span>connector_name<span style="color:#666">}</span> curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors/&#34;</span><span style="color:#666">{</span>connector_name<span style="color:#666">}</span><span style="color:#ba2121">&#34;/status&#34;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  jq -c -M <span style="color:#ba2121">&#39;[.name,.connector.state,.tasks[].state]|join(&#34;:|:&#34;)&#39;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+
+sink-elastic-orders-00     |  RUNNING  |  RUNNING
+source-debezium-orders-00  |  RUNNING  |  FAILED</code></pre></div>
+</div>
+<div class="paragraph">
+<p>If a connector’s task(s) are failed you can restart them using the <a href="https://docs.confluent.io/current/connect/references/restapi.html#post—​connectors-(string-name)-tasks-(int-taskid)-restart">REST API</a>:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -X POST http://localhost:8083/connectors/source-debezium-orders-00/tasks/0/restart</code></pre></div>
+</div>
+<div class="paragraph">
+<p>after which it comes back</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors&#34;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  jq <span style="color:#ba2121">&#39;.[]&#39;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  xargs -I<span style="color:#666">{</span>connector_name<span style="color:#666">}</span> curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors/&#34;</span><span style="color:#666">{</span>connector_name<span style="color:#666">}</span><span style="color:#ba2121">&#34;/status&#34;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  jq -c -M <span style="color:#ba2121">&#39;[.name,.connector.state,.tasks[].state]|join(&#34;:|:&#34;)&#39;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+
+sink-elastic-orders-00     |  RUNNING  |  RUNNING
+source-debezium-orders-00  |  RUNNING  |  RUNNING</code></pre></div>
+</div>
+<div class="paragraph">
+<p>But, manually watching and restarting tasks isn’t fun, so let’s automate it. Here’s a bit of bash that will restart any failed tasks. It’s the same pattern as above for iterating through the connectors on Kafka Connect’s REST API, coupled with <code>jq</code> &#39;s ability to filter data (<code>select(.tasks[].state==&#34;FAILED&#34;)</code>)</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#bc7a00">#!/usr/bin/env bash
+</span><span style="color:#bc7a00"></span><span style="color:#408080;font-style:italic"># @rmoff / June 6, 2019</span>
+
+<span style="color:#008000">echo</span> <span style="color:#ba2121">&#39;----&#39;</span>
+<span style="color:#408080;font-style:italic"># Set the path so cron can find jq, necessary for cron depending on your default PATH</span>
+<span style="color:#008000">export</span> <span style="color:#19177c">PATH</span><span style="color:#666">=</span><span style="color:#19177c">$PATH</span>:/usr/local/bin/
+
+<span style="color:#408080;font-style:italic"># What time is it Mr Wolf? </span>
+date 
+
+<span style="color:#408080;font-style:italic"># List current connectors and status</span>
+curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=info&amp;expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>           jq <span style="color:#ba2121">&#39;. | to_entries[] | [ .value.info.type, .key, .value.status.connector.state,.value.status.tasks[].state,.value.info.config.&#34;connector.class&#34;]|join(&#34;:|:&#34;)&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>           column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+
+<span style="color:#408080;font-style:italic"># Restart any connector tasks that are FAILED</span>
+<span style="color:#408080;font-style:italic"># Works for Apache Kafka &gt;= 2.3.0 </span>
+<span style="color:#408080;font-style:italic"># Thanks to @jocelyndrean for this enhanced code snippet that also supports </span>
+<span style="color:#408080;font-style:italic">#  multiple tasks in a connector</span>
+curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  jq -c -M <span style="color:#ba2121">&#39;map({name: .status.name } +  {tasks: .status.tasks}) | .[] | {task: ((.tasks[]) + {name: .name})}  | select(.task.state==&#34;FAILED&#34;) | {name: .task.name, task_id: .task.id|tostring} | (&#34;/connectors/&#34;+ .name + &#34;/tasks/&#34; + .task_id + &#34;/restart&#34;)&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  xargs -I<span style="color:#666">{</span>connector_and_task<span style="color:#666">}</span> curl -v -X POST <span style="color:#ba2121">&#34;http://localhost:8083&#34;</span><span style="color:#b62;font-weight:bold">\{</span>connector_and_task<span style="color:#b62;font-weight:bold">\}</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Which as any hacky admin will know can be scheduled to run with a crontab such as this:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">*/5 * * * * /u01/connectors/restart_failed_connector_tasks.sh 2&gt;&amp;<span style="color:#666">1</span> &gt;&gt; /u01/connectors/connect_monitor.log</code></pre></div>
+</div>
+<div class="paragraph">
+<p>Now every five minutes the script will look for any <code>FAILED</code> tasks and send a REST call to restart them.</p>
+</div>
+<hr/>
+<div class="paragraph">
+<p>If you’re using Apache Kafka &lt; 2.3.0 then the enhanced REST API for <code>connectors</code> is not available so you will need something like this:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#408080;font-style:italic"># List current connectors and status</span>
+curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors&#34;</span>| jq <span style="color:#ba2121">&#39;.[]&#39;</span>| xargs -I<span style="color:#666">{</span>connector_name<span style="color:#666">}</span> curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors/&#34;</span><span style="color:#666">{</span>connector_name<span style="color:#666">}</span><span style="color:#ba2121">&#34;/status&#34;</span>| jq -c -M <span style="color:#ba2121">&#39;[.name,.connector.state,.tasks[].state]|join(&#34;:|:&#34;)&#39;</span>| column -s : -t| sed <span style="color:#ba2121">&#39;s/\&#34;//g&#39;</span>| sort
+
+<span style="color:#408080;font-style:italic"># Restart any connector tasks that are FAILED</span>
+curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  jq <span style="color:#ba2121">&#39;.[]&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  xargs -I<span style="color:#666">{</span>connector_name<span style="color:#666">}</span> curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors/&#34;</span><span style="color:#666">{</span>connector_name<span style="color:#666">}</span><span style="color:#ba2121">&#34;/status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  jq -c -M <span style="color:#ba2121">&#39;[select(.tasks[].state==&#34;FAILED&#34;) | .name,&#34;§±§&#34;,.tasks[].id]&#39;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  grep -v <span style="color:#ba2121">&#34;\[\]&#34;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  sed -e <span style="color:#ba2121">&#39;s/^\[\&#34;//g&#39;</span>| sed -e <span style="color:#ba2121">&#39;s/\&#34;,\&#34;§±§\&#34;,/\/tasks\//g&#39;</span>|sed -e <span style="color:#ba2121">&#39;s/\]$//g&#39;</span>| <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>  xargs -I<span style="color:#666">{</span>connector_and_task<span style="color:#666">}</span> curl -v -X POST <span style="color:#ba2121">&#34;http://localhost:8083/connectors/&#34;</span><span style="color:#666">{</span>connector_and_task<span style="color:#666">}</span><span style="color:#ba2121">&#34;/restart&#34;</span></code></pre></div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>

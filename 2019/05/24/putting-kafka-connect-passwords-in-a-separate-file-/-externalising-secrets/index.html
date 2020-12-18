@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Putting Kafka Connect passwords in a separate file / externalising secrets</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2019/05/24/putting-kafka-connect-passwords-in-a-separate-file-/-externalising-secrets/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.79.0" />
+
+		
+		<meta property="og:title" content="Putting Kafka Connect passwords in a separate file / externalising secrets" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2019/05/IMG_9719.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2019/05/24/putting-kafka-connect-passwords-in-a-separate-file-/-externalising-secrets/" />
+		<meta property="og:site_name" content="Putting Kafka Connect passwords in a separate file / externalising secrets" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2019/05/IMG_9719.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Putting Kafka Connect passwords in a separate file / externalising secrets</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2019-05-24T17:30:57&#43;01:00">May 24, 2019</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>
+								<span class="display-print">at https://rmoff.net/2019/05/24/putting-kafka-connect-passwords-in-a-separate-file-/-externalising-secrets/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>Kafka Connect configuration is easy - you just write some JSON! But what if you’ve got credentials that you need to pass? Embedding those in a config file is not always such a smart idea. Fortunately with <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-297%3A+Externalizing+Secrets+for+Connect+Configurations">KIP-297</a> which was released in Apache Kafka 2.0 there is support for external secrets. It’s extendable to use your own <code>ConfigProvider</code>, and ships with its own for just putting credentials in a file - which I’ll show here. You can <a href="https://docs.confluent.io/current/connect/security.html#externalizing-secrets">read more here</a>.</p>
+</div>
+<div class="sect1">
+<h2 id="_kafka_connect_connector_secrets_management">Kafka Connect connector secrets management</h2>
+<div class="sectionbody">
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Set up your credentials file, e.g. <code>data/foo_credentials.properties</code></p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#19177c">FOO_USERNAME</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;rick&#34;</span>
+<span style="color:#19177c">FOO_PASSWORD</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;n3v3r_g0nn4_g1ve_y0u_up&#34;</span></code></pre></div>
+</div>
+</li>
+<li>
+<p>Add the <code>ConfigProvider</code> to your Kafka Connect worker. I run mine with Docker Compose so the config looks like this. I’m also mounting the credentials file folder to the container</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">  kafka-connect:
+    image: confluentinc/cp-kafka-connect:5.2.1
+    <span style="color:#666">[</span>…<span style="color:#666">]</span>
+    environment:
+    <span style="color:#666">[</span>…<span style="color:#666">]</span>
+      <span style="color:#408080;font-style:italic"># External secrets config</span>
+      <span style="color:#408080;font-style:italic"># See https://docs.confluent.io/current/connect/security.html#externalizing-secrets</span>
+<span style="display:block;width:100%;background-color:#e5e5e5">      CONNECT_CONFIG_PROVIDERS: <span style="color:#ba2121">&#39;file&#39;</span>
+</span><span style="display:block;width:100%;background-color:#e5e5e5">      CONNECT_CONFIG_PROVIDERS_FILE_CLASS: <span style="color:#ba2121">&#39;org.apache.kafka.common.config.provider.FileConfigProvider&#39;</span>
+</span>    <span style="color:#666">[</span>…<span style="color:#666">]</span>
+<span style="display:block;width:100%;background-color:#e5e5e5">  volumes:
+</span><span style="display:block;width:100%;background-color:#e5e5e5">    - ./data:/data</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p>Restart your Kafka Connect worker</p>
+</div>
+</li>
+<li>
+<p>Now simply replace the credentials in your connector config with placeholders for the values:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Before:</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json"><span style="">&#39;</span>{<span style="color:#008000;font-weight:bold">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;source-activemq-01&#34;</span>,
+  <span style="color:#008000;font-weight:bold">&#34;config&#34;</span>: {
+    <span style="color:#008000;font-weight:bold">&#34;connector.class&#34;</span>: <span style="color:#ba2121">&#34;io.confluent.connect.activemq.ActiveMQSourceConnector&#34;</span>,
+<span style="display:block;width:100%;background-color:#e5e5e5">    <span style="color:#008000;font-weight:bold">&#34;activemq.username&#34;</span>: <span style="color:#ba2121">&#34;rick&#34;</span>,
+</span><span style="display:block;width:100%;background-color:#e5e5e5">    <span style="color:#008000;font-weight:bold">&#34;activemq.password&#34;</span>: <span style="color:#ba2121">&#34;n3v3r_g0nn4_g1ve_y0u_up&#34;</span>,
+</span>    <span style="">[…]</span></code></pre></div>
+</div>
+</li>
+<li>
+<p>After:</p>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json"><span style="">&#39;</span>{<span style="color:#008000;font-weight:bold">&#34;name&#34;</span>: <span style="color:#ba2121">&#34;source-activemq-01&#34;</span>,
+  <span style="color:#008000;font-weight:bold">&#34;config&#34;</span>: {
+    <span style="color:#008000;font-weight:bold">&#34;connector.class&#34;</span>: <span style="color:#ba2121">&#34;io.confluent.connect.activemq.ActiveMQSourceConnector&#34;</span>,
+<span style="display:block;width:100%;background-color:#e5e5e5">    <span style="color:#008000;font-weight:bold">&#34;activemq.username&#34;</span>: <span style="color:#ba2121">&#34;${file:/data/foo_credentials.properties:FOO_USERNAME}&#34;</span>,
+</span><span style="display:block;width:100%;background-color:#e5e5e5">    <span style="color:#008000;font-weight:bold">&#34;activemq.password&#34;</span>: <span style="color:#ba2121">&#34;${file:/data/foo_credentials.properties:FOO_PASSWORD}&#34;</span>,
+</span>    <span style="">[…]</span></code></pre></div>
+</div>
+</li>
+</ul>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_kafka_connect_worker_secrets_management">Kafka Connect worker secrets management</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>You can use the same approach to externalise sensitive values from the worker configuration file itself too. Whilst the worker masks sensitive values in the logfile, you still have the plaintext stored in the worker configuration file. Moving that to another file as shown below may not be so useful (unless the file is secured differently) but when combined with a configuration provider such as a password vault will be very useful.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>As above, in the worker configuration, define the config provider. For a file provider it looks like this:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Properties file</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">config.providers=file
+config.providers.file.class=org.apache.kafka.common.config.provider.FileConfigProvider</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Docker environment variables</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">CONNECT_CONFIG_PROVIDERS: &#39;file&#39;
+CONNECT_CONFIG_PROVIDERS_FILE_CLASS: &#39;org.apache.kafka.common.config.provider.FileConfigProvider&#39;</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>For the file provider, create a file with the key/value configuration items:</p>
+<div class="literalblock">
+<div class="content">
+<pre>SSL_KEYSTORE_PASSWORD=nevergonnagiveyouup
+GROUP_ID=my_connect_group</pre>
+</div>
+</div>
+</li>
+<li>
+<p>In the worker configuration specify the configuration items you’d like to source from the configuration provider, just the same you would for a connector itself. For example, to override the group id and the SSL keystore password using the config specified in the sample file above:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Properties file</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">group.id=${file:/data/connect_external.properties:GROUP_ID}
+ssl.keystore.password=${file:/data/connect_external.properties:SSL_KEYSTORE_PASSWORD}</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Docker environment variables</p>
+<div class="paragraph">
+<p><em>Note the double <code>$$</code>, since one it’s own will give you the error `Invalid interpolation format`</em></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">CONNECT_GROUP_ID: $${file:/data/connect_external.properties:GROUP_ID}
+CONNECT_SSL_KEYSTORE_PASSWORD: $${file:/data/connect_external.properties:SSL_KEYSTORE_PASSWORD}</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>When the Kafka Connect worker launches you’ll see it uses the new values. Since the SSL credentials are already masked you just see that it’s a hidden value.</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>[2020-06-16 13:03:09,721] INFO DistributedConfig values:
+…
+group.id = my_connect_group
+ssl.keystore.password = [hidden]</pre>
+</div>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>

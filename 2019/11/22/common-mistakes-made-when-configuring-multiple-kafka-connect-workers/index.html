@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Common mistakes made when configuring multiple Kafka Connect workers</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2019/11/22/common-mistakes-made-when-configuring-multiple-kafka-connect-workers/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.79.0" />
+
+		
+		<meta property="og:title" content="Common mistakes made when configuring multiple Kafka Connect workers" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2019/11/IMG_1165.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2019/11/22/common-mistakes-made-when-configuring-multiple-kafka-connect-workers/" />
+		<meta property="og:site_name" content="Common mistakes made when configuring multiple Kafka Connect workers" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2019/11/IMG_1165.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Common mistakes made when configuring multiple Kafka Connect workers</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2019-11-22T11:33:48Z">Nov 22, 2019</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>
+								<span class="display-print">at https://rmoff.net/2019/11/22/common-mistakes-made-when-configuring-multiple-kafka-connect-workers/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>Kafka Connect can be deployed in two modes: <strong>Standalone</strong> or <strong>Distributed</strong>. You can learn more about them in my <a href="http://rmoff.dev/ksldn19-kafka-connect">Kafka Summit London 2019 talk</a>.</p>
+</div>
+<div class="paragraph">
+<p>I usually recommend <strong>Distributed</strong> for several reasons:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>It can scale</p>
+</li>
+<li>
+<p>It is fault-tolerant</p>
+</li>
+<li>
+<p>It can be run on a single node sandbox or a multi-node production environment</p>
+</li>
+<li>
+<p>It is the same configuration method however you run it</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>I usually find that <strong>Standalone</strong> is appropriate when:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>You need to guarantee locality of task execution, such as picking up a log file from a folder on a specific machine</p>
+</li>
+<li>
+<p>You don’t care about scale or fault-tolerance ;-)</p>
+</li>
+<li>
+<p>You like re-learning how to configure something when you realise that you <em>do</em> care about scale or fault-tolerance X-D</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>My last snarky point on the list is why even if you’re just playing around with Kafka Connect on a laptop, learning it in Distributed mode means you learn it once, and then you’re all set. If you start with Standalone and its <code>.properties</code> method of passing configuration files to the worker at startup, and then come to use Distributed you have to re-learn how to use the REST interface etc.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2019/11/connect.png" alt="connect"/>
+</div>
+</div>
+<div class="paragraph">
+<p>So anyway…a long lead into a short article pointing out some of the common mistakes that can be made when setting up multiple Kafka Connect workers in a cluster.</p>
+</div>
+<div class="paragraph">
+<p>As always, refer to <a href="https://docs.confluent.io/current/connect/concepts.html#distributed-workers">the documentation</a> for more details.</p>
+</div>
+<div class="sect1">
+<h2 id="_mistake_1_rest_advertised_host_name_set_to_localhost">Mistake 1: <code>rest.advertised.host.name</code> set to <code>localhost</code></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <code>rest.advertised.host.name</code> (or if you’re using Docker, <code>CONNECT_REST_ADVERTISED_HOST_NAME</code>) is how a Connect worker communicates with other workers in the cluster. If you set it to <code>localhost</code> then each worker in the cluster will only ever be able to contact itself when you use the REST interface, e.g. to send configuration updates. If the worker happens to be the leader of the connect cluster then the command will work, but if it’s not then you’ll get this:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>{&#34;error_code&#34;:409,&#34;message&#34;:&#34;Cannot complete request because of a conflicting operation (e.g. worker rebalance)&#34;}⏎</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you front your Kafka Connect workers with a load balancer with a random/round-robin policy then you’ll see the above error &#34;randomly&#34;, since you’ll only get it if you happen to be forwarded to a worker that is not the leader.</p>
+</div>
+<div class="paragraph">
+<p>The second problem with doing this is that even though you might get connectors running successfully (if you send the config REST call to a worker that is the leader) the tasks that run across the cluster will all be identified as running on <code>localhost</code>, which makes it impossible to determine which worker they’re on. Here’s an example of a connector running a six tasks across three workers:</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ curl -s <span style="color:#ba2121">&#34;http://localhost:8083/connectors?expand=info&amp;expand=status&#34;</span> | <span style="color:#b62;font-weight:bold">\
+</span><span style="color:#b62;font-weight:bold"></span>            jq <span style="color:#ba2121">&#39;.&#34;source-datagen-01&#34;.status.tasks&#39;</span>
+<span style="color:#666">[</span>
+<span style="color:#666">{</span>
+    <span style="color:#ba2121">&#34;id&#34;</span>: 0,
+    <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
+    <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
+<span style="color:#666">}</span>,
+<span style="color:#666">{</span>
+    <span style="color:#ba2121">&#34;id&#34;</span>: 1,
+    <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
+    <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
+<span style="color:#666">}</span>,
+<span style="color:#666">{</span>
+    <span style="color:#ba2121">&#34;id&#34;</span>: 2,
+    <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
+    <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
+<span style="color:#666">}</span>,
+<span style="color:#666">{</span>
+    <span style="color:#ba2121">&#34;id&#34;</span>: 3,
+    <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
+    <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
+<span style="color:#666">}</span>,
+<span style="color:#666">{</span>
+    <span style="color:#ba2121">&#34;id&#34;</span>: 4,
+    <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
+    <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
+<span style="color:#666">}</span>,
+<span style="color:#666">{</span>
+    <span style="color:#ba2121">&#34;id&#34;</span>: 5,
+    <span style="color:#ba2121">&#34;state&#34;</span>: <span style="color:#ba2121">&#34;RUNNING&#34;</span>,
+    <span style="color:#ba2121">&#34;worker_id&#34;</span>: <span style="color:#ba2121">&#34;localhost:8083&#34;</span>
+<span style="color:#666">}</span>
+<span style="color:#666">]</span></code></pre></div>
+</div>
+<div class="paragraph">
+<p><strong>FIX</strong>: make sure <code>rest.advertised.host.name</code> / <code>CONNECT_REST_ADVERTISED_HOST_NAME</code> is set to <em>the hostname of the worker that is resolvable to the other workers</em>. If you’ve got a private network (e.g. Docker, VPC, etc) then this is the <strong>internal</strong> hostname/IP of the workers. It is nothing to do with the <strong>external</strong> hostname that you might access it by through a load balancer etc.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_mistake_2_rest_advertised_host_name_set_to_something_not_resolvable_by_the_workers">Mistake 2: <code>rest.advertised.host.name</code> set to something not resolvable by the workers</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This is a variation on the above problem. The <code>rest.advertised.host.name</code> (or if you’re using Docker, <code>CONNECT_REST_ADVERTISED_HOST_NAME</code>) is how a Connect worker communicates with other workers in the cluster. It needs to be something that can be <em>resolved by the other workers</em>.</p>
+</div>
+<div class="paragraph">
+<p>A problem that can arise is if you set this to an address that may be resolvable outside the Kafka Connect cluster (e.g. an external DNS hostname) but which isn’t within the cluster’s network.</p>
+</div>
+<div class="paragraph">
+<p>If you do this then similarly to above, if you send the REST call to the worker that happens to be the leader of the cluster then things will work - but if it’s not the leader you’ll get</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>{&#34;error_code&#34;:500,&#34;message&#34;:&#34;IO Error trying to forward REST request: java.net.UnknownHostException: foobar2: Name or service not known&#34;}⏎</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>(where <code>foobar2</code> is the hostname of the leader worker of the cluster)</p>
+</div>
+<div class="paragraph">
+<p>Since Kafka Connect uses Kafka topics to distribute configuration, if you <em>do</em> send the REST call to the leader then it writes the config to the topic which the other workers then pick up - hence the connector will still execute.</p>
+</div>
+<div class="paragraph">
+<p><strong>FIX</strong>: make sure <code>rest.advertised.host.name</code> / <code>CONNECT_REST_ADVERTISED_HOST_NAME</code> is set to <em>the hostname of the worker that is resolvable to the other workers</em>. If you’ve got a private network (e.g. Docker, VPC, etc) then this is the <strong>internal</strong> hostname/IP of the workers. It is nothing to do with the <strong>external</strong> hostname that you might access it by through a load balancer etc.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_mistake_3_sharing_the_same_kafka_topics_for_different_kafka_connect_clusters">Mistake 3: Sharing the same Kafka topics for different Kafka Connect clusters</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Kafka Connect uses Kafka topics to share and persist information about connector configuration, offsets, and the status of tasks. For each Kafka Connect cluster that you run, you need <strong>a unique set of three Kafka topics</strong>. If you try to share them, even having set a different <code>group.id</code> for your Kafka Connect workers, you’ll find that each cluster will start running the other’s connectors too.</p>
+</div>
+<div class="paragraph">
+<p>You can see why by examining the config topic; it doesn’t include the <code>group.id</code> in the key for the messages that share the configuration (<em>perhaps it should</em>?), which means that any worker reading from this topic will assume that it’s for it to run and share amongst its cluster</p>
+</div>
+<div class="paragraph">
+<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ kafkacat -b localhost:9092 -t _kafka-connect-configs -o beginning -f <span style="color:#ba2121">&#39;key: %k, payload: %s\n&#39;</span> -u -C
+
+key: connector-source-datagen-01, payload: <span style="color:#666">{</span><span style="color:#ba2121">&#34;properties&#34;</span>:<span style="color:#666">{</span><span style="color:#ba2121">&#34;connector.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenConnector&#34;</span>,<span style="color:#ba2121">&#34;key.converter&#34;</span>:<span style="color:#ba2121">&#34;org.apache.kafka.connect.storage.StringConverter&#34;</span>,<span style="color:#ba2121">&#34;kafka.topic&#34;</span>:<span style="color:#ba2121">&#34;item_details_01&#34;</span>,<span style="color:#ba2121">&#34;max.interval&#34;</span>:<span style="color:#ba2121">&#34;250&#34;</span>,<span style="color:#ba2121">&#34;quickstart&#34;</span>:<span style="color:#ba2121">&#34;ratings&#34;</span>,<span style="color:#ba2121">&#34;tasks.max&#34;</span>:<span style="color:#ba2121">&#34;6&#34;</span>,<span style="color:#ba2121">&#34;name&#34;</span>:<span style="color:#ba2121">&#34;source-datagen-01&#34;</span><span style="color:#666">}}</span>
+key: task-source-datagen-01-0, payload: <span style="color:#666">{</span><span style="color:#ba2121">&#34;properties&#34;</span>:<span style="color:#666">{</span><span style="color:#ba2121">&#34;connector.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenConnector&#34;</span>,<span style="color:#ba2121">&#34;quickstart&#34;</span>:<span style="color:#ba2121">&#34;ratings&#34;</span>,<span style="color:#ba2121">&#34;task.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenTask&#34;</span>,<span style="color:#ba2121">&#34;tasks.max&#34;</span>:<span style="color:#ba2121">&#34;6&#34;</span>,<span style="color:#ba2121">&#34;name&#34;</span>:<span style="color:#ba2121">&#34;source-datagen-01&#34;</span>,<span style="color:#ba2121">&#34;kafka.topic&#34;</span>:<span style="color:#ba2121">&#34;item_details_01&#34;</span>,<span style="color:#ba2121">&#34;max.interval&#34;</span>:<span style="color:#ba2121">&#34;250&#34;</span>,<span style="color:#ba2121">&#34;key.converter&#34;</span>:<span style="color:#ba2121">&#34;org.apache.kafka.connect.storage.StringConverter&#34;</span><span style="color:#666">}}</span>
+key: task-source-datagen-01-1, payload: <span style="color:#666">{</span><span style="color:#ba2121">&#34;properties&#34;</span>:<span style="color:#666">{</span><span style="color:#ba2121">&#34;connector.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenConnector&#34;</span>,<span style="color:#ba2121">&#34;quickstart&#34;</span>:<span style="color:#ba2121">&#34;ratings&#34;</span>,<span style="color:#ba2121">&#34;task.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenTask&#34;</span>,<span style="color:#ba2121">&#34;tasks.max&#34;</span>:<span style="color:#ba2121">&#34;6&#34;</span>,<span style="color:#ba2121">&#34;name&#34;</span>:<span style="color:#ba2121">&#34;source-datagen-01&#34;</span>,<span style="color:#ba2121">&#34;kafka.topic&#34;</span>:<span style="color:#ba2121">&#34;item_details_01&#34;</span>,<span style="color:#ba2121">&#34;max.interval&#34;</span>:<span style="color:#ba2121">&#34;250&#34;</span>,<span style="color:#ba2121">&#34;key.converter&#34;</span>:<span style="color:#ba2121">&#34;org.apache.kafka.connect.storage.StringConverter&#34;</span><span style="color:#666">}}</span>
+key: task-source-datagen-01-2, payload: <span style="color:#666">{</span><span style="color:#ba2121">&#34;properties&#34;</span>:<span style="color:#666">{</span><span style="color:#ba2121">&#34;connector.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenConnector&#34;</span>,<span style="color:#ba2121">&#34;quickstart&#34;</span>:<span style="color:#ba2121">&#34;ratings&#34;</span>,<span style="color:#ba2121">&#34;task.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenTask&#34;</span>,<span style="color:#ba2121">&#34;tasks.max&#34;</span>:<span style="color:#ba2121">&#34;6&#34;</span>,<span style="color:#ba2121">&#34;name&#34;</span>:<span style="color:#ba2121">&#34;source-datagen-01&#34;</span>,<span style="color:#ba2121">&#34;kafka.topic&#34;</span>:<span style="color:#ba2121">&#34;item_details_01&#34;</span>,<span style="color:#ba2121">&#34;max.interval&#34;</span>:<span style="color:#ba2121">&#34;250&#34;</span>,<span style="color:#ba2121">&#34;key.converter&#34;</span>:<span style="color:#ba2121">&#34;org.apache.kafka.connect.storage.StringConverter&#34;</span><span style="color:#666">}}</span>
+key: task-source-datagen-01-3, payload: <span style="color:#666">{</span><span style="color:#ba2121">&#34;properties&#34;</span>:<span style="color:#666">{</span><span style="color:#ba2121">&#34;connector.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenConnector&#34;</span>,<span style="color:#ba2121">&#34;quickstart&#34;</span>:<span style="color:#ba2121">&#34;ratings&#34;</span>,<span style="color:#ba2121">&#34;task.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenTask&#34;</span>,<span style="color:#ba2121">&#34;tasks.max&#34;</span>:<span style="color:#ba2121">&#34;6&#34;</span>,<span style="color:#ba2121">&#34;name&#34;</span>:<span style="color:#ba2121">&#34;source-datagen-01&#34;</span>,<span style="color:#ba2121">&#34;kafka.topic&#34;</span>:<span style="color:#ba2121">&#34;item_details_01&#34;</span>,<span style="color:#ba2121">&#34;max.interval&#34;</span>:<span style="color:#ba2121">&#34;250&#34;</span>,<span style="color:#ba2121">&#34;key.converter&#34;</span>:<span style="color:#ba2121">&#34;org.apache.kafka.connect.storage.StringConverter&#34;</span><span style="color:#666">}}</span>
+key: task-source-datagen-01-4, payload: <span style="color:#666">{</span><span style="color:#ba2121">&#34;properties&#34;</span>:<span style="color:#666">{</span><span style="color:#ba2121">&#34;connector.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenConnector&#34;</span>,<span style="color:#ba2121">&#34;quickstart&#34;</span>:<span style="color:#ba2121">&#34;ratings&#34;</span>,<span style="color:#ba2121">&#34;task.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenTask&#34;</span>,<span style="color:#ba2121">&#34;tasks.max&#34;</span>:<span style="color:#ba2121">&#34;6&#34;</span>,<span style="color:#ba2121">&#34;name&#34;</span>:<span style="color:#ba2121">&#34;source-datagen-01&#34;</span>,<span style="color:#ba2121">&#34;kafka.topic&#34;</span>:<span style="color:#ba2121">&#34;item_details_01&#34;</span>,<span style="color:#ba2121">&#34;max.interval&#34;</span>:<span style="color:#ba2121">&#34;250&#34;</span>,<span style="color:#ba2121">&#34;key.converter&#34;</span>:<span style="color:#ba2121">&#34;org.apache.kafka.connect.storage.StringConverter&#34;</span><span style="color:#666">}}</span>
+key: task-source-datagen-01-5, payload: <span style="color:#666">{</span><span style="color:#ba2121">&#34;properties&#34;</span>:<span style="color:#666">{</span><span style="color:#ba2121">&#34;connector.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenConnector&#34;</span>,<span style="color:#ba2121">&#34;quickstart&#34;</span>:<span style="color:#ba2121">&#34;ratings&#34;</span>,<span style="color:#ba2121">&#34;task.class&#34;</span>:<span style="color:#ba2121">&#34;io.confluent.kafka.connect.datagen.DatagenTask&#34;</span>,<span style="color:#ba2121">&#34;tasks.max&#34;</span>:<span style="color:#ba2121">&#34;6&#34;</span>,<span style="color:#ba2121">&#34;name&#34;</span>:<span style="color:#ba2121">&#34;source-datagen-01&#34;</span>,<span style="color:#ba2121">&#34;kafka.topic&#34;</span>:<span style="color:#ba2121">&#34;item_details_01&#34;</span>,<span style="color:#ba2121">&#34;max.interval&#34;</span>:<span style="color:#ba2121">&#34;250&#34;</span>,<span style="color:#ba2121">&#34;key.converter&#34;</span>:<span style="color:#ba2121">&#34;org.apache.kafka.connect.storage.StringConverter&#34;</span><span style="color:#666">}}</span>
+key: commit-source-datagen-01, payload: <span style="color:#666">{</span><span style="color:#ba2121">&#34;tasks&#34;</span>:6<span style="color:#666">}</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_interested_to_know_more">Interested to know more?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>You can see my notes and try out the test rig on Docker Compose <a href="https://github.com/confluentinc/demo-scene/tree/master/connect-cluster">here</a>.</p>
+</div>
+</div>
+</div>
+
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>

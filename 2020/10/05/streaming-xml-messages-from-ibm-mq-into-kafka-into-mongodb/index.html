@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Streaming XML messages from IBM MQ into Kafka into MongoDB</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2020/10/05/streaming-xml-messages-from-ibm-mq-into-kafka-into-mongodb/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.79.0" />
+
+		
+		<meta property="og:title" content="Streaming XML messages from IBM MQ into Kafka into MongoDB" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2020/10/IMG_6943.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2020/10/05/streaming-xml-messages-from-ibm-mq-into-kafka-into-mongodb/" />
+		<meta property="og:site_name" content="Streaming XML messages from IBM MQ into Kafka into MongoDB" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2020/10/IMG_6943.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Streaming XML messages from IBM MQ into Kafka into MongoDB</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2020-10-05T10:09:41&#43;01:00">Oct 5, 2020</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/xml" class="no-underline category near-white dim">XML</a>, <a href="https://rmoff.net/categories/kafka" class="no-underline category near-white dim">Kafka</a>, <a href="https://rmoff.net/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>, <a href="https://rmoff.net/categories/single-message-transform" class="no-underline category near-white dim">Single Message Transform</a>, <a href="https://rmoff.net/categories/mongodb" class="no-underline category near-white dim">MongoDB</a>, <a href="https://rmoff.net/categories/ibm-mq" class="no-underline category near-white dim">IBM MQ</a>
+								<span class="display-print">at https://rmoff.net/2020/10/05/streaming-xml-messages-from-ibm-mq-into-kafka-into-mongodb/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://twitter.com/rmoff/" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>Let’s imagine we have XML data on a queue in IBM MQ, and we want to ingest it into Kafka to then use downstream, perhaps in an application or maybe to stream to a NoSQL store like MongoDB.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This same pattern for ingesting XML will work with other connectors such as <a href="https://www.confluent.io/hub/confluentinc/kafka-connect-jms">JMS</a> and <a href="https://www.confluent.io/hub/confluentinc/kafka-connect-activemq">ActiveMQ</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/10/xml-ibmmq-mongodb.gif" alt="Streaming XML messages from IBM MQ through Apache Kafka into MongoDB"/>
+</div>
+</div>
+<div class="paragraph">
+<p>I’ve got a <a href="https://github.com/confluentinc/demo-scene/blob/master/xml-to-kafka/docker-compose.yml">Docker Compose</a> stack running that includes:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>IBM MQ</p>
+</li>
+<li>
+<p>Apache Kafka (deployed as Confluent Platform to include the all-important Schema Registry)</p>
+</li>
+<li>
+<p>MongoDB</p>
+</li>
+</ul>
+</div>
+<div class="sect1">
+<h2 id="_loading_some_test_data_onto_ibm_mq">Loading some test data onto IBM MQ</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Let’s load some messages onto the queue from an XML file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">docker exec --interactive ibmmq \
+  /opt/mqm/samp/bin/amqsput DEV.QUEUE.1 QM1 &lt; data/note.xml</code></pre>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2020/10/ibmmq.jpg" alt="ibmmq"/>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_streaming_from_ibm_mq_to_kafka_and_translating_the_xml_messages">Streaming from IBM MQ to Kafka and translating the XML messages</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Now we can ingest this into Kafka using the <a href="/2020/09/11/what-is-kafka-connect/">Kafka Connect</a> with the <a href="https://www.confluent.io/hub/confluentinc/kafka-connect-ibmmq">IbmMQSourceConnector</a> plugin and <a href="https://www.confluent.io/hub/jcustenborder/kafka-connect-transform-xml">XML Transformation</a>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">curl -i -X PUT -H  &#34;Content-Type:application/json&#34; \
+    http://localhost:8083/connectors/source-ibmmq-note-01/config \
+    -d &#39;{
+    &#34;connector.class&#34;: &#34;io.confluent.connect.ibm.mq.IbmMQSourceConnector&#34;,
+    &#34;kafka.topic&#34;:&#34;ibmmq-note-01&#34;,
+    &#34;mq.hostname&#34;:&#34;ibmmq&#34;,
+    &#34;mq.port&#34;:&#34;1414&#34;,
+    &#34;mq.queue.manager&#34;:&#34;QM1&#34;,
+    &#34;mq.transport.type&#34;:&#34;client&#34;,
+    &#34;mq.channel&#34;:&#34;DEV.APP.SVRCONN&#34;,
+    &#34;mq.username&#34;:&#34;app&#34;,
+    &#34;mq.password&#34;:&#34;password123&#34;,
+    &#34;jms.destination.name&#34;:&#34;DEV.QUEUE.1&#34;,
+    &#34;jms.destination.type&#34;:&#34;queue&#34;,
+    &#34;confluent.license&#34;:&#34;&#34;,
+    &#34;confluent.topic.bootstrap.servers&#34;:&#34;broker:29092&#34;,
+    &#34;confluent.topic.replication.factor&#34;:&#34;1&#34;,
+    &#34;transforms&#34;: &#34;extractPayload,xml&#34;,
+    &#34;transforms.extractPayload.type&#34;: &#34;org.apache.kafka.connect.transforms.ExtractField$Value&#34;,
+    &#34;transforms.extractPayload.field&#34;: &#34;text&#34;,
+    &#34;transforms.xml.type&#34;: &#34;com.github.jcustenborder.kafka.connect.transform.xml.FromXml$Value&#34;,
+    &#34;transforms.xml.schema.path&#34;: &#34;file:///data/note.xsd&#34;,
+    &#34;value.converter&#34;: &#34;io.confluent.connect.avro.AvroConverter&#34;,
+    &#34;value.converter.schema.registry.url&#34;:&#34;http://schema-registry:8081&#34;
+    }&#39;</code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+<code>ExtractField</code> is needed otherwise the XML transform will fail with <code>java.lang.UnsupportedOperationException: STRUCT is not a supported type.</code> since it will be trying to operate on the entire payload from IBM MQ which includes fields other than the XML that we’re interested in.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>The resulting Kafka topic holds the value of the <code>text</code> field in the messages, serialised in Avro:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">docker exec kafkacat \
+    kafkacat                            \
+      -b broker:29092                   \
+      -r http://schema-registry:8081    \
+      -s key=s -s value=avro            \
+      -t ibmmq-note-01                  \
+      -C -o beginning -u -q -J | \
+    jq -c &#39;.payload&#39;</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">{&#34;Note&#34;:{&#34;to&#34;:&#34;Tove&#34;,&#34;from&#34;:&#34;Jani&#34;,&#34;heading&#34;:&#34;Reminder 01&#34;,&#34;body&#34;:&#34;Don&#39;t forget me this weekend!&#34;}}
+{&#34;Note&#34;:{&#34;to&#34;:&#34;Jani&#34;,&#34;from&#34;:&#34;Tove&#34;,&#34;heading&#34;:&#34;Reminder 02&#34;,&#34;body&#34;:&#34;Of course I won&#39;t!&#34;}}
+…</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To understand more about the concepts around getting XML data into Kafka <a href="/2020/10/01/ingesting-xml-data-into-kafka-introduction/">see here</a>, and I’ve written about the specifics of Kafka Connect and the XML transformation <a href="/2020/10/01/ingesting-xml-data-into-kafka-option-2-kafka-connect-plus-single-message-transform/">here</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_streaming_the_data_from_kafka_to_mongodb">Streaming the data from Kafka to MongoDB</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>We can then add another Kafka Connect connector to the pipeline, using the <a href="https://www.confluent.io/hub/mongodb/kafka-connect-mongodb">official plugin for Kafka Connect from MongoDB</a>, which will stream data straight from a Kafka topic into MongoDB:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">curl -i -X PUT -H  &#34;Content-Type:application/json&#34; \
+    http://localhost:8083/connectors/sink-mongodb-note-01/config \
+    -d &#39;{
+    &#34;connector.class&#34;: &#34;com.mongodb.kafka.connect.MongoSinkConnector&#34;,
+    &#34;topics&#34;:&#34;ibmmq-note-01&#34;,
+    &#34;connection.uri&#34;:&#34;mongodb://mongodb:27017&#34;,
+    &#34;database&#34;:&#34;rmoff&#34;,
+    &#34;collection&#34;:&#34;notes&#34;,
+    &#34;value.converter&#34;: &#34;io.confluent.connect.avro.AvroConverter&#34;,
+    &#34;value.converter.schema.registry.url&#34;:&#34;http://schema-registry:8081&#34;
+    }&#39;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Check out the data in MongoDB:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">docker exec --interactive mongodb mongo localhost:27017 &lt;&lt;EOF
+use rmoff
+db.notes.find()
+EOF</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">MongoDB shell version v4.4.1
+connecting to: mongodb://localhost:27017/test?compressors=disabled&amp;gssapiServiceName=mongodb
+Implicit session: session { &#34;id&#34; : UUID(&#34;9aae83c4-0e25-43a9-aca5-7278d366423b&#34;) }
+MongoDB server version: 4.4.1
+switched to db rmoff
+{ &#34;_id&#34; : ObjectId(&#34;5f77b64eee00df1cc80135a1&#34;), &#34;to&#34; : &#34;Tove&#34;, &#34;from&#34; : &#34;Jani&#34;, &#34;heading&#34; : &#34;Reminder 01&#34;, &#34;body&#34; : &#34;Don&#39;t forget me this weekend!&#34; }
+{ &#34;_id&#34; : ObjectId(&#34;5f77b64eee00df1cc80135a2&#34;), &#34;to&#34; : &#34;Jani&#34;, &#34;from&#34; : &#34;Tove&#34;, &#34;heading&#34; : &#34;Reminder 02&#34;, &#34;body&#34; : &#34;Of course I won&#39;t!&#34; }
+{ &#34;_id&#34; : ObjectId(&#34;5f77b64eee00df1cc80135a3&#34;), &#34;to&#34; : &#34;Tove&#34;, &#34;from&#34; : &#34;Jani&#34;, &#34;heading&#34; : &#34;Reminder 03&#34;, &#34;body&#34; : &#34;Where are you?&#34; }
+{ &#34;_id&#34; : ObjectId(&#34;5f77b64eee00df1cc80135a4&#34;), &#34;to&#34; : &#34;Jani&#34;, &#34;from&#34; : &#34;Tove&#34;, &#34;heading&#34; : &#34;Reminder 04&#34;, &#34;body&#34; : &#34;I forgot ð¤·ââï¸&#34; }
+bye</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s check that this is actually streaming, by sending another record to the MQ:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">echo &#34;&lt;note&gt; &lt;to&gt;Tove&lt;/to&gt; &lt;from&gt;Jani&lt;/from&gt; &lt;heading&gt;Reminder 05&lt;/heading&gt; &lt;body&gt;Srsly?&lt;/body&gt; &lt;/note&gt;&#34; | docker exec --interactive ibmmq /opt/mqm/samp/bin/amqsput DEV.QUEUE.1 QM1</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">Sample AMQSPUT0 start
+target queue is DEV.QUEUE.1
+Sample AMQSPUT0 end</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And, behold, the new record in MongoDB:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">docker exec --interactive mongodb mongo localhost:27017 &lt;&lt;EOF
+use rmoff
+db.notes.find()
+EOF</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">MongoDB shell version v4.4.1
+connecting to: mongodb://localhost:27017/test?compressors=disabled&amp;gssapiServiceName=mongodb
+Implicit session: session { &#34;id&#34; : UUID(&#34;2641e93e-9c5d-4270-8f64-e52295a60309&#34;) }
+MongoDB server version: 4.4.1
+switched to db rmoff
+{ &#34;_id&#34; : ObjectId(&#34;5f77b64eee00df1cc80135a1&#34;), &#34;to&#34; : &#34;Tove&#34;, &#34;from&#34; : &#34;Jani&#34;, &#34;heading&#34; : &#34;Reminder 01&#34;, &#34;body&#34; : &#34;Don&#39;t forget me this weekend!&#34; }
+{ &#34;_id&#34; : ObjectId(&#34;5f77b64eee00df1cc80135a2&#34;), &#34;to&#34; : &#34;Jani&#34;, &#34;from&#34; : &#34;Tove&#34;, &#34;heading&#34; : &#34;Reminder 02&#34;, &#34;body&#34; : &#34;Of course I won&#39;t!&#34; }
+{ &#34;_id&#34; : ObjectId(&#34;5f77b64eee00df1cc80135a3&#34;), &#34;to&#34; : &#34;Tove&#34;, &#34;from&#34; : &#34;Jani&#34;, &#34;heading&#34; : &#34;Reminder 03&#34;, &#34;body&#34; : &#34;Where are you?&#34; }
+{ &#34;_id&#34; : ObjectId(&#34;5f77b64eee00df1cc80135a4&#34;), &#34;to&#34; : &#34;Jani&#34;, &#34;from&#34; : &#34;Tove&#34;, &#34;heading&#34; : &#34;Reminder 04&#34;, &#34;body&#34; : &#34;I forgot ð¤·ââï¸&#34; }
+{ &#34;_id&#34; : ObjectId(&#34;5f77b77cee00df1cc80135a6&#34;), &#34;to&#34; : &#34;Tove&#34;, &#34;from&#34; : &#34;Jani&#34;, &#34;heading&#34; : &#34;Reminder 05&#34;, &#34;body&#34; : &#34;Srsly?&#34; }
+bye</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_if_my_datas_not_in_xml_what_if_we_want_other_fields_from_the_payload">What if my data’s not in XML? What if we want other fields from the payload?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In the example above we’re taking data from the source system (IBM MQ) and Kafka Connect is applying a schema to the field called <code>text</code> within it (the XML transformation does this, based on the supplied XSD). When it’s written to Kafka it’s serialised using the selected converter which since it’s Avro stores the schema in the Schema Registry. This is a Good Way of doing things, since we retain the schema for use by any consumer. We could use Protobuf or JSON Schema here too if we wanted. If this doesn’t all make sense to you then check out <a href="/2020/10/01/ingesting-xml-data-into-kafka-introduction/">Schemas, Schmeeeemas / Why not just JSON?</a>.</p>
+</div>
+<div class="paragraph">
+<p>But the full payload that comes through from IBM MQ looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code>messageID=ID:414d5120514d3120202020202020202060e67a5f06352924
+messageType=text
+timestamp=1601893142430
+deliveryMode=1
+redelivered=false
+expiration=0
+priority=0
+properties={JMS_IBM_Format=Struct{propertyType=string,string=MQSTR   },
+            JMS_IBM_PutDate=Struct{propertyType=string,string=20201005},
+            JMS_IBM_Character_Set=Struct{propertyType=string,string=ISO-8859-1},
+            JMSXDeliveryCount=Struct{propertyType=integer,integer=1},
+            JMS_IBM_MsgType=Struct{propertyType=integer,integer=8},
+            JMSXUserID=Struct{propertyType=string,string=mqm         },
+            JMS_IBM_Encoding=Struct{propertyType=integer,integer=546},
+            JMS_IBM_PutTime=Struct{propertyType=string,string=10190243},
+            JMSXAppID=Struct{propertyType=string,string=amqsput                     },
+            JMS_IBM_PutApplType=Struct{propertyType=integer,integer=6}}
+text=&lt;note&gt; &lt;to&gt;Jani&lt;/to&gt; &lt;from&gt;Tove&lt;/from&gt; &lt;heading&gt;Reminder 02&lt;/heading&gt; &lt;body&gt;Of course I won&#39;t!&lt;/body&gt; &lt;/note&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If we want to retain some or all of these fields, we’re going to have to approach things a different way. As things stand, there is no Single Message Transform that I’m aware of that can take <em>both</em> the non-XML fields <em>and</em> the XML field and wrangle them into a single structured schema (which is the ideal outcome, or perhaps putting the non-XML fields into the Kafka message header). By default the <a href="https://docs.confluent.io/current/connect/kafka-connect-ibmmq/index.html">IBM MQ Source Connector</a> will write the full payload to a <a href="https://docs.confluent.io/current/connect/kafka-connect-ibmmq/index.html#io-confluent-connect-jms-value">schema</a>. This means that you still use a schema-supporting serialisation method, but the <code>text</code> payload field remains unparsed.</p>
+</div>
+<div class="paragraph">
+<p>Here’s an example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">curl -i -X PUT -H  &#34;Content-Type:application/json&#34; \
+    http://localhost:8083/connectors/source-ibmmq-note-03/config \
+    -d &#39;{
+    &#34;connector.class&#34;: &#34;io.confluent.connect.ibm.mq.IbmMQSourceConnector&#34;,
+    &#34;kafka.topic&#34;:&#34;ibmmq-note-03&#34;,
+    &#34;mq.hostname&#34;:&#34;ibmmq&#34;,
+    &#34;mq.port&#34;:&#34;1414&#34;,
+    &#34;mq.queue.manager&#34;:&#34;QM1&#34;,
+    &#34;mq.transport.type&#34;:&#34;client&#34;,
+    &#34;mq.channel&#34;:&#34;DEV.APP.SVRCONN&#34;,
+    &#34;mq.username&#34;:&#34;app&#34;,
+    &#34;mq.password&#34;:&#34;password123&#34;,
+    &#34;jms.destination.name&#34;:&#34;DEV.QUEUE.1&#34;,
+    &#34;jms.destination.type&#34;:&#34;queue&#34;,
+    &#34;confluent.license&#34;:&#34;&#34;,
+    &#34;confluent.topic.bootstrap.servers&#34;:&#34;broker:29092&#34;,
+    &#34;confluent.topic.replication.factor&#34;:&#34;1&#34;,
+    &#34;value.converter&#34;: &#34;io.confluent.connect.avro.AvroConverter&#34;,
+    &#34;value.converter.schema.registry.url&#34;:&#34;http://schema-registry:8081&#34;
+    }&#39;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now the full IBM MQ message is written to a Kafka topic, serialised with a schema. We can deserialise it with something like kafkacat:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">kafkacat                                \
+      -b broker:29092                   \
+      -r http://schema-registry:8081    \
+      -s key=s -s value=avro            \
+      -t ibmmq-note-03                  \
+      -C -c1 -o beginning -u -q -J | \
+    jq  &#39;.&#39;</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">{
+  &#34;topic&#34;: &#34;ibmmq-note-03&#34;,
+  &#34;partition&#34;: 0,
+  &#34;offset&#34;: 0,
+  &#34;tstype&#34;: &#34;create&#34;,
+  &#34;ts&#34;: 1601894073400,
+  &#34;broker&#34;: 1,
+  &#34;key&#34;: &#34;Struct{messageID=ID:414d5120514d3120202020202020202060e67a5f033a2924}&#34;,
+  &#34;payload&#34;: {
+    &#34;messageID&#34;: &#34;ID:414d5120514d3120202020202020202060e67a5f033a2924&#34;,
+    &#34;messageType&#34;: &#34;text&#34;,
+    &#34;timestamp&#34;: 1601894073400,
+    &#34;deliveryMode&#34;: 1,
+    &#34;properties&#34;: {
+      &#34;JMS_IBM_Format&#34;: {
+        &#34;propertyType&#34;: &#34;string&#34;,
+        &#34;boolean&#34;: null,
+        &#34;byte&#34;: null,
+        &#34;short&#34;: null,
+        &#34;integer&#34;: null,
+        &#34;long&#34;: null,
+        &#34;float&#34;: null,
+        &#34;double&#34;: null,
+        &#34;string&#34;: {
+          &#34;string&#34;: &#34;MQSTR   &#34;
+        }
+      },
+    …
+    &#34;map&#34;: null,
+    &#34;text&#34;: {
+      &#34;string&#34;: &#34;&lt;note&gt; &lt;to&gt;Tove&lt;/to&gt; &lt;from&gt;Jani&lt;/from&gt; &lt;heading&gt;Reminder 01&lt;/heading&gt; &lt;body&gt;Don&#39;t forget me this weekend!&lt;/body&gt; &lt;/note&gt;&#34;
+    }
+  }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Observe that the <code>text</code> field is just a string, holding [what happens to be] XML.</p>
+</div>
+<div class="paragraph">
+<p>You can use ksqlDB to work with the data, to an extent - although there’s currently no <a href="https://github.com/confluentinc/ksql/issues/6357">support for handing the XML</a>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">SELECT &#34;PROPERTIES&#34;[&#39;JMSXAppID&#39;]-&gt;STRING as JMSXAppID,
+       &#34;PROPERTIES&#34;[&#39;JMS_IBM_PutTime&#39;]-&gt;STRING as JMS_IBM_PutTime,
+       &#34;PROPERTIES&#34;[&#39;JMSXDeliveryCount&#39;]-&gt;INTEGER as JMSXDeliveryCount,
+       &#34;PROPERTIES&#34;[&#39;JMSXUserID&#39;]-&gt;STRING as JMSXUserID,
+       text
+  FROM IBMMQ_SOURCE
+  EMIT CHANGES;</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">+-----------+-----------------+-------------------+------------+------------------------------------+
+|JMSXAPPID  |JMS_IBM_PUTTIME  |JMSXDELIVERYCOUNT  |JMSXUSERID  |TEXT                                |
++-----------+-----------------+-------------------+------------+------------------------------------+
+|amqsput    |10302905         |1                  |mqm         |&lt;note&gt; &lt;to&gt;Jani&lt;/to&gt; &lt;from&gt;Tove&lt;/fro|
+|           |                 |                   |            |m&gt; &lt;heading&gt;Reminder 02&lt;/heading&gt; &lt;b|
+|           |                 |                   |            |ody&gt;Of course I won&#39;t!&lt;/body&gt; &lt;/note|
+|           |                 |                   |            |&gt;                                   |
+|amqsput    |10302905         |1                  |mqm         |&lt;note&gt; &lt;to&gt;Tove&lt;/to&gt; &lt;from&gt;Jani&lt;/fro|
+|           |                 |                   |            |m&gt; &lt;heading&gt;Reminder 03&lt;/heading&gt; &lt;b|
+|           |                 |                   |            |ody&gt;Where are you?&lt;/body&gt; &lt;/note&gt;   |</code></pre>
+</div>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2020 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
