@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Kafka Connect - Deep Dive into Single Message Transforms</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2021/01/04/kafka-connect-deep-dive-into-single-message-transforms/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.75.1" />
+
+		
+		<meta property="og:title" content="Kafka Connect - Deep Dive into Single Message Transforms" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2021/01/smt_title.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2021/01/04/kafka-connect-deep-dive-into-single-message-transforms/" />
+		<meta property="og:site_name" content="Kafka Connect - Deep Dive into Single Message Transforms" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2021/01/smt_title.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Kafka Connect - Deep Dive into Single Message Transforms</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2021-01-04T14:26:40Z">Jan 4, 2021</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>, <a href="https://rmoff.net/categories/single-message-transform" class="no-underline category near-white dim">Single Message Transform</a>, <a href="https://rmoff.net/categories/twelvedaysofsmt" class="no-underline category near-white dim">TwelveDaysOfSMT</a>
+								<span class="display-print">at https://rmoff.net/2021/01/04/kafka-connect-deep-dive-into-single-message-transforms/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://twitter.com/rmoff/" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-66%3A+Single+Message+Transforms+for+Kafka+Connect">KIP-66</a> was added in Apache Kafka 0.10.2 and brought new functionality called <strong>Single Message Transforms</strong> (SMT). Using SMT you can modify the data and its characteristics as it passes through Kafka Connect pipeline, without needing additional stream processors. For things like manipulating fields, changing topic names, conditionally dropping messages, and more, SMT are a perfect solution. If you get to things like aggregation, joining streams, and lookups then SMT may not be the best for you and you should head over to Kafka Streams or ksqlDB instead.</p>
+</div>
+<div class="paragraph">
+<p>I recently completed a twelve-day exercise of digging into many of the Single Message Transform that are available - almost all of them ship with Apache Kafka itself. For each one I recorded a video, wrote up a blog detailing the SMT, and built a test environment in Docker so that <strong>you</strong> can go and try it out too :-)</p>
+</div>
+<div class="sect1">
+<h2 id="_the_highlights">✨ The Highlights ✨</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>SMT as a concept are a highlight of Kafka Connect in themselves, but here are a handful of the ones that thought were <em>particularly</em> neat:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="/2020/12/23/twelve-days-of-smt-day-12-community-transformations#_add_the_timestamp_of_a_field_to_the_topic_name">Add the timestamp of a field to the topic name</a></p>
+</li>
+<li>
+<p><a href="/2020/12/22/twelve-days-of-smt-day-11-predicate-and-filter/#_filtering_out_null_records">Filtering out null records</a></p>
+</li>
+<li>
+<p><a href="/2020/12/22/twelve-days-of-smt-day-11-predicate-and-filter/#_conditionally_renaming_fields_based_on_the_topic_name">Conditionally renaming fields based on the topic name</a></p>
+</li>
+<li>
+<p><a href="/2020/12/11/twelve-days-of-smt-day-4-regexrouter/#_changing_the_topic_name_to_which_a_source_connector_writes">Changing the topic name to which a source connector writes</a></p>
+</li>
+<li>
+<p><a href="/2020/12/18/twelve-days-of-smt-day-9-cast/#_changing_the_data_type_of_fields_as_they_pass_through_kafka_connect">Changing the data type of fields as they pass through Kafka Connect</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_videos_playlist">🎥 Videos Playlist</h2>
+<div class="sectionbody">
+<div class="imageblock">
+<div class="content">
+<a class="image" href="https://www.youtube.com/watch?v=3Gj_SoyuTYk&amp;list=PL5T99fPsK7pq7LiaaL-S6b7wQqzxyjgya"><img src="/images/2021/01/smtplaylist.png" alt="smtplaylist"/></a>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_code">👾 Code</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>You can grab the Docker Compose and tutorial files on <a href="https://github.com/confluentinc/demo-scene/tree/master/kafka-connect-single-message-transforms">GitHub</a></p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_complete_list">📝 The Complete List</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Here are links to the blogs and videos of each Single Message Transform:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="/2020/12/23/twelve-days-of-smt-day-12-community-transformations">Community Transformations</a></p>
+</li>
+<li>
+<p><a href="/2020/12/22/twelve-days-of-smt-day-11-predicate-and-filter">Predicate and Filter</a></p>
+</li>
+<li>
+<p><a href="/2020/12/21/twelve-days-of-smt-day-10-replacefield">ReplaceField</a></p>
+</li>
+<li>
+<p><a href="/2020/12/18/twelve-days-of-smt-day-9-cast">Cast</a></p>
+</li>
+<li>
+<p><a href="/2020/12/17/twelve-days-of-smt-day-8-timestampconverter">TimestampConverter</a></p>
+</li>
+<li>
+<p><a href="/2020/12/16/twelve-days-of-smt-day-7-timestamprouter">TimestampRouter</a></p>
+</li>
+<li>
+<p><a href="/2020/12/15/twelve-days-of-smt-day-6-insertfield-ii">InsertField II</a></p>
+</li>
+<li>
+<p><a href="/2020/12/14/twelve-days-of-smt-day-5-maskfield">MaskField</a></p>
+</li>
+<li>
+<p><a href="/2020/12/11/twelve-days-of-smt-day-4-regexrouter">RegExRouter</a></p>
+</li>
+<li>
+<p><a href="/2020/12/10/twelve-days-of-smt-day-3-flatten">Flatten</a></p>
+</li>
+<li>
+<p><a href="/2020/12/09/twelve-days-of-smt-day-2-valuetokey-and-extractfield">ValueToKey and ExtractField</a></p>
+</li>
+<li>
+<p><a href="/2020/12/08/twelve-days-of-smt-day-1-insertfield-timestamp">InsertField (timestamp)</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2021 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
