@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Defining custom topic properties with Kafka Connect source connectors</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2021/01/06/defining-custom-topic-properties-with-kafka-connect-source-connectors/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.75.1" />
+
+		
+		<meta property="og:title" content="Defining custom topic properties with Kafka Connect source connectors" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2021/01/IMG_8408.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2021/01/06/defining-custom-topic-properties-with-kafka-connect-source-connectors/" />
+		<meta property="og:site_name" content="Defining custom topic properties with Kafka Connect source connectors" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2021/01/IMG_8408.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Defining custom topic properties with Kafka Connect source connectors</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2021-01-06T12:18:51Z">Jan 6, 2021</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/kafka-connect" class="no-underline category near-white dim">Kafka Connect</a>
+								<span class="display-print">at https://rmoff.net/2021/01/06/defining-custom-topic-properties-with-kafka-connect-source-connectors/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://twitter.com/rmoff/" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>When Kafka Connect ingests data from a source system into Kafka it writes it to a topic. Assuming you have set <code>auto.create.topics.enable = true</code> then it will create these topics for you, and do so using the defaults configured on the broker for topic creation, including <a href="https://kafka.apache.org/documentation/#brokerconfigs_num.partitions"><code>num.partitions</code></a> and <a href="https://kafka.apache.org/documentation/#brokerconfigs_default.replication.factor"><code>default.replication.factor</code></a>.</p>
+</div>
+<div class="paragraph">
+<p>There are many other <a href="https://kafka.apache.org/documentation/#topicconfigs">topic-level configurations</a> which you may want to set for topics that are automatically created by Kafka Connect. This is particularly true for connectors which are creating a large number of topics, or where the topic name is not known in advance (e.g. when using a regex to select objects from the source system) and thus cannot be pre-created with the desired settings. Common settings for a topic that you may want to customise include <a href="https://kafka.apache.org/documentation/#topicconfigs_cleanup.policy">cleanup.policy</a>, <a href="https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas">min.insync.replicas</a>, and <a href="https://kafka.apache.org/documentation/#topicconfigs_compression.type">compression.type</a>.</p>
+</div>
+<div class="paragraph">
+<p><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-158%3A+Kafka+Connect+should+allow+source+connectors+to+set+topic-specific+settings+for+new+topics">KIP-158</a> was implemented in Apache Kafka 2.6 (available with Confluent Platform 6.0), and adds the ability to set topic-level configurations for topics created by Kafka Connect source connectors.</p>
+</div>
+<div class="sect1">
+<h2 id="_just_the_defaults_maam">Just the defaults, ma’am.</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Here’s a very simply Kafka Connect source connector, reading data in from a file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">curl</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">i</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">X</span> <span style="background-color: #f8f8f8">PUT</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">H</span> <span style="color: #d14">&#34;</span><span style="color: #d14">Accept:application/json</span><span style="color: #d14">&#34;</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">H</span>  <span style="color: #d14">&#34;</span><span style="color: #d14">Content-Type:application/json</span><span style="color: #d14">&#34;</span> <span style="color: #000000;font-weight: bold">\</span>
+     <span style="background-color: #f8f8f8">http</span><span style="background-color: #f8f8f8">:</span><span style="color: #999988;font-style: italic">//localhost:8083/connectors/source-txt-file-00/config \</span>
+     <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">d</span> <span style="color: #d14">&#39;</span><span style="color: #d14">{
+        &#34;connector.class&#34;: &#34;org.apache.kafka.connect.file.FileStreamSourceConnector&#34;,
+        &#34;key.converter&#34;  : &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+        &#34;value.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+        &#34;topic&#34;          : &#34;testdata-00&#34;,
+        &#34;file&#34;           : &#34;/data/test.txt&#34;
+        }</span><span style="color: #d14">&#39;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Since the broker is configured to automagically create new topics (<code>auto.create.topics.enable = true</code>), it does so and using the defaults - one partition, replication factor of 1, etc. We can examine this using various tools:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>kafka-topics</code></p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #008080">$ </span>kafka-topics <span style="color: #000080">--bootstrap-server</span> broker:29092  <span style="color: #000080">--topic</span> testdata-00 <span style="color: #000080">--describe</span>
+Topic: testdata-00      PartitionCount: 1       ReplicationFactor: 1    Configs:
+        Topic: testdata-00      Partition: 0    Leader: 1       Replicas: 1     Isr: 1</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p><code>kafkacat</code></p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #008080">$ </span>kafkacat <span style="color: #000080">-b</span> broker:29092 <span style="color: #000080">-L</span> <span style="color: #000080">-J</span>|jq <span style="color: #d14">&#39;.topics[] | select(.topic ==&#34;testdata&#34;)&#39;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">topic</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #d14">&#34;</span><span style="color: #d14">testdata-00</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">,</span>
+  <span style="color: #d14">&#34;</span><span style="color: #d14">partitions</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">[</span>
+    <span style="background-color: #f8f8f8">{</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">partition</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">0</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">leader</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">,</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">replicas</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">[</span>
+        <span style="background-color: #f8f8f8">{</span>
+          <span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span>
+        <span style="background-color: #f8f8f8">}</span>
+      <span style="background-color: #f8f8f8">],</span>
+      <span style="color: #d14">&#34;</span><span style="color: #d14">isrs</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">[</span>
+        <span style="background-color: #f8f8f8">{</span>
+          <span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">1</span>
+        <span style="background-color: #f8f8f8">}</span>
+      <span style="background-color: #f8f8f8">]</span>
+    <span style="background-color: #f8f8f8">}</span>
+  <span style="background-color: #f8f8f8">]</span>
+<span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_setting_the_configuration_for_auto_created_topics">Setting the configuration for auto-created topics</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Let’s see how we can use the new options in Apache Kafka 2.6 (Confluent Platform 6.0) to change some of the topic configurations that are set when it’s created.</p>
+</div>
+<div class="sect2">
+<h3 id="_attempt_1_crashed_and_burned_mav">Attempt 1 … Crashed and burned, Mav</h3>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2021/01/crashed_and_burned.gif" alt="Crashed and burned! Huh" width="Mav?"/>
+</div>
+</div>
+<div class="paragraph">
+<p>In my sandbox I just have a single broker so I’m going to leave the number of replicas as a sensible setting of 1, but I’m going to change the number of partitions to four, as well as the cleanup policy from its default of <code>delete</code> to instead <code>compact</code>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">curl</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">i</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">X</span> <span style="background-color: #f8f8f8">PUT</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">H</span> <span style="color: #d14">&#34;</span><span style="color: #d14">Accept:application/json</span><span style="color: #d14">&#34;</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">H</span>  <span style="color: #d14">&#34;</span><span style="color: #d14">Content-Type:application/json</span><span style="color: #d14">&#34;</span> <span style="color: #000000;font-weight: bold">\</span>
+     <span style="background-color: #f8f8f8">http</span><span style="background-color: #f8f8f8">:</span><span style="color: #999988;font-style: italic">//localhost:8083/connectors/source-txt-file-01/config \</span>
+     <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">d</span> <span style="color: #d14">&#39;</span><span style="color: #d14">{
+        &#34;connector.class&#34;                          : &#34;org.apache.kafka.connect.file.FileStreamSourceConnector&#34;,
+        &#34;key.converter&#34;                            : &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+        &#34;value.converter&#34;                          : &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+        &#34;topic&#34;                                    : &#34;testdata-01&#34;,
+        &#34;file&#34;                                     : &#34;/data/test.txt&#34;,
+        &#34;topic.creation.default.partitions&#34;        : 4,
+        &#34;topic.creation.default.replication.factor&#34;: 1,
+        &#34;topic.creation.default.cleanup.policy&#34;    : &#34;compact&#34;
+        }</span><span style="color: #d14">&#39;</span></code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+If you are setting topic creation overrides you <strong>must</strong> include <code>replication.factor</code> and <code>partitions</code> even if you’re not specifying a value that’s different from the broker default.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>In the broker log you can see that the <code>cleanup.policy</code> configuration has been honoured (<code>{cleanup.policy=compact}</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #000000;font-weight: bold">[</span>2021-01-06 12:03:04,184] INFO Creating topic testdata-01 with configuration <span style="color: #000000;font-weight: bold">{</span>cleanup.policy<span style="color: #000000;font-weight: bold">=</span>compact<span style="color: #000000;font-weight: bold">}</span> and initial partition assignment HashMap<span style="color: #000000;font-weight: bold">(</span>0 -&gt; ArrayBuffer<span style="color: #000000;font-weight: bold">(</span>1<span style="color: #000000;font-weight: bold">)</span>, 1 -&gt; ArrayBuffer<span style="color: #000000;font-weight: bold">(</span>1<span style="color: #000000;font-weight: bold">)</span>, 2 -&gt; ArrayBuffer<span style="color: #000000;font-weight: bold">(</span>1<span style="color: #000000;font-weight: bold">)</span>, 3 -&gt; ArrayBuffer<span style="color: #000000;font-weight: bold">(</span>1<span style="color: #000000;font-weight: bold">))</span> <span style="color: #000000;font-weight: bold">(</span>kafka.zk.AdminZkClient<span style="color: #000000;font-weight: bold">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But! Alas! the connector fails:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #000000;font-weight: bold">[</span>2021-01-06 12:03:04,346] ERROR WorkerSourceTask<span style="color: #000000;font-weight: bold">{</span><span style="color: #0086B3">id</span><span style="color: #000000;font-weight: bold">=</span>source-txt-file-01-0<span style="color: #000000;font-weight: bold">}</span> failed to send record to testdata-01:  <span style="color: #000000;font-weight: bold">(</span>org.apache.kafka.connect.runtime.WorkerSourceTask<span style="color: #000000;font-weight: bold">)</span>
+org.apache.kafka.common.InvalidRecordException: This record has failed the validation on broker and hence will be rejected.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>FileStreamSourceConnector</code> sends records with no key set, which for a compacted topic makes no sense, and hence we get <code>org.apache.kafka.common.InvalidRecordException</code>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_attempt_2_i_dont_know_but_uh_its_looking_good_so_far">Attempt 2…  I don’t know, but uh, it’s looking good so far.</h3>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2021/01/looking_good.gif" alt="I don’t know" width="but uh" height="it&#39;s looking good so far."/>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s try a different variation just to prove out the topic configuration:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">curl</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">i</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">X</span> <span style="background-color: #f8f8f8">PUT</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">H</span> <span style="color: #d14">&#34;</span><span style="color: #d14">Accept:application/json</span><span style="color: #d14">&#34;</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">H</span>  <span style="color: #d14">&#34;</span><span style="color: #d14">Content-Type:application/json</span><span style="color: #d14">&#34;</span> <span style="color: #000000;font-weight: bold">\</span>
+     <span style="background-color: #f8f8f8">http</span><span style="background-color: #f8f8f8">:</span><span style="color: #999988;font-style: italic">//localhost:8083/connectors/source-txt-file-02/config \</span>
+     <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">d</span> <span style="color: #d14">&#39;</span><span style="color: #d14">{
+        &#34;connector.class&#34;                          : &#34;org.apache.kafka.connect.file.FileStreamSourceConnector&#34;,
+        &#34;key.converter&#34;                            : &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+        &#34;value.converter&#34;                          : &#34;org.apache.kafka.connect.storage.StringConverter&#34;,
+        &#34;topic&#34;                                    : &#34;testdata-02&#34;,
+        &#34;file&#34;                                     : &#34;/data/test.txt&#34;,
+        &#34;topic.creation.default.partitions&#34;        : 4,
+        &#34;topic.creation.default.replication.factor&#34;: 1,
+        &#34;topic.creation.default.compression.type&#34;  : &#34;snappy&#34;
+        }</span><span style="color: #d14">&#39;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In the Kafka Connect worker log you can see the settings used (under the covers it’s done through <code>TopicCreationGroup</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #000000;font-weight: bold">[</span>2021-01-06 12:11:29,256] INFO Created topic <span style="color: #d14">&#39;(name=testdata-02, numPartitions=4, replicationFactor=1, replicasAssignments=null, configs={compression.type=snappy})&#39;</span> using creation group TopicCreationGroup<span style="color: #000000;font-weight: bold">{</span><span style="color: #008080">name</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;default&#39;</span>, <span style="color: #008080">inclusionPattern</span><span style="color: #000000;font-weight: bold">=</span>.<span style="color: #000000;font-weight: bold">*</span>, <span style="color: #008080">exclusionPattern</span><span style="color: #000000;font-weight: bold">=</span>, <span style="color: #008080">numPartitions</span><span style="color: #000000;font-weight: bold">=</span>4, <span style="color: #008080">replicationFactor</span><span style="color: #000000;font-weight: bold">=</span>1, <span style="color: #008080">otherConfigs</span><span style="color: #000000;font-weight: bold">={</span>compression.type<span style="color: #000000;font-weight: bold">=</span>snappy<span style="color: #000000;font-weight: bold">}}</span> <span style="color: #000000;font-weight: bold">(</span>org.apache.kafka.connect.runtime.WorkerSourceTask<span style="color: #000000;font-weight: bold">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Checking out the topic details we can see it’s as we wanted it - four partitions, and using snappy compression 💥</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #008080">$ </span>kafka-topics <span style="color: #000080">--bootstrap-server</span> broker:29092  <span style="color: #000080">--topic</span> testdata-02 <span style="color: #000080">--describe</span>
+
+Topic: testdata-02      PartitionCount: 4       ReplicationFactor: 1    Configs: compression.type<span style="color: #000000;font-weight: bold">=</span>snappy
+        Topic: testdata-02      Partition: 0    Leader: 1       Replicas: 1     Isr: 1
+        Topic: testdata-02      Partition: 1    Leader: 1       Replicas: 1     Isr: 1
+        Topic: testdata-02      Partition: 2    Leader: 1       Replicas: 1     Isr: 1
+        Topic: testdata-02      Partition: 3    Leader: 1       Replicas: 1     Isr: 1</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_topic_creation_groups">Topic Creation Groups</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In the example above I used just the <code>default</code> topic creation group, but you can create multiple groups of configuration based on the topic name.</p>
+</div>
+<div class="paragraph">
+<p>I can see this being really useful if you want to override topic configuration for just <em>some</em> of the topics that a connector creates but not all of them, or you want to override configuration for all topics but vary it by topic based on the topic name.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_more_examples">More examples</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Check out the <a href="https://docs.confluent.io/platform/current/connect/userguide.html#configuration-examples">docs page</a> for some nicely documented examples of using this feature further.</p>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Senior Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2021 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>

@@ -5,7 +5,7 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2021-01-04</lastBuildDate>
+    <lastBuildDate>2021-01-06</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
     <item>
@@ -111,6 +111,227 @@
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;🎥 &lt;a href=&#34;https://www.youtube.com/confluent&#34;&gt;Confluent&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>Defining custom topic properties with Kafka Connect source connectors</title>
+      <link>https://rmoff.net/2021/01/06/defining-custom-topic-properties-with-kafka-connect-source-connectors/</link>
+      <pubDate>2021-01-06</pubDate>
+      
+      <guid>https://rmoff.net/2021/01/06/defining-custom-topic-properties-with-kafka-connect-source-connectors/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2021/01/BE2FC62C-0C03-45F3-B1BA-32C4F1D64B68.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;When Kafka Connect ingests data from a source system into Kafka it writes it to a topic. Assuming you have set &lt;code&gt;auto.create.topics.enable = true&lt;/code&gt; then it will create these topics for you, and do so using the defaults configured on the broker for topic creation, including &lt;a href=&#34;https://kafka.apache.org/documentation/#brokerconfigs_num.partitions&#34;&gt;&lt;code&gt;num.partitions&lt;/code&gt;&lt;/a&gt; and &lt;a href=&#34;https://kafka.apache.org/documentation/#brokerconfigs_default.replication.factor&#34;&gt;&lt;code&gt;default.replication.factor&lt;/code&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There are many other &lt;a href=&#34;https://kafka.apache.org/documentation/#topicconfigs&#34;&gt;topic-level configurations&lt;/a&gt; which you may want to set for topics that are automatically created by Kafka Connect. This is particularly true for connectors which are creating a large number of topics, or where the topic name is not known in advance (e.g. when using a regex to select objects from the source system) and thus cannot be pre-created with the desired settings. Common settings for a topic that you may want to customise include &lt;a href=&#34;https://kafka.apache.org/documentation/#topicconfigs_cleanup.policy&#34;&gt;cleanup.policy&lt;/a&gt;, &lt;a href=&#34;https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas&#34;&gt;min.insync.replicas&lt;/a&gt;, and &lt;a href=&#34;https://kafka.apache.org/documentation/#topicconfigs_compression.type&#34;&gt;compression.type&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;a href=&#34;https://cwiki.apache.org/confluence/display/KAFKA/KIP-158%3A+Kafka+Connect+should+allow+source+connectors+to+set+topic-specific+settings+for+new+topics&#34;&gt;KIP-158&lt;/a&gt; was implemented in Apache Kafka 2.6 (available with Confluent Platform 6.0), and adds the ability to set topic-level configurations for topics created by Kafka Connect source connectors.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_just_the_defaults_maam&#34;&gt;Just the defaults, ma’am.&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here’s a very simply Kafka Connect source connector, reading data in from a file:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Accept:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
+     &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/source-txt-file-00/config \&lt;/span&gt;
+     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
+        &amp;#34;connector.class&amp;#34;: &amp;#34;org.apache.kafka.connect.file.FileStreamSourceConnector&amp;#34;,
+        &amp;#34;key.converter&amp;#34;  : &amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;,
+        &amp;#34;value.converter&amp;#34;: &amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;,
+        &amp;#34;topic&amp;#34;          : &amp;#34;testdata-00&amp;#34;,
+        &amp;#34;file&amp;#34;           : &amp;#34;/data/test.txt&amp;#34;
+        }&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Since the broker is configured to automagically create new topics (&lt;code&gt;auto.create.topics.enable = true&lt;/code&gt;), it does so and using the defaults - one partition, replication factor of 1, etc. We can examine this using various tools:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;kafka-topics&lt;/code&gt;&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;kafka-topics &lt;span style=&#34;color: #000080&#34;&gt;--bootstrap-server&lt;/span&gt; broker:29092  &lt;span style=&#34;color: #000080&#34;&gt;--topic&lt;/span&gt; testdata-00 &lt;span style=&#34;color: #000080&#34;&gt;--describe&lt;/span&gt;
+Topic: testdata-00      PartitionCount: 1       ReplicationFactor: 1    Configs:
+        Topic: testdata-00      Partition: 0    Leader: 1       Replicas: 1     Isr: 1&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;kafkacat&lt;/code&gt;&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;kafkacat &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; broker:29092 &lt;span style=&#34;color: #000080&#34;&gt;-L&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-J&lt;/span&gt;|jq &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.topics[] | select(.topic ==&amp;#34;testdata&amp;#34;)&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;topic&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;testdata-00&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;partitions&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;partition&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;leader&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;replicas&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;
+        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+          &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;
+        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
+      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;],&lt;/span&gt;
+      &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;isrs&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;
+        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+          &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;
+        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
+      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
+  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_setting_the_configuration_for_auto_created_topics&#34;&gt;Setting the configuration for auto-created topics&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s see how we can use the new options in Apache Kafka 2.6 (Confluent Platform 6.0) to change some of the topic configurations that are set when it’s created.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_attempt_1_crashed_and_burned_mav&#34;&gt;Attempt 1 … Crashed and burned, Mav&lt;/h3&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2021/01/crashed_and_burned.gif&#34; alt=&#34;Crashed and burned! Huh&#34; width=&#34;Mav?&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In my sandbox I just have a single broker so I’m going to leave the number of replicas as a sensible setting of 1, but I’m going to change the number of partitions to four, as well as the cleanup policy from its default of &lt;code&gt;delete&lt;/code&gt; to instead &lt;code&gt;compact&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Accept:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
+     &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/source-txt-file-01/config \&lt;/span&gt;
+     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
+        &amp;#34;connector.class&amp;#34;                          : &amp;#34;org.apache.kafka.connect.file.FileStreamSourceConnector&amp;#34;,
+        &amp;#34;key.converter&amp;#34;                            : &amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;,
+        &amp;#34;value.converter&amp;#34;                          : &amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;,
+        &amp;#34;topic&amp;#34;                                    : &amp;#34;testdata-01&amp;#34;,
+        &amp;#34;file&amp;#34;                                     : &amp;#34;/data/test.txt&amp;#34;,
+        &amp;#34;topic.creation.default.partitions&amp;#34;        : 4,
+        &amp;#34;topic.creation.default.replication.factor&amp;#34;: 1,
+        &amp;#34;topic.creation.default.cleanup.policy&amp;#34;    : &amp;#34;compact&amp;#34;
+        }&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-note&#34; title=&#34;Note&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+If you are setting topic creation overrides you &lt;strong&gt;must&lt;/strong&gt; include &lt;code&gt;replication.factor&lt;/code&gt; and &lt;code&gt;partitions&lt;/code&gt; even if you’re not specifying a value that’s different from the broker default.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In the broker log you can see that the &lt;code&gt;cleanup.policy&lt;/code&gt; configuration has been honoured (&lt;code&gt;{cleanup.policy=compact}&lt;/code&gt;):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;2021-01-06 12:03:04,184] INFO Creating topic testdata-01 with configuration &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;cleanup.policy&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;compact&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt; and initial partition assignment HashMap&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;0 -&amp;gt; ArrayBuffer&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;1&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;, 1 -&amp;gt; ArrayBuffer&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;1&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;, 2 -&amp;gt; ArrayBuffer&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;1&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;, 3 -&amp;gt; ArrayBuffer&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;1&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;))&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;kafka.zk.AdminZkClient&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But! Alas! the connector fails:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;2021-01-06 12:03:04,346] ERROR WorkerSourceTask&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;source-txt-file-01-0&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt; failed to send record to testdata-01:  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;org.apache.kafka.connect.runtime.WorkerSourceTask&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+org.apache.kafka.common.InvalidRecordException: This record has failed the validation on broker and hence will be rejected.&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;code&gt;FileStreamSourceConnector&lt;/code&gt; sends records with no key set, which for a compacted topic makes no sense, and hence we get &lt;code&gt;org.apache.kafka.common.InvalidRecordException&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_attempt_2_i_dont_know_but_uh_its_looking_good_so_far&#34;&gt;Attempt 2…  I don’t know, but uh, it’s looking good so far.&lt;/h3&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2021/01/looking_good.gif&#34; alt=&#34;I don’t know&#34; width=&#34;but uh&#34; height=&#34;it&amp;#39;s looking good so far.&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s try a different variation just to prove out the topic configuration:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Accept:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
+     &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/source-txt-file-02/config \&lt;/span&gt;
+     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
+        &amp;#34;connector.class&amp;#34;                          : &amp;#34;org.apache.kafka.connect.file.FileStreamSourceConnector&amp;#34;,
+        &amp;#34;key.converter&amp;#34;                            : &amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;,
+        &amp;#34;value.converter&amp;#34;                          : &amp;#34;org.apache.kafka.connect.storage.StringConverter&amp;#34;,
+        &amp;#34;topic&amp;#34;                                    : &amp;#34;testdata-02&amp;#34;,
+        &amp;#34;file&amp;#34;                                     : &amp;#34;/data/test.txt&amp;#34;,
+        &amp;#34;topic.creation.default.partitions&amp;#34;        : 4,
+        &amp;#34;topic.creation.default.replication.factor&amp;#34;: 1,
+        &amp;#34;topic.creation.default.compression.type&amp;#34;  : &amp;#34;snappy&amp;#34;
+        }&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In the Kafka Connect worker log you can see the settings used (under the covers it’s done through &lt;code&gt;TopicCreationGroup&lt;/code&gt;):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;2021-01-06 12:11:29,256] INFO Created topic &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;(name=testdata-02, numPartitions=4, replicationFactor=1, replicasAssignments=null, configs={compression.type=snappy})&amp;#39;&lt;/span&gt; using creation group TopicCreationGroup&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;default&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color: #008080&#34;&gt;inclusionPattern&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;.&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;, &lt;span style=&#34;color: #008080&#34;&gt;exclusionPattern&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;, &lt;span style=&#34;color: #008080&#34;&gt;numPartitions&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;4, &lt;span style=&#34;color: #008080&#34;&gt;replicationFactor&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;1, &lt;span style=&#34;color: #008080&#34;&gt;otherConfigs&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;={&lt;/span&gt;compression.type&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;snappy&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}}&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;org.apache.kafka.connect.runtime.WorkerSourceTask&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Checking out the topic details we can see it’s as we wanted it - four partitions, and using snappy compression 💥&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;kafka-topics &lt;span style=&#34;color: #000080&#34;&gt;--bootstrap-server&lt;/span&gt; broker:29092  &lt;span style=&#34;color: #000080&#34;&gt;--topic&lt;/span&gt; testdata-02 &lt;span style=&#34;color: #000080&#34;&gt;--describe&lt;/span&gt;
+
+Topic: testdata-02      PartitionCount: 4       ReplicationFactor: 1    Configs: compression.type&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;snappy
+        Topic: testdata-02      Partition: 0    Leader: 1       Replicas: 1     Isr: 1
+        Topic: testdata-02      Partition: 1    Leader: 1       Replicas: 1     Isr: 1
+        Topic: testdata-02      Partition: 2    Leader: 1       Replicas: 1     Isr: 1
+        Topic: testdata-02      Partition: 3    Leader: 1       Replicas: 1     Isr: 1&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_topic_creation_groups&#34;&gt;Topic Creation Groups&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In the example above I used just the &lt;code&gt;default&lt;/code&gt; topic creation group, but you can create multiple groups of configuration based on the topic name.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I can see this being really useful if you want to override topic configuration for just &lt;em&gt;some&lt;/em&gt; of the topics that a connector creates but not all of them, or you want to override configuration for all topics but vary it by topic based on the topic name.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_more_examples&#34;&gt;More examples&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Check out the &lt;a href=&#34;https://docs.confluent.io/platform/current/connect/userguide.html#configuration-examples&#34;&gt;docs page&lt;/a&gt; for some nicely documented examples of using this feature further.&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
@@ -2053,159 +2274,6 @@ TRACE [sink-jdbc-mysql-day7-00|task-2] Applying transformation io.confluent.conn
 &lt;div class=&#34;sectionbody&#34;&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;You can find the full code for trying this out—including a Docker Compose so you can spin it up on your local machine— &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/kafka-connect-single-message-transforms/day7.adoc&#34;&gt;👾 here&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>🎄 Twelve Days of SMT 🎄 - Day 6: InsertField II</title>
-      <link>https://rmoff.net/2020/12/15/twelve-days-of-smt-day-6-insertfield-ii/</link>
-      <pubDate>2020-12-15</pubDate>
-      
-      <guid>https://rmoff.net/2020/12/15/twelve-days-of-smt-day-6-insertfield-ii/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/12/smt_day6_thumb.jpg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;We kicked off this series by seeing on &lt;a href=&#34;https://rmoff.net/2020/12/08/twelve-days-of-smt-day-1-insertfield-timestamp/&#34;&gt;day 1&lt;/a&gt; how to use &lt;a href=&#34;https://docs.confluent.io/platform/current/connect/transforms/insertfield.html&#34;&gt;&lt;code&gt;InsertField&lt;/code&gt;&lt;/a&gt; to add in the timestamp to a message passing through the Kafka Connect sink connector. Today we’ll see how to use the same Single Message Transform to add in a static field value, as well as the name of the Kafka topic, partition, and offset from which the message has been read.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;transforms&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;                                &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;insertStaticField1&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;transforms.insertStaticField1.type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;org.apache.kafka.connect.transforms.InsertField$Value&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;transforms.insertStaticField1.static.field&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;sourceSystem&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;transforms.insertStaticField1.static.value&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;NeverGonna&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/6XfwZUnZLlI&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/kafka-connect-single-message-transforms/day6.adoc&#34;&gt;👾 Demo code&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_adding_fields_to_messages_at_ingest_in_the_kafka_connect_source_connector&#34;&gt;Adding fields to messages at ingest in the Kafka Connect source connector&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;When ingesting data from a source it can be useful to add fields to store information such as the server from which it was read.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Here’s an example source connector, which adds&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/source-voluble-datagen-day6-00/config \&lt;/span&gt;
-    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
-        &amp;#34;connector.class&amp;#34;                           : &amp;#34;io.mdrogalis.voluble.VolubleSourceConnector&amp;#34;,
-        &amp;#34;genkp.day6-transactions.with&amp;#34;              : &amp;#34;#{Internet.uuid}&amp;#34;,
-        &amp;#34;genv.day6-transactions.cost.with&amp;#34;          : &amp;#34;#{Commerce.price}&amp;#34;,
-        &amp;#34;genv.day6-transactions.card_type.with&amp;#34;     : &amp;#34;#{Business.creditCardType}&amp;#34;,
-        &amp;#34;genv.day6-transactions.item.with&amp;#34;          : &amp;#34;#{Beer.name}&amp;#34;,
-        &amp;#34;topic.day6-transactions.throttle.ms&amp;#34;       : 5000,
-        &amp;#34;transforms&amp;#34;                                : &amp;#34;insertStaticField1,insertStaticField2&amp;#34;,
-        &amp;#34;transforms.insertStaticField1.type&amp;#34;        : &amp;#34;org.apache.kafka.connect.transforms.InsertField$Value&amp;#34;,
-        &amp;#34;transforms.insertStaticField1.static.field&amp;#34;: &amp;#34;sourceSystem&amp;#34;,
-        &amp;#34;transforms.insertStaticField1.static.value&amp;#34;: &amp;#34;NeverGonna&amp;#34;,
-        &amp;#34;transforms.insertStaticField2.type&amp;#34;        : &amp;#34;org.apache.kafka.connect.transforms.InsertField$Value&amp;#34;,
-        &amp;#34;transforms.insertStaticField2.static.field&amp;#34;: &amp;#34;ingestAgent&amp;#34;,
-        &amp;#34;transforms.insertStaticField2.static.value&amp;#34;: &amp;#34;GiveYouUp&amp;#34;
-    }&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The resulting message that’s written to Kafka includes the data from the source system (a data generator, in this case, writing fields &lt;code&gt;cost&lt;/code&gt;, &lt;code&gt;card_type&lt;/code&gt;, and &lt;code&gt;item&lt;/code&gt;), plus the static fields configured (&lt;code&gt;sourceSystem&lt;/code&gt;, &lt;code&gt;ingestAgent&lt;/code&gt;):&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;docker &lt;span style=&#34;color: #0086B3&#34;&gt;exec &lt;/span&gt;kafkacat kafkacat &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; broker:29092 &lt;span style=&#34;color: #000080&#34;&gt;-r&lt;/span&gt; http://schema-registry:8081 &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;s &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;value&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;avro &lt;span style=&#34;color: #000080&#34;&gt;-t&lt;/span&gt; day6-transactions &lt;span style=&#34;color: #000080&#34;&gt;-C&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-c1&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-o&lt;/span&gt; end &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-q&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-J&lt;/span&gt; | jq  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.payload&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;cost&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;25.79&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
-  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;card_type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;visa&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
-  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;item&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Westmalle Trappist Tripel&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
-  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;sourceSystem&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;NeverGonna&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
-  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ingestAgent&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;GiveYouUp&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
-  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
-&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_adding_details_about_the_kafka_message_at_egress_with_a_kafka_connect_sink_connector&#34;&gt;Adding details about the Kafka message at egress with a Kafka Connect sink connector&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;👉 &lt;a href=&#34;https://www.confluent.io/hub/confluentinc/kafka-connect-jdbc&#34; class=&#34;bare&#34;&gt;https://www.confluent.io/hub/confluentinc/kafka-connect-jdbc&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;See also 🎥 &lt;a href=&#34;https://rmoff.dev/kafka-jdbc-video&#34;&gt;Kafka Connect in Action : JDBC Sink&lt;/a&gt; (👾 &lt;a href=&#34;../kafka-to-database/README.adoc&#34;&gt;&lt;code&gt;demo code&lt;/code&gt;&lt;/a&gt;) and 🎥 &lt;a href=&#34;https://rmoff.dev/ksqldb-jdbc-sink-video&#34;&gt;ksqlDB &amp;amp; Kafka Connect JDBC Sink in action&lt;/a&gt; (👾 &lt;a href=&#34;../kafka-to-database/ksqldb-jdbc-sink.adoc&#34;&gt;&lt;code&gt;demo code&lt;/code&gt;&lt;/a&gt;)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;It can often be useful to add information about the Kafka message (topic, partition, offset) when the data is sent to a target system. Here’s an example using the above topic, with another static field added in for good measure. You can also add the timestamp of the Kafka message, &lt;a href=&#34;day1.adoc&#34;&gt;as shown previously&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Accept:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
-    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/sink-jdbc-mysql-day6-00/config \&lt;/span&gt;
-    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
-          &amp;#34;connector.class&amp;#34;                           : &amp;#34;io.confluent.connect.jdbc.JdbcSinkConnector&amp;#34;,
-          &amp;#34;connection.url&amp;#34;                            : &amp;#34;jdbc:mysql://mysql:3306/demo&amp;#34;,
-          &amp;#34;connection.user&amp;#34;                           : &amp;#34;mysqluser&amp;#34;,
-          &amp;#34;connection.password&amp;#34;                       : &amp;#34;mysqlpw&amp;#34;,
-          &amp;#34;topics&amp;#34;                                    : &amp;#34;day6-transactions&amp;#34;,
-          &amp;#34;tasks.max&amp;#34;                                 : &amp;#34;4&amp;#34;,
-          &amp;#34;auto.create&amp;#34;                               : &amp;#34;true&amp;#34;,
-          &amp;#34;auto.evolve&amp;#34;                               : &amp;#34;true&amp;#34;,
-          &amp;#34;transforms&amp;#34;                                : &amp;#34;insertPartition,insertOffset,insertTopic&amp;#34;,
-          &amp;#34;transforms.insertPartition.type&amp;#34;           : &amp;#34;org.apache.kafka.connect.transforms.InsertField$Value&amp;#34;,
-          &amp;#34;transforms.insertPartition.partition.field&amp;#34;: &amp;#34;kafkaPartition&amp;#34;,
-          &amp;#34;transforms.insertOffset.type&amp;#34;              : &amp;#34;org.apache.kafka.connect.transforms.InsertField$Value&amp;#34;,
-          &amp;#34;transforms.insertOffset.offset.field&amp;#34;      : &amp;#34;kafkaOffset&amp;#34;,
-          &amp;#34;transforms.insertTopic.type&amp;#34;               : &amp;#34;org.apache.kafka.connect.transforms.InsertField$Value&amp;#34;,
-          &amp;#34;transforms.insertTopic.topic.field&amp;#34;        : &amp;#34;kafkaTopic&amp;#34;
-        }&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Here’s the data as it appears in the target system:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;mysql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`day6-transactions`&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;LIMIT&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-------+-----------+---------------------+--------------+-------------+----------------+-------------+-------------------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;cost&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;card_type&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item&lt;/span&gt;                &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sourceSystem&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ingestAgent&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafkaPartition&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafkaOffset&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;kafkaTopic&lt;/span&gt;        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-------+-----------+---------------------+--------------+-------------+----------------+-------------+-------------------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;11&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;78&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;visa&lt;/span&gt;      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Schneider&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Aventinus&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NeverGonna&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;GiveYouUp&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;              &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;day6&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;transactions&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;17&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;65&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;discover&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Two&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Hearted&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Ale&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NeverGonna&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;GiveYouUp&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;              &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;day6&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;transactions&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;11&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;63&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;jcb&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Stone&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;IPA&lt;/span&gt;           &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NeverGonna&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;GiveYouUp&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;              &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;day6&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;transactions&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;67&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;51&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;switch&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Shakespeare&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Oatmeal&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NeverGonna&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;GiveYouUp&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;              &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;day6&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;transactions&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;22&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;25&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;discover&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Hop&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Rod&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Rye&lt;/span&gt;         &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;NeverGonna&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;GiveYouUp&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;              &lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;4&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;day6&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;transactions&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-------+-----------+---------------------+--------------+-------------+----------------+-------------+-------------------+&lt;/span&gt;
-&lt;span style=&#34;color: #009999&#34;&gt;5&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;rows&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;set&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_try_it_out&#34;&gt;Try it out!&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can find the full code for trying this out—including a Docker Compose so you can spin it up on your local machine— &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/kafka-connect-single-message-transforms/day6.adoc&#34;&gt;👾 here&lt;/a&gt;&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
