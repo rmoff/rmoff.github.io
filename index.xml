@@ -5,7 +5,7 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2021-02-17</lastBuildDate>
+    <lastBuildDate>2021-02-26</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
     <item>
@@ -111,6 +111,355 @@
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;🎥 &lt;a href=&#34;https://www.youtube.com/confluent&#34;&gt;Confluent&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>Loading delimited data into Kafka - quick &amp; dirty (but effective)</title>
+      <link>https://rmoff.net/2021/02/26/loading-delimited-data-into-kafka-quick-dirty-but-effective/</link>
+      <pubDate>2021-02-26</pubDate>
+      
+      <guid>https://rmoff.net/2021/02/26/loading-delimited-data-into-kafka-quick-dirty-but-effective/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2021/02/IMG_9122.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Whilst Apache Kafka is an event streaming platform designed for, well, &lt;em&gt;streams&lt;/em&gt; of events, it’s perfectly valid to use it as a store of data which perhaps changes only occasionally (or even never). I’m thinking here of reference data (lookup data) that’s used to enrich regular streams of events.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You might well get your reference data from a database where it resides and do so effectively &lt;a href=&#34;https://rmoff.dev/no-more-silos&#34;&gt;using CDC&lt;/a&gt; - but sometimes it comes down to those pesky CSV files that we all know and love/hate. Simple, awful, but effective. I wrote previously about &lt;a href=&#34;https://rmoff.net/2020/06/17/loading-csv-data-into-kafka/&#34;&gt;loading CSV data into Kafka from files that are updated frequently&lt;/a&gt;, but here I want to look at CSV files that are not changing. Kafka Connect simplifies getting data in to (and out of) Kafka but even Kafka Connect becomes a bit of an overhead when you just have a single file that you want to load into a topic and then never deal with again. I spent this afternoon wrangling with a couple of CSV-ish files, and building on my previous article about &lt;a href=&#34;https://rmoff.net/2021/02/02/performing-a-group-by-on-data-in-bash/&#34;&gt;neat tricks you can do in bash with data&lt;/a&gt;, I have some more to share with you here :)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_data&#34;&gt;The data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The first file has two fields and is semi-colon delimited:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat &lt;/span&gt;data01.csv
+shipname&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;mmsi
+FRIO FORWIN&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;210631000
+AQUAMARINE&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;214182223
+OCEAN STAR 98&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;214182700
+MINIK ARCTICA&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;219663000
+IVALO ARCTICA&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;219667000
+IZAR ARGIA&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;224434000
+V CENTENARIO&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;224739000
+MARINERO2&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;238187240
+SANTINA&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;256384000&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The second has more fields, and is comma-separated. There is a common field in both files (&lt;code&gt;mmsi&lt;/code&gt;) and this will be important later.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat &lt;/span&gt;data02.csv
+mmsi,shipname,callsign,flag,imo,first_timestamp,last_timestamp
+306117000,SIERRALAUREL,PJBQ,ANT,9163403,2018-03-29T08:34:21Z,2018-06-30T17:08:41Z
+306873000,SIERRALEYRE,PJJZ,ANT,9135822,2012-01-01T01:06:00Z,2012-06-26T08:58:28Z
+309681,GREENBRAZIL,C6WH6,BHS,9045792,2018-06-29T10:34:00Z,2018-06-30T23:47:40Z
+308735000,NOVA BRETAGNE,C6JI7,BHS,9000364,2012-01-01T00:39:08Z,2013-09-12T10:03:48Z
+311000682,SIERRA LARA,C6DI3,BHS,9120205,2017-07-03T10:28:05Z,2018-06-30T23:35:36Z
+311000433,SILVER PEARL,C6CC5,BHS,8400050,2015-08-19T10:00:02Z,2018-06-30T23:57:13Z
+311000709,SIERRA LEYRE,C6DL3,BHS,9135822,2017-10-12T08:51:41Z,2018-06-30T06:08:40Z
+311043900,GREENCONCORDIA,C6YS7,BHS,9011038,2012-01-03T22:17:16Z,2013-09-09T11:44:22Z
+308572000,RUNAWAY BAY,C6PX2,BHS,9019640,2012-01-01T00:28:40Z,2017-02-08T06:13:05Z&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_requirement&#34;&gt;The requirement&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’m using the data from both these files to enrich a stream of data about the movement of ships, based on the &lt;code&gt;mmsi&lt;/code&gt; field as a key. I want to load both datasets into separate topics, with the &lt;code&gt;mmsi&lt;/code&gt; field set as the key in both.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_solution_tldr&#34;&gt;The solution - tl;dr&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Whilst I could use Kafka Connect connectors for ingesting flat files into Kafka such as &lt;code&gt;kafka-connect-spooldir&lt;/code&gt; and &lt;code&gt;kafka-connect-filepulse&lt;/code&gt;, I wanted something dead simple. Since the data wasn’t changing I didn’t want to get into setting up connectors, and quick &amp;amp; dirty would be just fine.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The short answer here is &lt;code&gt;kafkacat&lt;/code&gt;, which takes &lt;code&gt;stdin&lt;/code&gt; as a source of messages for writing to Kafka. It can be given a delimiter to split the input into key and value for writing to Kafka.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The slightly longer answer is a few other bash tools for manipulating the data into an appropriate state for &lt;code&gt;kafkacat&lt;/code&gt; to receive.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_solution_in_detail&#34;&gt;The solution - in detail&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_switching_fields_around_in_bash&#34;&gt;Switching fields around in bash&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The first file, &lt;code&gt;data01.csv&lt;/code&gt;, has the &lt;code&gt;mmsi&lt;/code&gt; field second, and I want the first so that I can use it as the key when it gets to kafkacat. For that we can use &lt;code&gt;awk&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;awk&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-F&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{ print $2 &amp;#34;,&amp;#34; $1 }&amp;#39;&lt;/span&gt; data01.csv&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Or…we &lt;em&gt;think&lt;/em&gt; we can. Because this was where the fun started. Check this out. What should happen is that with the field separator set to &lt;code&gt;;&lt;/code&gt; awk will store the first field in &lt;code&gt;$1&lt;/code&gt; and second in &lt;code&gt;$2&lt;/code&gt;, which I can then just reverse in the &lt;code&gt;print&lt;/code&gt; output. But what happens is this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;awk&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-F&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{ print $2 &amp;#34;,&amp;#34; $1 }&amp;#39;&lt;/span&gt; data01.csv
+,shipname
+,FRIO FORWIN
+,AQUAMARINE
+,OCEAN STAR 98&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Huh? I get the new field separator (a comma), and the the first field (&lt;code&gt;$1&lt;/code&gt;) — but not the second. Weird. Let’s see if &lt;code&gt;$2&lt;/code&gt; is working:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;awk&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-F&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{ print $2 }&amp;#39;&lt;/span&gt; data01.csv
+mmsi
+210631000
+214182223
+214182700&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Yup, that field is working too - so why aren’t they working together?&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_when_is_a_line_break_different_from_a_line_break&#34;&gt;When is a line break different from a line break?&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;After a lot of headscratching, and a &lt;em&gt;lot&lt;/em&gt; of Google and StackOverflow, I hit on the problem.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2021/02/lineendings.png&#34; alt=&#34;lineendings&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The file was written with &lt;code&gt;/x0d /x0a&lt;/code&gt; (CRLF) line endings, which was screwing things up. I don’t actually know why (&lt;a href=&#34;https://twitter.com/rmoff/&#34;&gt;drop me a line if you do!&lt;/a&gt;) but once I stripped the &lt;code&gt;CR&lt;/code&gt; (&lt;code&gt;\r&lt;/code&gt;) them out with &lt;code&gt;tr&lt;/code&gt; things started to look better:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\r&amp;#39;&lt;/span&gt; &amp;lt; data01.csv |awk &lt;span style=&#34;color: #000080&#34;&gt;-F&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39; { print $2 &amp;#34;,&amp;#34; $1 }&amp;#39;&lt;/span&gt;
+mmsi,shipname
+210631000,FRIO FORWIN
+214182223,AQUAMARINE
+214182700,OCEAN STAR 98&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_setting_a_key_separator_inserting_hex_values_with_awk&#34;&gt;Setting a key separator / Inserting hex values with awk&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’ve &lt;a href=&#34;2020/09/30/setting-key-value-when-piping-from-jq-to-kafkacat/&#34;&gt;written before&lt;/a&gt; about a little trick for manipulating data from &lt;code&gt;jq&lt;/code&gt; piped to &lt;code&gt;kafkacat&lt;/code&gt; such that a key is set in the resulting Kafka message. I wanted to use the same approach here. It relies on putting a character between the key and value part of the data, and picking a character that isn’t going to appear elsewhere in the payload. I used &lt;a href=&#34;https://www.fileformat.info/info/unicode/char/001c/index.htm&#34;&gt;&lt;code&gt;\x1c&lt;/code&gt;&lt;/a&gt; here.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To use it as the separator between the two fields in awk looks like this - I’m piping it to &lt;code&gt;hexdump&lt;/code&gt; so that you can see its effect:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\r&amp;#39;&lt;/span&gt; &amp;lt; data01.csv | &lt;span style=&#34;color: #0086B3&#34;&gt;awk&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-F&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39; { print $2 &amp;#34;\x1c&amp;#34; $1 } &amp;#39;&lt;/span&gt;| hexdump &lt;span style=&#34;color: #000080&#34;&gt;-C&lt;/span&gt;
+00000000  6d 6d 73 69 1c 73 68 69  70 6e 61 6d 65 0a 32 31  |mmsi.shipname.21|
+00000010  30 36 33 31 30 30 30 1c  46 52 49 4f 20 46 4f 52  |0631000.FRIO FOR|
+00000020  57 49 4e 0a 32 31 34 31  38 32 32 32 33 1c 41 51  |WIN.214182223.AQ|
+00000030  55 41 4d 41 52 49 4e 45  0a 32 31 34 31 38 32 37  |UAMARINE.2141827|
+00000040  30 30 1c 4f 43 45 41 4e  20 53 54 41 52 20 39 38  |00.OCEAN STAR 98|&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now we’re ready to stream the data to Kafka, specifying this special character as the key separator to &lt;code&gt;kafkacat&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\r&amp;#39;&lt;/span&gt; &amp;lt; data01.csv | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;awk&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-F&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39; { print $2 &amp;#34;\x1c&amp;#34; $1 } &amp;#39;&lt;/span&gt;| &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  kafkacat &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; localhost:9092 &lt;span style=&#34;color: #000080&#34;&gt;-t&lt;/span&gt; data01 &lt;span style=&#34;color: #000080&#34;&gt;-K&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\x&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;1c&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-P&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We can consume the data from the Kafka topic with &lt;code&gt;kafkacat&lt;/code&gt; to check that it’s worked:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;kafkacat &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; localhost:9092 &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-C&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-o&lt;/span&gt; beginning &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-t&lt;/span&gt; data01 &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-f&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;Topic+Partition+Offset: %t+%p+%o\tKey: %k\tValue: %s\n&amp;#39;&lt;/span&gt;
+Topic+Partition+Offset: data01+0+0      Key: mmsi       Value: shipname
+Topic+Partition+Offset: data01+0+1      Key: 210631000  Value: FRIO FORWIN
+Topic+Partition+Offset: data01+0+2      Key: 214182223  Value: AQUAMARINE
+Topic+Partition+Offset: data01+0+3      Key: 214182700  Value: OCEAN STAR 98&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;NOTE: The CSV header line has been ingested as a data row; if we were fussed we could filter it out prior to ingest with &lt;code&gt;head&lt;/code&gt;.&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So: one file down, one to go. The second one is a bit more tricky because we’ve got more fields to deal with. I don’t really want to start writing &lt;code&gt;awk&lt;/code&gt; statements with a long list of field numbers and separators, so let’s see how we can do it a bit smarter.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_changing_the_first_comma_in_a_csv_file_in_bash&#34;&gt;Changing the first comma in a CSV file in bash&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Unlike the previous file, the key field (&lt;code&gt;mmsi&lt;/code&gt;) &lt;em&gt;is&lt;/em&gt; the first field in this file so we don’t need to reorder things.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;head &lt;/span&gt;data02.csv
+mmsi,shipname,callsign,flag,imo,first_timestamp,last_timestamp
+306117000,SIERRALAUREL,PJBQ,ANT,9163403,2018-03-29T08:34:21Z,2018-06-30T17:08:41Z
+306873000,SIERRALEYRE,PJJZ,ANT,9135822,2012-01-01T01:06:00Z,2012-06-26T08:58:28Z
+309681,GREENBRAZIL,C6WH6,BHS,9045792,2018-06-29T10:34:00Z,2018-06-30T23:47:40Z&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We do, however, want to change the comma into our bespoke key/value delimiter. This time I reached for &lt;code&gt;sed&lt;/code&gt; (although if there’s one thing I learnt from my afternoon of Googling is that &lt;code&gt;sed&lt;/code&gt; and &lt;code&gt;awk&lt;/code&gt; and always &lt;code&gt;perl&lt;/code&gt; usually can be twisted to perform the same function).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In &lt;code&gt;sed&lt;/code&gt; the very common usage is to change one thing for another—so much so that it’s become shorthand amongst nerds when reviewing documents to report a tyop (&lt;code&gt;s/tyop/typo&lt;/code&gt;) — see what I did there? ;-)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So, with &lt;code&gt;sed&lt;/code&gt; if you specify a trailing &lt;code&gt;/g&lt;/code&gt; in the replacement expression then all matches are replaced:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;one_two_three&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/_/ FOO /g&amp;#39;&lt;/span&gt;
+one FOO two FOO three&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Without the trailing &lt;code&gt;/g&lt;/code&gt; only the first match is replaced:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;one_two_three&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/_/ FOO /&amp;#39;&lt;/span&gt;
+one FOO two_three&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So we can use this to replace the first comma (after our key field), whilst leaving the others alone. As before we needed to strip out the &lt;code&gt;CR&lt;/code&gt; characters in the line breaks with &lt;code&gt;tr&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\r&amp;#39;&lt;/span&gt; &amp;lt; data02.csv|sed &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/,/ FOO /&amp;#39;&lt;/span&gt;
+mmsi FOO shipname,callsign,flag,imo,first_timestamp,last_timestamp
+306117000 FOO SIERRALAUREL,PJBQ,ANT,9163403,2018-03-29T08:34:21Z,2018-06-30T17:08:41Z
+306873000 FOO SIERRALEYRE,PJJZ,ANT,9135822,2012-01-01T01:06:00Z,2012-06-26T08:58:28Z
+309681 FOO GREENBRAZIL,C6WH6,BHS,9045792,2018-06-29T10:34:00Z,2018-06-30T23:47:40Z&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now all we need to do is replace ` FOO ` with a single-character hex value that we can use for the key delimiter in &lt;code&gt;kafkacat&lt;/code&gt;. And this was where it got sticky.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_using_a_hex_value_in_the_replacement_argument_of_sed&#34;&gt;Using a hex value in the replacement argument of &lt;code&gt;sed&lt;/code&gt;&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I started off with the fairly obvious, which didn’t work - I just got a literal &lt;code&gt;x1c&lt;/code&gt; value:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\r&amp;#39;&lt;/span&gt; &amp;lt; data02.csv|sed &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/,/\x1c/&amp;#39;&lt;/span&gt;
+mmsix1cshipname,callsign,flag,imo,first_timestamp,last_timestamp
+306117000x1cSIERRALAUREL,PJBQ,ANT,9163403,2018-03-29T08:34:21Z,2018-06-30T17:08:41Z
+306873000x1cSIERRALEYRE,PJJZ,ANT,9135822,2012-01-01T01:06:00Z,2012-06-26T08:58:28Z
+309681x1cGREENBRAZIL,C6WH6,BHS,9045792,2018-06-29T10:34:00Z,2018-06-30T23:47:40Z&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;All that Google wanted to tell me was how to &lt;em&gt;replace&lt;/em&gt; a hex value with &lt;code&gt;sed&lt;/code&gt;, rather than use hex &lt;strong&gt;in the replacement&lt;/strong&gt;. Eventually I found &lt;a href=&#34;https://stackoverflow.com/a/28059344/350613&#34;&gt;this answer on StackOverflow&lt;/a&gt; which set me on the right lines - using &lt;code&gt;$(printf &amp;#39;\x1c&amp;#39;)&lt;/code&gt; (and because that uses single quotes, change the sed expression to be surrounded by double quotes)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\r&amp;#39;&lt;/span&gt; &amp;lt; data02.csv|sed &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;s/,/&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$(&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;printf&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\x1c&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;/&amp;#34;&lt;/span&gt;|hexdump &lt;span style=&#34;color: #000080&#34;&gt;-C&lt;/span&gt;
+00000000  6d 6d 73 69 1c 73 68 69  70 6e 61 6d 65 2c 63 61  |mmsi.shipname,ca|
+00000010  6c 6c 73 69 67 6e 2c 66  6c 61 67 2c 69 6d 6f 2c  |llsign,flag,imo,|
+00000020  66 69 72 73 74 5f 74 69  6d 65 73 74 61 6d 70 2c  |first_timestamp,|
+00000030  6c 61 73 74 5f 74 69 6d  65 73 74 61 6d 70 0a 33  |last_timestamp.3|
+00000040  30 36 31 31 37 30 30 30  1c 53 49 45 52 52 41 4c  |06117000.SIERRAL|
+00000050  41 55 52 45 4c 2c 50 4a  42 51 2c 41 4e 54 2c 39  |AUREL,PJBQ,ANT,9|
+00000060  31 36 33 34 30 33 2c 32  30 31 38 2d 30 33 2d 32  |163403,2018-03-2|
+00000070  39 54 30 38 3a 33 34 3a  32 31 5a 2c 32 30 31 38  |9T08:34:21Z,2018|
+00000080  2d 30 36 2d 33 30 54 31  37 3a 30 38 3a 34 31 5a  |-06-30T17:08:41Z|&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So after this I ended up with&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\r&amp;#39;&lt;/span&gt; &amp;lt; data02.csv | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;s/,/&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$(&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;printf&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\x1c&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;/&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  kafkacat &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; localhost:9092 &lt;span style=&#34;color: #000080&#34;&gt;-t&lt;/span&gt; data02 &lt;span style=&#34;color: #000080&#34;&gt;-K&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\x&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;1c&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-P&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Which worked a treat and loaded the data which looked like this once loaded:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;kafkacat &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; localhost:9092 &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-C&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-o&lt;/span&gt; beginning &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-t&lt;/span&gt; data02 &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-f&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;Topic+Partition+Offset: %t+%p+%o\tKey: %k\tValue: %s\n&amp;#39;&lt;/span&gt;
+Topic+Partition+Offset: data02+0+0      Key: mmsi       Value: shipname,callsign,flag,imo,first_timestamp,last_timestamp
+Topic+Partition+Offset: data02+0+1      Key: 306117000  Value: SIERRALAUREL,PJBQ,ANT,9163403,2018-03-29T08:34:21Z,2018-06-30T17:08:41Z
+Topic+Partition+Offset: data02+0+2      Key: 306873000  Value: SIERRALEYRE,PJJZ,ANT,9135822,2012-01-01T01:06:00Z,2012-06-26T08:58:28Z
+Topic+Partition+Offset: data02+0+3      Key: 309681     Value: GREENBRAZIL,C6WH6,BHS,9045792,2018-06-29T10:34:00Z,2018-06-30T23:47:40Z&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_using_the_data&#34;&gt;Using the data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So, whilst my explanations may have been verbose, the actual result was relatively simple. With the data loaded into Kafka topics I could fire up ksqlDB (in which I was doing the stream processing) and define a table over each topic. The key (!!) thing with tables is that the Kafka message key must be the key declared in the table—which is why we did that extra work above at ingest time.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;data01&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;mmsi&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;BIGINT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;PRIMARY&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;KEY&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;shipname_raw&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;varchar&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;KAFKA_TOPIC&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;data01&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;FORMAT&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;DELIMITED&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;
+
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;data02&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;mmsi&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;BIGINT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;PRIMARY&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;KEY&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;shipname&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;VARCHAR&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;callsign&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;VARCHAR&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;flag&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;VARCHAR&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;imo&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;VARCHAR&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;first_timestamp&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;VARCHAR&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;last_timestamp&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;VARCHAR&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;KAFKA_TOPIC&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;data02&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;FORMAT&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;DELIMITED&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;And with the tables defined, I could query them:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ksql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;data01&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;EMIT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CHANGES&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;LIMIT&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-----------+--------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;MMSI&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;SHIPNAME_RAW&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-----------+--------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;210631000&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;FRIO&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;FORWIN&lt;/span&gt;   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;214182223&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;AQUAMARINE&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;214182700&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;OCEAN&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STAR&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;98&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Limit&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Reached&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Query&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;terminated&lt;/span&gt;
+
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ksql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;data02&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;EMIT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CHANGES&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;LIMIT&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----------+-------------+---------+-----+--------+---------------------+---------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;MMSI&lt;/span&gt;      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;SHIPNAME&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CALLSIGN&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;FLAG&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;IMO&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;FIRST_TIMESTAMP&lt;/span&gt;      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;LAST_TIMESTAMP&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----------+-------------+---------+-----+--------+---------------------+---------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;306117000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;SIERRALAUREL&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PJBQ&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ANT&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;9163403&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2018&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;29&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;T08&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;34&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;21&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Z&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2018&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;30&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;T17&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;08&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;41&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Z&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;306873000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;SIERRALEYRE&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PJJZ&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ANT&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;9135822&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2012&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;T01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Z&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2012&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;26&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;T08&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;58&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;28&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Z&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;309681&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;GREENBRAZIL&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;C6WH6&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;BHS&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;9045792&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2018&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;29&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;T10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;34&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Z&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2018&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;30&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;T23&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;47&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;40&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Z&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Limit&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Reached&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Query&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;terminated&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
@@ -2206,253 +2555,6 @@ record.value&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/s
 &lt;div class=&#34;sectionbody&#34;&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;You can find the full code for trying this out—including a Docker Compose so you can spin it up on your local machine— &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/kafka-connect-single-message-transforms/day11.adoc&#34;&gt;👾 here&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>🎄 Twelve Days of SMT 🎄 - Day 10: ReplaceField</title>
-      <link>https://rmoff.net/2020/12/21/twelve-days-of-smt-day-10-replacefield/</link>
-      <pubDate>2020-12-21</pubDate>
-      
-      <guid>https://rmoff.net/2020/12/21/twelve-days-of-smt-day-10-replacefield/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2020/12/smt_day10_thumb.jpg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The &lt;a href=&#34;https://docs.confluent.io/platform/current/connect/transforms/replacefield.html&#34;&gt;&lt;code&gt;ReplaceField&lt;/code&gt;&lt;/a&gt; Single Message Transform has three modes of operation on fields of data passing through Kafka Connect:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Include &lt;strong&gt;only&lt;/strong&gt; the fields specified in the list (&lt;code&gt;whitelist&lt;/code&gt;)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Include all fields &lt;strong&gt;except&lt;/strong&gt; the ones specified (&lt;code&gt;blacklist&lt;/code&gt;)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Rename field(s) (&lt;code&gt;renames&lt;/code&gt;)&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;It can be used in both a source and sink connector depending on requirements.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/I0nd3GH_VzY&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;(&lt;a href=&#34;https://cwiki.apache.org/confluence/display/KAFKA/KIP-629%3A+Use+racially+neutral+terms+in+our+codebase&#34;&gt;KIP-629&lt;/a&gt; has started to be implemented in Apache Kafka 2.7. If you are using an earlier version then you will have to use &lt;code&gt;blacklist&lt;/code&gt; and &lt;code&gt;whitelist&lt;/code&gt; in place of &lt;code&gt;exclude&lt;/code&gt; and &lt;code&gt;include&lt;/code&gt; respectively)&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/kafka-connect-single-message-transforms/day10.adoc&#34;&gt;👾 Demo code&lt;/a&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_dropping_fields_in_a_sink_connector&#34;&gt;Dropping fields in a sink connector&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Imagine we have a source topic with multiple fields in:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;docker &lt;span style=&#34;color: #0086B3&#34;&gt;exec &lt;/span&gt;kafkacat kafkacat &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; broker:29092 &lt;span style=&#34;color: #000080&#34;&gt;-r&lt;/span&gt; http://schema-registry:8081 &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;s &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;value&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;avro &lt;span style=&#34;color: #000080&#34;&gt;-t&lt;/span&gt; day10-transactions &lt;span style=&#34;color: #000080&#34;&gt;-C&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-c1&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-o-1&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-q&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-J&lt;/span&gt; |  jq  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.payload&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Gen0&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;cost&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;            &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;12.85&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;units&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;           &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;card_type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;maestro&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;item&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;            &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Hercules Double IPA&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;customer_remarks&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Perfect! My experiment worked! They&amp;#39;re all exactly 25 minutes slow!&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;cc_num&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;          &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;1228-1221-1221-1431&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;cc_exp&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;          &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2013-9-12&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;txn_date&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Wed Dec 16 07:59:52 GMT 2020&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
-  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
-&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This data is in Kafka, but the system to which we’re going to stream it with a sink connector mustn’t hold sensitive information, such as credit card data. One option is to &lt;a href=&#34;https://rmoff.net/2020/12/14/twelve-days-of-smt-day-5-maskfield/&#34;&gt;&lt;code&gt;Mask&lt;/code&gt;&lt;/a&gt; it, but this retains the fields in the payload which is wasteful if we simply don’t want them in the target system. We can use &lt;code&gt;ReplaceField&lt;/code&gt; to exclude a set of fields from passing through Kafka Connect:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;curl &lt;span style=&#34;color: #000080&#34;&gt;-i&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-X&lt;/span&gt; PUT &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Accept:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; http://localhost:8083/connectors/sink-jdbc-mysql-day10-01/config &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{
-      &amp;#34;connector.class&amp;#34;            : &amp;#34;io.confluent.connect.jdbc.JdbcSinkConnector&amp;#34;,
-      &amp;#34;connection.url&amp;#34;             : &amp;#34;jdbc:mysql://mysql:3306/demo&amp;#34;,
-      &amp;#34;connection.user&amp;#34;            : &amp;#34;mysqluser&amp;#34;,
-      &amp;#34;connection.password&amp;#34;        : &amp;#34;mysqlpw&amp;#34;,
-      &amp;#34;topics&amp;#34;                     : &amp;#34;day10-transactions&amp;#34;,
-      &amp;#34;tasks.max&amp;#34;                  : &amp;#34;4&amp;#34;,
-      &amp;#34;auto.create&amp;#34;                : &amp;#34;true&amp;#34;,
-      &amp;#34;auto.evolve&amp;#34;                : &amp;#34;true&amp;#34;,
-      &amp;#34;transforms&amp;#34;                 : &amp;#34;dropCC&amp;#34;,
-      &amp;#34;transforms.dropCC.type&amp;#34;     : &amp;#34;org.apache.kafka.connect.transforms.ReplaceField$Value&amp;#34;,
-      &amp;#34;transforms.dropCC.blacklist&amp;#34;: &amp;#34;cc_num,cc_exp,card_type&amp;#34;
-      }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;In the target system (a database, in this case) the credit card fields are not present, exactly as intended:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;mysql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;describe&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`day10-transactions`&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;------------------+------+------+-----+---------+-------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Field&lt;/span&gt;            &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Type&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Null&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Key&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Default&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Extra&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;------------------+------+------+-----+---------+-------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;cost&lt;/span&gt;             &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;units&lt;/span&gt;            &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item&lt;/span&gt;             &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;customer_remarks&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;txn_date&lt;/span&gt;         &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;------------------+------+------+-----+---------+-------+&lt;/span&gt;
-&lt;span style=&#34;color: #009999&#34;&gt;5&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;rows&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;set&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_including_only_certain_fields_in_a_source_connector&#34;&gt;Including only certain fields in a source connector&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This time we have a source connector that’s ingesting data from a system that includes numerous fields that we don’t want to ingest into Kafka. Because a Single Message Transform applies to the pipeline &lt;strong&gt;before&lt;/strong&gt; a message is written to Kafka, not after, we can deliberately ensure that certain data is never stored in Kafka if it’s not intended to be.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The source connector in this example is reading data from a database with a schema that looks like this:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;mysql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;describe&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;production_data&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;------------------+------+------+-----+---------+-------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Field&lt;/span&gt;            &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Type&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Null&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Key&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Default&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Extra&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;------------------+------+------+-----+---------+-------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;cost&lt;/span&gt;             &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;units&lt;/span&gt;            &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;card_type&lt;/span&gt;        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item&lt;/span&gt;             &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;customer_remarks&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;cc_num&lt;/span&gt;           &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;cc_exp&lt;/span&gt;           &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;txn_date&lt;/span&gt;         &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;------------------+------+------+-----+---------+-------+&lt;/span&gt;
-&lt;span style=&#34;color: #009999&#34;&gt;8&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;rows&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;set&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Unlike the scenario in the first section this time we want to extract data from the source system but only certain fields that we need for our particular analytics pipeline. It may be that it’s inefficient to ingest a large number of redundant fields, or that the data is sensitive and we’re not allowed to store it in our topic. In this case we specify just a list of fields to include:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;curl &lt;span style=&#34;color: #000080&#34;&gt;-X&lt;/span&gt; PUT http://localhost:8083/connectors/source-jdbc-mysql-day10-00/config &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Content-Type: application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{
-    &amp;#34;connector.class&amp;#34;                  : &amp;#34;io.confluent.connect.jdbc.JdbcSourceConnector&amp;#34;,
-    &amp;#34;connection.url&amp;#34;                   : &amp;#34;jdbc:mysql://mysql:3306/demo&amp;#34;,
-    &amp;#34;connection.user&amp;#34;                  : &amp;#34;mysqluser&amp;#34;,
-    &amp;#34;connection.password&amp;#34;              : &amp;#34;mysqlpw&amp;#34;,
-    &amp;#34;topic.prefix&amp;#34;                     : &amp;#34;day10-&amp;#34;,
-    &amp;#34;poll.interval.ms&amp;#34;                 : 10000,
-    &amp;#34;tasks.max&amp;#34;                        : 1,
-    &amp;#34;table.whitelist&amp;#34;                  : &amp;#34;production_data&amp;#34;,
-    &amp;#34;mode&amp;#34;                             : &amp;#34;bulk&amp;#34;,
-    &amp;#34;transforms&amp;#34;                       : &amp;#34;selectFields&amp;#34;,
-    &amp;#34;transforms.selectFields.type&amp;#34;     : &amp;#34;org.apache.kafka.connect.transforms.ReplaceField$Value&amp;#34;,
-    &amp;#34;transforms.selectFields.whitelist&amp;#34;: &amp;#34;item,cost,units,txn_date&amp;#34;
-  }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The resulting Kafka topic is populated with only the fields of interest:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;docker &lt;span style=&#34;color: #0086B3&#34;&gt;exec &lt;/span&gt;kafkacat kafkacat &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; broker:29092 &lt;span style=&#34;color: #000080&#34;&gt;-r&lt;/span&gt; http://schema-registry:8081 &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;key&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;s &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;value&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;avro &lt;span style=&#34;color: #000080&#34;&gt;-t&lt;/span&gt; day10-production_data &lt;span style=&#34;color: #000080&#34;&gt;-C&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-o-1&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-q&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-J&lt;/span&gt; | jq  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.payload&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;cost&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;48.54&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;units&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;   &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;41&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;item&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Oak Aged Yeti Imperial Stout&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;txn_date&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;string&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Mon Dec 14 11:43:56 GMT 2020&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;
-&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_renaming_fields&#34;&gt;Renaming fields&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Perhaps you want to keep all the fields in the payload - but you want to change the name of them. This could be for various reasons, including:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Standardise common naming for the same business measures as data is ingested into Kafka&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Change a field to fit an existing name in a target object in a sink connector&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Here’s an example renaming a field in a sink connector:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;curl &lt;span style=&#34;color: #000080&#34;&gt;-i&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-X&lt;/span&gt; PUT &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Accept:application/json&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Content-Type:application/json&amp;#34;&lt;/span&gt; http://localhost:8083/connectors/sink-jdbc-mysql-day10-02/config &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{
-      &amp;#34;connector.class&amp;#34;            : &amp;#34;io.confluent.connect.jdbc.JdbcSinkConnector&amp;#34;,
-      &amp;#34;connection.url&amp;#34;             : &amp;#34;jdbc:mysql://mysql:3306/demo&amp;#34;,
-      &amp;#34;connection.user&amp;#34;            : &amp;#34;mysqluser&amp;#34;,
-      &amp;#34;connection.password&amp;#34;        : &amp;#34;mysqlpw&amp;#34;,
-      &amp;#34;topics&amp;#34;                     : &amp;#34;day10-production_data&amp;#34;,
-      &amp;#34;tasks.max&amp;#34;                  : &amp;#34;4&amp;#34;,
-      &amp;#34;auto.create&amp;#34;                : &amp;#34;true&amp;#34;,
-      &amp;#34;auto.evolve&amp;#34;                : &amp;#34;true&amp;#34;,
-      &amp;#34;transforms&amp;#34;                 : &amp;#34;renameTS&amp;#34;,
-      &amp;#34;transforms.renameTS.type&amp;#34;   : &amp;#34;org.apache.kafka.connect.transforms.ReplaceField$Value&amp;#34;,
-      &amp;#34;transforms.renameTS.renames&amp;#34;: &amp;#34;txn_date:transaction_timestamp&amp;#34;
-      }&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;The resulting table in the database has the amended field name (&lt;code&gt;transaction_timestamp&lt;/code&gt;):&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;mysql&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;describe&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`day10-production_data`&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-----------------------+------+------+-----+---------+-------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Field&lt;/span&gt;                 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Type&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Null&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Key&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;Default&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Extra&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-----------------------+------+------+-----+---------+-------+&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;cost&lt;/span&gt;                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;units&lt;/span&gt;                 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;card_type&lt;/span&gt;             &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item&lt;/span&gt;                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;customer_remarks&lt;/span&gt;      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;cc_num&lt;/span&gt;                &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;cc_exp&lt;/span&gt;                &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;transaction_timestamp&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;YES&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt;    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-----------------------+------+------+-----+---------+-------+&lt;/span&gt;
-&lt;span style=&#34;color: #009999&#34;&gt;8&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;rows&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;set&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;sec&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_try_it_out&#34;&gt;Try it out!&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can find the full code for trying this out—including a Docker Compose so you can spin it up on your local machine— &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/kafka-connect-single-message-transforms/day10.adoc&#34;&gt;👾 here&lt;/a&gt;&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
