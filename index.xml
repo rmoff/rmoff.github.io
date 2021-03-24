@@ -5,7 +5,7 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2021-03-19</lastBuildDate>
+    <lastBuildDate>2021-03-24</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
     <item>
@@ -111,6 +111,257 @@
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;🎥 &lt;a href=&#34;https://www.youtube.com/confluent&#34;&gt;Confluent&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>Connecting to managed ksqlDB in Confluent Cloud with REST and ksqlDB CLI</title>
+      <link>https://rmoff.net/2021/03/24/connecting-to-managed-ksqldb-in-confluent-cloud-with-rest-and-ksqldb-cli/</link>
+      <pubDate>2021-03-24</pubDate>
+      
+      <guid>https://rmoff.net/2021/03/24/connecting-to-managed-ksqldb-in-confluent-cloud-with-rest-and-ksqldb-cli/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2021/03/IMG_9301.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Using ksqlDB in &lt;a href=&#34;https://www.confluent.io/confluent-cloud/tryfree?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-local-to-cloud&amp;amp;utm_term=rmoff-devx&#34;&gt;Confluent Cloud&lt;/a&gt; makes things a whole bunch easier because now you just get to build apps and streaming pipelines, instead of having to run and manage a bunch of infrastructure yourself.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Once you’ve got ksqlDB provisioned on Confluent Cloud you can use the web-based editor to build and run queries. You can also connect to it using the &lt;a href=&#34;https://docs.ksqldb.io/en/latest/developer-guide/ksqldb-rest-api/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-local-to-cloud&amp;amp;utm_term=rmoff-devx&#34;&gt;REST API&lt;/a&gt; and the [ksqlDB CLI tool]. Here’s how.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_creating_the_ksqldb_api_key&#34;&gt;Creating the ksqlDB API key&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You need to generate an API keypair for your ksqlDB instance (known as an application). This is a different API keypair from that which you will have for your Kafka brokers on Confluent Cloud.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Using the &lt;a href=&#34;https://docs.confluent.io/ccloud-cli/current/index.html?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-local-to-cloud&amp;amp;utm_term=rmoff-devx&#34;&gt;Confluent Cloud CLI&lt;/a&gt;, first authenticate:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;ccloud login
+…
+Logged &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;as &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;rick@nevergonnagiveyouup.com&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;.&lt;/span&gt;
+Using environment &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;t4242&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;default&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;.&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Then list out the ksqlDB application(s) present:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;ccloud ksql app list
+
+       Id      |   Name   | Topic Prefix |   Kafka   | Storage |                          Endpoint                          | Status
++--------------+----------+--------------+-----------+---------+------------------------------------------------------------+--------+
+  lksqlc-1234  | trains   | pksqlc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*****&lt;/span&gt; | lkc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*****&lt;/span&gt; |     500 | https://pksqlc-1234.europe-north1.gcp.confluent.cloud:443 | UP
+  lksqlc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*****&lt;/span&gt; | ais      | pksqlc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*****&lt;/span&gt; | lkc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*****&lt;/span&gt; |     500 | https://pksqlc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;****&lt;/span&gt;.us-west2.gcp.confluent.cloud:443      | UP
+  lksqlc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*****&lt;/span&gt; | carparks | pksqlc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*****&lt;/span&gt; | lkc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*****&lt;/span&gt; |     500 | https://pksqlc-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;****&lt;/span&gt;.us-east1.gcp.confluent.cloud:443      | UP&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Make a note of the Endpoint, as well as the &lt;code&gt;Id&lt;/code&gt; of the ksqlDB application to which you want to connect. Specify the &lt;code&gt;Id&lt;/code&gt; as the value for &lt;code&gt;--resource&lt;/code&gt; in this command which will create the keypair:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;ccloud api-key create &lt;span style=&#34;color: #000080&#34;&gt;--resource&lt;/span&gt; lksqlc-1234
+It may take a couple of minutes &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for &lt;/span&gt;the API key to be ready.
+Save the API key and secret. The secret is not retrievable later.
++---------+------------------------------------------------------------------+
+| API Key | FGVYFW3ER4W4AONO                                                 |
+| Secret  | ude+PKSIHkrl3/nn32ikkesiaIMlfPw37qGaEx1Jy9zXMVRqTUYmKaIKU5gD5pw0 |
++---------+------------------------------------------------------------------+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-note&#34; title=&#34;Note&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+Protect this key as it allows access to your data &amp;amp; processing! Don’t do anything daft like, say, publish it in a blog on the internet 😉 &lt;em&gt;(…without revoking it first)&lt;/em&gt;
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You may choose to store the relevant connection details in a local &lt;code&gt;.env&lt;/code&gt; file - this is up to you, but I’m doing it here because it makes things more reusable.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# This is a .env file&lt;/span&gt;
+&lt;span style=&#34;color: #008080&#34;&gt;CCLOUD_KSQL_API_KEY&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;FGVYFW3ER4W4AONO
+&lt;span style=&#34;color: #008080&#34;&gt;CCLOUD_KSQL_API_SECRET&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;ude+PKSIHkrl3/nn32ikkesiaIMlfPw37qGaEx1Jy9zXMVRqTUYmKaIKU5gD5pw0
+&lt;span style=&#34;color: #008080&#34;&gt;CCLOUD_KSQL_ENDPOINT&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;https://pksqlc-1234.europe-north1.gcp.confluent.cloud:443&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Once created you can load the environment variables into your local session by running&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;source&lt;/span&gt; .env&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_connecting_to_ksqldb_on_confluent_cloud_from_local_cli&#34;&gt;Connecting to ksqlDB on Confluent Cloud from local CLI&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can install ksqlDB locally as part of the &lt;a href=&#34;https://www.confluent.io/download/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-local-to-cloud&amp;amp;utm_term=rmoff-devx&#34;&gt;Confluent Platform download&lt;/a&gt;, or just run it as a Docker container. Here I’m running it as temporary container that’s deleted when it exits. I’m using the ksqlDB endpoint and authentication details saved in a  &lt;code&gt;.env&lt;/code&gt; file as shown above.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;source&lt;/span&gt; .env
+
+docker run &lt;span style=&#34;color: #000080&#34;&gt;--interactive&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;--tty&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;--rm&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  confluentinc/ksqldb-server:0.15.0 &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  ksql &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_KEY&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+       &lt;span style=&#34;color: #000080&#34;&gt;-p&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_SECRET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+          &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_ENDPOINT&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;===========================================&lt;/span&gt;
+                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;       _              _ ____  ____       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
+                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;      | | _____  __ _| |  _ &lt;span style=&#34;color: #d14&#34;&gt;\|&lt;/span&gt; __ &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
+                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;      | |/ / __|/ _&lt;span style=&#34;color: #d14&#34;&gt;`&lt;/span&gt; | | | | |  _ &lt;span style=&#34;color: #d14&#34;&gt;\ &lt;/span&gt;     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
+                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;      |   &amp;lt;&lt;span style=&#34;color: #d14&#34;&gt;\_&lt;/span&gt;_ &lt;span style=&#34;color: #d14&#34;&gt;\ &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;_| | | |_| | |_&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt; |     &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
+                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;      |_|&lt;span style=&#34;color: #d14&#34;&gt;\_\_&lt;/span&gt;__/&lt;span style=&#34;color: #d14&#34;&gt;\_&lt;/span&gt;_, |_|____/|____/      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
+                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;                   |_|                   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
+                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;  Event Streaming Database purpose-built &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
+                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for &lt;/span&gt;stream processing apps       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;
+                  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;===========================================&lt;/span&gt;
+
+Copyright 2017-2020 Confluent Inc.
+
+CLI v0.15.0, Server v0.15.0-rc863 located at https://pksqlc-1234.europe-north1.gcp.confluent.cloud:443
+Server Status: RUNNING
+
+Having trouble? Type &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;help&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;case&lt;/span&gt;&lt;span style=&#34;color: #000080&#34;&gt;-insensitive&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for &lt;/span&gt;a rundown of how things work!
+
+ksql&amp;gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_connecting_to_the_ksqldb_rest_api_on_confluent_cloud&#34;&gt;Connecting to the ksqlDB REST API on Confluent Cloud&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;ksqlDB has a rich &lt;a href=&#34;https://docs.ksqldb.io/en/latest/developer-guide/ksqldb-rest-api/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-local-to-cloud&amp;amp;utm_term=rmoff-devx&#34;&gt;REST API&lt;/a&gt; that you can use for creating and querying objects in ksqlDB. You can use it directly from a tool like &lt;code&gt;curl&lt;/code&gt;, or embedded within your own application.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The first thing to do is &amp;#39;smoke test&amp;#39; the connection and make sure you have the correct authentication details and endpoint. Here I’m using &lt;a href=&#34;https://httpie.io/&#34;&gt;HTTPie&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;http &lt;span style=&#34;color: #000080&#34;&gt;-a&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_KEY&lt;/span&gt;:&lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_SECRET&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_ENDPOINT&lt;/span&gt;/info
+HTTP/1.1 200 OK
+content-length: 130
+content-type: application/json
+
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;KsqlServerInfo&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;kafkaClusterId&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;lkc-*****&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;ksqlServiceId&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;pksqlc-1234&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;serverStatus&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;RUNNING&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;version&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;0.15.0-rc863&amp;#34;&lt;/span&gt;
+    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The same thing works with &lt;code&gt;curl&lt;/code&gt; (just not as natively pretty-printed 😃):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;curl &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_KEY&lt;/span&gt;:&lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_SECRET&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_ENDPOINT&lt;/span&gt;/info
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;KsqlServerInfo&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;version&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;0.15.0-rc863&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;kafkaClusterId&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;lkc-*****&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;ksqlServiceId&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;pksqlc-1234&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;serverStatus&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;RUNNING&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;a href=&#34;https://docs.ksqldb.io/en/latest/developer-guide/ksqldb-rest-api/ksql-endpoint/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-local-to-cloud&amp;amp;utm_term=rmoff-devx&#34;&gt;&lt;code&gt;/ksql&lt;/code&gt;&lt;/a&gt; endpoint is used to run statements, such as listing topics:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{&amp;#34;ksql&amp;#34;: &amp;#34;LIST STREAMS;&amp;#34;, &amp;#34;streamsProperties&amp;#34;: {}}&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  http &lt;span style=&#34;color: #000080&#34;&gt;-a&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_KEY&lt;/span&gt;:&lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_SECRET&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_ENDPOINT&lt;/span&gt;/ksql&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;HTTP&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1.1&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;200&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;OK&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;content&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;length&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;976&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;content&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;type&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;application&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;json&lt;/span&gt;
+
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;@type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;kafka_topics&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+        &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;statementText&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;SHOW TOPICS;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+        &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;topics&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;
+            &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+                &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;_kafka-connect-group-gcp-v11-configs&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+                &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;replicaInfo&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;
+                    &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt;
+                &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;
+            &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;
+            &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;
+                &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;_kafka-connect-group-gcp-v11-offsets&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+                &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;replicaInfo&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You also use the &lt;a href=&#34;https://docs.ksqldb.io/en/latest/developer-guide/ksqldb-rest-api/ksql-endpoint/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-local-to-cloud&amp;amp;utm_term=rmoff-devx&#34;&gt;&lt;code&gt;/ksql&lt;/code&gt;&lt;/a&gt; endpoint to run statements which create tables and streams. This is how you can programatically deploy ksqlDB applications and pipelines.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This looks a bit grim because of all the &lt;a href=&#34;https://stackoverflow.com/questions/1250079/how-to-escape-single-quotes-within-single-quoted-strings&#34;&gt;quoting&lt;/a&gt;, but the concept is still simple.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{&amp;#34;ksql&amp;#34;:&amp;#34;CREATE STREAM LOCATIONS_RAW WITH (KAFKA_TOPIC=&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#39;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;ukrail-locations&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#39;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;, FORMAT=&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#39;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;AVRO&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#39;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;);&amp;#34;, &amp;#34;streamsProperties&amp;#34;: {}}&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  http &lt;span style=&#34;color: #000080&#34;&gt;-a&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_KEY&lt;/span&gt;:&lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_SECRET&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_ENDPOINT&lt;/span&gt;/ksql&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;json&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+  &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;@type&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;currentStatus&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;statementText&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;CREATE STREAM LOCATIONS_RAW (ROWKEY STRING KEY, LOCATION_ID STRING, NAME STRING, DESCRIPTION STRING, TIPLOC STRING, CRS STRING, NLC STRING, STANOX STRING, NOTES STRING, LONGITUDE STRING, LATITUDE STRING, ISOFFNETWORK STRING, TIMINGPOINTTYPE STRING) WITH (FORMAT=&amp;#39;AVRO&amp;#39;, KAFKA_TOPIC=&amp;#39;ukrail-locations&amp;#39;, KEY_SCHEMA_ID=100092, VALUE_SCHEMA_ID=100093);&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;commandId&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;stream/`LOCATIONS_RAW`/create&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;commandStatus&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+      &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;SUCCESS&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+      &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;message&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Stream created&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+      &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;queryId&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;},&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;commandSequenceNumber&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+    &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;warnings&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[]&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+  &lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To query a stream you use the &lt;a href=&#34;https://docs.ksqldb.io/en/latest/developer-guide/ksqldb-rest-api/streaming-endpoint/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-local-to-cloud&amp;amp;utm_term=rmoff-devx&#34;&gt;&lt;code&gt;/query-stream&lt;/code&gt;&lt;/a&gt; endpoint. Note that you have to use HTTP2 for this which (as far as I can tell) HTTPie does not support, so I’m showing &lt;code&gt;curl&lt;/code&gt; here. Also note that the API payload is different - &lt;code&gt;sql&lt;/code&gt; instead of &lt;code&gt;ksql&lt;/code&gt; and &lt;code&gt;properties&lt;/code&gt; instead of &lt;code&gt;streamsProperties&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;curl &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_KEY&lt;/span&gt;:&lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_SECRET&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_ENDPOINT&lt;/span&gt;/query-stream &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{&amp;#34;sql&amp;#34;:&amp;#34;SELECT * FROM LOCATIONS_RAW EMIT CHANGES LIMIT 5;&amp;#34;, &amp;#34;properties&amp;#34;: { &amp;#34;ksql.streams.auto.offset.reset&amp;#34;: &amp;#34;earliest&amp;#34; }}&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;queryId&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;dc3ca802-1577-4d93-93c3-a4e9f3aa2654&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;columnNames&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ROWKEY&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;LOCATION_ID&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;NAME&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;DESCRIPTION&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;TIPLOC&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;CRS&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;NLC&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STANOX&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;NOTES&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;LONGITUDE&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;LATITUDE&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ISOFFNETWORK&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;TIMINGPOINTTYPE&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;],&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;columnTypes&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]}&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2506&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2506&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Atos C Interface&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Atos C Interface&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;1800&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2510&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2510&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Tflb Interface&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Tflb Interface&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2200&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2514&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2514&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Hq Input Spare&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Hq Input Ttl Inward Spare&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2600&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2516&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2516&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Capcard 2 (Test Purpose Only)&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2800&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2522&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;2522&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Dunfermline&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;3323&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
@@ -3034,76 +3285,6 @@ There’s an even better way than I’ve described here, and it’s called &lt;c
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Running as root on Docker images that don&#39;t use root</title>
-      <link>https://rmoff.net/2021/01/13/running-as-root-on-docker-images-that-dont-use-root/</link>
-      <pubDate>2021-01-13</pubDate>
-      
-      <guid>https://rmoff.net/2021/01/13/running-as-root-on-docker-images-that-dont-use-root/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2018/11/IMG_7280-EFFECTS.jpg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;p&gt;tl;dr: specify the &lt;code&gt;--user root&lt;/code&gt; argument:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;docker &lt;span style=&#34;color:#008000&#34;&gt;exec&lt;/span&gt; --interactive &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            --tty &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            --user root &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            --workdir / &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;            container-name bash&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;p&gt;There are &lt;a href=&#34;https://engineering.bitnami.com/articles/why-non-root-containers-are-important-for-security.html&#34;&gt;good reasons&lt;/a&gt; why running in a container as root is not a good idea, and that&amp;rsquo;s why many images published nowadays avoid doing this. &lt;a href=&#34;https://hub.docker.com/r/confluentinc/&#34;&gt;Confluent Platform&amp;rsquo;s Docker images&lt;/a&gt; changed to using &lt;code&gt;appuser&lt;/code&gt; with the 6.0 release.&lt;/p&gt;
-&lt;h2 id=&#34;checking-the-container-user&#34;&gt;Checking the container user&lt;/h2&gt;
-&lt;p&gt;You can check what user your container is running with:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ docker &lt;span style=&#34;color:#008000&#34;&gt;exec&lt;/span&gt; --interactive --tty kafka bash
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;appuser@b59043522a44 ~&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;$ whoami
-appuser
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;or more directly:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ docker &lt;span style=&#34;color:#008000&#34;&gt;exec&lt;/span&gt; --interactive --tty kafka whoami
-appuser
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;changing-the-container-user&#34;&gt;Changing the container user&lt;/h2&gt;
-&lt;p&gt;Using the &lt;code&gt;--user root&lt;/code&gt; argument when launching the Docker exec command you can override the container&amp;rsquo;s user:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ docker &lt;span style=&#34;color:#008000&#34;&gt;exec&lt;/span&gt; --interactive --tty --user root kafka bash
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;root@b59043522a44 appuser&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# whoami&lt;/span&gt;
-root
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;or&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ docker &lt;span style=&#34;color:#008000&#34;&gt;exec&lt;/span&gt; --interactive --tty --user root kafka whoami
-root
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;what-no-sudo&#34;&gt;What, no &lt;code&gt;sudo&lt;/code&gt;?&lt;/h2&gt;
-&lt;p&gt;Imagine this nightmare scenario 🙀 :&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ docker &lt;span style=&#34;color:#008000&#34;&gt;exec&lt;/span&gt; --interactive --tty kafka bash
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;appuser@b59043522a44 ~&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;$ yum install jq
-Error: This &lt;span style=&#34;color:#008000&#34;&gt;command&lt;/span&gt; has to be run under the root user.
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;appuser@b59043522a44 ~&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;$ sudo yum install jq
-bash: sudo: &lt;span style=&#34;color:#008000&#34;&gt;command&lt;/span&gt; not found
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;appuser@b59043522a44 ~&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;$
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now, installing into Docker containers is not The Right Way - you should amend the Docker image to install what&amp;rsquo;s needed before invocation as a container. &lt;em&gt;BUT&lt;/em&gt; sometimes needs must. Whether a quick hack, or just a PoC that you want to get running - sometimes you do want to install into a container, and that can be more difficult without root.&lt;/p&gt;
-&lt;p&gt;You can use the same approach as above (&lt;code&gt;--user root&lt;/code&gt;):&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ docker &lt;span style=&#34;color:#008000&#34;&gt;exec&lt;/span&gt; --interactive --tty --user root kafka bash
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;root@b59043522a44 appuser&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# yum install -y jq&lt;/span&gt;
-Confluent repository                                                                                                                                         &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; kB/s |  &lt;span style=&#34;color:#666&#34;&gt;29&lt;/span&gt; kB     00:02
-Red Hat Universal Base Image &lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;RPMs&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; - BaseOS                                                                                                              &lt;span style=&#34;color:#666&#34;&gt;978&lt;/span&gt; kB/s | &lt;span style=&#34;color:#666&#34;&gt;772&lt;/span&gt; kB     00:00
-Red Hat Universal Base Image &lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;RPMs&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; - AppStream                                                                                                           1.8 MB/s | 4.9 MB     00:02
-Red Hat Universal Base Image &lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;RPMs&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; - CodeReady Builder                                                                                                    &lt;span style=&#34;color:#666&#34;&gt;40&lt;/span&gt; kB/s |  &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; kB     00:00
-zulu-openjdk - Azul Systems Inc., Zulu packages                                                                                                              &lt;span style=&#34;color:#666&#34;&gt;95&lt;/span&gt; kB/s | &lt;span style=&#34;color:#666&#34;&gt;123&lt;/span&gt; kB     00:01
-&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;…&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
-&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
-Installed:
-  jq-1.5-12.el8.x86_64                                                                     oniguruma-6.8.2-2.el8.x86_64
-
-Complete!
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;logging-in-as-root-on-oracles-database-docker-image&#34;&gt;Logging in as &lt;code&gt;root&lt;/code&gt; on Oracle&amp;rsquo;s Database Docker Image&lt;/h2&gt;
-&lt;p&gt;Using Oracle&amp;rsquo;s &lt;a href=&#34;https://github.com/oracle/docker-images/blob/master/OracleDatabase/SingleInstance/README.md&#34;&gt;Docker database image&lt;/a&gt; I wanted to install some additional apps, without modifying the &lt;code&gt;Dockerfile&lt;/code&gt;.&lt;/p&gt;
-&lt;p&gt;Connect to the container:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;$ docker exec --interactive --tty docker-compose_oracle_1_479e7fa05ab5 bash
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;No sudo:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;[oracle@a37d6e99353b ~]$ sudo whoami
-bash: sudo: command not found
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Googled, found the the &lt;code&gt;--user&lt;/code&gt; flag for Docker, tried that:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;$ docker exec --interactive --tty --user root docker-compose_oracle_1_479e7fa05ab5 bash
-OCI runtime exec failed: exec failed: container_linux.go:348: starting container process caused &amp;quot;chdir to cwd (\&amp;quot;/home/oracle\&amp;quot;) set in config.json failed: permission denied&amp;quot;: unknown
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Evidently, the Docker image tries to change directory to the Oracle home folder which Docker&amp;rsquo;s not happy doing as another user (even though it&amp;rsquo;s &lt;code&gt;root&lt;/code&gt;?).&lt;/p&gt;
-&lt;p&gt;Googled some more, found the &lt;code&gt;--workdir&lt;/code&gt; flag to override the &lt;code&gt;WORKDIR&lt;/code&gt; setting of &lt;a href=&#34;https://github.com/oracle/docker-images/blob/master/OracleDatabase/SingleInstance/dockerfiles/12.2.0.1/Dockerfile#L105&#34;&gt;the Dockerfile from which the image is built&lt;/a&gt;:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;$ docker exec --interactive --tty --user root --workdir / docker-compose_oracle_1_479e7fa05ab5 bash
-bash-4.2# whoami
-root
-&lt;/code&gt;&lt;/pre&gt;</description>
     </item>
     
   </channel>
