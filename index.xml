@@ -5,7 +5,7 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2021-03-24</lastBuildDate>
+    <lastBuildDate>2021-03-26</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
     <item>
@@ -113,6 +113,146 @@
 &lt;p&gt;🎥 &lt;a href=&#34;https://www.youtube.com/confluent&#34;&gt;Confluent&lt;/a&gt;&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>Loading CSV data into Confluent Cloud using the FilePulse connector</title>
+      <link>https://rmoff.net/2021/03/26/loading-csv-data-into-confluent-cloud-using-the-filepulse-connector/</link>
+      <pubDate>2021-03-26</pubDate>
+      
+      <guid>https://rmoff.net/2021/03/26/loading-csv-data-into-confluent-cloud-using-the-filepulse-connector/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2021/03/IMG_9313t.jpg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;a href=&#34;https://www.confluent.io/hub/streamthoughts/kafka-connect-file-pulse?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_csv-to-ccloud.adoc&amp;amp;utm_term=rmoff-devx&#34;&gt;FilePulse connector&lt;/a&gt; from &lt;a href=&#34;https://twitter.com/fhussonnois&#34;&gt;Florian Hussonnois&lt;/a&gt; is a really useful connector for Kafka Connect which enables you to ingest flat files including CSV, JSON, XML, etc into Kafka. You can read more it in &lt;a href=&#34;https://streamthoughts.github.io/kafka-connect-file-pulse/docs/overview/filepulse/&#34;&gt;its overview here&lt;/a&gt;. Other connectors for ingested CSV data include &lt;a href=&#34;https://www.confluent.io/hub/jcustenborder/kafka-connect-spooldir?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_csv-to-ccloud.adoc&amp;amp;utm_term=rmoff-devx&#34;&gt;kafka-connect-spooldir&lt;/a&gt; (which I &lt;a href=&#34;http://localhost:1314/2020/06/17/loading-csv-data-into-kafka/&#34;&gt;wrote about previously&lt;/a&gt;), and &lt;a href=&#34;https://www.confluent.io/hub/mmolimar/kafka-connect-fs?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_csv-to-ccloud.adoc&amp;amp;utm_term=rmoff-devx&#34;&gt;kafka-connect-fs&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here I’ll show how to use it to stream CSV data into a topic in &lt;a href=&#34;https://www.confluent.io/confluent-cloud/tryfree?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_csv-to-ccloud.adoc&amp;amp;utm_term=rmoff-devx&#34;&gt;Confluent Cloud&lt;/a&gt;. You can apply the same config pattern to any other secured Kafka cluster.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;olist arabic&#34;&gt;
+&lt;ol class=&#34;arabic&#34;&gt;
+&lt;li&gt;
+&lt;p&gt;Run your Kafka Connect worker. Whilst &lt;a href=&#34;https://www.confluent.io/confluent-cloud/tryfree?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_csv-to-ccloud.adoc&amp;amp;utm_term=rmoff-devx&#34;&gt;Confluent Cloud&lt;/a&gt; offers many different &lt;a href=&#34;https://docs.confluent.io/cloud/current/connectors/index.html?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_csv-to-ccloud.adoc&amp;amp;utm_term=rmoff-devx&#34;&gt;managed connectors&lt;/a&gt; FilePulse isn’t yet available on it so you’ll need to &lt;a href=&#34;https://rmoff.net/2021/01/11/running-a-self-managed-kafka-connect-worker-for-confluent-cloud/&#34;&gt;run your own Kafka Connect worker connecting to Confluent Cloud&lt;/a&gt; which is what I did here&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;You need to &lt;a href=&#34;https://docs.confluent.io/cloud/current/client-apps/topics/manage.html#create-a-topic?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_csv-to-ccloud.adoc&amp;amp;utm_term=rmoff-devx&#34;&gt;pre-create the topic(s)&lt;/a&gt; to which the connector is going to write, &lt;strong&gt;and also&lt;/strong&gt; the internal reporting topic that the connector uses.&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;ccloud kafka topic create &lt;span style=&#34;color: #000080&#34;&gt;--config&lt;/span&gt; cleanup.policy&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;compact,retention.ms&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #000080&#34;&gt;-1&lt;/span&gt;,retention.bytes&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #000080&#34;&gt;-1&lt;/span&gt; connect-file-pulse-status
+ccloud kafka topic create target_csv_topic&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Create the connector. This has several points which are worth explaining.&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;This is what I used to specify a given CSV filename in a given folder:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;fs.scan.filters&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;           &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;io.streamthoughts.kafka.connect.filepulse.scanner.local.filter.RegexFileListFilter&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;fs.scan.directory.path&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;/data/ingest/locations/&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;fs.scan.interval.ms&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;10000&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;file.filter.regex.pattern&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;openraildata-talk-carl-partridge-ukrail_locations.csv&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The broker security config needs specifying &lt;strong&gt;in the connector&lt;/strong&gt; (not just the worker). The FilePulse connector uses its own topics to hold information about the file ingest (these are different from the topics that the Kafka Connect distributed workers use) and it needs some configuration for the producer and consumer to connect to the Kafka broker. This is prefixed with &lt;code&gt;internal.kafka.reporter&lt;/code&gt;. The two standard configuration items are easy enough and apply regardless of whether your Kafka cluster is secured:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.bootstrap.servers&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.topic&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But you also need to specify the security config:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.producer.security.protocol&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.producer.ssl.endpoint.identification.algorithm&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.producer.sasl.mechanism&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.producer.sasl.jaas.config&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.consumer.security.protocol&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.consumer.ssl.endpoint.identification.algorithm&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.consumer.sasl.mechanism&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;internal.kafka.reporter.consumer.sasl.jaas.config&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The connector can infer the schema of the CSV file which is neat. Do this by setting&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;filters.ParseLine.type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;             &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;io.streamthoughts.kafka.connect.filepulse.filter.DelimitedRowFilter&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;filters.ParseLine.extractColumnName&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;headers&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;filters.ParseLine.trimColumn&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;filters.ParseLine.separator&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;You can specify a value from the payload to set as the message key, which is very useful. Here I’m using the field called &lt;code&gt;location_id&lt;/code&gt;:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;filters.setKey.type&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;                &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;io.streamthoughts.kafka.connect.filepulse.filter.AppendFilter&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;filters.setKey.field&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;               &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$key&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;filters.setKey.value&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;               &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$value.location_id&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Here’s the full connector configuration REST call. Substitute the CSV details and broker config (&lt;code&gt;CCLOUD_HOST&lt;/code&gt;, &lt;code&gt;CCLOUD_API_KEY&lt;/code&gt;, &lt;code&gt;CCLOUD_API_SECRET&lt;/code&gt;).&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;i&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;X&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PUT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Accept:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;\&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;H&lt;/span&gt;  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;Content-Type:application/json&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;http&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;//localhost:8083/connectors/source-csv-01/config \&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;d&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;{
+  &amp;#34;connector.class&amp;#34;                    : &amp;#34;io.streamthoughts.kafka.connect.filepulse.source.FilePulseSourceConnector&amp;#34;,
+  &amp;#34;task.reader.class&amp;#34;                  : &amp;#34;io.streamthoughts.kafka.connect.filepulse.reader.RowFileInputReader&amp;#34;,
+  &amp;#34;fs.scan.filters&amp;#34;                    : &amp;#34;io.streamthoughts.kafka.connect.filepulse.scanner.local.filter.RegexFileListFilter&amp;#34;,
+  &amp;#34;fs.scan.directory.path&amp;#34;             : &amp;#34;/data/ingest/locations/&amp;#34;,
+  &amp;#34;fs.scan.interval.ms&amp;#34;                : &amp;#34;10000&amp;#34;,
+  &amp;#34;file.filter.regex.pattern&amp;#34;          : &amp;#34;openraildata-talk-carl-partridge-ukrail_locations.csv&amp;#34;,
+  &amp;#34;offset.strategy&amp;#34;                    : &amp;#34;name&amp;#34;,
+  &amp;#34;skip.headers&amp;#34;                       : &amp;#34;1&amp;#34;,
+  &amp;#34;topic&amp;#34;                              : &amp;#34;ukrail-locations&amp;#34;,
+  &amp;#34;fs.cleanup.policy.class&amp;#34;            : &amp;#34;io.streamthoughts.kafka.connect.filepulse.clean.LogCleanupPolicy&amp;#34;,
+  &amp;#34;tasks.max&amp;#34;                          : 1,
+  &amp;#34;filters&amp;#34;                            : &amp;#34;ParseLine,setKey&amp;#34;,
+  &amp;#34;filters.ParseLine.type&amp;#34;             : &amp;#34;io.streamthoughts.kafka.connect.filepulse.filter.DelimitedRowFilter&amp;#34;,
+  &amp;#34;filters.ParseLine.extractColumnName&amp;#34;: &amp;#34;headers&amp;#34;,
+  &amp;#34;filters.ParseLine.trimColumn&amp;#34;       : &amp;#34;true&amp;#34;,
+  &amp;#34;filters.ParseLine.separator&amp;#34;        : &amp;#34;,&amp;#34;,
+  &amp;#34;filters.setKey.type&amp;#34;                : &amp;#34;io.streamthoughts.kafka.connect.filepulse.filter.AppendFilter&amp;#34;,
+  &amp;#34;filters.setKey.field&amp;#34;               : &amp;#34;$key&amp;#34;,
+  &amp;#34;filters.setKey.value&amp;#34;               : &amp;#34;$value.location_id&amp;#34;,
+  &amp;#34;internal.kafka.reporter.bootstrap.servers&amp;#34;                             : &amp;#34;CCLOUD_HOST:9092&amp;#34;,
+  &amp;#34;internal.kafka.reporter.topic&amp;#34;                                         : &amp;#34;connect-file-pulse-status&amp;#34;,
+  &amp;#34;internal.kafka.reporter.producer.security.protocol&amp;#34;                    : &amp;#34;SASL_SSL&amp;#34;,
+  &amp;#34;internal.kafka.reporter.producer.ssl.endpoint.identification.algorithm&amp;#34;: &amp;#34;https&amp;#34;,
+  &amp;#34;internal.kafka.reporter.producer.sasl.mechanism&amp;#34;                       : &amp;#34;PLAIN&amp;#34;,
+  &amp;#34;internal.kafka.reporter.producer.sasl.jaas.config&amp;#34;                     : &amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34; password=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;;&amp;#34;,
+  &amp;#34;internal.kafka.reporter.producer.request.timeout.ms&amp;#34;                   : &amp;#34;20000&amp;#34;,
+  &amp;#34;internal.kafka.reporter.producer.retry.backoff.ms&amp;#34;                     : &amp;#34;500&amp;#34;,
+  &amp;#34;internal.kafka.reporter.consumer.security.protocol&amp;#34;                    : &amp;#34;SASL_SSL&amp;#34;,
+  &amp;#34;internal.kafka.reporter.consumer.ssl.endpoint.identification.algorithm&amp;#34;: &amp;#34;https&amp;#34;,
+  &amp;#34;internal.kafka.reporter.consumer.sasl.mechanism&amp;#34;                       : &amp;#34;PLAIN&amp;#34;,
+  &amp;#34;internal.kafka.reporter.consumer.sasl.jaas.config&amp;#34;                     : &amp;#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;CCLOUD_API_KEY&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34; password=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;CCLOUD_API_SECRET&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;;&amp;#34;,
+  &amp;#34;internal.kafka.reporter.consumer.request.timeout.ms&amp;#34;                   : &amp;#34;20000&amp;#34;,
+  &amp;#34;internal.kafka.reporter.consumer.retry.backoff.ms&amp;#34;                     : &amp;#34;500&amp;#34;
+}&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The connector is really powerful, and all the options can make it a bit daunting to get started with - but it’s worth persevering 😄 (and &lt;a href=&#34;https://streamthoughts.github.io/kafka-connect-file-pulse/docs/developer-guide/&#34;&gt;the documentation&lt;/a&gt; is comprehensive).&lt;/p&gt;
 &lt;/div&gt;</description>
     </item>
     <item>
@@ -3197,93 +3337,6 @@ Topic+Partition+Offset: data02+0+3      Key: 309681     Value: GREENBRAZIL,C6WH6
 &lt;p&gt;👉 Head over to the &lt;a href=&#34;https://confluent.io/community/ask-the-community/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;Confluent Community&lt;/a&gt; forum or Slack group.&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Performing a GROUP BY on data in bash</title>
-      <link>https://rmoff.net/2021/02/02/performing-a-group-by-on-data-in-bash/</link>
-      <pubDate>2021-02-02</pubDate>
-      
-      <guid>https://rmoff.net/2021/02/02/performing-a-group-by-on-data-in-bash/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2021/02/IMG_8588.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;One of the fun things about working with data over the years is learning how to use the tools of the day—but also learning to fall back on the tools that are always there for you - and one of those is bash and its wonderful library of shell tools.&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;admonitionblock note&#34;&gt;
-&lt;table&gt;
-&lt;tbody&gt;&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;i class=&#34;fa icon-note&#34; title=&#34;Note&#34;&gt;&lt;/i&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-There’s an even better way than I’ve described here, and it’s called &lt;code&gt;visidata&lt;/code&gt;. &lt;a href=&#34;https://rmoff.net/2021/03/04/quick-profiling-of-data-in-apache-kafka-using-kafkacat-and-visidata/&#34;&gt;I’ve written about it more over here&lt;/a&gt;.
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;&lt;/table&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I’ve been playing around with a new data source recently, and needed to understand more about its structure. Within a single stream there were multiple message types.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;blockquote class=&#34;twitter-tweet&#34;&gt;&lt;p lang=&#34;en&#34; dir=&#34;ltr&#34;&gt;Poking around a fun source for streaming demo with &lt;a href=&#34;https://twitter.com/apachekafka?ref_src=twsrc%5Etfw&#34;&gt;@apachekafka&lt;/a&gt;, &lt;a href=&#34;https://twitter.com/ksqlDB?ref_src=twsrc%5Etfw&#34;&gt;@ksqldb&lt;/a&gt;, and &lt;a href=&#34;https://twitter.com/elastic?ref_src=twsrc%5Etfw&#34;&gt;@elastic&lt;/a&gt; - AIS maritime data :) &lt;a href=&#34;https://t.co/ar8nllOZ97&#34;&gt;pic.twitter.com/ar8nllOZ97&lt;/a&gt;&lt;/p&gt;&amp;mdash; Robin Moffatt 🍻🏃🥓 (@rmoff) &lt;a href=&#34;https://twitter.com/rmoff/status/1355097951094366209?ref_src=twsrc%5Etfw&#34;&gt;January 29, 2021&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;https://platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Each message has its &lt;a href=&#34;https://gpsd.gitlab.io/gpsd/AIVDM.html#_ais_payload_interpretation&#34;&gt;own schema&lt;/a&gt;, and a common &lt;code&gt;type&lt;/code&gt; field. I wanted to know what the most common message types were. Courtesy of &lt;a href=&#34;https://stackoverflow.com/a/380832/350613&#34;&gt;StackOverflow&lt;/a&gt; this was pretty easy.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;My data happened to be in a Kafka topic, &lt;strong&gt;but because of the beauty of unix pipelines the source could be anywhere that can emit to &lt;code&gt;stdout&lt;/code&gt;&lt;/strong&gt;. Here I used &lt;code&gt;kafkacat&lt;/code&gt; to take a sample of the most recent ten thousand messages on the topic:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;kafkacat &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; localhost:9092 &lt;span style=&#34;color: #000080&#34;&gt;-t&lt;/span&gt; ais &lt;span style=&#34;color: #000080&#34;&gt;-C&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-c&lt;/span&gt; 10000 &lt;span style=&#34;color: #000080&#34;&gt;-o-10000&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  jq  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.type&amp;#39;&lt;/span&gt;                                            | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  &lt;span style=&#34;color: #0086B3&#34;&gt;sort&lt;/span&gt;                                                   | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  &lt;span style=&#34;color: #0086B3&#34;&gt;uniq&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-c&lt;/span&gt;                                                | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  &lt;span style=&#34;color: #0086B3&#34;&gt;awk&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{ print $2, $1 }&amp;#39;&lt;/span&gt;                                 | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
-  &lt;span style=&#34;color: #0086B3&#34;&gt;sort&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-n&lt;/span&gt;
-
-1 6162
-3 1565
-4 393
-5 1643
-8 61
-9 1
-12 1
-18 165
-21 3
-27 6&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;kafkacat&lt;/code&gt; specifies the broker details (&lt;code&gt;-b&lt;/code&gt;), source topic (&lt;code&gt;-t&lt;/code&gt;), act as a consumer (&lt;code&gt;-C&lt;/code&gt;) and then how many messages to consume (&lt;code&gt;-c 10000&lt;/code&gt;) and from which offset (&lt;code&gt;-o-10000&lt;/code&gt;).&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;jq&lt;/code&gt; extracts just the value of the &lt;code&gt;type&lt;/code&gt; field&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;sort&lt;/code&gt; orders all of the &lt;code&gt;type&lt;/code&gt; values into order (a pre-requisite for &lt;code&gt;uniq&lt;/code&gt;)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;uniq -c&lt;/code&gt; outputs the number of occurrences of each line&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;The remaining commands are optional&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;awk&lt;/code&gt; changes round the columns from &lt;code&gt;&amp;lt;count&amp;gt;,&amp;lt;item&amp;gt;&lt;/code&gt; to &lt;code&gt;&amp;lt;item&amp;gt;,&amp;lt;count&amp;gt;&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;The final &lt;code&gt;sort&lt;/code&gt; arranges the list in numeric order&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
 &lt;/div&gt;</description>
     </item>
     
