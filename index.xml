@@ -5,7 +5,7 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2021-03-26</lastBuildDate>
+    <lastBuildDate>2021-04-01</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
     <item>
@@ -111,6 +111,200 @@
 &lt;/div&gt;
 &lt;div class=&#34;paragraph&#34;&gt;
 &lt;p&gt;🎥 &lt;a href=&#34;https://www.youtube.com/confluent&#34;&gt;Confluent&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>A bash script to deploy ksqlDB queries automagically</title>
+      <link>https://rmoff.net/2021/04/01/a-bash-script-to-deploy-ksqldb-queries-automagically/</link>
+      <pubDate>2021-04-01</pubDate>
+      
+      <guid>https://rmoff.net/2021/04/01/a-bash-script-to-deploy-ksqldb-queries-automagically/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2021/04/IMG_9429.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There’s &lt;a href=&#34;https://github.com/spena/ksql/blob/7bc5875896c0206574e096c0ead808b5a87caa89/design-proposals/klip-42-schema-migrations-tool.md&#34;&gt;a bunch of improvements&lt;/a&gt; in the works for how ksqlDB handles code deployments and migrations. For now though, for deploying queries there’s the option of using &lt;a href=&#34;https://docs.ksqldb.io/en/latest/operate-and-deploy/installation/server-config/#non-interactive-headless-ksqldb-usage&#34;&gt;headless mode&lt;/a&gt; (which is limited to one query file and disables subsequent interactive work on the server from a CLI), manually running commands (yuck), or using the REST endpoint to deploy queries automagically. Here’s an example of doing that.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_deploying_statements_using_ksql_endpoint&#34;&gt;Deploying statements using &lt;code&gt;/ksql&lt;/code&gt; endpoint&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;#!/bin/bash&lt;/span&gt;
+
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;function &lt;/span&gt;deploy_ksql &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Deploying &amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$1&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;grep&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-v&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;^--&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$1&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\n&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39; &amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/;/;\&amp;#39;$&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&amp;#39;/g&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/&amp;#34;/\\\\&amp;#34;/g&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;while &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;read &lt;/span&gt;stmt&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;do
+      &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;------&amp;#39;&lt;/span&gt;
+      &lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$stmt&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+
+      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;${#&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;stmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-gt&lt;/span&gt; 0 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;]&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;then
+        &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{&amp;#34;ksql&amp;#34;:&amp;#34;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$stmt&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&amp;#34;, &amp;#34;streamsProperties&amp;#34;: { &amp;#34;ksql.streams.auto.offset.reset&amp;#34;: &amp;#34;earliest&amp;#34; }}&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        curl &lt;span style=&#34;color: #000080&#34;&gt;-s&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-X&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;POST&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;http://localhost:8088/ksql&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Content-Type: application/vnd.ksql.v1+json; charset=utf-8&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; @- | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        jq
+      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;fi
+  done&lt;/span&gt;
+  &lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Give ourselves chance to breath&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sleep &lt;/span&gt;2
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With this bash function defined (put it in a &lt;code&gt;.sh&lt;/code&gt; file and &lt;code&gt;source&lt;/code&gt; it) you can deploy multiple files (each with multiple statements in) thus:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Creating ksqlDB tables for reference data&amp;#34;&lt;/span&gt;
+deploy_ksql ./data/ksql/01_location/00_location.ksql
+deploy_ksql ./data/ksql/03_movements/01_canx_reason.ksql
+deploy_ksql ./data/ksql/02_cif_schedule/01_schedule_raw.ksql&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_running_queries_using_the_query_stream_endpoint&#34;&gt;Running queries using the &lt;code&gt;/query-stream&lt;/code&gt; endpoint&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For queries (&lt;code&gt;SELECT…&lt;/code&gt;) you need to use a different endpoint.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;function &lt;/span&gt;query_ksql &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Querying &amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$1&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;grep&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-v&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;^--&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$1&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\n&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39; &amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/;/;\&amp;#39;$&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&amp;#39;/g&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/&amp;#34;/\\\\&amp;#34;/g&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;while &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;read &lt;/span&gt;stmt&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;do
+      &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;------&amp;#39;&lt;/span&gt;
+      &lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$stmt&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+
+      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;${#&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;stmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-gt&lt;/span&gt; 0 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;]&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;then
+        &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{&amp;#34;sql&amp;#34;:&amp;#34;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$stmt&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&amp;#34;, &amp;#34;properties&amp;#34;: { &amp;#34;ksql.streams.auto.offset.reset&amp;#34;: &amp;#34;earliest&amp;#34; }}&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        curl &lt;span style=&#34;color: #000080&#34;&gt;--silent&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;--show-error&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;--http2&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-X&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;POST&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;http://localhost:8088/query-stream&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Content-Type: application/vnd.ksql.v1+json; charset=utf-8&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; @- | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        jq
+      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;fi
+  done&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Use is similar to the &lt;code&gt;deploy_ksql&lt;/code&gt; function - pass it a file with SQL in to run:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;deploy_ksql ./data/ksql/03_movements/02_activations.ksql
+query_ksql ./data/ksql/03_movements/03_activations_query.ksql&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Note that you can’t use &lt;code&gt;SET&lt;/code&gt; in the SQL passed to the endpoint. The above bash function hardcodes &lt;code&gt;&amp;#39;auto.offset.reset&amp;#39; = &amp;#39;earliest&amp;#39;&lt;/code&gt; - you can customise it as needed to set other values.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_improvements&#34;&gt;Improvements&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There’s a ton to improve here. For example&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Checking the return code of the REST call and aborting if there’s an error condition&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Perhaps muting verbose output if everything’s OK&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Funky characters will invariably trip up the bash code - things like quotation marks and asterisks are handled, but there’s plenty else that probably isn’t&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_automagically_deploying_streams_and_table_to_confluent_cloud&#34;&gt;Automagically deploying streams and table to Confluent Cloud&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The above scripts can be tailored to work with Confluent Cloud too. Make sure you set the necessary environment variables first. See &lt;a href=&#34;https://rmoff.net/2021/03/24/connecting-to-managed-ksqldb-in-confluent-cloud-with-rest-and-ksqldb-cli/#_creating_the_ksqldb_api_key&#34;&gt;this article on how to obtain the ksqlDB API key pair&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;CCLOUD_KSQL_ENDPOINT&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;CCLOUD_KSQL_API_KEY&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;CCLOUD_KSQL_API_SECRET&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;#!/bin/bash&lt;/span&gt;
+
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;function &lt;/span&gt;deploy_ccloud_ksql &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Deploying &amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$1&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;grep&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-v&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;^--&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$1&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\n&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39; &amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/;/;\&amp;#39;$&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&amp;#39;/g&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;/&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#39;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;/g&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/&amp;#34;/\\\\&amp;#34;/g&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;while &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;read &lt;/span&gt;stmt&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;do
+      &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;------&amp;#39;&lt;/span&gt;
+
+      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;${#&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;stmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-gt&lt;/span&gt; 0 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;]&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;then
+        &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{&amp;#34;ksql&amp;#34;:&amp;#34;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$stmt&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&amp;#34;, &amp;#34;streamsProperties&amp;#34;: { &amp;#34;ksql.streams.auto.offset.reset&amp;#34;: &amp;#34;earliest&amp;#34; }}&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        curl &lt;span style=&#34;color: #000080&#34;&gt;--silent&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;--show-error&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_KEY&lt;/span&gt;:&lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_SECRET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-X&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;POST&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_ENDPOINT&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;/ksql&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Content-Type: application/vnd.ksql.v1+json; charset=utf-8&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; @- | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        jq
+      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;fi
+  done&lt;/span&gt;
+  &lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Give ourselves chance to breath&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sleep &lt;/span&gt;2
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;
+
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;function &lt;/span&gt;query_ksql &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Querying &amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$1&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;grep&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-v&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;^--&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$1&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;\n&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39; &amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/;/;\&amp;#39;$&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&amp;#39;/g&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #0086B3&#34;&gt;sed&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;s/&amp;#34;/\\\\&amp;#34;/g&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;while &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;read &lt;/span&gt;stmt&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;do
+      &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;------&amp;#39;&lt;/span&gt;
+      &lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$stmt&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+
+      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;${#&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;stmt&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-gt&lt;/span&gt; 0 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;]&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;then
+        &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;{&amp;#34;sql&amp;#34;:&amp;#34;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$stmt&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&amp;#34;, &amp;#34;properties&amp;#34;: { &amp;#34;ksql.streams.auto.offset.reset&amp;#34;: &amp;#34;earliest&amp;#34; }}&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        curl &lt;span style=&#34;color: #000080&#34;&gt;--silent&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;--show-error&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-u&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_KEY&lt;/span&gt;:&lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_API_SECRET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-X&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;POST&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;$CCLOUD_KSQL_ENDPOINT&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;/query-stream&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-H&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Content-Type: application/vnd.ksql.v1+json; charset=utf-8&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+            &lt;span style=&#34;color: #000080&#34;&gt;-d&lt;/span&gt; @- | &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        jq
+      &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;fi
+  done&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
@@ -3053,289 +3247,6 @@ Topic+Partition+Offset: data02+0+3      Key: 309681     Value: GREENBRAZIL,C6WH6
 &lt;/div&gt;
 &lt;a class=&#34;embedly-card&#34; href=&#34;https://www.reddit.com/r/apachekafka/comments/ltbkkn/loading_delimited_data_into_kafka_quick_dirty_but/gp5dtq6&#34;&gt;Card&lt;/a&gt;
 &lt;script async=&#34;&#34; src=&#34;//embed.redditmedia.com/widgets/platform.js&#34; charset=&#34;UTF-8&#34;&gt;&lt;/script&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>📼 ksqlDB HOWTO - A mini video series 📼</title>
-      <link>https://rmoff.net/2021/02/17/ksqldb-howto-a-mini-video-series/</link>
-      <pubDate>2021-02-17</pubDate>
-      
-      <guid>https://rmoff.net/2021/02/17/ksqldb-howto-a-mini-video-series/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2021/02/IMG_8916.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Some people learn through doing - and for that there’s a bunch of good ksqlDB tutorials &lt;a href=&#34;https://docs.ksqldb.io/en/latest/tutorials/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;here&lt;/a&gt; and &lt;a href=&#34;https://kafka-tutorials.confluent.io/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;here&lt;/a&gt;. Others may prefer to watch and listen first, before getting hands on. And for that, I humbly offer you this little series of videos all about ksqlDB. They’re all based on a set of demo scripts that you can &lt;a href=&#34;https://github.com/confluentinc/demo-scene/blob/master/introduction-to-ksqldb/demo_introduction_to_ksqldb_02.adoc&#34;&gt;run for yourself and try out&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;🚨 Make sure you &lt;a href=&#34;http://youtube.com/rmoff?sub_confirmation=1&#34;&gt;subscribe to my YouTube channel&lt;/a&gt; so that you don’t miss more videos like these!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_s01e01_filtering&#34;&gt;S01E01 : Filtering&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/TfX70zBHyPM&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Using ksqlDB you can filter streams of data in Apache Kafka and write new topics in Kafka populated by a subset of another. For example&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS_NY&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;
-    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt;
-   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ADDRESS_STATE&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;New York&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_s01e02_schema_manipulation_and_data_transformation&#34;&gt;S01E02 : Schema Manipulation and Data Transformation&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/7pH5KEQiYYo&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;There are lots of transformations that you can do on streams in ksqlDB including:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Remove/drop fields&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Rename fields&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;CAST&lt;/code&gt; datatypes&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Reformat timestamps from &lt;code&gt;BIGINT&lt;/code&gt; epoch to human-readable strings&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Flatten nested objects (&lt;code&gt;STRUCT&lt;/code&gt;)&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;For example:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS_PROCESSED&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TIMESTAMPTOSTRING&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ROWTIME&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;yyyy-MM-dd HH:mm:ss&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;Europe/London&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_TS&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-         &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CAST&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_VALUE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;DECIMAL&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;9&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;))&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_VALUE_USD&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-         &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ORDER&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ADDRESS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ADDRESS&lt;/span&gt;
-    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_s01e03_joins&#34;&gt;S01E03 : Joins&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/_0Ktp2eB-as&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Using ksqlDB you can enrich messages on a Kafka topic with reference data held in another topic. This could come from a database, message queue, producer API, etc. With JOIN clause you can define relationships between streams and/or tables in ksqlDB (which are built on topics in Kafka). For example:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS_ENRICHED&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt;
-&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;O&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERTIME&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_TIMESTAMP&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;O&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERID&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;MAKE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;O&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERUNITS&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;O&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERUNITS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;UNIT_COST&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TOTAL_ORDER_VALUE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;O&lt;/span&gt;
-       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;INNER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;JOIN&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ITEM_REFERENCE_01&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt;
-       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ON&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;O&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ITEMID&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ITEM_ID&lt;/span&gt;
-  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;PARTITION&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;BY&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERID&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_s01e04_integration_with_other_systems&#34;&gt;S01E04 : Integration with other systems&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/MLSrnBTSGlQ&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;ksqlDB can pull data in from other systems (e.g. databases, JMS message queues, etc etc), and push data down to other systems (NoSQL stores, Elasticsearch, databases, Neo4j, etc etc). This is done using Kafka Connect, which can be run embedded within ksqlDB or as a separate cluster of workers. ksqlDB can be used to create and control the connectors. For example:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;SINK&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CONNECTOR&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;SINK_ELASTIC_ORDERS_01&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;connector.class&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;io.confluent.connect.elasticsearch.ElasticsearchSinkConnector&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;topics&amp;#39;&lt;/span&gt;          &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;ORDERS_ENRICHED&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;connection.url&amp;#39;&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;http://elasticsearch:9200&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;​&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-  &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;type.name&amp;#39;&lt;/span&gt;       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;_doc&amp;#39;&lt;/span&gt;
-  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_s01e05_reserialising_streams&#34;&gt;S01E05 : Reserialising Streams&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/sLAztA-rt74&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Using ksqlDB you can reserialise data in Apache Kafka topics. For example, you can take a stream of CSV data and write it to a new topic in Avro. ksqlDB supports many serialisation formats including Avro, Protobuf, JSON Schema, JSON, and Delimited (CSV, TSV, etc). For example:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS_CSV&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;VALUE_FORMAT&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;DELIMITED&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-                                &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;KAFKA_TOPIC&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;orders_csv&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_s01e06_split_and_merge_kafka_topics&#34;&gt;S01E06 : Split and Merge Kafka Topics&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/5NoU7D4OGA0&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You can split streams of data in Apache Kafka based on values in a field using ksqlDB. You can also merge separate streams of data together into one.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Splitting a stream:&lt;/p&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS_UK&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COUNTRY&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;UK&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS_OTHER&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COUNTRY&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;!=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;UK&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Merging streams&lt;/p&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;INVENTORY_COMBINED&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;WH1&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SOURCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;INVENTORY_WH1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STREAM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;INVENTORY_COMBINED&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;WH2&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SOURCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;INVENTORY_WH2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_s01e07_aggregates&#34;&gt;S01E07 : Aggregates&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/_-j7aKE0kl0&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Using ksqlDB you can build stateful aggregations of state on events in Apache Kafka topics. These are persisted as Kafka topics and held in a state store within ksqlDB that you can query directly or from an external application using the &lt;a href=&#34;https://docs.ksqldb.io/en/latest/developer-guide/ksqldb-clients/java-client/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;Java client&lt;/a&gt; or &lt;a href=&#34;https://docs.ksqldb.io/en/latest/developer-guide/api/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;REST API&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;ksqlDB uses SQL to describe the stream processing that you want to do. For example:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS_BY_MAKE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt;
-  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;MAKE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-         &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;COUNT&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDER_COUNT&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
-         &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SUM&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TOTAL_ORDER_VALUE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TOTAL_ORDER_VALUE&lt;/span&gt;
-    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ORDERS&lt;/span&gt;
-   &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;GROUP&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;BY&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;MAKE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_s01e08_time_handling&#34;&gt;S01E08: Time Handling&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/scpbbl71CD8&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;When you do processing in ksqlDB that is based on time (such as windowed aggregations, or stream-stream joins) it is important that you define correctly the timestamp by which you want your data to be processed. This could be the timestamp that’s part of the Kafka message metadata, or it could be a field in the value of the Kafka message itself.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;By default ksqlDB will use the timestamp of the Kafka message. You can change this by specifying &lt;a href=&#34;https://docs.ksqldb.io/en/latest/developer-guide/ksqldb-reference/create-stream/#description?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;&lt;code&gt;WITH (TIMESTAMP=&amp;#39;…&amp;#39;&lt;/code&gt;&lt;/a&gt; in your CREATE STREAM statement, and instead identify a value field to use as the timestamp.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Use the &lt;code&gt;ROWTIME&lt;/code&gt; system field to view the timestamp of the ksqlDB row.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_references_links&#34;&gt;References &amp;amp; Links&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;💾 &lt;a href=&#34;https://ksqldb.io?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;Run ksqlDB yourself&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;☁️ &lt;a href=&#34;https://www.confluent.io/confluent-cloud/tryfree?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;Use ksqlDB as a managed service on Confluent Cloud&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://docs.ksqldb.io/en/latest/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;ksqlDB docs&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_questions&#34;&gt;Questions?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;👉 Head over to the &lt;a href=&#34;https://confluent.io/community/ask-the-community/?utm_source=rmoff&amp;amp;utm_medium=blog&amp;amp;utm_campaign=tm.devx_ch.rmoff_ksqldb-howto&amp;amp;utm_term=rmoff-devx&#34;&gt;Confluent Community&lt;/a&gt; forum or Slack group.&lt;/p&gt;
-&lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
     </item>
