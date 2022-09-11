@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Materialised Views - PCT Partition Truncation</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2011/01/08/materialised-views-pct-partition-truncation/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.85.0" />
+
+		
+		<meta property="og:title" content="Materialised Views - PCT Partition Truncation" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/img/default-header-img.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2011/01/08/materialised-views-pct-partition-truncation/" />
+		<meta property="og:site_name" content="Materialised Views - PCT Partition Truncation" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/img/default-header-img.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Materialised Views - PCT Partition Truncation</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2011-01-08T00:00:00Z">Jan 8, 2011</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/bug" class="no-underline category near-white dim">Bug</a>, <a href="https://rmoff.net/categories/dwh" class="no-underline category near-white dim">Dwh</a>, <a href="https://rmoff.net/categories/mviews" class="no-underline category near-white dim">Mviews</a>, <a href="https://rmoff.net/categories/oracle" class="no-underline category near-white dim">Oracle</a>
+								<span class="display-print">at https://rmoff.net/2011/01/08/materialised-views-pct-partition-truncation/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<p>I&rsquo;ve been doing some work recently that involved the use of Materialised Views on Oracle 11g (11.1.0.7), particularly around PCT refresh. There are some things that are not clear from the documentation, or are actually bugs so far as I&rsquo;m concerned, and I&rsquo;ve detailed these below.</p>
+<p>In this example I was working on part of a DWH with c.2 millions rows aggregated up daily. One of the things that I spent a long time trying to get to work was Partition Truncation when using PCT refresh. We had tried and discarded &ldquo;FAST&rdquo; refresh as being completely non-performant for our volumes.</p>
+<p>There was something about PCT that confused me for a while, and so maybe other thickos like me will also be confused so I&rsquo;ll clarify it here: PCT is about <strong>Tracking</strong> the <strong>Change</strong> on <strong>Partitions</strong> of the <strong>detail table</strong>. It can have interactions with a partition on an MView, but this is not where its terminology refers to.</p>
+<p>Our desired aggregation behaviour was as follows. Given the following:</p>
+<ul>
+<li>a base fact table (partitioned by day)</li>
+<li>a weekly aggregation MV (partitioned by week)</li>
+<li>data loaded daily, MV refreshed daily</li>
+</ul>
+<p>we would expect the following to be the most efficient way of refreshing the MV:</p>
+<ol>
+<li>When we load a new day&rsquo;s data, for a new week: a new partition populated on the weekly MV</li>
+<li>When we load a new day&rsquo;s data, for an <em>existing</em> week : truncate the partition on the weekly MV, and reload it (As any fule kno, truncate/insert is going to perform better than delete/insert)</li>
+<li>When existing data is updated on the base table: corresponding weekly MV partition truncated and reloaded</li>
+</ol>
+<p>From what I read in the documentation, this is what PCT would be expected to do. However, it didn&rsquo;t work like this for us at first.</p>
+<h2 id="the-answer">The Answer</h2>
+<p>I&rsquo;ve discussed these elements in more detail in sections below, but to cut to the chase, here is how we got PCT Partition Truncation to work for a detail table partitioned on day and aggregate table partitioned on week:</p>
+<ul>
+<li>
+<p>In the MView definition:</p>
+<ol>
+<li>Partition by range or list (n.b. not interval)</li>
+<li>Join to reference table for partition key (n.b. don’t use ANSI syntax)</li>
+</ol>
+<ul>
+<li>Eg. Day-&gt;Week aggregation, join to calendar reference table</li>
+<li>Alternatively partition MView on same partition key as detail table</li>
+</ul>
+<ol start="4">
+<li>Define the MView <strong>USING NO INDEX</strong> to prevent the default global index being created</li>
+</ol>
+</li>
+<li>
+<p>When refreshing the MView:</p>
+<ol>
+<li>alter session set &ldquo;_mv_refresh_costing&rdquo;=&lsquo;rule_pt_pd_fa_co&rsquo;;</li>
+<li>dbms_mview.refresh(
+<ul>
+<li>atomic_refresh=&gt;false</li>
+<li>method=&gt;&lsquo;P&rsquo; or &lsquo;?&rsquo;</li>
+</ul>
+</li>
+</ol>
+</li>
+</ul>
+<p>Note: this is what <strong>we</strong> did to get it to work; it may be that other versions differ particularly around the _mv_refresh_costing parameter and its default value. I presume there is standard disclaimer around using undocumented parameters too.</p>
+<h2 id="rtfm">RTFM!</h2>
+<p>Links to 11gR1 docs:</p>
+<ul>
+<li><a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28313/basicmv.htm">Basic Materialized Views</a></li>
+<li><a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28313/advmv.htm">Advanced Materialized Views</a></li>
+<li><a href="http://download.oracle.com/docs/cd/B28359_01/appdev.111/b28419/d_mview.htm">DBMS_MVIEW</a></li>
+<li><a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28286/statements_6002.htm">CREATE MATERIALIZED VIEW</a></li>
+<li><a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28286/statements_2001.htm">ALTER MATERIALIZED VIEW</a></li>
+</ul>
+<h2 id="what-it-says-in-the-manual">What it says in the manual</h2>
+<p><a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28313/advmv.htm#i1009128">See here for the documentation regarding PCT partition truncation.</a> There are three conditions that you must obey for it to work (although see below for a further condition):</p>
+<ol>
+<li><strong>The materialized view is partitioned on the partitioning key column or join dependent expressions of the detail table.</strong> If you think about this it makes a lot of sense. PCT is about tracking change on the partition of the detail table, and so if data in this partition changes, Oracle must be told how this relates to the data in the MView, so that it can refresh just the relevant subset of it.
+<ul>
+<li>An example of the former (partitioned on the partitioning key of the detail table) is base table and aggregate MV both partitioned on Store, or Warehouse, etc.<img src="/images/rnm1978/snag-2011-01-07-14-47-22-0000.png" alt="" title="SNAG-2011-01-07-14.47.22-0000"></li>
+<li>An example of the latter (join dependent expression) is where you link to a second table in the MV definition, giving Oracle the understanding of the relation between two different partitioning columns (for example, how do weeks relate to days): <img src="/images/rnm1978/snag-2011-01-07-14-48-38-0000.png" alt="" title="SNAG-2011-01-07-14.48.38-0000"></li>
+</ul>
+</li>
+<li><strong>The materialized view should be range or list partitioned</strong></li>
+<li><strong>PCT refresh is nonatomic</strong>
+<ul>
+<li>That is, you specify the atomic_refresh parameter in your refresh call as false: [sourcecode language=&ldquo;sql&rdquo;]EXEC DBMS_MVIEW.REFRESH( […], […], atomic_refresh=&gt;false, […]); [/sourcecode]</li>
+<li><strong>By default (i.e. if you do not specify it), atomic_refresh=&gt;true</strong></li>
+</ul>
+</li>
+</ol>
+<p><!-- raw HTML omitted --> The documentation on all this is there, if you look for it. My personal opinion is that other functionality of Oracle DB is better documented than this, and that DBMS_MVIEW as a whole gives away its long history in the disjointed nature of the documentation. If it were re-written today with a focus on data warehousing I&rsquo;m confident it would be clearer. Anyway, that&rsquo;s my excuse for not RTFMing properly&hellip; <!-- raw HTML omitted --></p>
+<h2 id="what-it-doesnt-say-in-the-manual">What it doesn&rsquo;t say in the manual</h2>
+<p>Despite having met all the above conditions for PCT partition truncation, it still wasn’t happening. When adding or updating data for an existing weekly partition, we always saw DELETE … INSERT, rather than TRUNCATE … INSERT. The DELETE took ages, as would be expected</p>
+<p>A 10979 trace (see below) on the MView refresh showed this crucial line : [sourcecode] [&hellip;]</p>
+<p>Value of _mv_refresh_costing : rule</p>
+<p>[&hellip;] [/sourcecode]</p>
+<p>This undocumented parameter is at the very heart of getting PCT partition truncation. By default it is set to Rule, which means that you will get DELETE &hellip; INSERT and never TRUNCATE&hellip;INSERT. There is a document on My Oracle Support: <a href="https://supporthtml.oracle.com/ep/faces/secure/km/DocumentDisplay.jspx?id=733673.1">PCT REFRESH ISSUES DELETE WHERE IT SHOULD ISSUE TRUNCATE (Doc ID 733673.1)</a>.</p>
+<p>The suggested solution is to set it to Cost, which instructs Oracle to cost the different options and use the best for the given situation. However, during testing we saw an instance of bad costing on this leading Oracle to still DELETE instead of TRUNCATE. Therefore, we opted for forcing the choice through rule, but specified in order of preference: [sourcecode language=&ldquo;sql&rdquo;] alter session set &ldquo;_mv_refresh_costing&rdquo;=&lsquo;rule_pt_pd_fa_co&rsquo;; [/sourcecode] where:</p>
+<ul>
+<li>pt = PCT – TRUNC <em>(i.e. TRUNCATE &hellip; INSERT)</em></li>
+<li>pd = PCT – DEL/TRUNC <em>(i.e. DELETE &hellip; INSERT)</em></li>
+<li>fa = FAST</li>
+<li>co = COMPLETE</li>
+</ul>
+<p>(Credit: &ldquo;wilhelm2000&rdquo; on <a href="http://forums.oracle.com/forums/thread.jspa?threadID=569191">this OTN forum post</a>)</p>
+<p>N.B. Despite the &lsquo;TRUNC&rsquo; in the name, &ldquo;PCT - DEL/TRUNC&rdquo; does not do a TRUNCATE - maybe the name comes from DELETE being used as a kind of TRUNCATE?</p>
+<h2 id="what-it-kind-of-says-in-the-manual---default-global-index">[What it kind of says in the manual] - Default global index</h2>
+<p>Our elation at seeing a TRUNCATE occur was short-lived, because the refresh still took ages to run.</p>
+<p>After a bit of head-scratching and more RTFMing, we found that the reason for the slow refresh time was down to a default global index that is created on MViews. Named I_SNAP$.[&hellip;], they are used when you do &ldquo;fast&rdquo; (incremental) refreshes, using the mv$log tables. However, if you&rsquo;re only doing PCT refreshes of a MView, they are a positive hindrance because they need rebuilding every time. On an MView with millions of rows this takes a long time.</p>
+<p>Here is an abridged trace for a PCT-Truncate refresh of an MView with the default global index in place: [sourcecode language=&ldquo;sql&rdquo;] /* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &ldquo;HR&rdquo;.&ldquo;I_SNAP$_MV_WEEK&rdquo; UNUSABLE</p>
+<p>ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION PART_20101122 UPDATE GLOBAL INDEXES</p>
+<p>/* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX APPEND BYPASS_RECURSIVE_CHECK */ INTO[…]</p>
+<p>BEGIN sys.dbms_index_utl.multi_level_build(index_list=&gt;'&ldquo;HR&rdquo;.&ldquo;I_SNAP$_MV_WEEK&rdquo;',just_unusable=&gt;TRUE, cont_after_err=&gt;TRUE, concurrent=&gt;TRUE); END; [/sourcecode]</p>
+<p>By defining the MView using the USING NO INDEX clause, the global index is not created and the PCT-Truncate works much more efficiently: [sourcecode language=&ldquo;sql&rdquo;] ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION[…]</p>
+<p>/* MV_REFRESH (INS) */ INSERT /*+ APPEND […] [/sourcecode]</p>
+<h2 id="refresh-method">Refresh method</h2>
+<p>To get PCT refresh, use method=&gt;&lsquo;P&rsquo; [sourcecode language=&ldquo;sql&rdquo;]EXEC DBMS_MVIEW.REFRESH( […], […], method=&gt;&lsquo;P&rsquo;, […]); [/sourcecode] You can also use method=&gt;'?' where Oracle will try PCT first, and then Complete if PCT is not possible. However, if PCT isn&rsquo;t possible you may have a problem that you want to know about rather than rebuilding the MV each time without you being aware of it.</p>
+<h2 id="bug-interval-partitioned-mview-and-pct-partition-truncation">Bug: Interval Partitioned MView and PCT Partition Truncation</h2>
+<p>Interval partitioning removes the headache of partition management for new data. Unfortunately, it appears that you can’t partition MViews and refresh them using PCT partition truncation. If you try to PCT partition truncate refresh an interval-partitioned MView, you get this error: [sourcecode] ERROR at line 1: ORA-12008: error in materialized view refresh path ORA-00936: missing expression ORA-06512: at &ldquo;SYS.DBMS_SNAPSHOT&rdquo;, line 2545 ORA-06512: at &ldquo;SYS.DBMS_SNAPSHOT&rdquo;, line 2751 ORA-06512: at &ldquo;SYS.DBMS_SNAPSHOT&rdquo;, line 2720 ORA-06512: at line 1 [/sourcecode]</p>
+<p>You don&rsquo;t get the error if you do a non-atomic refresh - but if you do a non-atomic refresh you don&rsquo;t get partition truncation (you get DELETE instead).</p>
+<p>Test case: <a href="http://rnm1978.wordpress.com/mv_issue_01a-sql/">mv_issue_01a.sql</a></p>
+<h2 id="bug-mview-defined-with-ansi-sql">Bug: MView defined with ANSI SQL</h2>
+<p>This will probably have some people exclaiming &ldquo;serves you right &hellip;&rdquo; but ANSI SQL joins (INNER JOIN etc, instead of joining tables in the WHERE clause) is what I was brought up on. I discovered after several frustrating hours that you shouldn&rsquo;t use it when you define MViews, as it can result in an erroneous &ldquo;COMPILATION ERROR&rdquo; state for the MView when data on the base table is changed. There&rsquo;s a of MOS article: <a href="https://supporthtml.oracle.com/ep/faces/secure/km/DocumentDisplay.jspx?id=1081493.1">Mview Refresh Fails And COMPILE_STATE =&gt; COMPILATION_ERROR (Doc ID 1081493.1)</a>, which refers to bug <a href="https://supporthtml.oracle.com/ep/faces/secure/km/BugDisplay.jspx?id=5759944&amp;bugProductSource=Oracle">5759944</a> and for which there&rsquo;s a patch number. It&rsquo;s supposedly fixed in 11.2 but appears to still be present in 11.2.0.1.0.</p>
+<p>Test case: <a href="http://rnm1978.wordpress.com/mv_issue_02-sql/">mv_issue_02.sql</a></p>
+<h2 id="10979-tracing">10979 Tracing</h2>
+<p>To understand exactly what happens when a MView refresh takes place, you can enable tracing using: [sourcecode language=&ldquo;sql&rdquo;] &ndash; enable the trace alter session set events &lsquo;10979 trace name context forever&rsquo;; &ndash; SQL commands to trace go here [&hellip;] &ndash; Disable the trace alter session set events &lsquo;10979 trace name context off&rsquo;; [/sourcecode]</p>
+<p>Here&rsquo;s an annotated trace log of a successful PCT partition truncation MView refresh:</p>
+<p>First is one of the key bits - is the refresh atomic (atomic_refresh=&gt;&lsquo;true&rsquo;, which is the default) or non-atomic (atomic_refresh=&gt;&lsquo;false&rsquo;) which is required for PCT partition truncation [sourcecode] NON ATOMIC REFRESH ON DEMAND REFRESH</p>
+<p>ONLY TRUNCATE based PCT REFRESH possible [/sourcecode] Next follows the statements that Oracle would execute, for all of the MV refresh methods that it thinks are applicable in this refresh scenario.</p>
+<p>Method 4 is a DELETE &hellip; INSERT, whilst Method 5 is TRUNCATE &hellip; INSERT. Note that the global index hasn&rsquo;t been removed from the MView, hence the additional index maintenance commands</p>
+<p>[sourcecode] Refresh Method 4 REFRESH Stmt 0 /* MV_REFRESH (DEL) */ DELETE FROM &ldquo;HR&rdquo;.&ldquo;MV_WEE[&hellip;] REFRESH Stmt 1 /* MV_REFRESH (INS) */ INSERT /*+ BYPASS_RECURSIVE_CHEC[&hellip;]</p>
+<p>Refresh Method 5 REFRESH Stmt 0 /* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &ldquo;HR[&hellip;] REFRESH Stmt 1 ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION [&hellip;] REFRESH Stmt 2 /* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX[&hellip;] REFRESH Stmt 3 BEGIN sys.dbms_index_utl.multi_level_build(index_list=[&hellip;] [/sourcecode] Watch out for this parameter value - it&rsquo;s crucial! [sourcecode]</p>
+<p>Value of _mv_refresh_costing : COST</p>
+<p>[/sourcecode] By default (11.1.0.7) it&rsquo;s &ldquo;RULE&rdquo; and will do DELETE&hellip;INSERT *always* instead of TRUNCATE&hellip;INSERT</p>
+<p>If you&rsquo;re using COST, then the cost of the possible refresh methods will be calculated: [sourcecode] REFRESH STATEMENT /* MV_REFRESH (DEL) */ DELETE FROM &ldquo;HR&rdquo;.&ldquo;MV_WEE[&hellip;] COST = 4.002855 REFRESH STATEMENT /* MV_REFRESH (INS) */ INSERT /*+ BYPASS_RECURSIVE_CHEC[&hellip;] COST = 2.571476 TOTAL COST OF REFRESH = 6.574331</p>
+<p>REFRESH STATEMENT /* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &ldquo;HR[&hellip;] COST = 0.000000 REFRESH STATEMENT ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION [&hellip;] COST = 0.000000 REFRESH STATEMENT /* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX[&hellip;] COST = 2.279282 REFRESH STATEMENT BEGIN sys.dbms_index_utl.multi_level_build(index_list=[&hellip;] COST = 0.000000 TOTAL COST OF REFRESH = 2.279282</p>
+<p>[/sourcecode] After costing, or by rule, the method chosen will be stated: [sourcecode]</p>
+<p>Refresh method picked PCT - TRUNC</p>
+<p>[/sourcecode] Oracle then records the actual statements executed: [sourcecode]</p>
+<p>Executed Stmt - /* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &ldquo;HR[&hellip;] Executed Stmt - ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION [&hellip;] Executed Stmt - /* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX[&hellip;] Executed Stmt - BEGIN sys.dbms_index_utl.multi_level_build(index_list=[&hellip;]</p>
+<p>[/sourcecode]</p>
+<p>A final word of warning - remember that the trace file is an internal diagnostic, it is not for user-consumption. I spent a while worrying about this entry in the log: [sourcecode] PARSE ERROR #19:len=12330 dep=1 uid=142 oct=3 lid=142 tim=35441256289311 err=10980 SELECT &ldquo;R&rdquo;.&ldquo;BSNS_WK_KEY&rdquo; &ldquo;WK_KEY&rdquo;,&ldquo;D&rdquo;.&ldquo;SOURCE_SYSTEM_KEY&rdquo; &ldquo;SOURCE_SYSTEM_KEY&rdquo;,&ldquo;D&rdquo;.&rdquo; CLOSE #19:c=0,e=0,dep=1,type=0,tim=35441256289311 [/sourcecode] Even though there was no error returned to the user session calling the refresh, I figured this must be some problem. However, according to MOS doc <a href="https://supporthtml.oracle.com/ep/faces/secure/km/DocumentDisplay.jspx?id=294513.1">Errors In Refresh Snapshot Trace Files ORA-10980 (Doc ID 294513.1)</a> the parse error is raised and cleared internally and therefore nothing to worry about.</p>
+
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Principal Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2022 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
