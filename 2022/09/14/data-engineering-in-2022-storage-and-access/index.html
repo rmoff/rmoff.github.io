@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Data Engineering in 2022: Storage and Access</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2022/09/14/data-engineering-in-2022-storage-and-access/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.85.0" />
+
+		
+		<meta property="og:title" content="Data Engineering in 2022: Storage and Access" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2022/09/h_IMG_8389.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2022/09/14/data-engineering-in-2022-storage-and-access/" />
+		<meta property="og:site_name" content="Data Engineering in 2022: Storage and Access" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2022/09/h_IMG_8389.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Data Engineering in 2022: Storage and Access</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2022-09-14T17:07:04Z">Sep 14, 2022</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/data-engineering" class="no-underline category near-white dim">Data Engineering</a>, <a href="https://rmoff.net/categories/table-formats" class="no-underline category near-white dim">Table Formats</a>, <a href="https://rmoff.net/categories/apache-hudi" class="no-underline category near-white dim">Apache Hudi</a>, <a href="https://rmoff.net/categories/apache-iceberg" class="no-underline category near-white dim">Apache Iceberg</a>, <a href="https://rmoff.net/categories/delta-lake" class="no-underline category near-white dim">Delta Lake</a>, <a href="https://rmoff.net/categories/lakefs" class="no-underline category near-white dim">LakeFS</a>
+								<span class="display-print">at https://rmoff.net/2022/09/14/data-engineering-in-2022-storage-and-access/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://twitter.com/rmoff/" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>In this article I look at where we store our analytical data, how we organise it, and how we enable access to it. I’m considering here potentially large volumes of data for access throughout an organisation. I’m not looking at data stores that are used for specific purposes (caches, low-latency analytics, graph etc).</p>
+</div>
+<div class="paragraph">
+<p>The article is <a href="/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/">part of a series</a> in which I explore the world of data engineering in 2022 and how it has changed from when I started my career in data warehousing 20+ years ago. Read the <a href="/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/">introduction</a> for more context and background.</p>
+</div>
+<div class="sect1">
+<h2 id="_storing_and_accessing_your_data_pt_1_burn_it_all_down">Storing and Accessing Your Data pt 1: 🔥 Burn It All Down…🔥</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In the beginning was the word, and the word was an expensive relational datawarehouse that wasn’t flexible or scalable enough for the cool kids in Silicon Valley.</p>
+</div>
+<div class="paragraph">
+<p>Then came Hadoop and scalability was won, at the vast cost of usability. You literally had to write your own Java code to move data around and transform it. You needed to serialise and deserialise the data yourself, and could store whatever you wanted - it didn’t have to be structured. This was sold as a benefit — &#34;Schema on Read&#34; they said, &#34;It’ll be a good idea&#34;, they said. <em>&#34;Oh bugger, where’s my schema&#34;</em>, they said when they came to use it.</p>
+</div>
+<div class="paragraph">
+<p>Through the virtues of open source a fantastic ecosystem grew particularly around the <a href="https://apache.org">Apache Software Foundation</a> and we got such wonderfully named projects as <a href="https://sqoop.apache.org/">Sqoop</a>, <a href="https://oozie.apache.org/">Oozie</a>, <a href="https://pig.apache.org/">Pig</a>, and <a href="https://flume.apache.org/">Flume</a> emerged. <a href="https://hive.apache.org/">Hive</a> brought with it the familiar and comforting bosom of SQL and table structures but with limited functionality (including no <code>DELETE</code> or <code>UPDATE</code> at first) and performance.</p>
+</div>
+<div class="paragraph">
+<p>Over the years things improved, with <a href="https://spark.apache.org/">Spark</a> replacing <a href="https://hadoop.apache.org/">MapReduce</a> and enabling a generation of Python coders to get into the big data lark too, along with <a href="https://spark.apache.org/sql/">SQL</a>.</p>
+</div>
+<div class="paragraph">
+<p>Amongst all of this pioneering work and technology was the assumption that the resting place for analytical data was <a href="https://hadoop.apache.org/">HDFS</a>. Other stores like <a href="https://hbase.apache.org/">HBase</a> existed for special purposes, but the general we’ve-got-a-bunch-of-data-in-this-org-and-need-to-collect-it destination was HDFS. Because &#34;general dumping ground&#34; wasn’t sexy enough for the marketing folk it became sold as a &#34;Data Lake&#34; with all the associated puns and awful cliches (fishing for data, data swamp, etc etc etc).</p>
+</div>
+<div class="paragraph">
+<p>The general pitch around the data lake was to collect all the data, structured and unstructured (<em>or structured that you’ve made unstructured by chucking away its schema when you loaded it</em>), and then <del>wait for the data lake fairy to conjure magical value out of the pile of data you’ve dumped there</del> make the raw data available for teams in the company to process and use for their particular purposes. This may have been direct querying of the data in place, or processing it and landing it in another data store for serving (for example, aggregated and structured for optimal query access in an RDBMS or columnar data store).</p>
+</div>
+<div class="paragraph">
+<p>Accessing the data in HDFS was done with Hive and other tools including <a href="https://impala.apache.org/">Impala</a>, <a href="https://drill.apache.org/">Drill</a>, and <a href="https://prestodb.io/">Presto</a>. All had their pros and cons particularly in early releases, often with limitations around performance and management of the data.</p>
+</div>
+<div class="paragraph">
+<p>All of this was built around the closely-intertwined <a href="https://hadoop.apache.org/">Hadoop</a> platform, whether self-managed on-premises including with deployments from Cloudera, MapR, and Hortonworks, or with a cloud provider such as AWS and its <a href="https://aws.amazon.com/emr/">EMR</a> service.</p>
+</div>
+<div class="paragraph">
+<p>This was pretty much the state of the Big Data world (as it was called then) as <a href="https://www.rittmanmead.com/blog/2016/12/etl-offload-with-spark-and-amazon-emr-part-5/">I last saw it</a> before getting distracted by the world of stream processing - fragmented, more difficult to use, less functionality than an RDBMS for analytics, and evolving rapidly.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_storing_and_accessing_your_data_pt_2_and_then_rebuild_it_️">Storing and Accessing Your Data pt 2: …and Then Rebuild It 🏗️</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Coming back to this after my attention being elsewhere for a few years means that I have the slightly uninformed but helpfully simplistic view of things. What the relational data warehouses used to do (bar scale, arguably), we are now approaching something roughly like parity again with a stack of tools that have stabilised and matured in large, with a layer on top that’s still being figured out.</p>
+</div>
+<div class="paragraph">
+<p>Underpinning it all is the core idea of separation of storage and compute. Instead of one box (the traditional RDBMS), we have two. This is important for two vital reasons:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>It’s a lot <strong>cheaper</strong> to just store data and then only pay for compute when you want to use it.</p>
+<div class="paragraph">
+<p>The alternative is that you couple the two together which is what we’ve generally always done and is seen in every RDBMS, like Oracle, DB2, etc etc. With the coupled approach you have a server with disks and CPUs and you’re paying for the CPUs whether they’re doing anything or not, and when you need more storage and have filled the disk bays you need to buy (and license, hi Oracle) another server (with CPUs etc).</p>
+</div>
+<div class="paragraph">
+<p>The added element here is that you have to provision your capacity for your <strong>peak</strong> workload, which means over-provisioning and capacity sat idle potentially for much of the time depending on your business and data workload patterns.</p>
+</div>
+</li>
+<li>
+<p>If your data is held in an <strong>open format</strong> on a storage platform that has <strong>open APIs</strong> then multiple tools can use it as they want to.</p>
+<div class="paragraph">
+<p>Contrast this to putting your data in SQL Server (not to pick on Oracle all the time), and any tool that wants to use it has to do so through SQL Server. If a new tool comes along that does particular processing really really well and your data is sat in an RDBMS then you have to migrate that data off the RDBMS first, or query it in place.</p>
+</div>
+<div class="paragraph">
+<p>Given the <a href="https://en.wikipedia.org/wiki/Cambrian_explosion">Cambrian explosion</a> that’s been happening in the world of software and showing no signs of abating, setting ourselves up for compatibilty and future evolution of software choices seems like the smart move.</p>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>HDFS and Hive gave us this separation, right? Well, it did, but with a <a href="https://youtu.be/nWwQMlrjhy0?t=734">long list of problems and limitations for Hive</a>. These include poor perfomance, a lack of support for transactions, point-in-time querying, streaming updates, and more. In addition, HDFS has nowadays been overtaken by S3 as the object store of choice with APIs supported by numerous non-S3 platforms, both Cloud based (e.g. <a href="https://cloud.google.com/storage/docs/interoperability">Google’s Cloud Storage (GCS)</a>, and <a href="https://developers.cloudflare.com/r2/platform/s3-compatibility/api/">Cloudflare’s R2</a>) and on-premises (e.g. <a href="https://min.io/">Minio</a>).</p>
+</div>
+<div class="paragraph">
+<p>So if it’s not HDFS and Hive, what’s the current state and future of analytics data storage &amp; access looking like?</p>
+</div>
+<div class="sect2">
+<h3 id="_data_lake_table_formats_data_lakehouses">Data Lake Table Formats &amp; Data Lakehouses</h3>
+<div class="paragraph">
+<p>So, full disclosure first:</p>
+</div>
+<div class="paragraph">
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">😳Confession: Until last week I honestly thought &quot;data lakehouse&quot; was some god-awful marketing bollocks and nothing more. <br>🙈Embarrassed to find out there&#39;s actually a rather interesting paper from last year describing the concept in detail: <a href="https://t.co/XEI0zGSXBl">https://t.co/XEI0zGSXBl</a></p>&mdash; Robin Moffatt 🍻🏃🥓 (@rmoff) <a href="https://twitter.com/rmoff/status/1565747777992359938?ref_src=twsrc%5Etfw">September 2, 2022</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+</div>
+<div class="paragraph">
+<p>You can read the <a href="https://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf">Lakehouse paper</a> (and <a href="https://www.databricks.com/wp-content/uploads/2020/08/p975-armbrust.pdf">more detailed one</a>) and decide for yourself <a href="https://twitter.com/gwenshap/status/1565771009902256129">its virtues</a>, but I found it a useful description of a pattern that several technologies are adopting, not just <a href="https://www.databricks.com/product/data-lakehouse">Databricks and their Delta Lake implementation of the Lakehouse</a>. <em>I’ll admit, the name grates—and I miss the Hadoop days of fun names 😉.</em></p>
+</div>
+<div class="paragraph">
+<p>In short, the &#34;Lakehouse&#34; concept is where data is stored on object store (the Data Lake) with a layer above it providing a &#34;table format&#34; through which data can be read and written in a structured way, supporting updates and deletes to the data, as well as queried in an efficient way. The Lakehouse is the whole; the <strong>table format</strong> is the specific layer of technology that implements the access on the data in your Data Lake.</p>
+</div>
+<div id="img-lakehouse" class="imageblock">
+<div class="content">
+<a class="image" href="https://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf"><img src="/images/2022/09/lakehouse_dl01.png" alt="Diagram of the evolution of the Lakehouse from Databricks"/></a>
+</div>
+</div>
+<div class="paragraph">
+<p>Whether you go for the <strong>Lakehouse</strong> term (Databricks would like you to, and <a href="https://www.snowflake.com/guides/what-data-lakehouse">Snowflake</a> are onboard too, and maybe even <a href="https://www.oracle.com/uk/data-lakehouse/what-is-data-lakehouse/">Oracle</a>) or just the <strong>Data Lake plus Table Format</strong>, it’s a really interesting idea. The bit that really catches my attention is that it enables a common table structure to be defined and accessed by a variety of compute engines - meaning that in both querying and processing (ETL/ELT) the data can be structured and manipulated in the way in which you would in an RDBMS.</p>
+</div>
+<div class="paragraph">
+<p>There are three table formats available:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://hudi.apache.org/">Apache Hudi</a></p>
+</li>
+<li>
+<p><a href="https://iceberg.apache.org">Apache Iceberg</a></p>
+</li>
+<li>
+<p><a href="https://delta.io">Delta Lake</a></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>All of them enable the things that we’d have taken for granted a decade ago including rich metadata, transactional access, `UPDATE`s, `DELETE`s, and ACID compliance, along with performant access when querying the data.</p>
+</div>
+<div class="paragraph">
+<p>Both Hudi and Delta Lake have a similar conceptual diagram which illustrates things well. Note the plethora of query engines and integrations that each support.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2022/09/hudi_dl01.png" alt="Apache Hudi and Delta Lake conceptual diagrams"/>
+</div>
+</div>
+<div class="paragraph">
+<p><em>(image credits: <a href="https://hudi.apache.org/">Apache Hudi</a> / <a href="https://delta.io">Delta Lake</a>)</em></p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_managed_data_lakehouses">Managed Data Lakehouses</h3>
+<div class="paragraph">
+<p>You can run run your own, or use used hosted versions including</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://www.onehouse.ai/">Onehouse</a> (Apache Hudi)</p>
+</li>
+<li>
+<p><a href="https://tabular.io/">Tabular</a> (Apache Iceberg)</p>
+</li>
+<li>
+<p><a href="https://www.databricks.com/">Databricks</a> (Delta Lake)</p>
+</li>
+<li>
+<p><strong>GCP</strong>&#39;s <a href="https://cloud.google.com/blog/products/data-analytics/unify-data-lakes-and-warehouses-with-biglake-now-generally-available">BigLake</a> (Iceberg?)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p><strong>Azure</strong> have a close partnership with Databricks, so the only major cloud provider missing from this list is <strong>AWS</strong>. They have <a href="https://aws.amazon.com/lake-formation/">Lake Formation</a> and <a href="https://docs.aws.amazon.com/lake-formation/latest/dg/governed-tables.html">Governed Tables</a> which looks similar on the surface but I’ve not dug into in detail (and Governed Tables aren’t even mentioned on AWS&#39; <a href="https://aws.amazon.com/blogs/big-data/build-a-lake-house-architecture-on-aws/">Build a Lakehouse Architecture on AWS</a> blog).</p>
+</div>
+<div class="paragraph">
+<p><strong>Snowflake</strong> recently added support for <a href="https://www.snowflake.com/blog/iceberg-tables-powering-open-standards-with-snowflake-innovations/">Iceberg tables</a> (complementing the existing <a href="https://docs.snowflake.com/en/user-guide/tables-external-intro.html#delta-lake-support">support for Delta Lake external tables</a>), and are <a href="https://www.snowflake.com/blog/5-reasons-apache-iceberg/">backing Iceberg</a> — presumably in part to try and hamper Databricks&#39; Delta Lake (see also their snarky comments about &#34;<em>Iceberg includes features that are <strong>paid in other table formats*</strong></em><strong>&#34;, &#34;<em>The Iceberg project is *well-run</em></strong><em> open source</em>&#34; etc, taking a shot at the fact that Delta Lake has paid options, and the majority of committers are from Databricks).</p>
+</div>
+<div class="paragraph">
+<p><a href="https://www.dremio.com/"><strong>Dremio</strong></a> are also in this space as one of the companies working on <a href="https://arrow.apache.org/">Apache Arrow</a> and providing a fast query engine built on it called Dremio Sonar. I’ve yet to get my head around their offering, but it looks like on-premises platform as well as hosted, with support for Apache Iceberg and Delta Lake. They’ve got a rich set of resources in their <a href="https://www.dremio.com/subsurface/">Subsurface</a> resource area.</p>
+</div>
+<div class="paragraph">
+<p><strong>Oracle</strong> being Oracle are not ones to miss up the chance to jump on a buzzword or marketing bandwagon. Their version of the Lakehouse however looks to be to stick their Autonomous Data Warehouse (it’s self driving! self healing!) on top of a data lake - kinda like Snowflake have done, but without the open table format support of Apache Iceberg. The huge downside to this is that without the open table format there’s zero interoperability with other query &amp; processing engines - something Oracle are presumably not in a rush to enable.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_storage_formats">Storage Formats</h3>
+<div class="paragraph">
+<p>Regardless of which <em>table format</em> you implement, you still store your data in a format appropriate for its use - and that format is separate from the table format (confused yet? you might be). Different table formats support different storage formats but in general you’ll see various open formats used:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Probably something like <a href="https://avro.apache.org/">Avro</a> for structure data that’s still to be processed</p>
+</li>
+<li>
+<p>A columnar format such as <a href="https://parquet.apache.org/">Parquet</a> or <a href="https://orc.apache.org/">Orc</a> for data that’s going to be queried</p>
+</li>
+<li>
+<p>It could also just be JSON (hell, use CSV if you really must)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Regardless of the format, the data is stored on storage with an open API (or at least one which is widely supported by most tools) - S3 becomes the de facto choice here.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_reading_more_about_table_formats_lakehouses">Reading more about Table Formats &amp; Lakehouses</h3>
+<div class="paragraph">
+<p>Here are some good explanations, deep-dives, and comparison posts covering the three formats:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://dacort.dev/posts/modern-data-lake-storage-layers/">An Introduction to Modern Data Lake Storage Layers</a> - <a href="https://twitter.com/dacort">Damon Cortesi</a> (AWS)</p>
+</li>
+<li>
+<p>Comparison of Data Lake Table Formats <a href="https://www.dremio.com/subsurface/comparison-of-data-lake-table-formats-iceberg-hudi-and-delta-lake/">blog</a> / <a href="https://www.dremio.com/subsurface/subsurface-meetup-comparison-of-data-lakehouse-table-formats/">video</a> - <a href="https://twitter.com/AMdatalakehouse">Alex Merced</a> (Dremio)</p>
+</li>
+<li>
+<p><a href="https://www.onehouse.ai/blog/apache-hudi-vs-delta-lake-vs-apache-iceberg-lakehouse-feature-comparison">Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Comparison</a> - <a href="https://www.linkedin.com/in/lakehouse/">Kyle Weller</a> (Onehouse)</p>
+</li>
+<li>
+<p><a href="https://lakefs.io/hudi-iceberg-and-delta-lake-data-lake-table-formats-compared/">Hudi, Iceberg and Delta Lake: Data Lake Table Formats Compared</a> - <a href="https://www.linkedin.com/in/paulsingman/">Paul Singman</a> (LakeFS)</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_a_note_about_open_formats">A Note About Open Formats</h3>
+<div class="paragraph">
+<p>Whether we’re talking data lakes, Lakehouses, or other ways of storing data, open formats are important. A closed-format vendor will tell you that it’s just the &#34;vendor lockin bogeyman man&#34; pitch and how often do you re-platform anyway. I would reframe it away from this and suggest that just as with tools such as Apache Kafka, an open format enables you to keep your data in a neutral place, accessible by many different tools and technologies. Why do so many support it? Because it’s open!</p>
+</div>
+<div class="paragraph">
+<p>In a technology landscape which has not stopped moving at this pace for several years now and probably won’t for many more, the alternative to an open format is betting big on a closed platform and hoping that nothing better comes along in the envisaged lifetime of the data platform. Open formats give you the flexibility to hedge your bets, to evaluate newer tools and technologies as they come along, and to not be beholden to a particular vendor or technology if it falls behind what you need.</p>
+</div>
+<div class="paragraph">
+<p>In previous times the use of an open format may have been moot given the dearth of alternatives when it came to processing the data—never mind the fact that the storage of data was usually coupled to the compute making it even more irrelevant. Nowadays there are multiple &#34;big hitters&#34; in each processing category with a dozen other options nibbling at their feet. Using a open format gives you the freedom to trial whichever ones you want to.</p>
+</div>
+<div class="paragraph">
+<p>Just a tip to vendors: that’s great if you’re embracing open formats, but check your hubris if you start to brag about it whilst simultaneously throwing FUD at open source. <a href="https://www.linkedin.com/posts/robinmoffatt_choosing-open-wisely-snowflake-blog-activity-6973309528628973568-gjOJ?utm_source=share&amp;utm_medium=member_desktop">Just sayin&#39;</a>.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_git_for_data_with_lakefs"><code>git</code> For Data with LakeFS</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Leaving aside table formats and lakehouses for the moment—and coming back to the big picture of how we store and access data nowadays—one idea that’s caught my attention is that of being able to apply git-like semantics <strong>to the data itself</strong>. Here’s a copy of <a href="https://twitter.com/rmoff/status/1567829714865102853">a recent Twitter thread that I wrote</a>.</p>
+</div>
+<hr/>
+<div class="paragraph">
+<p>Having <a href="https://www.youtube.com/watch?v=uixZ7NcGoeE">watched @gwenshap and @ozkatz100 talk about &#34;git for data&#34;</a> I would definitely say is a serious idea.
+However to the point at the end of the video, RTFM—it took reading <a href="https://docs.lakefs.io/using_lakefs/data-devenv.html">page from the docs</a> and some other pages subsequently to really grok the concept in practice.</p>
+</div>
+<div class="paragraph">
+<p>Where I struggled at first with the git analogy alone was that data changes, and I couldn’t see how branch/merge fitted into that outside of the idea of branching for throwaway testing alone. The <a href="https://www.youtube.com/watch?v=uixZ7NcGoeE&amp;t=1401s">1PB accidental deletion example</a> was useful for illustrating the latter point for sure.</p>
+</div>
+<div class="paragraph">
+<p>But then reading <a href="https://docs.lakefs.io/understand/roadmap.html#improved-streaming-support-for-apache-kafka">this page</a> made me realise that I was thinking about the whole thing from a streaming PoV—when actually the idea of running a batch against a branch with a hook to validate and then merge is a freakin awesome idea</p>
+</div>
+<div class="paragraph">
+<p>(As the roadmap issue notes, doing this for streaming data is conceptually possible but more complex to implement.)</p>
+</div>
+<div class="paragraph">
+<p>I’m also still trying to think through the implications of <a href="https://docs.lakefs.io/understand/model.html#merge">merging one branch into another</a> in which there are changes; can data really be treated the same as code in that sense, or could one end up with inconsistent data sets?</p>
+</div>
+<div class="paragraph">
+<p>Lastly, having been reading up on table formats, I’d be interested to dig into quite how much LakeFS works already with them vs roadmap alone (the docs are not entirely consistent on this point)—but with both in place it sounds like a fantastic place for data eng to be heading.</p>
+</div>
+<hr/>
+<div class="paragraph">
+<p>The &#34;git for data&#34; pitch is a great way to articulate things, but it also shifted my brain off some of the central uses. For code, <code>git</code> is an integral part of the development process but once it hits Production <code>git</code> steps back from an active role. However, in the case of LakeFS some of their most exciting use cases are <em>as part of the Production data process</em>. <a href="https://docs.lakefs.io/understand/roadmap.html#improved-streaming-support-for-apache-kafka">The docs</a> have several examples which I think are just great:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>When your batch pipeline runs, it does so against a branch of the data. Before merging that branch back into trunk, a hook can be configured to do various data quality checks (just as you’d configure hooks in GitHub etc to check for code quality, test suites, etc etc). This could be things like checking for PII slipping through, or simply &#34;did we process the approximate number of records that we would expect&#34;. If that kind of check fails because the source data’s gone bad or failed up stream then you potentially save yourself a ton of unpicking that you’d have to do if it’s updated directly in the Production data lake.</p>
+</li>
+<li>
+<p>As above, the batch pipeline creates a new branch when it runs, and when (or if) it completes successfully and merges that back into the trunk, that merge can have attached to it a bunch of metadata to do with the pipeline execution. What version of the code was it running, what version of the underlying frameworks on which it executed, and so on. Invaluable for tracing particular problems at a later date.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p><em>I kicked the tyres on LakeFS and wrote about it <a href="/2022/09/16/data-engineering-in-2022-exploring-lakefs-with-jupyter-and-pyspark/">here</a></em></p>
+</div>
+<hr/>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_data_engineering_in_2022">Data Engineering in 2022</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><a href="/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/">Introduction</a></p>
+</li>
+<li>
+<p><a href="/2022/09/16/data-engineering-in-2022-exploring-lakefs-with-jupyter-and-pyspark/">Exploring LakeFS with Jupyter and PySpark</a></p>
+</li>
+<li>
+<p>Query &amp; Transformation Engines [TODO]</p>
+</li>
+<li>
+<p>ETL/ELT tools &amp; Orchestration [TODO]</p>
+</li>
+<li>
+<p>Architectures &amp; Terminology [TODO]</p>
+</li>
+<li>
+<p><a href="/2022/09/14/data-engineering-resources/">Resources</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --><!-- raw HTML omitted --> <em>Robin Moffatt is a Principal Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2022 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>

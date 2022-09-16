@@ -5,9 +5,1162 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2022-09-12</lastBuildDate>
+    <lastBuildDate>2022-09-16</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Data Engineering in 2022: Exploring LakeFS with Jupyter and PySpark</title>
+      <link>https://rmoff.net/2022/09/16/data-engineering-in-2022-exploring-lakefs-with-jupyter-and-pyspark/</link>
+      <pubDate>2022-09-16</pubDate>
+      
+      <guid>https://rmoff.net/2022/09/16/data-engineering-in-2022-exploring-lakefs-with-jupyter-and-pyspark/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2022/09/t_DSCF8265.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;p&gt;With my &lt;a href=&#34;https://rmoff.net/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/&#34;&gt;foray&lt;/a&gt; into the current world of data engineering I wanted to get my hands dirty with some of the tools and technologies I&amp;rsquo;d been reading about. The vehicle for this was trying to understand more about LakeFS, but along the way dabbling with PySpark and S3 (MinIO) too.&lt;/p&gt;
+&lt;p&gt;I&amp;rsquo;d forgotten how amazingly useful notebooks are. It&amp;rsquo;s &lt;a href=&#34;https://www.rittmanmead.com/blog/2016/12/etl-offload-with-spark-and-amazon-emr-part-2-code-development-with-notebooks-and-docker/&#34;&gt;six years since I wrote about them last&lt;/a&gt; (and the last time I tried my hand at PySpark). This blog is basically the notebook, with some more annotations.&lt;/p&gt;
+&lt;p&gt;If you want to run it yourself you can &lt;a href=&#34;https://rmoff.net/images/2022/09/lakefs.ipynb&#34;&gt;download the notebook&lt;/a&gt; and run it on the &lt;a href=&#34;https://github.com/treeverse/lakeFS/tree/master/deployments/compose&#34;&gt;Everything Bagel&lt;/a&gt; Docker Compose environment from LakeFS.&lt;/p&gt;
+&lt;h2 id=&#34;tldr&#34;&gt;tl;dr&lt;/h2&gt;
+&lt;p&gt;With LakeFS you can branch and merge your data just as you would with your code. You can work on a copy of your main dataset to test new code without worrying about overwriting it. You can test destructive changes without committing them until you&amp;rsquo;re sure they work.&lt;/p&gt;
+&lt;p&gt;See more thoughts on it &lt;a href=&#34;https://rmoff.net/2022/09/14/data-engineering-in-2022-storage-and-access/#_git_for_data_with_lakefs&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;overview&#34;&gt;Overview&lt;/h2&gt;
+&lt;p&gt;I wanted to understand and see for myself how LakeFS brings the concept of git to data, and what it looks like in practice.&lt;/p&gt;
+&lt;p&gt;I start off with a &lt;code&gt;main&lt;/code&gt; branch and write some data to it (as a Parquet file).&lt;/p&gt;
+&lt;p&gt;From there I create two branches, in which I&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Add some more rows of data&lt;/li&gt;
+&lt;li&gt;Delete some columns from the existing data&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Along the way I compare how LakeFS reports the files (acting as a S3 proxy), and what&amp;rsquo;s happening in the actual S3 storage underneath. The latter&amp;rsquo;s interesting because LakeFS does &amp;ldquo;copy on write&amp;rdquo;, whereby data&amp;rsquo;s not duplicated until it needs to be written (i.e. when, and only when, it changes). This CoW approach is great for storage efficiency, and a solid reason why you&amp;rsquo;d be looking at something like LakeFS instead of simply actually duplicating data on S3 when you want to test something.&lt;/p&gt;
+&lt;h2 id=&#34;set-up-connections&#34;&gt;Set up connections&lt;/h2&gt;
+&lt;h3 id=&#34;s3&#34;&gt;S3&lt;/h3&gt;
+&lt;p&gt;&lt;em&gt;Connection is configured &lt;a href=&#34;https://github.com/treeverse/lakeFS/blob/master/deployments/compose/etc/hive-site.xml#L51-L62&#34;&gt;here&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;boto3&lt;/span&gt;
+
+s3 &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; boto3&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;resource(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3&amp;#39;&lt;/span&gt;,
+                  endpoint_url&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;http://minio:9000/&amp;#39;&lt;/span&gt;,
+                  aws_access_key_id&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;minioadmin&amp;#39;&lt;/span&gt;,
+                  aws_secret_access_key&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;minioadmin&amp;#39;&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;lakefs&#34;&gt;LakeFS&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client&lt;/span&gt;
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; models
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.client&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; LakeFSClient
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.api&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; branches_api
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.api&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; commits_api
+
+&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;# lakeFS credentials and endpoint&lt;/span&gt;
+configuration &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; lakefs_client&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;Configuration()
+configuration&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;username &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;AKIAIOSFODNN7EXAMPLE&amp;#39;&lt;/span&gt;
+configuration&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;password &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY&amp;#39;&lt;/span&gt;
+configuration&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;host &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;http://lakefs:8000&amp;#39;&lt;/span&gt;
+
+client &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; LakeFSClient(configuration)
+api_client &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; lakefs_client&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;ApiClient(configuration)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;spark&#34;&gt;Spark&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark.context&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkContext
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkFiles
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark.sql.session&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkSession
+sc &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; SparkContext(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;local&amp;#39;&lt;/span&gt;)
+spark &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; SparkSession(sc)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;list-the-current-branches-in-the-repository&#34;&gt;List the current branches in the repository&lt;/h4&gt;
+&lt;p&gt;&lt;a href=&#34;https://pydocs.lakefs.io/docs/BranchesApi.html#list_branches&#34;&gt;https://pydocs.lakefs.io/docs/BranchesApi.html#list_branches&lt;/a&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;repo&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;example&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; b &lt;span style=&#34;color:#a2f;font-weight:bold&#34;&gt;in&lt;/span&gt; client&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;branches&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;list_branches(repo)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results:
+    display(b&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;id)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;&#39;main&#39;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;load-and-write-some-data-to-the-main-branch&#34;&gt;Load and write some data to the main branch&lt;/h2&gt;
+&lt;p&gt;To start with we take a random parquet data file that I found on github, load it, and write it to S3 on the main branch of the repository.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;url&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;https://github.com/Teradata/kylo/blob/master/samples/sample-data/parquet/userdata1.parquet?raw=true&amp;#39;&lt;/span&gt;
+sc&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;addFile(url)
+df &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;file://&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt; SparkFiles&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;get(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;userdata1.parquet&amp;#34;&lt;/span&gt;))
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Inspect the data:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;display(df&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;count())
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;1000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;What does the data look like?&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;df&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;show(n&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;,vertical&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;True&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;-RECORD 0--------------------------------
+ registration_dttm | 2016-02-03 07:55:29 
+ id                | 1                   
+ first_name        | Amanda              
+ last_name         | Jordan              
+ email             | ajordan0@com.com    
+ gender            | Female              
+ ip_address        | 1.197.201.2         
+ cc                | 6759521864920116    
+ country           | Indonesia           
+ birthdate         | 3/8/1971            
+ salary            | 49756.53            
+ title             | Internal Auditor    
+ comments          | 1E+02               
+only showing top 1 row
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;write-data-to-s3&#34;&gt;Write data to S3&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;branch&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;main&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;df&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;write&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;mode(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;overwrite&amp;#39;&lt;/span&gt;)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;branch&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/demo/users&amp;#39;&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;exploring-lakefs&#34;&gt;Exploring LakeFS&lt;/h2&gt;
+&lt;p&gt;Let&amp;rsquo;s see how LakeFS handles and see the file that we&amp;rsquo;ve just written, and then how to commit it to the branch.&lt;/p&gt;
+&lt;h3 id=&#34;the-data-as-seen-from-lakefs&#34;&gt;The data as seen from LakeFS&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://pydocs.lakefs.io/docs/ObjectsApi.html#list_objects&#34;&gt;https://pydocs.lakefs.io/docs/ObjectsApi.html#list_objects&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Note the &lt;code&gt;physical_address&lt;/code&gt; and its match in the S3 output in the next step&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;client&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;objects&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;list_objects(repo,branch)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;[{&#39;checksum&#39;: &#39;d41d8cd98f00b204e9800998ecf8427e&#39;,
+  &#39;content_type&#39;: &#39;application/octet-stream&#39;,
+  &#39;mtime&#39;: 1663316305,
+  &#39;path&#39;: &#39;demo/users/_SUCCESS&#39;,
+  &#39;path_type&#39;: &#39;object&#39;,
+  &#39;physical_address&#39;: &#39;s3://example/5e91c0a09d3a4415abd33bc460662e18&#39;,
+  &#39;size_bytes&#39;: 0},
+ {&#39;checksum&#39;: &#39;addfab49d691a5d4a18ae0b127a792a0&#39;,
+  &#39;content_type&#39;: &#39;application/octet-stream&#39;,
+  &#39;mtime&#39;: 1663316304,
+  &#39;path&#39;: &#39;demo/users/part-00000-142e4126-aaec-477c-bbcf-c1dd68011369-c000.snappy.parquet&#39;,
+  &#39;path_type&#39;: &#39;object&#39;,
+  &#39;physical_address&#39;: &#39;s3://example/2895bba44b5b4f5199bf58d80144a9de&#39;,
+  &#39;size_bytes&#39;: 78869}]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;the-data-as-seen-from-s3&#34;&gt;The data as seen from S3&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; o &lt;span style=&#34;color:#a2f;font-weight:bold&#34;&gt;in&lt;/span&gt; s3&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;Bucket(repo)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;objects&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;all():
+    &lt;span style=&#34;color:#008000&#34;&gt;print&lt;/span&gt;(o&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;last_modified, o&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;key, o&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;size)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;2022-09-16 08:18:24.769000+00:00 1984e4e69777452fb03800bd4c6b1b05 0
+2022-09-16 08:18:23.607000+00:00 2895bba44b5b4f5199bf58d80144a9de 78869
+2022-09-16 08:18:22.900000+00:00 49ad588d52b942c9b682f271f228cb9c 0
+2022-09-16 08:18:25.034000+00:00 5e91c0a09d3a4415abd33bc460662e18 0
+2022-09-16 08:18:24.277000+00:00 c4cae27b7c0a46beb14f79347d77c29d 0
+2022-09-16 08:17:18.615000+00:00 dummy 70
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;list-diff-of-branch-in-lakefs-this-is-kinda-like-a-git-status&#34;&gt;List diff of branch in LakeFS (this is kinda like a &lt;code&gt;git status&lt;/code&gt;)&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://pydocs.lakefs.io/docs/BranchesApi.html#diff_branch&#34;&gt;https://pydocs.lakefs.io/docs/BranchesApi.html#diff_branch&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Note that the files show &lt;strong&gt;&lt;code&gt;&#39;type&#39;: &#39;added&#39;&lt;/code&gt;&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;api_instance &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; branches_api&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;BranchesApi(api_client)
+
+api_response &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; api_instance&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;diff_branch(repo, branch)
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; api_response&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;pagination&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results&lt;span style=&#34;color:#666&#34;&gt;==&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;:
+    display(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Nothing to commit&amp;#34;&lt;/span&gt;)
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;else&lt;/span&gt;:
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; r &lt;span style=&#34;color:#a2f;font-weight:bold&#34;&gt;in&lt;/span&gt; api_response&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results:
+        display(r)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;{&#39;path&#39;: &#39;demo/users/_SUCCESS&#39;,
+ &#39;path_type&#39;: &#39;object&#39;,
+ &#39;size_bytes&#39;: 78869,
+ &#39;type&#39;: &#39;added&#39;}
+
+
+
+{&#39;path&#39;: &#39;demo/users/part-00000-142e4126-aaec-477c-bbcf-c1dd68011369-c000.snappy.parquet&#39;,
+ &#39;path_type&#39;: &#39;object&#39;,
+ &#39;size_bytes&#39;: 78869,
+ &#39;type&#39;: &#39;added&#39;}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;commit-the-new-file-in-main&#34;&gt;Commit the new file in &lt;code&gt;main&lt;/code&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://pydocs.lakefs.io/docs/CommitsApi.html#commit&#34;&gt;https://pydocs.lakefs.io/docs/CommitsApi.html#commit&lt;/a&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.api&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; commits_api
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.model.commit&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; Commit
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.model.commit_creation&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; CommitCreation
+
+api_instance &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; commits_api&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;CommitsApi(api_client)
+commit_creation &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; CommitCreation(
+    message&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Everything Bagel - commit users data (original)&amp;#34;&lt;/span&gt;,
+    metadata&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;{
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;foo&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bar&amp;#34;&lt;/span&gt;,
+    }
+) 
+
+api_instance&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;commit(repo, branch, commit_creation)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;{&#39;committer&#39;: &#39;docker&#39;,
+ &#39;creation_date&#39;: 1663316414,
+ &#39;id&#39;: &#39;de2ae0f24961f65bf7b525d983b3dbc869ce49a0dea43529920743154ce0ddd0&#39;,
+ &#39;message&#39;: &#39;Everything Bagel - commit users data (original)&#39;,
+ &#39;meta_range_id&#39;: &#39;&#39;,
+ &#39;metadata&#39;: {&#39;foo&#39;: &#39;bar&#39;},
+ &#39;parents&#39;: [&#39;a3bfc3317b697cb671665ea44b05b4009a06404c95c56a705fe638a824f1c04e&#39;]}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;list-branch-status-again---nothing-returned-means-that-there-is-nothing-uncommitted&#34;&gt;List branch status again - nothing returned means that there is nothing uncommitted&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;api_instance &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; branches_api&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;BranchesApi(api_client)
+
+api_response &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; api_instance&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;diff_branch(repo, branch)
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; api_response&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;pagination&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results&lt;span style=&#34;color:#666&#34;&gt;==&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;:
+    display(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Nothing to commit&amp;#34;&lt;/span&gt;)
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;else&lt;/span&gt;:
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; r &lt;span style=&#34;color:#a2f;font-weight:bold&#34;&gt;in&lt;/span&gt; api_response&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results:
+        display(r)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;&#39;Nothing to commit&#39;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;em&gt;Similar to a &lt;code&gt;git status&lt;/code&gt; showing &lt;code&gt;Your branch is up to date with &#39;main&#39;&lt;/code&gt; / &lt;code&gt;nothing to commit, working tree clean&lt;/code&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;branching-to-test-new-code&#34;&gt;Branching to test new code&lt;/h2&gt;
+&lt;p&gt;Now that we&amp;rsquo;ve got our main branch set up, let&amp;rsquo;s explore what we can do with. Imagine we have a couple of things that we&amp;rsquo;re working on and want to try out without touching the main dataset (at least until we know that they work).&lt;/p&gt;
+&lt;p&gt;First we&amp;rsquo;ll test adding new data, and create a branch on which to try it.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://pydocs.lakefs.io/docs/BranchesApi.html#create_branch&#34;&gt;https://pydocs.lakefs.io/docs/BranchesApi.html#create_branch&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Note that at this point there&amp;rsquo;s no additional object created on the object store&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;branch&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;add_more_user_data&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.model.branch_creation&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; BranchCreation
+
+api_instance &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; branches_api&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;BranchesApi(api_client)
+branch_creation &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; BranchCreation(
+    name&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;branch,
+    source&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;main&amp;#34;&lt;/span&gt;,
+) 
+
+api_response &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; api_instance&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;create_branch(repo, branch_creation)
+display(api_response)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;&#39;de2ae0f24961f65bf7b525d983b3dbc869ce49a0dea43529920743154ce0ddd0&#39;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;list-the-current-branches-in-the-example-repository&#34;&gt;List the current branches in the &lt;code&gt;example&lt;/code&gt; repository&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://pydocs.lakefs.io/docs/BranchesApi.html#list_branches&#34;&gt;https://pydocs.lakefs.io/docs/BranchesApi.html#list_branches&lt;/a&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; b &lt;span style=&#34;color:#a2f;font-weight:bold&#34;&gt;in&lt;/span&gt; client&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;branches&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;list_branches(repo)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results:
+    display(b&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;id)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;&#39;add_more_user_data&#39;
+&#39;main&#39;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;read-the-existing-data&#34;&gt;Read the existing data&lt;/h3&gt;
+&lt;p&gt;Note that we&amp;rsquo;re reading from the new branch, and see the data that was committed to &lt;code&gt;main&lt;/code&gt;.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;xform_df &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;branch&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/demo/users&amp;#39;&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;How many rows of data?&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;display(xform_df&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;count())
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;1000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;What does the data look like?&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;xform_df&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;show(n&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;,vertical&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;True&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;-RECORD 0--------------------------------
+ registration_dttm | 2016-02-03 07:55:29 
+ id                | 1                   
+ first_name        | Amanda              
+ last_name         | Jordan              
+ email             | ajordan0@com.com    
+ gender            | Female              
+ ip_address        | 1.197.201.2         
+ cc                | 6759521864920116    
+ country           | Indonesia           
+ birthdate         | 3/8/1971            
+ salary            | 49756.53            
+ title             | Internal Auditor    
+ comments          | 1E+02               
+only showing top 1 row
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;add-some-new-data&#34;&gt;Add some new data&lt;/h3&gt;
+&lt;p&gt;We&amp;rsquo;ll download another file from the same source as originally. It&amp;rsquo;s &lt;code&gt;userdata2&lt;/code&gt; this time, instead of the &lt;code&gt;userdata1&lt;/code&gt; used above.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;url&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;https://github.com/Teradata/kylo/blob/master/samples/sample-data/parquet/userdata2.parquet?raw=true&amp;#39;&lt;/span&gt;
+sc&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;addFile(url)
+df &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;file://&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt; SparkFiles&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;get(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;userdata2.parquet&amp;#34;&lt;/span&gt;))
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Look at the new data:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;df&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;show(n&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;,vertical&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;True&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;-RECORD 0---------------------------------
+ registration_dttm | 2016-02-03 13:36:39  
+ id                | 1                    
+ first_name        | Donald               
+ last_name         | Lewis                
+ email             | dlewis0@clickbank... 
+ gender            | Male                 
+ ip_address        | 102.22.124.20        
+ cc                |                      
+ country           | Indonesia            
+ birthdate         | 7/9/1972             
+ salary            | 140249.37            
+ title             | Senior Financial ... 
+ comments          |                      
+only showing top 1 row
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;write-the-data-to-the-branch-and-commit-it&#34;&gt;Write the data (to the branch) and commit it&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;df&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;write&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;mode(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;append&amp;#39;&lt;/span&gt;)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;branch&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/demo/users&amp;#39;&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;LakeFS sees that there is an uncommited change&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;api_instance &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; branches_api&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;BranchesApi(api_client)
+
+api_response &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; api_instance&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;diff_branch(repo, branch)
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; api_response&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;pagination&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results&lt;span style=&#34;color:#666&#34;&gt;==&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;:
+    display(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Nothing to commit&amp;#34;&lt;/span&gt;)
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;else&lt;/span&gt;:
+    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; r &lt;span style=&#34;color:#a2f;font-weight:bold&#34;&gt;in&lt;/span&gt; api_response&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results:
+        display(r)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;{&#39;path&#39;: &#39;demo/users/part-00000-b90910aa-58a0-42af-84ec-8ec557c56850-c000.snappy.parquet&#39;,
+ &#39;path_type&#39;: &#39;object&#39;,
+ &#39;size_bytes&#39;: 78729,
+ &#39;type&#39;: &#39;added&#39;}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Commit it&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.api&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; commits_api
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.model.commit&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; Commit
+&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.model.commit_creation&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; CommitCreation
+
+api_instance &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; commits_api&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;CommitsApi(api_client)
+commit_creation &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; CommitCreation(
+    message&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Everything Bagel - add more user data&amp;#34;&lt;/span&gt;,
+    metadata&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;{
+        &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;foo&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;bar&amp;#34;&lt;/span&gt;,
+    }
+) 
+
+api_instance&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;commit(repo, branch, commit_creation)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;{&#39;committer&#39;: &#39;docker&#39;,
+ &#39;creation_date&#39;: 1663316722,
+ &#39;id&#39;: &#39;9d7f809d1733ee0f48d89fd6d5d1d915aaf79200e10f26e997db1437b3414794&#39;,
+ &#39;message&#39;: &#39;Everything Bagel - add more user data&#39;,
+ &#39;meta_range_id&#39;: &#39;&#39;,
+ &#39;metadata&#39;: {&#39;foo&#39;: &#39;bar&#39;},
+ &#39;parents&#39;: [&#39;de2ae0f24961f65bf7b525d983b3dbc869ce49a0dea43529920743154ce0ddd0&#39;]}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;status-check-hows-the-data-look-from-each-branch&#34;&gt;Status check: how&amp;rsquo;s the data look from each branch?&lt;/h2&gt;
+&lt;p&gt;Let&amp;rsquo;s re-read the &lt;code&gt;main&lt;/code&gt; and &lt;code&gt;add_more_user_data&lt;/code&gt; branches and count the rows in each&lt;/p&gt;
+&lt;p&gt;Original branch (&lt;code&gt;main&lt;/code&gt;):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;add_more_user_data &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/main/demo/users&amp;#39;&lt;/span&gt;)
+display(add_more_user_data&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;count())
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;1000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;New branch (&lt;code&gt;add_more_user_data&lt;/code&gt;):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;add_more_user_data &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/add_more_user_data/demo/users&amp;#39;&lt;/span&gt;)
+display(add_more_user_data&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;count())
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;2000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;look-at-the-view-in-lakefs&#34;&gt;Look at the view in LakeFS&lt;/h3&gt;
+&lt;h4 id=&#34;main&#34;&gt;&lt;code&gt;main&lt;/code&gt;&lt;/h4&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;client&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;objects&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;list_objects(repo,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;main&amp;#39;&lt;/span&gt;)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;[{&#39;checksum&#39;: &#39;d41d8cd98f00b204e9800998ecf8427e&#39;,
+  &#39;content_type&#39;: &#39;application/octet-stream&#39;,
+  &#39;mtime&#39;: 1663316305,
+  &#39;path&#39;: &#39;demo/users/_SUCCESS&#39;,
+  &#39;path_type&#39;: &#39;object&#39;,
+  &#39;physical_address&#39;: &#39;s3://example/5e91c0a09d3a4415abd33bc460662e18&#39;,
+  &#39;size_bytes&#39;: 0},
+ {&#39;checksum&#39;: &#39;addfab49d691a5d4a18ae0b127a792a0&#39;,
+  &#39;content_type&#39;: &#39;application/octet-stream&#39;,
+  &#39;mtime&#39;: 1663316304,
+  &#39;path&#39;: &#39;demo/users/part-00000-142e4126-aaec-477c-bbcf-c1dd68011369-c000.snappy.parquet&#39;,
+  &#39;path_type&#39;: &#39;object&#39;,
+  &#39;physical_address&#39;: &#39;s3://example/2895bba44b5b4f5199bf58d80144a9de&#39;,
+  &#39;size_bytes&#39;: 78869}]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;add_more_user_data&#34;&gt;&lt;code&gt;add_more_user_data&lt;/code&gt;&lt;/h4&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;client&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;objects&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;list_objects(repo,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;add_more_user_data&amp;#39;&lt;/span&gt;)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;results
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;[{&#39;checksum&#39;: &#39;d41d8cd98f00b204e9800998ecf8427e&#39;,
+  &#39;content_type&#39;: &#39;application/octet-stream&#39;,
+  &#39;mtime&#39;: 1663316556,
+  &#39;path&#39;: &#39;demo/users/_SUCCESS&#39;,
+  &#39;path_type&#39;: &#39;object&#39;,
+  &#39;physical_address&#39;: &#39;s3://example/8acafaeee021459ba6cc29cfb35bb06b&#39;,
+  &#39;size_bytes&#39;: 0},
+ {&#39;checksum&#39;: &#39;addfab49d691a5d4a18ae0b127a792a0&#39;,
+  &#39;content_type&#39;: &#39;application/octet-stream&#39;,
+  &#39;mtime&#39;: 1663316304,
+  &#39;path&#39;: &#39;demo/users/part-00000-142e4126-aaec-477c-bbcf-c1dd68011369-c000.snappy.parquet&#39;,
+  &#39;path_type&#39;: &#39;object&#39;,
+  &#39;physical_address&#39;: &#39;s3://example/2895bba44b5b4f5199bf58d80144a9de&#39;,
+  &#39;size_bytes&#39;: 78869},
+ {&#39;checksum&#39;: &#39;90bee97b5d4bf0675f2684664e5993dc&#39;,
+  &#39;content_type&#39;: &#39;application/octet-stream&#39;,
+  &#39;mtime&#39;: 1663316555,
+  &#39;path&#39;: &#39;demo/users/part-00000-b90910aa-58a0-42af-84ec-8ec557c56850-c000.snappy.parquet&#39;,
+  &#39;path_type&#39;: &#39;object&#39;,
+  &#39;physical_address&#39;: &#39;s3://example/ece3333dd6bd4d6d9ffab3d53fd4e6b2&#39;,
+  &#39;size_bytes&#39;: 78729}]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;the-data-as-seen-from-s3-1&#34;&gt;The data as seen from S3&lt;/h3&gt;
+&lt;p&gt;Note that there are just two 78k files; there is no duplication of data shared by branches.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; o &lt;span style=&#34;color:#a2f;font-weight:bold&#34;&gt;in&lt;/span&gt; s3&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;Bucket(repo)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;objects&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;all():
+    &lt;span style=&#34;color:#008000&#34;&gt;print&lt;/span&gt;(o&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;last_modified, o&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;key, o&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;size)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;2022-09-16 08:18:24.769000+00:00 1984e4e69777452fb03800bd4c6b1b05 0
+2022-09-16 08:18:23.607000+00:00 2895bba44b5b4f5199bf58d80144a9de 78869
+2022-09-16 08:22:35.628000+00:00 31d780e5af4140e895a7c3779fac985d 0
+2022-09-16 08:22:36.105000+00:00 3aec1fd8560f43aaa8667d0b2d3a70be 0
+2022-09-16 08:18:22.900000+00:00 49ad588d52b942c9b682f271f228cb9c 0
+2022-09-16 08:18:25.034000+00:00 5e91c0a09d3a4415abd33bc460662e18 0
+2022-09-16 08:22:36.360000+00:00 8acafaeee021459ba6cc29cfb35bb06b 0
+2022-09-16 08:25:22.454000+00:00 _lakefs/1ddeab3bef4929b69d52e44b94048f47fe17269821ccdf3ba6701c43d691fb34 1239
+2022-09-16 08:20:14.890000+00:00 _lakefs/6f2ea862d75cb1a2cdb4a3a76969c2bb134c51538c74c0d144b781ed12165b83 1390
+2022-09-16 08:20:14.903000+00:00 _lakefs/ae52ce4551b3d0fd1eb49a8568f4a65db007f222953dd2770d55e0f13c4aaeb9 1239
+2022-09-16 08:25:22.447000+00:00 _lakefs/dedf8f514dcf0bb4184e9ebd55ceddcfafc9fb9fd02888566a0ad2052cfb7c12 1609
+2022-09-16 08:22:34.689000+00:00 b3cf0d04badd411da874a6448eead32f 0
+2022-09-16 08:18:24.277000+00:00 c4cae27b7c0a46beb14f79347d77c29d 0
+2022-09-16 08:17:18.615000+00:00 dummy 70
+2022-09-16 08:22:35.017000+00:00 ece3333dd6bd4d6d9ffab3d53fd4e6b2 78729
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;creating-another-new-branch&#34;&gt;Creating another new branch&lt;/h2&gt;
+&lt;p&gt;We&amp;rsquo;ve not merged the new user data back into main yet, but in parallel we decide we want to test removing personally identifiable information (PII) from the data that we do have already. We can create another branch to do this.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;branch&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;remove_pii&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;lakefs_client.model.branch_creation&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; BranchCreation
+
+api_instance &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; branches_api&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;BranchesApi(api_client)
+branch_creation &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; BranchCreation(
+    name&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;branch,
+    source&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;main&amp;#34;&lt;/span&gt;,
+) 
+
+api_response &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; api_instance&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;create_branch(repo, branch_creation)
+display(api_response)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;&#39;de2ae0f24961f65bf7b525d983b3dbc869ce49a0dea43529920743154ce0ddd0&#39;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;First off we&amp;rsquo;ll confirm that the data in this new branch matches what&amp;rsquo;s in main (a row count alone will suffice for a quick check):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;xform_df &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;branch&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/demo/users&amp;#39;&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;display(xform_df&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;count())
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;1000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;em&gt;Note that this shows 1000 per &lt;code&gt;main&lt;/code&gt;, and not 2000 per the &lt;code&gt;add_more_user_data&lt;/code&gt; branch above since this has not been merged to &lt;code&gt;main&lt;/code&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;transform-the-data&#34;&gt;Transform the data&lt;/h3&gt;
+&lt;p&gt;Now we&amp;rsquo;ll use &lt;code&gt;.drop()&lt;/code&gt; to remove sensitive fields from the data.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;df2&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;xform_df&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;drop(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;ip_address&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;birthdate&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;salary&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;email&amp;#39;&lt;/span&gt;)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;cache()
+df2&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;show(n&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;,vertical&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;True&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;-RECORD 0--------------------------------
+ registration_dttm | 2016-02-03 07:55:29 
+ id                | 1                   
+ first_name        | Amanda              
+ last_name         | Jordan              
+ gender            | Female              
+ cc                | 6759521864920116    
+ country           | Indonesia           
+ title             | Internal Auditor    
+ comments          | 1E+02               
+only showing top 1 row
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;write-data-back-to-the-branch&#34;&gt;Write data back to the branch&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;df2&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;write&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;mode(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;overwrite&amp;#39;&lt;/span&gt;)&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;branch&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/demo/users&amp;#39;&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;commit-changes&#34;&gt;Commit changes&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;api_instance &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; commits_api&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;CommitsApi(api_client)
+commit_creation &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; CommitCreation(
+    message&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Remove PII&amp;#34;&lt;/span&gt;,
+) 
+
+api_instance&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;commit(repo, branch, commit_creation)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;{&#39;committer&#39;: &#39;docker&#39;,
+ &#39;creation_date&#39;: 1663322293,
+ &#39;id&#39;: &#39;12718ce62f97df78beb1d49dcd4c5528a1977d2af1b220f22012f8305e72f768&#39;,
+ &#39;message&#39;: &#39;Remove PII&#39;,
+ &#39;meta_range_id&#39;: &#39;&#39;,
+ &#39;metadata&#39;: {},
+ &#39;parents&#39;: [&#39;de2ae0f24961f65bf7b525d983b3dbc869ce49a0dea43529920743154ce0ddd0&#39;]}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ℹ-reading-and-writing-the-same-data-back&#34;&gt;ℹ️ Reading and writing the same data back&lt;/h3&gt;
+&lt;p&gt;If you try to read and then write the data from the same place you&amp;rsquo;ll get an error like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;Caused by: java.io.FileNotFoundException: 
+No such file or directory: s3a://example/remove_pii/demo/users/part-00000-7a0bbe79-a3e2-4355-984e-bd8b950a4e0c-c000.snappy.parquet
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;One &lt;a href=&#34;https://stackoverflow.com/a/65330116/350613&#34;&gt;solution&lt;/a&gt; is to use &lt;code&gt;.cache()&lt;/code&gt;. Alternatively (and probably better, is to read the data from a different path - the reference point from which the branch was created)&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Thanks to Barak Amar on the LakeFS Slack for helping me with this.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;re-read-all-branches-and-inspect-data-for-isolation&#34;&gt;Re-read all branches and inspect data for isolation&lt;/h3&gt;
+&lt;p&gt;Here&amp;rsquo;s the original branch (&lt;code&gt;main&lt;/code&gt;), with 1k records and full set of fields:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;main &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/main/demo/users&amp;#39;&lt;/span&gt;)
+display(main&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;count())
+main&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;show(n&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;,vertical&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;True&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;1000
+
+
+-RECORD 0--------------------------------
+ registration_dttm | 2016-02-03 07:55:29 
+ id                | 1                   
+ first_name        | Amanda              
+ last_name         | Jordan              
+ email             | ajordan0@com.com    
+ gender            | Female              
+ ip_address        | 1.197.201.2         
+ cc                | 6759521864920116    
+ country           | Indonesia           
+ birthdate         | 3/8/1971            
+ salary            | 49756.53            
+ title             | Internal Auditor    
+ comments          | 1E+02               
+only showing top 1 row
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The branch to which we added more data still has that data (as we&amp;rsquo;d expect; we&amp;rsquo;ve not touched it):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;add_more_user_data &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/add_more_user_data/demo/users&amp;#39;&lt;/span&gt;)
+display(add_more_user_data&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;count())
+add_more_user_data&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;show(n&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;,vertical&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;True&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;2000
+
+
+-RECORD 0--------------------------------
+ registration_dttm | 2016-02-03 07:55:29 
+ id                | 1                   
+ first_name        | Amanda              
+ last_name         | Jordan              
+ email             | ajordan0@com.com    
+ gender            | Female              
+ ip_address        | 1.197.201.2         
+ cc                | 6759521864920116    
+ country           | Indonesia           
+ birthdate         | 3/8/1971            
+ salary            | 49756.53            
+ title             | Internal Auditor    
+ comments          | 1E+02               
+only showing top 1 row
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;And our new branch for removing PII is showing the correct data too:  (&lt;code&gt;remove_pii&lt;/code&gt;):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;remove_pii &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/remove_pii/demo/users&amp;#39;&lt;/span&gt;)
+display(remove_pii&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;count())
+remove_pii&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;show(n&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;,vertical&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;True&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;1000
+
+
+-RECORD 0--------------------------------
+ registration_dttm | 2016-02-03 07:55:29 
+ id                | 1                   
+ first_name        | Amanda              
+ last_name         | Jordan              
+ gender            | Female              
+ cc                | 6759521864920116    
+ country           | Indonesia           
+ title             | Internal Auditor    
+ comments          | 1E+02               
+only showing top 1 row
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;merge-remove_pii-into-main&#34;&gt;Merge &lt;code&gt;remove_pii&lt;/code&gt; into &lt;code&gt;main&lt;/code&gt;&lt;/h3&gt;
+&lt;p&gt;Since we&amp;rsquo;re happy with the data transform work, we&amp;rsquo;ll merge the result into main.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;client&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;refs&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;merge_into_branch(repository&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;repo, source_ref&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;remove_pii&amp;#39;&lt;/span&gt;, destination_branch&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;main&amp;#39;&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;{&#39;reference&#39;: &#39;bb4564d3811586db5db202e8553fa5bfc4c5a235c4d8b8ec22ab62f7ab43b34c&#39;,
+ &#39;summary&#39;: {&#39;added&#39;: 0, &#39;changed&#39;: 0, &#39;conflict&#39;: 0, &#39;removed&#39;: 0}}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Now if we read the data from the original branch (&lt;code&gt;main&lt;/code&gt;), we can see that it&amp;rsquo;s what we merged in, as expected:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;main &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;read&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;parquet(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s3a://&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;repo&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;/main/demo/users&amp;#39;&lt;/span&gt;)
+display(main&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;count())
+main&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;show(n&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;,vertical&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;True&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;1000
+
+
+-RECORD 0--------------------------------
+ registration_dttm | 2016-02-03 07:55:29 
+ id                | 1                   
+ first_name        | Amanda              
+ last_name         | Jordan              
+ gender            | Female              
+ cc                | 6759521864920116    
+ country           | Indonesia           
+ title             | Internal Auditor    
+ comments          | 1E+02               
+only showing top 1 row
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;data-engineering-in-2022&#34;&gt;Data Engineering in 2022&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://rmoff.net/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/&#34;&gt;Introduction&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://rmoff.net/2022/09/14/data-engineering-in-2022-storage-and-access/&#34;&gt;Storage and Access&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Query &amp;amp; Transformation Engines [TODO]&lt;/li&gt;
+&lt;li&gt;ETL/ELT tools &amp;amp; Orchestration [TODO]&lt;/li&gt;
+&lt;li&gt;Architectures &amp;amp; Terminology [TODO]&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://rmoff.net/2022/09/14/data-engineering-resources/&#34;&gt;Resources&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+    </item>
+    <item>
+      <title>Data Engineering: Resources</title>
+      <link>https://rmoff.net/2022/09/14/data-engineering-resources/</link>
+      <pubDate>2022-09-14</pubDate>
+      
+      <guid>https://rmoff.net/2022/09/14/data-engineering-resources/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2022/09/t_DSCF7583.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As I’ve been reading and exploring the current world of data engineering I’ve been adding links to my &lt;a href=&#34;https://raindrop.io/rmoff/data-engineering-23335742&#34;&gt;Raindrop.io collection&lt;/a&gt;, so check that out. In addition, below are some specific resources that I’d recommend.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_articles&#34;&gt;Articles&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.getdbt.com/blog/future-of-the-modern-data-stack/&#34;&gt;Tristan Handy - The Modern Data Stack: Past, Present, and Future&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://medium.com/free-code-camp/the-rise-of-the-data-engineer-91be18f1e603&#34;&gt;Maxime Beauchemin - The Rise of the Data Engineer&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_newsletters&#34;&gt;Newsletters&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://benn.substack.com/&#34;&gt;benn.substack | Benn Stancil | Substack&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://davidsj.substack.com/&#34;&gt;davidj.substack | David Jayatillake | Substack&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringweekly.com/&#34;&gt;Data Engineering Weekly | Ananth Packkildurai | Substack&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_podcasts&#34;&gt;Podcasts&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The main podcast that I listen to in this area is the &lt;a href=&#34;https://www.dataengineeringpodcast.com/&#34;&gt;Data Engineering Podcast&lt;/a&gt;. Here are some ones I’ve particularly enjoyed:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/joe-reis-flips-the-script-episode-307/&#34;&gt;Joe Reis Flips The Script And Interviews Tobias Macey About The Data Engineering Podcast&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Implementations&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/riskified-data-platform-journey-episode-306/&#34;&gt;Charting the Path of Riskified’s Data Platform Journey&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/segment-customer-analytics-episode-72/&#34;&gt;Customer Analytics At Scale With Segment&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/snuba-event-data-warehouse-episode-108/&#34;&gt;Building A Real Time Event Data Warehouse For Sentry&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/shopify-data-warehouse-with-dbt-episode-171/&#34;&gt;How Shopify Is Building Their Production Data Warehouse Using DBT&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/yotpo-data-platform-architecture-episode-285/&#34;&gt;Evolving And Scaling The Data Platform at Yotpo&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/data-lake-platform-design-srivatsan-sridharan-episode-289/&#34;&gt;Insights And Advice On Building A Data Lake Platform From Someone Who Learned The Hard Way&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/shadow-it-data-analytics-episode-121/&#34;&gt;Shining A Light on Shadow IT In Data And Analytics&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Technology&lt;/p&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/dbt-data-analytics-episode-81/&#34;&gt;Build Your Data Analytics Like An Engineer With DBT&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/hudi-streaming-data-lake-episode-209/&#34;&gt;Charting A Path For Streaming Data To Fill Your Data Lake With Hudi&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dataengineeringpodcast.com/lakefs-data-lake-versioning-episode-157/&#34;&gt;Add Version Control To Your Data Lake With LakeFS&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;hr/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_data_engineering_in_2022&#34;&gt;Data Engineering in 2022&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/&#34;&gt;Introduction&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2022/09/14/data-engineering-in-2022-storage-and-access/&#34;&gt;Storage and Access&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2022/09/16/data-engineering-in-2022-exploring-lakefs-with-jupyter-and-pyspark/&#34;&gt;Exploring LakeFS with Jupyter and PySpark&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Query &amp;amp; Transformation Engines [TODO]&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;ETL/ELT tools &amp;amp; Orchestration [TODO]&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Architectures &amp;amp; Terminology [TODO]&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>Data Engineering in 2022: Storage and Access</title>
+      <link>https://rmoff.net/2022/09/14/data-engineering-in-2022-storage-and-access/</link>
+      <pubDate>2022-09-14</pubDate>
+      
+      <guid>https://rmoff.net/2022/09/14/data-engineering-in-2022-storage-and-access/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2022/09/t_IMG_5037.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In this article I look at where we store our analytical data, how we organise it, and how we enable access to it. I’m considering here potentially large volumes of data for access throughout an organisation. I’m not looking at data stores that are used for specific purposes (caches, low-latency analytics, graph etc).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The article is &lt;a href=&#34;https://rmoff.net/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/&#34;&gt;part of a series&lt;/a&gt; in which I explore the world of data engineering in 2022 and how it has changed from when I started my career in data warehousing 20+ years ago. Read the &lt;a href=&#34;https://rmoff.net/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/&#34;&gt;introduction&lt;/a&gt; for more context and background.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_storing_and_accessing_your_data_pt_1_burn_it_all_down&#34;&gt;Storing and Accessing Your Data pt 1: 🔥 Burn It All Down…🔥&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In the beginning was the word, and the word was an expensive relational datawarehouse that wasn’t flexible or scalable enough for the cool kids in Silicon Valley.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Then came Hadoop and scalability was won, at the vast cost of usability. You literally had to write your own Java code to move data around and transform it. You needed to serialise and deserialise the data yourself, and could store whatever you wanted - it didn’t have to be structured. This was sold as a benefit — &amp;#34;Schema on Read&amp;#34; they said, &amp;#34;It’ll be a good idea&amp;#34;, they said. &lt;em&gt;&amp;#34;Oh bugger, where’s my schema&amp;#34;&lt;/em&gt;, they said when they came to use it.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Through the virtues of open source a fantastic ecosystem grew particularly around the &lt;a href=&#34;https://apache.org&#34;&gt;Apache Software Foundation&lt;/a&gt; and we got such wonderfully named projects as &lt;a href=&#34;https://sqoop.apache.org/&#34;&gt;Sqoop&lt;/a&gt;, &lt;a href=&#34;https://oozie.apache.org/&#34;&gt;Oozie&lt;/a&gt;, &lt;a href=&#34;https://pig.apache.org/&#34;&gt;Pig&lt;/a&gt;, and &lt;a href=&#34;https://flume.apache.org/&#34;&gt;Flume&lt;/a&gt; emerged. &lt;a href=&#34;https://hive.apache.org/&#34;&gt;Hive&lt;/a&gt; brought with it the familiar and comforting bosom of SQL and table structures but with limited functionality (including no &lt;code&gt;DELETE&lt;/code&gt; or &lt;code&gt;UPDATE&lt;/code&gt; at first) and performance.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Over the years things improved, with &lt;a href=&#34;https://spark.apache.org/&#34;&gt;Spark&lt;/a&gt; replacing &lt;a href=&#34;https://hadoop.apache.org/&#34;&gt;MapReduce&lt;/a&gt; and enabling a generation of Python coders to get into the big data lark too, along with &lt;a href=&#34;https://spark.apache.org/sql/&#34;&gt;SQL&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Amongst all of this pioneering work and technology was the assumption that the resting place for analytical data was &lt;a href=&#34;https://hadoop.apache.org/&#34;&gt;HDFS&lt;/a&gt;. Other stores like &lt;a href=&#34;https://hbase.apache.org/&#34;&gt;HBase&lt;/a&gt; existed for special purposes, but the general we’ve-got-a-bunch-of-data-in-this-org-and-need-to-collect-it destination was HDFS. Because &amp;#34;general dumping ground&amp;#34; wasn’t sexy enough for the marketing folk it became sold as a &amp;#34;Data Lake&amp;#34; with all the associated puns and awful cliches (fishing for data, data swamp, etc etc etc).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The general pitch around the data lake was to collect all the data, structured and unstructured (&lt;em&gt;or structured that you’ve made unstructured by chucking away its schema when you loaded it&lt;/em&gt;), and then &lt;del&gt;wait for the data lake fairy to conjure magical value out of the pile of data you’ve dumped there&lt;/del&gt; make the raw data available for teams in the company to process and use for their particular purposes. This may have been direct querying of the data in place, or processing it and landing it in another data store for serving (for example, aggregated and structured for optimal query access in an RDBMS or columnar data store).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Accessing the data in HDFS was done with Hive and other tools including &lt;a href=&#34;https://impala.apache.org/&#34;&gt;Impala&lt;/a&gt;, &lt;a href=&#34;https://drill.apache.org/&#34;&gt;Drill&lt;/a&gt;, and &lt;a href=&#34;https://prestodb.io/&#34;&gt;Presto&lt;/a&gt;. All had their pros and cons particularly in early releases, often with limitations around performance and management of the data.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;All of this was built around the closely-intertwined &lt;a href=&#34;https://hadoop.apache.org/&#34;&gt;Hadoop&lt;/a&gt; platform, whether self-managed on-premises including with deployments from Cloudera, MapR, and Hortonworks, or with a cloud provider such as AWS and its &lt;a href=&#34;https://aws.amazon.com/emr/&#34;&gt;EMR&lt;/a&gt; service.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This was pretty much the state of the Big Data world (as it was called then) as &lt;a href=&#34;https://www.rittmanmead.com/blog/2016/12/etl-offload-with-spark-and-amazon-emr-part-5/&#34;&gt;I last saw it&lt;/a&gt; before getting distracted by the world of stream processing - fragmented, more difficult to use, less functionality than an RDBMS for analytics, and evolving rapidly.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_storing_and_accessing_your_data_pt_2_and_then_rebuild_it_️&#34;&gt;Storing and Accessing Your Data pt 2: …and Then Rebuild It 🏗️&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Coming back to this after my attention being elsewhere for a few years means that I have the slightly uninformed but helpfully simplistic view of things. What the relational data warehouses used to do (bar scale, arguably), we are now approaching something roughly like parity again with a stack of tools that have stabilised and matured in large, with a layer on top that’s still being figured out.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Underpinning it all is the core idea of separation of storage and compute. Instead of one box (the traditional RDBMS), we have two. This is important for two vital reasons:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;It’s a lot &lt;strong&gt;cheaper&lt;/strong&gt; to just store data and then only pay for compute when you want to use it.&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The alternative is that you couple the two together which is what we’ve generally always done and is seen in every RDBMS, like Oracle, DB2, etc etc. With the coupled approach you have a server with disks and CPUs and you’re paying for the CPUs whether they’re doing anything or not, and when you need more storage and have filled the disk bays you need to buy (and license, hi Oracle) another server (with CPUs etc).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The added element here is that you have to provision your capacity for your &lt;strong&gt;peak&lt;/strong&gt; workload, which means over-provisioning and capacity sat idle potentially for much of the time depending on your business and data workload patterns.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;If your data is held in an &lt;strong&gt;open format&lt;/strong&gt; on a storage platform that has &lt;strong&gt;open APIs&lt;/strong&gt; then multiple tools can use it as they want to.&lt;/p&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Contrast this to putting your data in SQL Server (not to pick on Oracle all the time), and any tool that wants to use it has to do so through SQL Server. If a new tool comes along that does particular processing really really well and your data is sat in an RDBMS then you have to migrate that data off the RDBMS first, or query it in place.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Given the &lt;a href=&#34;https://en.wikipedia.org/wiki/Cambrian_explosion&#34;&gt;Cambrian explosion&lt;/a&gt; that’s been happening in the world of software and showing no signs of abating, setting ourselves up for compatibilty and future evolution of software choices seems like the smart move.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;HDFS and Hive gave us this separation, right? Well, it did, but with a &lt;a href=&#34;https://youtu.be/nWwQMlrjhy0?t=734&#34;&gt;long list of problems and limitations for Hive&lt;/a&gt;. These include poor perfomance, a lack of support for transactions, point-in-time querying, streaming updates, and more. In addition, HDFS has nowadays been overtaken by S3 as the object store of choice with APIs supported by numerous non-S3 platforms, both Cloud based (e.g. &lt;a href=&#34;https://cloud.google.com/storage/docs/interoperability&#34;&gt;Google’s Cloud Storage (GCS)&lt;/a&gt;, and &lt;a href=&#34;https://developers.cloudflare.com/r2/platform/s3-compatibility/api/&#34;&gt;Cloudflare’s R2&lt;/a&gt;) and on-premises (e.g. &lt;a href=&#34;https://min.io/&#34;&gt;Minio&lt;/a&gt;).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So if it’s not HDFS and Hive, what’s the current state and future of analytics data storage &amp;amp; access looking like?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_data_lake_table_formats_data_lakehouses&#34;&gt;Data Lake Table Formats &amp;amp; Data Lakehouses&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So, full disclosure first:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;blockquote class=&#34;twitter-tweet&#34;&gt;&lt;p lang=&#34;en&#34; dir=&#34;ltr&#34;&gt;😳Confession: Until last week I honestly thought &amp;quot;data lakehouse&amp;quot; was some god-awful marketing bollocks and nothing more. &lt;br&gt;🙈Embarrassed to find out there&amp;#39;s actually a rather interesting paper from last year describing the concept in detail: &lt;a href=&#34;https://t.co/XEI0zGSXBl&#34;&gt;https://t.co/XEI0zGSXBl&lt;/a&gt;&lt;/p&gt;&amp;mdash; Robin Moffatt 🍻🏃🥓 (@rmoff) &lt;a href=&#34;https://twitter.com/rmoff/status/1565747777992359938?ref_src=twsrc%5Etfw&#34;&gt;September 2, 2022&lt;/a&gt;&lt;/blockquote&gt;
+&lt;script async src=&#34;https://platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;
+
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can read the &lt;a href=&#34;https://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf&#34;&gt;Lakehouse paper&lt;/a&gt; (and &lt;a href=&#34;https://www.databricks.com/wp-content/uploads/2020/08/p975-armbrust.pdf&#34;&gt;more detailed one&lt;/a&gt;) and decide for yourself &lt;a href=&#34;https://twitter.com/gwenshap/status/1565771009902256129&#34;&gt;its virtues&lt;/a&gt;, but I found it a useful description of a pattern that several technologies are adopting, not just &lt;a href=&#34;https://www.databricks.com/product/data-lakehouse&#34;&gt;Databricks and their Delta Lake implementation of the Lakehouse&lt;/a&gt;. &lt;em&gt;I’ll admit, the name grates—and I miss the Hadoop days of fun names 😉.&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In short, the &amp;#34;Lakehouse&amp;#34; concept is where data is stored on object store (the Data Lake) with a layer above it providing a &amp;#34;table format&amp;#34; through which data can be read and written in a structured way, supporting updates and deletes to the data, as well as queried in an efficient way. The Lakehouse is the whole; the &lt;strong&gt;table format&lt;/strong&gt; is the specific layer of technology that implements the access on the data in your Data Lake.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id=&#34;img-lakehouse&#34; class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;a class=&#34;image&#34; href=&#34;https://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf&#34;&gt;&lt;img src=&#34;https://rmoff.net/images/2022/09/lakehouse_dl01.png&#34; alt=&#34;Diagram of the evolution of the Lakehouse from Databricks&#34;/&gt;&lt;/a&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Whether you go for the &lt;strong&gt;Lakehouse&lt;/strong&gt; term (Databricks would like you to, and &lt;a href=&#34;https://www.snowflake.com/guides/what-data-lakehouse&#34;&gt;Snowflake&lt;/a&gt; are onboard too, and maybe even &lt;a href=&#34;https://www.oracle.com/uk/data-lakehouse/what-is-data-lakehouse/&#34;&gt;Oracle&lt;/a&gt;) or just the &lt;strong&gt;Data Lake plus Table Format&lt;/strong&gt;, it’s a really interesting idea. The bit that really catches my attention is that it enables a common table structure to be defined and accessed by a variety of compute engines - meaning that in both querying and processing (ETL/ELT) the data can be structured and manipulated in the way in which you would in an RDBMS.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There are three table formats available:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://hudi.apache.org/&#34;&gt;Apache Hudi&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://iceberg.apache.org&#34;&gt;Apache Iceberg&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://delta.io&#34;&gt;Delta Lake&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;All of them enable the things that we’d have taken for granted a decade ago including rich metadata, transactional access, `UPDATE`s, `DELETE`s, and ACID compliance, along with performant access when querying the data.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Both Hudi and Delta Lake have a similar conceptual diagram which illustrates things well. Note the plethora of query engines and integrations that each support.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2022/09/hudi_dl01.png&#34; alt=&#34;Apache Hudi and Delta Lake conceptual diagrams&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;(image credits: &lt;a href=&#34;https://hudi.apache.org/&#34;&gt;Apache Hudi&lt;/a&gt; / &lt;a href=&#34;https://delta.io&#34;&gt;Delta Lake&lt;/a&gt;)&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_managed_data_lakehouses&#34;&gt;Managed Data Lakehouses&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can run run your own, or use used hosted versions including&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.onehouse.ai/&#34;&gt;Onehouse&lt;/a&gt; (Apache Hudi)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://tabular.io/&#34;&gt;Tabular&lt;/a&gt; (Apache Iceberg)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.databricks.com/&#34;&gt;Databricks&lt;/a&gt; (Delta Lake)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;GCP&lt;/strong&gt;&amp;#39;s &lt;a href=&#34;https://cloud.google.com/blog/products/data-analytics/unify-data-lakes-and-warehouses-with-biglake-now-generally-available&#34;&gt;BigLake&lt;/a&gt; (Iceberg?)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Azure&lt;/strong&gt; have a close partnership with Databricks, so the only major cloud provider missing from this list is &lt;strong&gt;AWS&lt;/strong&gt;. They have &lt;a href=&#34;https://aws.amazon.com/lake-formation/&#34;&gt;Lake Formation&lt;/a&gt; and &lt;a href=&#34;https://docs.aws.amazon.com/lake-formation/latest/dg/governed-tables.html&#34;&gt;Governed Tables&lt;/a&gt; which looks similar on the surface but I’ve not dug into in detail (and Governed Tables aren’t even mentioned on AWS&amp;#39; &lt;a href=&#34;https://aws.amazon.com/blogs/big-data/build-a-lake-house-architecture-on-aws/&#34;&gt;Build a Lakehouse Architecture on AWS&lt;/a&gt; blog).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Snowflake&lt;/strong&gt; recently added support for &lt;a href=&#34;https://www.snowflake.com/blog/iceberg-tables-powering-open-standards-with-snowflake-innovations/&#34;&gt;Iceberg tables&lt;/a&gt; (complementing the existing &lt;a href=&#34;https://docs.snowflake.com/en/user-guide/tables-external-intro.html#delta-lake-support&#34;&gt;support for Delta Lake external tables&lt;/a&gt;), and are &lt;a href=&#34;https://www.snowflake.com/blog/5-reasons-apache-iceberg/&#34;&gt;backing Iceberg&lt;/a&gt; — presumably in part to try and hamper Databricks&amp;#39; Delta Lake (see also their snarky comments about &amp;#34;&lt;em&gt;Iceberg includes features that are &lt;strong&gt;paid in other table formats*&lt;/strong&gt;&lt;/em&gt;&lt;strong&gt;&amp;#34;, &amp;#34;&lt;em&gt;The Iceberg project is *well-run&lt;/em&gt;&lt;/strong&gt;&lt;em&gt; open source&lt;/em&gt;&amp;#34; etc, taking a shot at the fact that Delta Lake has paid options, and the majority of committers are from Databricks).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.dremio.com/&#34;&gt;&lt;strong&gt;Dremio&lt;/strong&gt;&lt;/a&gt; are also in this space as one of the companies working on &lt;a href=&#34;https://arrow.apache.org/&#34;&gt;Apache Arrow&lt;/a&gt; and providing a fast query engine built on it called Dremio Sonar. I’ve yet to get my head around their offering, but it looks like on-premises platform as well as hosted, with support for Apache Iceberg and Delta Lake. They’ve got a rich set of resources in their &lt;a href=&#34;https://www.dremio.com/subsurface/&#34;&gt;Subsurface&lt;/a&gt; resource area.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Oracle&lt;/strong&gt; being Oracle are not ones to miss up the chance to jump on a buzzword or marketing bandwagon. Their version of the Lakehouse however looks to be to stick their Autonomous Data Warehouse (it’s self driving! self healing!) on top of a data lake - kinda like Snowflake have done, but without the open table format support of Apache Iceberg. The huge downside to this is that without the open table format there’s zero interoperability with other query &amp;amp; processing engines - something Oracle are presumably not in a rush to enable.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_storage_formats&#34;&gt;Storage Formats&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Regardless of which &lt;em&gt;table format&lt;/em&gt; you implement, you still store your data in a format appropriate for its use - and that format is separate from the table format (confused yet? you might be). Different table formats support different storage formats but in general you’ll see various open formats used:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Probably something like &lt;a href=&#34;https://avro.apache.org/&#34;&gt;Avro&lt;/a&gt; for structure data that’s still to be processed&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;A columnar format such as &lt;a href=&#34;https://parquet.apache.org/&#34;&gt;Parquet&lt;/a&gt; or &lt;a href=&#34;https://orc.apache.org/&#34;&gt;Orc&lt;/a&gt; for data that’s going to be queried&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;It could also just be JSON (hell, use CSV if you really must)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Regardless of the format, the data is stored on storage with an open API (or at least one which is widely supported by most tools) - S3 becomes the de facto choice here.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_reading_more_about_table_formats_lakehouses&#34;&gt;Reading more about Table Formats &amp;amp; Lakehouses&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here are some good explanations, deep-dives, and comparison posts covering the three formats:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://dacort.dev/posts/modern-data-lake-storage-layers/&#34;&gt;An Introduction to Modern Data Lake Storage Layers&lt;/a&gt; - &lt;a href=&#34;https://twitter.com/dacort&#34;&gt;Damon Cortesi&lt;/a&gt; (AWS)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Comparison of Data Lake Table Formats &lt;a href=&#34;https://www.dremio.com/subsurface/comparison-of-data-lake-table-formats-iceberg-hudi-and-delta-lake/&#34;&gt;blog&lt;/a&gt; / &lt;a href=&#34;https://www.dremio.com/subsurface/subsurface-meetup-comparison-of-data-lakehouse-table-formats/&#34;&gt;video&lt;/a&gt; - &lt;a href=&#34;https://twitter.com/AMdatalakehouse&#34;&gt;Alex Merced&lt;/a&gt; (Dremio)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.onehouse.ai/blog/apache-hudi-vs-delta-lake-vs-apache-iceberg-lakehouse-feature-comparison&#34;&gt;Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Comparison&lt;/a&gt; - &lt;a href=&#34;https://www.linkedin.com/in/lakehouse/&#34;&gt;Kyle Weller&lt;/a&gt; (Onehouse)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://lakefs.io/hudi-iceberg-and-delta-lake-data-lake-table-formats-compared/&#34;&gt;Hudi, Iceberg and Delta Lake: Data Lake Table Formats Compared&lt;/a&gt; - &lt;a href=&#34;https://www.linkedin.com/in/paulsingman/&#34;&gt;Paul Singman&lt;/a&gt; (LakeFS)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_a_note_about_open_formats&#34;&gt;A Note About Open Formats&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Whether we’re talking data lakes, Lakehouses, or other ways of storing data, open formats are important. A closed-format vendor will tell you that it’s just the &amp;#34;vendor lockin bogeyman man&amp;#34; pitch and how often do you re-platform anyway. I would reframe it away from this and suggest that just as with tools such as Apache Kafka, an open format enables you to keep your data in a neutral place, accessible by many different tools and technologies. Why do so many support it? Because it’s open!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In a technology landscape which has not stopped moving at this pace for several years now and probably won’t for many more, the alternative to an open format is betting big on a closed platform and hoping that nothing better comes along in the envisaged lifetime of the data platform. Open formats give you the flexibility to hedge your bets, to evaluate newer tools and technologies as they come along, and to not be beholden to a particular vendor or technology if it falls behind what you need.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In previous times the use of an open format may have been moot given the dearth of alternatives when it came to processing the data—never mind the fact that the storage of data was usually coupled to the compute making it even more irrelevant. Nowadays there are multiple &amp;#34;big hitters&amp;#34; in each processing category with a dozen other options nibbling at their feet. Using a open format gives you the freedom to trial whichever ones you want to.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Just a tip to vendors: that’s great if you’re embracing open formats, but check your hubris if you start to brag about it whilst simultaneously throwing FUD at open source. &lt;a href=&#34;https://www.linkedin.com/posts/robinmoffatt_choosing-open-wisely-snowflake-blog-activity-6973309528628973568-gjOJ?utm_source=share&amp;amp;utm_medium=member_desktop&#34;&gt;Just sayin&amp;#39;&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_git_for_data_with_lakefs&#34;&gt;&lt;code&gt;git&lt;/code&gt; For Data with LakeFS&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Leaving aside table formats and lakehouses for the moment—and coming back to the big picture of how we store and access data nowadays—one idea that’s caught my attention is that of being able to apply git-like semantics &lt;strong&gt;to the data itself&lt;/strong&gt;. Here’s a copy of &lt;a href=&#34;https://twitter.com/rmoff/status/1567829714865102853&#34;&gt;a recent Twitter thread that I wrote&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;hr/&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Having &lt;a href=&#34;https://www.youtube.com/watch?v=uixZ7NcGoeE&#34;&gt;watched @gwenshap and @ozkatz100 talk about &amp;#34;git for data&amp;#34;&lt;/a&gt; I would definitely say is a serious idea.
+However to the point at the end of the video, RTFM—it took reading &lt;a href=&#34;https://docs.lakefs.io/using_lakefs/data-devenv.html&#34;&gt;page from the docs&lt;/a&gt; and some other pages subsequently to really grok the concept in practice.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Where I struggled at first with the git analogy alone was that data changes, and I couldn’t see how branch/merge fitted into that outside of the idea of branching for throwaway testing alone. The &lt;a href=&#34;https://www.youtube.com/watch?v=uixZ7NcGoeE&amp;amp;t=1401s&#34;&gt;1PB accidental deletion example&lt;/a&gt; was useful for illustrating the latter point for sure.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But then reading &lt;a href=&#34;https://docs.lakefs.io/understand/roadmap.html#improved-streaming-support-for-apache-kafka&#34;&gt;this page&lt;/a&gt; made me realise that I was thinking about the whole thing from a streaming PoV—when actually the idea of running a batch against a branch with a hook to validate and then merge is a freakin awesome idea&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;(As the roadmap issue notes, doing this for streaming data is conceptually possible but more complex to implement.)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’m also still trying to think through the implications of &lt;a href=&#34;https://docs.lakefs.io/understand/model.html#merge&#34;&gt;merging one branch into another&lt;/a&gt; in which there are changes; can data really be treated the same as code in that sense, or could one end up with inconsistent data sets?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Lastly, having been reading up on table formats, I’d be interested to dig into quite how much LakeFS works already with them vs roadmap alone (the docs are not entirely consistent on this point)—but with both in place it sounds like a fantastic place for data eng to be heading.&lt;/p&gt;
+&lt;/div&gt;
+&lt;hr/&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &amp;#34;git for data&amp;#34; pitch is a great way to articulate things, but it also shifted my brain off some of the central uses. For code, &lt;code&gt;git&lt;/code&gt; is an integral part of the development process but once it hits Production &lt;code&gt;git&lt;/code&gt; steps back from an active role. However, in the case of LakeFS some of their most exciting use cases are &lt;em&gt;as part of the Production data process&lt;/em&gt;. &lt;a href=&#34;https://docs.lakefs.io/understand/roadmap.html#improved-streaming-support-for-apache-kafka&#34;&gt;The docs&lt;/a&gt; have several examples which I think are just great:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;When your batch pipeline runs, it does so against a branch of the data. Before merging that branch back into trunk, a hook can be configured to do various data quality checks (just as you’d configure hooks in GitHub etc to check for code quality, test suites, etc etc). This could be things like checking for PII slipping through, or simply &amp;#34;did we process the approximate number of records that we would expect&amp;#34;. If that kind of check fails because the source data’s gone bad or failed up stream then you potentially save yourself a ton of unpicking that you’d have to do if it’s updated directly in the Production data lake.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;As above, the batch pipeline creates a new branch when it runs, and when (or if) it completes successfully and merges that back into the trunk, that merge can have attached to it a bunch of metadata to do with the pipeline execution. What version of the code was it running, what version of the underlying frameworks on which it executed, and so on. Invaluable for tracing particular problems at a later date.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;I kicked the tyres on LakeFS and wrote about it &lt;a href=&#34;https://rmoff.net/2022/09/16/data-engineering-in-2022-exploring-lakefs-with-jupyter-and-pyspark/&#34;&gt;here&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;hr/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_data_engineering_in_2022&#34;&gt;Data Engineering in 2022&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/&#34;&gt;Introduction&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2022/09/16/data-engineering-in-2022-exploring-lakefs-with-jupyter-and-pyspark/&#34;&gt;Exploring LakeFS with Jupyter and PySpark&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Query &amp;amp; Transformation Engines [TODO]&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;ETL/ELT tools &amp;amp; Orchestration [TODO]&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Architectures &amp;amp; Terminology [TODO]&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2022/09/14/data-engineering-resources/&#34;&gt;Resources&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
+    <item>
+      <title>Stretching my Legs in the Data Engineering Ecosystem in 2022</title>
+      <link>https://rmoff.net/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/</link>
+      <pubDate>2022-09-14</pubDate>
+      
+      <guid>https://rmoff.net/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2022/09/IMG_7557.jpeg" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For the past 5.5 years I’ve been head-down in the exciting area of stream processing and events, and I realised recently that the world of data and analytics that I worked in up to 2017 which was changing significantly back then (Big Data, y’all!) has evolved and, dare I say it, matured somewhat - and I’ve not necessarily kept up with it. In this series of posts you can follow along as I start to reacquaint myself with where it’s got to these days.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_background&#34;&gt;Background&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Twenty years ago (😱TWENTY😱) I took my first job from university using my 🎼 Music degree to…build data warehouses. I was lucky to get a place on a graduate scheme at a well-established retailer with an excellent training programme. I got taught COBOL, DB2, TSO, and all that fun stuff. I even remember my TSO handle - TSO954. Weird huh. From there I continued in the data space, via a stint as a DBA on production OLTP systems, and into more data warehousing and analytics with Oracle in 2010.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;From the mid 2010s I became aware of the Big Data ecosystem emerging, primarily around Apache Hadoop and Cloudera (anyone remember &lt;a href=&#34;https://twitter.com/kestelyn/status/322407722261819392&#34;&gt;&lt;em&gt;Data Is The New Bacon&lt;/em&gt;&lt;/a&gt;?). All the things I’d been used to doing with analytical data suddenly became really difficult. Query some data? Write Java code. Update some data? Haha nope. Use SQL? hah, welcome to this alpha release that probably doesn’t work. And BTW, if you didn’t know it before, now you truly know the meaning of JAR hell.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Snark aside, I spent some time &lt;a href=&#34;https://www.rittmanmead.com/blog/2016/12/etl-offload-with-spark-and-amazon-emr-part-5/&#34;&gt;looking at some of the tools&lt;/a&gt; and building out examples of its use in 2016, before moving jobs into my current role at Confluent.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;At Confluent I’ve been working with Apache Kafka and diving deep into the world of stream processing, including building streaming data pipelines. When I took on the role of chair of the &lt;a href=&#34;https://www.confluent.io/en-gb/blog/introducing-current-2022-program-committee/&#34;&gt;program committee for Current 22&lt;/a&gt; part of the remit was to help source and build a program that included elements across the broader data landscape than Kafka alone. In doing this, I realised quite how much had changed in recent years, and gave me an itch to try and make some sense of it.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Herewith that itch being scratched…&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;
+&lt;/p&gt;&lt;div class=&#34;tenor-gif-embed&#34; data-postid=&#34;15016547&#34; data-share-method=&#34;host&#34; data-aspect-ratio=&#34;1&#34; data-width=&#34;100%&#34;&gt;&lt;a href=&#34;https://tenor.com/view/happy-scratch-head-cat-gif-15016547&#34;&gt;Happy Scratch Head GIF&lt;/a&gt;from &lt;a href=&#34;https://tenor.com/search/happy-gifs&#34;&gt;Happy GIFs&lt;/a&gt;&lt;/div&gt; &lt;script type=&#34;text/javascript&#34; async=&#34;&#34; src=&#34;https://tenor.com/embed.js&#34;&gt;&lt;/script&gt;
+&lt;p&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_how_it_started&#34;&gt;How It Started&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;It’s hard to write a piece like this without invoking &lt;a href=&#34;https://www.youtube.com/watch?v=ue7wM0QC5LE&#34;&gt;The Four Yorkshiremen&lt;/a&gt; at some point, so I’ll get it out of the way now. But &lt;del&gt;back in my day&lt;/del&gt; my starting point for what is nowadays called &lt;code&gt;&amp;lt;Data|Analytics&amp;gt; Engineering&lt;/code&gt; is what pretty much everyone—bar the real cool kids in silicon valley—was doing back in the early 2010s (and the previous ~decades before that):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Find a source system - probably just one, or maybe two. Almost certainly a mainframe, Oracle, flat files.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;ETL/ELT the data into a target Data Warehouse or Data Mart, probably with a star or snowflake schema&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Build dashboards on the data&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2022/09/simpledw.png&#34; alt=&#34;Source DB → DW → Dashboard&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;It was maybe not as neat as this, with various elements of &amp;#34;shadow IT&amp;#34; springing up to circumvent real [or perceived] limitations - but at least you knew what you&lt;/em&gt; should &lt;em&gt;be doing and aspiring for&lt;/em&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Extracts were usually once a day. Operational Data Stores were becoming a bit trendy then along with &amp;#39;micro-batch&amp;#39; extracts which meant data coming maybe more frequently, e.g. 5-10 minutes&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Tools were the traditional ETL lot (Informatica, Data Stage, etc), with Oracle’s Data Integrator (neé Sunopsis) bringing the concept of ELT in which instead of buying servers (e.g. Informatica) to run the Transform, you took advantage of the target database’s ability to crunch data by loading the data into the database in one set of tables, transform it there, and load it into another set of tables. Nowadays &lt;a href=&#34;https://twitter.com/esammer/status/1567547892927442944&#34;&gt;ELT is not such a clear-cut concept&lt;/a&gt; (for non-obvious reasons)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Data modeling was an important part, as was the separation of logical and physical at both the ELT stage (ODI) and reporting (e.g. OBIEE’s semantic layer).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Source control in analytics was something that the hipsters did. Emailing around files and using &lt;code&gt;CODE_FILE_V01&lt;/code&gt;, &lt;code&gt;CODE_FILE_V02&lt;/code&gt;, &lt;code&gt;CODE_FILE_PROD_RELESE!_V3&lt;/code&gt; was seen as perfectly acceptable and sufficient. Even if you wanted to, it was often &lt;a href=&#34;https://www.rittmanmead.com/blog/2015/01/concurrent-rpd-development-in-obiee/&#34;&gt;difficult&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Data Warehouses tended to live on dedicated platforms including Teradata, Netezza, as well as the big RDBMSs such as Oracle, DB2, and SQL Server.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Scaling was mostly vertical (buy a bigger box, put in more CPUs). Oracle’s Exadata was an engineered system and launched with the promise of magical performance improvements with a combination of hardware and software fairy dust to make everything go quick.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The idea of building around open source software was not a commonplace idea for most companies of any size, and Cloud was in the early phases of the hype cycle.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Analytics work was centralised around the BI (Business Information) or MIS (Management Information Systems) teams, or going back a bit further the DSS (Decision Support System) team. Source systems owners would grudgingly allow an extract from their systems, with domain model specifics often left to the analytics team to figure out.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_how_its_going&#34;&gt;How It’s Going&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;First, a HUGE caveat: whereas the above is written based on my experience as a &amp;#34;practitioner&amp;#34; (I was actually doing and building this stuff), what comes next is my&lt;/em&gt; perception &lt;em&gt;from conversations, my Twitter bubble, etc. I would be deeply pleased to be corrected on any skew in what I write.&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Where to start?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The use of data has changed. The technology to do so has changed. The general technical competence and willingness to interact with IT systems has changed.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Data is no longer used just to print out on a report on a Monday morning. Data is used throughout companies to inform and automate processes, as described by Jay Kreps in his article &lt;a href=&#34;https://www.confluent.io/blog/every-company-is-becoming-software/&#34;&gt;Every Company is Becoming &lt;del&gt;a&lt;/del&gt; Software &lt;del&gt;Company&lt;/del&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Handling of data is done by many teams, not just one. In the new world of the Data Mesh even source system owners are supposed to get in on the game and publish their data as a data product. Outside of IT, other departments in a company are staffed by a new generation of &amp;#34;technology native&amp;#34; employees - those who grew up with the internet and computers as just as much a part of their worlds as television and the telephone. Rather than commissioning a long project from the IT department they’re as likely to self-serve their requirements, either building something themselves or using a credit card to sign up for one of the thousands of SaaS platforms.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The data engineering world has realised—if not fully accepted—that software engineering practices including testing, CI/CD, etc are important - see &lt;a href=&#34;https://www.youtube.com/watch?v=uixZ7NcGoeE&amp;amp;t=450s&#34;&gt;this interesting discussion&lt;/a&gt; on the &amp;#34;shift left&amp;#34; of data engineering.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Hardware is not limited to what you can procure and provision in your data center through a regimented and standardised central process, but whatever you can imagine (and afford) in the Cloud. Laptops themselves are so powerful that much processing can just be done locally. And the fact that it’s laptops is notable - now anyone can work anywhere. The desktop machine in the office is becoming an anachronistic idea except for specialised roles such as video processing. That mobility in its adds considerations to how technology serves us too.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Both &lt;a href=&#34;https://seattledataguy.substack.com/&#34;&gt;SeattleDataGuy&lt;/a&gt; in his article &lt;a href=&#34;https://seattledataguy.substack.com/p/the-baseline-datastack-going-beyond&#34;&gt;The Baseline Data Stack&lt;/a&gt; and &lt;a href=&#34;https://www.linkedin.com/in/jamesdensmore/&#34;&gt;James Densmore&lt;/a&gt; in his book &lt;a href=&#34;https://www.oreilly.com/library/view/data-pipelines-pocket/9781492087823/&#34;&gt;Data Pipelines Pocket Reference&lt;/a&gt; describe a basic approach to moving data into a place from which it can be analysed. Build a pipeline to do a batch extract of data from the source system into a target store from which it can be worked on. No streaming, no fancy tooling - just good ole&amp;#39; ETL. Same as we saw above, right?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;
+&lt;/p&gt;&lt;div class=&#34;tenor-gif-embed&#34; data-postid=&#34;23108779&#34; data-share-method=&#34;host&#34; data-aspect-ratio=&#34;1&#34; data-width=&#34;50%&#34;&gt;&lt;a href=&#34;https://tenor.com/view/sir-im-confused-butters-stotch-south-park-s15e6-city-sushi-gif-23108779&#34;&gt;Sir Im Confused Butters Stotch GIF&lt;/a&gt;from &lt;a href=&#34;https://tenor.com/search/sir+im+confused-gifs&#34;&gt;Sir Im Confused GIFs&lt;/a&gt;&lt;/div&gt; &lt;script type=&#34;text/javascript&#34; async=&#34;&#34; src=&#34;https://tenor.com/embed.js&#34;&gt;&lt;/script&gt;
+&lt;p&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Well not really. Because instead of one or two sources, there are probably dozens if not hundreds. Instead of one central data warehouse there will be numerous data stores. And rather than just a set of static reports to print out for a Monday morning, the data is being used in every corner of the business on every device and platform you can imagine.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_all_change_please&#34;&gt;All Change, Please&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The world of software has been blown apart, driven in my opinion by the internet, Cloud, and open source.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://archive.org/download/X09-51175/preview.jpg&#34; alt=&#34;Microsoft SQL Server 2000 CD&#34; width=&#34;500&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Never mind placing an order for software and waiting for the installation media to arrive. The world of software is at our disposal and just a download link away. With Docker you can spin up and try a dozen data stores in a day and pick the one that suits you best. Cloud gives you the ability to provision capacity on which to run whatever you’d like (IaaS), or as is widely the case provision the software itself (SaaS). They host it, they support it, they tune it - all you do it use it. Companies no longer have to choose simply between paying IBM for a mainframe license or Microsoft for a Windows licence, but whether to pay at all. Linux went from being a niche geek interest to the foundation on which a huge number of critical systems run. Oracle is still a dominant player in the RDBMS world but you’re no longer an oddity if you propose to use Postgres instead.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;And speaking of a dozen data stores, nowadays there are stores specialised for every purpose. NoSQL, oldSQL, someSQL, NewSQL and everywhere in between. Graph, relational, and document. AWS in particular has leant into this, mirroring what’s available to run yourself in their plethora of SaaS offerings in the data space.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_job_titles&#34;&gt;Job Titles&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In terms of job titles, back in the day you were often a &lt;em&gt;programmer&lt;/em&gt;, a &lt;em&gt;datawarehouse specialist&lt;/em&gt;, a &lt;em&gt;BI analyst&lt;/em&gt;, and all and many titles in between. Nowadays you have people who get the actual value out of the data that pays for all of this to happen, and they might still be called Analysts of one flavour or another but more often Data Scientists. This overlaps and bleeds into the ML world too. For a few years the people who got the data for the analysts to work with were &lt;a href=&#34;https://medium.com/free-code-camp/the-rise-of-the-data-engineer-91be18f1e603&#34;&gt;&lt;strong&gt;Data Engineers&lt;/strong&gt;&lt;/a&gt; (modelling the Software Engineers that &amp;#34;programmers&amp;#34; of old had become). It seems to me that this label has split further, with Data Engineering being the discipline of getting the data out of the source, building the pipelines to get it into some kind of staging area (e.g. data lake). From here the &lt;a href=&#34;https://benn.substack.com/p/why-do-people-want-to-be-analytics&#34;&gt;&lt;strong&gt;Analytics Engineers&lt;/strong&gt;&lt;/a&gt; take over, cleansing and perhaps restructuring it into a form and schema that is accessible and performant for the required use.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_where_to_start&#34;&gt;Where to Start?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So there is a &lt;strong&gt;lot&lt;/strong&gt; to cover, even if I were to just summarise across all of it. There are &lt;strong&gt;seventy seven&lt;/strong&gt; &lt;strong&gt;&lt;em&gt;sub-categeries&lt;/em&gt;&lt;/strong&gt; alone in Matt Turck’s useful survey of the landscape (&lt;a href=&#34;http://46eybw2v1nh52oe80d3bi91u-wpengine.netdna-ssl.com/wp-content/uploads/2020/09/2020-Data-and-AI-Landscape-Matt-Turck-at-FirstMark-v1.pdf&#34;&gt;pdf&lt;/a&gt; / &lt;a href=&#34;http://dfkoz.com/ai-data-landscape/&#34;&gt;source data&lt;/a&gt; / &lt;a href=&#34;https://mattturck.com/data2020/&#34;&gt;article&lt;/a&gt;) — and that’s from 2 years ago 😅 (lakeFS published something similar for &lt;a href=&#34;https://lakefs.io/the-state-of-data-engineering-2022/&#34;&gt;2022&lt;/a&gt;).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What I’m going to do is dig into some of the particular areas that have caught my eye, which is generally those closest related to the developments in the specific area of my interest - data engineering for analytics purposes. Even then I’m sure I’ll miss a huge swath of relevant content.&lt;/p&gt;
+&lt;/div&gt;
+&lt;hr/&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2022/09/14/data-engineering-in-2022-storage-and-access/&#34;&gt;Storage and Access&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2022/09/16/data-engineering-in-2022-exploring-lakefs-with-jupyter-and-pyspark/&#34;&gt;Exploring LakeFS with Jupyter and PySpark&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Query &amp;amp; Transformation Engines [TODO]&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;ETL/ELT tools &amp;amp; Orchestration [TODO]&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Architectures &amp;amp; Terminology [TODO]&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2022/09/14/data-engineering-resources/&#34;&gt;Resources&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_footnote_so_what&#34;&gt;Footnote: &lt;em&gt;So What?&lt;/em&gt;&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You may be wondering what is even the purpose of this blog? There’s no &amp;#34;call to action&amp;#34;, no great insight. And that’s fine - this is just my notes for myself, and if they’re of interest to anyone else then they are welcome to peruse them :)&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
     <item>
       <title>Customising the fields shown in Airtable&#39;s Calendar .ics export</title>
       <link>https://rmoff.net/2022/09/12/customising-the-fields-shown-in-airtables-calendar-.ics-export/</link>
@@ -998,716 +2151,6 @@ You need to be specific.&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Using GitHub Actions to build automagic Hugo previews of draft articles</title>
-      <link>https://rmoff.net/2022/04/06/using-github-actions-to-build-automagic-hugo-previews-of-draft-articles/</link>
-      <pubDate>2022-04-06</pubDate>
-      
-      <guid>https://rmoff.net/2022/04/06/using-github-actions-to-build-automagic-hugo-previews-of-draft-articles/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2022/04/IMG_5139.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This blog is written in Asciidoc, built using Hugo, and hosted on GitHub Pages. I recently wanted to share the draft of a post I was writing with someone and ended up exporting a local preview to a PDF - not a great workflow! This blog post shows you how to create an automagic hosted preview of any draft content on Hugo using GitHub Actions.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is useful for previewing and sharing one’s own content, but also for making good use of GitHub as a collaborative platform - if someone &lt;a href=&#34;https://github.com/rmoff/rmoff-blog/pull/4#pullrequestreview-933907051&#34;&gt;reviews and amends your PR&lt;/a&gt; the post gets updated in the preview too.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I &lt;a href=&#34;https://rmoff.net/2020/12/20/scheduling-hugo-builds-on-github-pages-with-github-actions/&#34;&gt;wrote previously&lt;/a&gt; about using GitHub Actions to automagically build and deploy my blog whenever I push new content to the GitHub repo that hosts the source. My friend &lt;a href=&#34;https://twitter.com/gunnarmorling&#34;&gt;Gunnar Morling&lt;/a&gt; does not only do that with &lt;a href=&#34;https://www.morling.dev/&#34;&gt;his blog&lt;/a&gt;, but he also has a neat preview functionality for new content in a Pull Request (PR). I’m writing this blog to document the steps I took to mimic &lt;a href=&#34;https://github.com/gunnarmorling/morling.dev/blob/master/.github/workflows/preview.yml&#34;&gt;his setup&lt;/a&gt; :)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;In essence it’s the same as &lt;a href=&#34;https://rmoff.net/2020/12/20/scheduling-hugo-builds-on-github-pages-with-github-actions/&#34;&gt;deploying the production Hugo site to GitHub Pages&lt;/a&gt;, except it’s hosted on &lt;a href=&#34;https://surge.sh/&#34;&gt;&lt;code&gt;https://surge.sh/&lt;/code&gt;&lt;/a&gt; instead and with a variable URL (since you might have multiple drafts each with their own PR).&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_setting_up_an_account_on_surge_sh&#34;&gt;Setting up an account on surge.sh&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;a href=&#34;https://surge.sh/&#34;&gt;&lt;code&gt;https://surge.sh/&lt;/code&gt;&lt;/a&gt; is not a shell script as the name may suggest, but a hosted service that provides &lt;code&gt;Static web publishing for Front-End Developers&lt;/code&gt;. Their audience is denoted very clearly by the fact you can’t sign up online - they assume that &lt;em&gt;of course&lt;/em&gt; you’ll have &lt;code&gt;npm&lt;/code&gt; installed (because you’re a front-end developer, right). For us heathens without it, you need to install &lt;code&gt;npm&lt;/code&gt; first which you can do via &lt;code&gt;brew&lt;/code&gt; (which in turn you can install using &lt;code&gt;npm&lt;/code&gt;…only kidding)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;brew &lt;span style=&#34;color: #0086B3&#34;&gt;install &lt;/span&gt;npm&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Then install surge&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;npm &lt;span style=&#34;color: #0086B3&#34;&gt;install&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;--global&lt;/span&gt; surge&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;With it installed you can then create an account&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;surge login
-
-   Login &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;or create surge account&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt; by entering email &amp;amp; password.
-
-          email: robin+surge@moffatt.me
-       password:
-
-   Success - Logged &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;as robin+surge@moffatt.me.&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Check your email and verify your email address, and then go and create an authentication token:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;$ &lt;/span&gt;surge token
-
-   4fimxlh7xmvvs72qhmrmgbhx4jwudepa&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;a href=&#34;https://docs.github.com/en/actions/security-guides/encrypted-secrets#creating-encrypted-secrets-for-a-repository&#34;&gt;Add this to your GitHub repository&lt;/a&gt; as a Repository Secret under Actions.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2022/04/gha_token.png&#34; alt=&#34;gha token&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_building_the_workflow&#34;&gt;Building the Workflow&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is all built around creating a &lt;a href=&#34;https://docs.github.com/en/actions&#34;&gt;GitHub Actions&lt;/a&gt; &lt;a href=&#34;https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions&#34;&gt;workflow&lt;/a&gt;. It will do the following:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;olist arabic&#34;&gt;
-&lt;ol class=&#34;arabic&#34;&gt;
-&lt;li&gt;
-&lt;p&gt;Trigger when a new PR is created&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Checkout the code from the PR source branch&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Install the dependencies on the container that’s running&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Set a variable to hold the target URL for the deployed preview&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Build the Hugo site&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Deploy the built preview to &lt;a href=&#34;https://surge.sh/&#34;&gt;&lt;code&gt;https://surge.sh/&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Let’s look at each of these in detail. Each section contributes a lump of YAML which builds the overall workflow.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_triggering_a_github_action_on_a_pr&#34;&gt;Triggering a GitHub Action on a PR&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;There are many events in a GitHub repository that can trigger an action, including a &lt;a href=&#34;https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request&#34;&gt;&lt;code&gt;pull_request&lt;/code&gt;&lt;/a&gt;. You can refine it further using a &lt;a href=&#34;https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#using-filters&#34;&gt;filter&lt;/a&gt;, such as only a pull request that’s been marked as ready for review. Here I’m just going to target PRs that are [re-]opened, which is the default and so &lt;a href=&#34;https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request&#34;&gt;per the docs&lt;/a&gt; no filter is needed:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;on&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-  &lt;span style=&#34;color: #008080&#34;&gt;pull_request&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_checkout_the_code&#34;&gt;Checkout the code&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/actions/checkout&#34;&gt;This action&lt;/a&gt; checks out the code from the PR branch. It can be configured to fetch other branches if required, but per the doc:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;quoteblock&#34;&gt;
-&lt;blockquote&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Only a single commit is fetched by default, for &lt;strong&gt;the ref/SHA that triggered the workflow&lt;/strong&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/blockquote&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;yaml&#34;&gt;    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;uses&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;actions/checkout@v3&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_install_dependencies&#34;&gt;Install dependencies&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is the same as used for the live site (which kinda makes sense, given that this is to be a preview of it)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;yaml&#34;&gt;    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Install Ruby Dev&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;sudo apt-get install ruby-dev&lt;/span&gt;
-
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Install AsciiDoctor and Rouge&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;sudo gem install asciidoctor rouge&lt;/span&gt;
-
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Setup Hugo&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;uses&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;peaceiris/actions-hugo@v2&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;with&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;hugo-version&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;0.85.0&amp;#39;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_determining_the_preview_url&#34;&gt;Determining the preview URL&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;To deploy to &lt;code&gt;surge.sh&lt;/code&gt; I used the same GitHub Action as Gunnar, which is &lt;a href=&#34;https://github.com/afc163/surge-preview&#34;&gt;this one&lt;/a&gt;. The URL that it deploys to is determined by the source repository and PR number:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;quoteblock&#34;&gt;
-&lt;blockquote&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;code&gt;&lt;a href=&#34;https://{{repository.owner}}-{{repository.name}}-{{job.name}}-pr-{{pr.number}}.surge.sh&#34; class=&#34;bare&#34;&gt;https://{{repository.owner}}-{{repository.name}}-{{job.name}}-pr-{{pr.number}}.surge.sh&lt;/a&gt;&lt;/code&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/blockquote&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;These break down as follows:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;repository.owner&lt;/code&gt;: &lt;code&gt;rmoff&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;repository.name&lt;/code&gt;: &lt;code&gt;rmoff-blog&lt;/code&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;job.name&lt;/code&gt;: This is the name of the job, specified under &lt;code&gt;jobs:&lt;/code&gt; in the YAML that defines the Workflow.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;pr.number&lt;/code&gt;: The PR number, which can be obtained from a variable in the workflow.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I’m stealing &lt;a href=&#34;https://github.com/gunnarmorling/morling.dev/blob/master/.github/workflows/preview.yml#L17&#34;&gt;Gunnar’s nice bit of code&lt;/a&gt; here to determine the PR number :)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;yaml&#34;&gt;    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Setup base URL env var&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;|&lt;/span&gt;
-        &lt;span style=&#34;color: #d14&#34;&gt;export PRNUMBER=$(jq --raw-output .pull_request.number &amp;#34;$GITHUB_EVENT_PATH&amp;#34;)&lt;/span&gt;
-        &lt;span style=&#34;color: #d14&#34;&gt;echo BASEURL=&amp;#34;https://rmoff-rmoff-blog-preview-pr-&amp;#34;$PRNUMBER&amp;#34;.surge.sh/&amp;#34; &amp;gt;&amp;gt; $GITHUB_ENV&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Note that &lt;code&gt;export&lt;/code&gt; works locally to a step, but to pass the variable between steps you append the setting of it to &lt;code&gt;$GITHUB_ENV&lt;/code&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_build_the_hugo_site&#34;&gt;Build the Hugo site&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Instead of simply calling &lt;code&gt;hugo&lt;/code&gt; which builds the site, we add a few command line flags to build draft posts (&lt;code&gt;--buildDrafts&lt;/code&gt;), future-dated posts (&lt;code&gt;--buildFuture&lt;/code&gt;), and also change the base URL (&lt;code&gt;--baseURL&lt;/code&gt;) which by default (per the &lt;a href=&#34;https://github.com/rmoff/rmoff-blog/blob/master/config.yaml&#34;&gt;&lt;code&gt;config.yaml&lt;/code&gt;&lt;/a&gt;) is the live site (&lt;code&gt;rmoff.net&lt;/code&gt;).&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Note that if the base URL is incorrectly set the resulting built site won’t render properly - you’ll get missing CSS files, weird relative links, etc.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_deploying_the_built_site_to_surge_sh&#34;&gt;Deploying the built site to surge.sh&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/afc163/surge-preview&#34;&gt;This action&lt;/a&gt; deploys the built site (under &lt;code&gt;/public&lt;/code&gt;, specified in the &lt;code&gt;dist&lt;/code&gt; parameter) from the previous step to surge.sh:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;yaml&#34;&gt;    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Preview&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;uses&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;afc163/surge-preview@v1&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;preview_step&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;with&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;surge_token&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;${{ secrets.SURGE_TOKEN }}&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;github_token&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;${{ secrets.GITHUB_TOKEN }}&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;dist&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;public&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;failOnError&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;true&amp;#39;&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;teardown&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;true&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;build&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;|&lt;/span&gt;
-          &lt;span style=&#34;color: #d14&#34;&gt;echo Deploying to surge.sh&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_the_finished_workflow&#34;&gt;The finished workflow&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Build and Deploy PR Preview&lt;/span&gt;
-
-&lt;span style=&#34;color: #008080&#34;&gt;on&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-  &lt;span style=&#34;color: #008080&#34;&gt;pull_request&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-
-&lt;span style=&#34;color: #008080&#34;&gt;jobs&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-  &lt;span style=&#34;color: #008080&#34;&gt;build_preview&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-    &lt;span style=&#34;color: #008080&#34;&gt;runs-on&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;ubuntu-22.04&lt;/span&gt;
-    &lt;span style=&#34;color: #008080&#34;&gt;steps&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;uses&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;actions/checkout@v3&lt;/span&gt;
-
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Install Ruby Dev&lt;/span&gt;                     
-      &lt;span style=&#34;color: #008080&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;sudo apt-get install ruby-dev&lt;/span&gt;
-
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Install AsciiDoctor&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;sudo gem install asciidoctor&lt;/span&gt;
-      
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Install Rouge&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;sudo gem install rouge -v 3.30.0&lt;/span&gt;
-
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Setup Hugo&lt;/span&gt;                           
-      &lt;span style=&#34;color: #008080&#34;&gt;uses&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;peaceiris/actions-hugo@v2&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;with&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;hugo-version&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;0.85.0&amp;#39;&lt;/span&gt;
-
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Setup base URL env var&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;|&lt;/span&gt;
-        &lt;span style=&#34;color: #d14&#34;&gt;export PRNUMBER=$(jq --raw-output .pull_request.number &amp;#34;$GITHUB_EVENT_PATH&amp;#34;) &lt;/span&gt;
-        &lt;span style=&#34;color: #d14&#34;&gt;echo BASEURL=&amp;#34;https://rmoff-rmoff-blog-build_preview-pr-&amp;#34;$PRNUMBER&amp;#34;.surge.sh/&amp;#34; &amp;gt;&amp;gt; $GITHUB_ENV&lt;/span&gt;
-
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Report base URL env var&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;echo &amp;#34;${{ env.BASEURL }}&amp;#34;&lt;/span&gt; 
-
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Build&lt;/span&gt;                                
-      &lt;span style=&#34;color: #008080&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;hugo --buildFuture --baseURL &amp;#34;${{ env.BASEURL }}&amp;#34;&lt;/span&gt;
-
-    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;Deploy&lt;/span&gt;                               
-      &lt;span style=&#34;color: #008080&#34;&gt;uses&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;afc163/surge-preview@v1&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;preview_step&lt;/span&gt;
-      &lt;span style=&#34;color: #008080&#34;&gt;with&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;surge_token&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;${{ secrets.SURGE_TOKEN }}&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;github_token&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;${{ secrets.GITHUB_TOKEN }}&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;dist&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;public&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;failOnError&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;true&amp;#39;&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;teardown&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;true&lt;/span&gt;
-        &lt;span style=&#34;color: #008080&#34;&gt;build&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;|&lt;/span&gt;
-          &lt;span style=&#34;color: #d14&#34;&gt;echo Deploying to surge.sh&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Put this YAML in a file in your github repository root folder under &lt;code&gt;.github/workflows/&lt;/code&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_the_workflow_in_action&#34;&gt;The workflow in action&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;olist arabic&#34;&gt;
-&lt;ol class=&#34;arabic&#34;&gt;
-&lt;li&gt;
-&lt;p&gt;Create a branch of the main branch, into which you will commit a new blog post:&lt;/p&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;git checkout &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; my_new_article&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Start writing your blog. Once it’s ready to publish as a draft, commit it and push to GitHub:&lt;/p&gt;
-&lt;div class=&#34;listingblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;git add content/post/never_gonna_give_you_up.adoc
-git commit &lt;span style=&#34;color: #000080&#34;&gt;-m&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Draft ready for review&amp;#34;&lt;/span&gt;
-git push &lt;span style=&#34;color: #000080&#34;&gt;--set-upstream&lt;/span&gt; origin my_new_article&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Create a PR from the new branch:&lt;/p&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2022/04/pr1.png&#34; alt=&#34;pr1&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2022/04/pr2.png&#34; alt=&#34;pr2&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;When you create the PR you’ll notice that a check has been added to it - this is the action that’s configured by the workflow and triggered by the PR being created&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2022/04/pr2a.png&#34; alt=&#34;pr2a&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;As the action runs you’ll see it update the PR with its status, and then a completion message including the URL to which the preview has been uploaded&lt;/p&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2022/04/pr4.png&#34; alt=&#34;pr4&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Bask in the glory of a nice preview of your new article, whilst safely not impinging upon your live site.&lt;/p&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2022/04/preview.png&#34; alt=&#34;preview&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/div&gt;
-&lt;hr/&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;My thanks to &lt;a href=&#34;https://twitter.com/gunnarmorling/&#34;&gt;Gunnar Morling&lt;/a&gt; for basically figuring all this out for me to &lt;del&gt;steal&lt;/del&gt; seek inspiration from.&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>🏃🚶 The unofficial Kafka Summit London 2022  Run/Walk 🏃🚶</title>
-      <link>https://rmoff.net/2022/04/05/the-unofficial-kafka-summit-london-2022-run/walk/</link>
-      <pubDate>2022-04-05</pubDate>
-      
-      <guid>https://rmoff.net/2022/04/05/the-unofficial-kafka-summit-london-2022-run/walk/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2022/04/joe-green-so83B0FeUMo-unsplash.jpg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;strong&gt;&lt;a href=&#34;https://www.myeventi.events/kafka22/gb/&#34;&gt;Kafka Summit London&lt;/a&gt; IS BACK&lt;/strong&gt;! After COVID spoiled everyone’s fun and fundamentally screwed everything up for the past two years, I cannot wait to be back at an in-person conference. At the last Kafka Summit in the beforetimes (San Francisco, 2019) &lt;a href=&#34;https://twitter.com/rmoff/status/1179047181891883008&#34;&gt;some of us&lt;/a&gt; got together for a &lt;a href=&#34;https://rmoff.net/2019/09/23/kafka-summit-goldengate-bridge-run/walk/&#34;&gt;run (or walk) across the GoldenGate bridge&lt;/a&gt;. I can’t promise quite the same views, but I thought it would be fun to do something similar when we meet in London later this month.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;blockquote class=&#34;twitter-tweet&#34;&gt;&lt;p lang=&#34;en&#34; dir=&#34;ltr&#34;&gt;🏃‍♀️ 🏃‍♂️ The inaugural &lt;a href=&#34;https://twitter.com/hashtag/KafkaSummitBridgeRun?src=hash&amp;amp;ref_src=twsrc%5Etfw&#34;&gt;#KafkaSummitBridgeRun&lt;/a&gt;! &lt;a href=&#34;https://twitter.com/hashtag/KafkaSummit?src=hash&amp;amp;ref_src=twsrc%5Etfw&#34;&gt;#KafkaSummit&lt;/a&gt; &lt;a href=&#34;https://t.co/24rmTvR8AG&#34;&gt;https://t.co/24rmTvR8AG&lt;/a&gt; &lt;a href=&#34;https://t.co/IJQss6Efts&#34;&gt;pic.twitter.com/IJQss6Efts&lt;/a&gt;&lt;/p&gt;&amp;mdash; Robin Moffatt 🍻🏃🥓 (@rmoff) &lt;a href=&#34;https://twitter.com/rmoff/status/1179047181891883008?ref_src=twsrc%5Etfw&#34;&gt;October 1, 2019&lt;/a&gt;&lt;/blockquote&gt;
-&lt;script async src=&#34;https://platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;
-
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_who_what_where_when&#34;&gt;Who? What? Where? When?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;Who&lt;/em&gt;:  Anyone who would like to is very welcome :)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;What&lt;/em&gt;: A 5k (3.1 miles) run or walk from the conference hotel around the Greenwich Peninsula&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;Where&lt;/em&gt;: Starting from the conference hotel (&lt;a href=&#34;https://g.page/intercontheo2?share&#34;&gt;InterContinental London - the O2&lt;/a&gt;)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;When&lt;/em&gt;: &lt;strong&gt;Monday 25th April&lt;/strong&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;We’ll &lt;strong&gt;meet at 07:00 BST&lt;/strong&gt; out on the riverside &lt;code&gt;Olympian Way&lt;/code&gt; path nearest to where you can reach it from the hotel. That’ll give us time to congrgate and take some &lt;a href=&#34;https://twitter.com/search?q=%23streamingselfie%20%23kafkasummit%20until%3A2020-03-01&amp;amp;src=typed_query&amp;amp;f=live&#34;&gt;&lt;code&gt;#streamingselfie&lt;/code&gt;&lt;/a&gt;s if you want them, before setting off at 07:10 sharp to make our way around the &lt;a href=&#34;https://www.strava.com/clubs/1039355/group_events/1146993&#34;&gt;the 5k route&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2022/04/o2_run.jpg&#34; alt=&#34;o2 run&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Go at your own pace; this isn’t a race. You can run, or walk. Or skip, if you prefer. You can &lt;a href=&#34;https://www.strava.com/clubs/1039355/group_events/1146993&#34;&gt;download the route&lt;/a&gt; to follow at your leisure. In fact, it’s a good idea to do so because this is not an organised event, so it’s your responsibility not to get lost :-D&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;At 6min/km it’ll take half an hour to get round the 5k route. That should give you plenty of time to then take some more &lt;a href=&#34;https://twitter.com/search?q=%23streamingselfie%20%23kafkasummit%20until%3A2020-03-01&amp;amp;src=typed_query&amp;amp;f=live&#34;&gt;&lt;code&gt;#streamingselfie&lt;/code&gt;&lt;/a&gt;s before heading back into the hotel for breakfast and ready for the &lt;strong&gt;start of the conference at 09:00&lt;/strong&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_cool_where_do_i_register&#34;&gt;Cool, where do I register?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Register at &lt;code&gt;/dev/null&lt;/code&gt; ;-)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is an entirely unofficial, barely-organised, thing. Turn up and run, if you want. Don’t, if you don’t. Fully intend to but sleep in from the jetlag and miss it, that’s completely fine 😁&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_other_running_options_for_other_days&#34;&gt;Other running options for other days&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I did toy with the idea of suggesting a run around Greenwich, but the logistics of getting there from the conference hotel and back in time with unpredictable rush hour traffic, along with quite a hill which might put some people off, made it seem the less good option.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;However, if you’re staying at the conference hotel and interested in seeing the excellent views from Greenwich observatory here are a couple of options for you:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://www.strava.com/routes/2946360950897733124&#34;&gt;10k route, from the conference hotel&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://www.strava.com/routes/2946011793818532474&#34;&gt;5k route, starting from Greenwich Park&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;I might do the 10k on the Tuesday - perhaps I’ll see you there :)&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;hr/&gt;
-&lt;div class=&#34;quoteblock&#34;&gt;
-&lt;blockquote&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;Images from &lt;a href=&#34;https://unsplash.com/s/photos/running-london?utm_source=unsplash&amp;amp;utm_medium=referral&amp;amp;utm_content=creditCopyText&#34;&gt;Unsplash&lt;/a&gt;, with thanks to &lt;a href=&#34;https://unsplash.com/@knowjack?utm_source=unsplash&amp;amp;utm_medium=referral&amp;amp;utm_content=creditCopyText&#34;&gt;jack atkinson&lt;/a&gt; and &lt;a href=&#34;https://unsplash.com/@jg?utm_source=unsplash&amp;amp;utm_medium=referral&amp;amp;utm_content=creditCopyText&#34;&gt;Joe Green&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/blockquote&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>My Favourite Tools on the Mac (Setting up a new Mac)</title>
-      <link>https://rmoff.net/2021/07/29/my-favourite-tools-on-the-mac-setting-up-a-new-mac/</link>
-      <pubDate>2021-07-29</pubDate>
-      
-      <guid>https://rmoff.net/2021/07/29/my-favourite-tools-on-the-mac-setting-up-a-new-mac/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2021/07/IMG_1108.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is the software counterpart to &lt;a href=&#34;https://rmoff.net/2020/12/02/my-workstation-2020/&#34;&gt;my previous article&lt;/a&gt; in which I looked at my workstation’s hardware setup. Some of these are unique or best-of-breed, others may have been &lt;a href=&#34;https://www.economist.com/babbage/2012/07/13/youve-been-sherlocked&#34;&gt;sherlocked&lt;/a&gt; but I stick with them anyway :)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Since writing the draft of this post a month ago I had to put my laptop in for repair, and in getting the loaner machine set up how I wanted it I realised that some of the tools that I originally listed below I could do without. So I’ve split the list into &lt;code&gt;essential&lt;/code&gt; and &lt;code&gt;nice-to-have&lt;/code&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_mac_essentials&#34;&gt;Mac Essentials&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_alfred&#34;&gt;&lt;a href=&#34;https://www.alfredapp.com/&#34;&gt;Alfred&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I’ve used &lt;a href=&#34;https://www.alfredapp.com/&#34;&gt;Alfred&lt;/a&gt; for years, and it’s one of the first apps I’ll install on a fresh Mac. It’s like the Cmd-Space search integration that MacOS has, but &lt;strong&gt;so much more than that&lt;/strong&gt;. I started out with listing a few features here but it soon turned into a &lt;a href=&#34;https://rmoff.net/2021/07/29/why-i-use-alfred-app-and-maybe-you-should-too/&#34;&gt;love letter to Alfred&lt;/a&gt; so head there for full details :)&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_moom&#34;&gt;&lt;a href=&#34;https://manytricks.com/moom/&#34;&gt;Moom&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Excellent utility for using the keyboard to move windows between desktops and resize to pre-configured places. I used to use &lt;a href=&#34;https://www.irradiatedsoftware.com/sizeup/&#34;&gt;SizeUp&lt;/a&gt;, this is like that on steroids :) It’s worth the learning curve of training muscle memory for repositioning and resizing windows, especially if you have more than one monitor. It’s probably the first tool I really missed when I got a new laptop - I was just so used to the ease with which it let me manage and manipulate windows on the desktop.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_vscode&#34;&gt;&lt;a href=&#34;https://code.visualstudio.com/&#34;&gt;VSCode&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;My text editor of choice. Nice plugin for asciidoc.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_iterm2&#34;&gt;&lt;a href=&#34;https://iterm2.com/&#34;&gt;iTerm2&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Nice Terminal replacement. Within my terminal I run &lt;code&gt;zsh&lt;/code&gt; with &lt;a href=&#34;https://ohmyz.sh/&#34;&gt;&lt;code&gt;oh-my-zsh&lt;/code&gt;&lt;/a&gt; and &lt;code&gt;bira&lt;/code&gt; theme. Some important tools to install for a happy life in your shell:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;brew&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;tldr&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_display_menu&#34;&gt;&lt;a href=&#34;http://displaymenu.milchimgemuesefach.de/&#34;&gt;Display Menu&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Great tool for quickly changing display resolution on different monitors - really handy when doing online talks etc and you want to make sure the screen resolution isn’t too tiny for sharing&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_keynote&#34;&gt;&lt;a href=&#34;https://www.apple.com/uk/keynote/&#34;&gt;Keynote&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;OMG Keynote! Reason alone for getting the Mac, so that you don’t have to use Powerpoint 🤣&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I know some people get somewhat evangelical about their software of choice (vi vs emacs, etc), but generally I am happy enough to use whatever’s and hand if it’s not crap. Which is why I won’t use Powerpoint ;-) This is the one thing I won’t compromise on. Keynote really is head and shoulders above Powerpoint in usability. I’m not a fan of Google Slides either, FTR. I’ll use it if I have to (in preference to Powerpoint) - but I’ll complain about it cos it’s not Keynote.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_snagit&#34;&gt;&lt;a href=&#34;https://www.techsmith.com/screen-capture.html&#34;&gt;SnagIt&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Very handy tool for taking and marking up static screen captures. See also &lt;a href=&#34;https://evernote.com/products/skitch&#34;&gt;Skitch&lt;/a&gt; (cheaper—free—but less functional).&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_kap&#34;&gt;&lt;a href=&#34;https://getkap.co/&#34;&gt;Kap&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Free tool that does a good job of video screencaptures, writing to MP4, animated GIF, etc. Does exactly what it needs to, and nothing else.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;For proper screencap and editing video I use &lt;a href=&#34;https://www.telestream.net/screenflow/&#34;&gt;Screenflow&lt;/a&gt;. &lt;a href=&#34;https://www.techsmith.com/video-editor.html&#34;&gt;Camtasia&lt;/a&gt; is similar tool and equally good.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_nice_to_have_mac_tools&#34;&gt;&amp;#34;Nice to have&amp;#34; Mac tools&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;These are ones I’ve used for ages, but didn’t find myself rushing to install when I got a new laptop.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_bartender_3&#34;&gt;&lt;a href=&#34;https://www.macbartender.com/&#34;&gt;Bartender 3&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;After a while your menu bar starts to look like this:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2021/06/menubar.png&#34; alt=&#34;menubar&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Bartender is a nice little tool for rearranging the order of the icons, or even hiding them entirely! Particularly handy when you’re presenting from your screen or recording a screencast. Plus you can customise its icon which is cool:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2021/06/menubar2.png&#34; alt=&#34;menubar2&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_istatmenus&#34;&gt;&lt;a href=&#34;https://bjango.com/mac/istatmenus/&#34;&gt;iStatMenus&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;CPU, memory, network, etc usage displayed on your menu bar, with hover-over drill-down visualisations. Neat!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2021/06/istat_menus.png&#34; alt=&#34;istat menus&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_little_snitch&#34;&gt;&lt;a href=&#34;https://www.obdev.at/products/littlesnitch/index.html&#34;&gt;Little Snitch&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Very powerful way to monitor, and optionally block, specific network traffic for each process on your machine.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_rocket&#34;&gt;&lt;a href=&#34;https://matthewpalmer.net/rocket/&#34;&gt;Rocket&lt;/a&gt;&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;emojis! 🙌 🙌&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;videoblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;video src=&#34;https://rmoff.net/images/2021/06/rocket.mp4&#34; width=&#34;400&#34; autoplay=&#34;&#34; loop=&#34;&#34;&gt;
-Your browser does not support the video tag.
-&lt;/video&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;It’s neat, but I’ve replaced it with something almost as quick - within the Mac settings you can remap the &lt;strong&gt;Fn&lt;/strong&gt; key to open the system’s emoji dialogue:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2021/07/keyboard01.png&#34; alt=&#34;keyboard01&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Why I use Alfred App (and maybe you should too)</title>
-      <link>https://rmoff.net/2021/07/29/why-i-use-alfred-app-and-maybe-you-should-too/</link>
-      <pubDate>2021-07-29</pubDate>
-      
-      <guid>https://rmoff.net/2021/07/29/why-i-use-alfred-app-and-maybe-you-should-too/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2021/07/IMG_1033.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;I’ve used &lt;a href=&#34;https://www.alfredapp.com/&#34;&gt;Alfred&lt;/a&gt; for years, and it’s one of the first apps I’ll install on a fresh Mac. It’s like the Cmd-Space search integration that MacOS has, but &lt;strong&gt;so much more than that&lt;/strong&gt;. Here’s a few of the really powerful features that makes it the first app I’ll reach for to install on any new Mac - and which it’ll feel like I’m trying to work with one arm tied behind my back if I don’t have :)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;I wrote up a list of other &lt;a href=&#34;https://rmoff.net/2021/07/29/my-favourite-tools-on-the-mac-setting-up-a-new-mac&#34;&gt;Mac software that I use here&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Clipboard history&lt;/strong&gt;. Every time you ⌘-C what you copy goes onto the clipboard history, which you can search. So you can then paste not only the thing you just copied, but anything else you copied previously! It is &lt;strong&gt;SO&lt;/strong&gt; powerful.&lt;/p&gt;
-&lt;div class=&#34;videoblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;video src=&#34;https://rmoff.net/images/2021/06/alfred_clipboard_history.mp4&#34; autoplay=&#34;&#34; loop=&#34;&#34;&gt;
-Your browser does not support the video tag.
-&lt;/video&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;It works with &lt;strong&gt;images&lt;/strong&gt; too!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;videoblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;video src=&#34;https://rmoff.net/images/2021/06/alfred_imagepaste.mp4&#34; width=&#34;640&#34; autoplay=&#34;&#34; loop=&#34;&#34;&gt;
-Your browser does not support the video tag.
-&lt;/video&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;File search&lt;/strong&gt;. Not just file search, but &lt;strong&gt;FILE SEARCH&lt;/strong&gt;! You can preview files, and even drag and drop them directly into an application&lt;/p&gt;
-&lt;div class=&#34;videoblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;video src=&#34;https://rmoff.net/images/2021/06/alfred_imagedrag.mp4&#34; width=&#34;640&#34; autoplay=&#34;&#34; loop=&#34;&#34;&gt;
-Your browser does not support the video tag.
-&lt;/video&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Snippets&lt;/strong&gt;. Kinda like the clipboard history, and integrated with it too, you can predefine static or dynamic (e.g. date) text to paste into a target. Pretty handy when you don’t want to memorise the exact name of each Kafka Connect converter class ;)&lt;/p&gt;
-&lt;div class=&#34;videoblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;video src=&#34;https://rmoff.net/images/2021/06/alfred_snippets.mp4&#34; autoplay=&#34;&#34; loop=&#34;&#34;&gt;
-Your browser does not support the video tag.
-&lt;/video&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Spell&lt;/strong&gt; and &lt;strong&gt;Define&lt;/strong&gt;. These are invaluably and so super-easy to use.&lt;/p&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Spell:&lt;/p&gt;
-&lt;div class=&#34;videoblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;video src=&#34;https://rmoff.net/images/2021/06/alfred_spell.mp4&#34; autoplay=&#34;&#34; loop=&#34;&#34;&gt;
-Your browser does not support the video tag.
-&lt;/video&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Define:&lt;/p&gt;
-&lt;div class=&#34;videoblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;video src=&#34;https://rmoff.net/images/2021/06/alfred_define.mp4&#34; autoplay=&#34;&#34; loop=&#34;&#34;&gt;
-Your browser does not support the video tag.
-&lt;/video&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Workflows&lt;/strong&gt;. I’ve only scratched the surface of these, but I can do neat stuff like pair a particular bluetooth headset and then play a noise to confirm that it’s worked.&lt;/p&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2021/06/alfred_workflow.png&#34; alt=&#34;alfred workflow&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Calculator&lt;/strong&gt;. Just like spell and define, this is another useful little tool there at your fingertips. Nothing fancy, just very easy to access and use&lt;/p&gt;
-&lt;div class=&#34;videoblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;video src=&#34;https://rmoff.net/images/2021/06/alfred_calc.mp4&#34; autoplay=&#34;&#34; loop=&#34;&#34;&gt;
-Your browser does not support the video tag.
-&lt;/video&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;hr/&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;I wrote up a list of other &lt;a href=&#34;https://rmoff.net/2021/07/29/my-favourite-tools-on-the-mac-setting-up-a-new-mac&#34;&gt;Mac software that I use here&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-</description>
     </item>
     
   </channel>
