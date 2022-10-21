@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Data Engineering in 2022: Exploring dbt with DuckDB</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2022/10/20/data-engineering-in-2022-exploring-dbt-with-duckdb/">
+		
+		
+		
+		<meta name="generator" content="Hugo 0.85.0" />
+
+		
+		<meta property="og:title" content="Data Engineering in 2022: Exploring dbt with DuckDB" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2022/10/h_IMG_8370.jpeg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2022/10/20/data-engineering-in-2022-exploring-dbt-with-duckdb/" />
+		<meta property="og:site_name" content="Data Engineering in 2022: Exploring dbt with DuckDB" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2022/10/h_IMG_8370.jpeg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Data Engineering in 2022: Exploring dbt with DuckDB</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2022-10-20T17:07:04Z">Oct 20, 2022</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/data-engineering" class="no-underline category near-white dim">Data Engineering</a>, <a href="https://rmoff.net/categories/dbt" class="no-underline category near-white dim">Dbt</a>, <a href="https://rmoff.net/categories/duckdb" class="no-underline category near-white dim">DuckDB</a>
+								<span class="display-print">at https://rmoff.net/2022/10/20/data-engineering-in-2022-exploring-dbt-with-duckdb/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://twitter.com/rmoff/" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw7">
+	<div class="paragraph">
+<p>I’ve been wanting to try out dbt for some time now, and a recent long-haul flight seemed like the obvious opportunity to do so. Except many of the tutorials with dbt that I found were based on using Cloud, and airplane WiFi is generally sucky or non-existant. Then I found the <a href="https://github.com/dbt-labs/jaffle_shop_duckdb">DuckDB-based demo of dbt</a>, which seemed to fit the bill (🦆 geddit?!) perfectly, since DuckDB runs locally. In addition, <a href="https://duckdb.org/">DuckDB</a> had appeared on my radar recently and I was keen to check it out.</p>
+</div>
+<div class="paragraph">
+<p>The <a href="https://github.com/dbt-labs/jaffle_shop_duckdb/blob/duckdb/README.md">README</a> for <a href="https://github.com/dbt-labs/jaffle_shop_duckdb">jaffle_shop_duckdb</a> is comprehensive and well-written. Kudos to the author for providing copy-paste for <em>all</em> the steps needed to get set up including an isolated Python virtual environment.</p>
+</div>
+<div class="paragraph">
+<p>My starting point for this was pretty much zero knowledge of dbt, and I used this opportunity to poke around it and understand it better. I could go and read the <a href="https://docs.getdbt.com/">docs</a> and the <a href="https://courses.getdbt.com/">training material</a>, but that’d be too obvious ;)</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+<em>If you’re interested in DuckDB make sure to also check out the noodling around with it that I did <a href="/2022/10/14/current-22-session-analysis-with-duckdb-and-jupyter-notebook/">in a notebook recently</a></em>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="sect1">
+<h2 id="_mach_speed">Mach Speed</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The first execution option of the demo is called <em>Mach Speed</em> and basically has you simply run the whole thing end-to-end with <code>dbt build</code> — and that’s it.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">$ dbt build
+16:29:22  Running with dbt=1.1.1
+16:29:22  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+16:29:22
+16:29:22  Concurrency: 1 threads (target=&#39;dev&#39;)
+16:29:22
+16:29:22  1 of 28 START seed file main.raw_customers ..................................... [RUN]
+16:29:22  1 of 28 OK loaded seed file main.raw_customers ................................. [INSERT 100 in 0.14s]
+16:29:22  2 of 28 START seed file main.raw_orders ........................................ [RUN]
+16:29:23  2 of 28 OK loaded seed file main.raw_orders .................................... [INSERT 99 in 0.04s]
+16:29:23  3 of 28 START seed file main.raw_payments ...................................... [RUN]
+16:29:23  3 of 28 OK loaded seed file main.raw_payments .................................. [INSERT 113 in 0.04s]
+16:29:23  4 of 28 START view model main.stg_customers .................................... [RUN]
+[…]
+16:29:23  28 of 28 START test unique_orders_order_id ..................................... [RUN]
+16:29:23  28 of 28 PASS unique_orders_order_id ........................................... [PASS in 0.03s]
+16:29:23
+16:29:23  Finished running 3 seeds, 3 view models, 20 tests, 2 table models in 1.16s.
+16:29:23
+16:29:23  Completed successfully
+16:29:23
+16:29:23  Done. PASS=28 WARN=0 ERROR=0 SKIP=0 TOTAL=28
+16:29:34  Error sending message, disabling tracking</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>That’s a lot of things it’s just done, with the resulting data loaded into DuckDB. The path of the database file is set in the <code>profiles.yml</code> dbt configuration file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">  outputs:
+    dev:
+      type: duckdb
+      path: &#39;jaffle_shop.duckdb&#39;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If we check in DuckDB we can see there’s data been loaded and transformed in various forms - magic!</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">jaffle_shop.duckdb&gt; \dt
++---------------+
+| name          |
++---------------+
+| customers     |
+| orders        |
+| raw_customers |
+| raw_orders    |
+| raw_payments  |
+| stg_customers |
+| stg_orders    |
+| stg_payments  |
++---------------+
+Time: 0.020s</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The source of the data is the CSV &#39;seed&#39; data in <code>/seed</code> - the demo’s author notes that this is not an idiomatic way to work with dbt and typically the data will already be in the database.</p>
+</div>
+<div class="paragraph">
+<p>As a side note - make sure to check out <a href="https://github.com/dbcli/duckcli">duckcli</a>, which gives DuckDB one of the most beautiful interactive CLI tools out of the box for any database that I’ve used.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2022/10/SCR-20221002-ocy.png" alt="DuckDB CLI"/>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_step_by_step">Step-by-Step</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Whilst the README says very clearly :</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>What this repo is not:
+A tutorial</p>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>I’m still wanting to use it to understand a bit about dbt (and DuckDB), so I’m going to <a href="https://github.com/dbt-labs/jaffle_shop_duckdb/blob/duckdb/README.md#running-build-steps-independently">run each step at a time</a> to understand a bit more about what dbt is and what it does. The collection of steps here is what <a href="https://docs.getdbt.com/reference/commands/build"><code>dbt build</code></a> executes automagically for you.</p>
+</div>
+<div class="paragraph">
+<p>To start with I’ll delete the DuckDB database that was created above, and then create a new one (since it doesn’t exist when I launch the CLI it’ll get created).</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ rm jaffle_shop.duckdb
+$ duckcli jaffle_shop.duckdb
+Version: 0.0.1
+GitHub: https://github.com/dbcli/duckcli
+jaffle_shop.duckdb&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Confirm that it’s empty:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">jaffle_shop.duckdb&gt; \dt
+Time: 0.006s</code></pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_dbt_seed"><code>dbt seed</code></h3>
+<div class="paragraph">
+<p>Let’s do the first bit of the processing (as shown in the <code>build</code> output above), which is going to be loading the sample data (&#39;seed&#39; data). I’m not 100% sure of the definition of a <strong>model</strong> at this point but I’m going to guess it’s the CSV files.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>The docs are rather good. Instead of just guessing I could look up <a href="https://docs.getdbt.com/reference/commands/seed"><code>dbt seed</code></a> and see that it says:</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>The <code>dbt seed</code> command will load <code>csv</code> files located in the <code>seed-paths</code> directory of your dbt project into your data warehouse.</p>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p><code>seed-paths</code> is defined in <code>./dbt_project.yml</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">seed-paths: [&#34;seeds&#34;]</code></pre>
+</div>
+</div>
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>The help text says you can use <code>--models</code> to specify one or more models. There are three seed files:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ ls -l seeds
+total 24
+-rw-r--r--  1 rmoff  staff  1302 27 Sep 21:33 raw_customers.csv
+-rw-r--r--  1 rmoff  staff  2723 27 Sep 21:33 raw_orders.csv
+-rw-r--r--  1 rmoff  staff  2560 27 Sep 21:33 raw_payments.csv</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So lets take one of the CSV filenames and use that:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt seed --models raw_customers
+16:59:27  Running with dbt=1.1.1
+16:59:28  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+16:59:28
+16:59:28  Concurrency: 1 threads (target=&#39;dev&#39;)
+16:59:28
+16:59:28  1 of 1 START seed file main.raw_customers ...................................... [RUN]
+16:59:28  1 of 1 OK loaded seed file main.raw_customers .................................. [INSERT 100 in 0.08s]
+16:59:28
+16:59:28  Finished running 1 seed in 0.17s.
+16:59:28
+16:59:28  Completed successfully
+16:59:28
+16:59:28  Done. PASS=1 WARN=0 ERROR=0 SKIP=0 TOTAL=1
+16:59:28  Error sending message, disabling tracking</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note the <code>INSERT 100</code>. I’m guessing this is what it says on the tin - that it’s inserted 100 rows. Let’s check DuckDB:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">jaffle_shop.duckdb&gt; \dt
++---------------+
+| name          |
++---------------+
+| raw_customers |
++---------------+
+Time: 0.018s
+jaffle_shop.duckdb&gt; select count(*) from raw_customers;
++--------------+
+| count_star() |
++--------------+
+| 100          |
++--------------+
+1 row in set
+Time: 0.007s
+jaffle_shop.duckdb&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The table’s been created by dbt, but I’m not sure using what schema definition. Here’s how it looks in DuckDB:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">+-----+------------+---------+---------+------------+-------+
+| cid | name       | type    | notnull | dflt_value | pk    |
++-----+------------+---------+---------+------------+-------+
+| 0   | id         | INTEGER | False   | &lt;null&gt;     | False |
+| 1   | first_name | VARCHAR | False   | &lt;null&gt;     | False |
+| 2   | last_name  | VARCHAR | False   | &lt;null&gt;     | False |
++-----+------------+---------+---------+------------+-------+</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Perhaps it just takes a best guess from the CSV file - the fields all being nullable would make sense, and the field names match the CSV header</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ head -n1 seeds/raw_customers.csv
+id,first_name,last_name</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I wonder if dbt will overwrite the data that’s there if you re-run the <code>seed</code> step. Let’s muck about with the data and see what happens.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">jaffle_shop.duckdb&gt; update raw_customers set last_name=&#39;Astley&#39;;
++-------+
+| Count |
++-------+
+| 100   |
++-------+
+1 row in set
+Time: 0.012s
+
+jaffle_shop.duckdb&gt; select last_name,count(*) from raw_customers group by last_name;
++-----------+--------------+
+| last_name | count_star() |
++-----------+--------------+
+| Astley    | 100          |
++-----------+--------------+
+1 row in set
+Time: 0.011s</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Re-run the seed step:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt seed --models raw_customers
+17:06:50  Running with dbt=1.1.1
+17:06:50  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+17:06:50
+17:06:50  Concurrency: 1 threads (target=&#39;dev&#39;)
+17:06:50
+17:06:50  1 of 1 START seed file main.raw_customers ...................................... [RUN]
+17:06:51  1 of 1 OK loaded seed file main.raw_customers .................................. [INSERT 100 in 0.16s]
+17:06:51
+17:06:51  Finished running 1 seed in 0.32s.
+17:06:51
+17:06:51  Completed successfully
+17:06:51
+17:06:51  Done. PASS=1 WARN=0 ERROR=0 SKIP=0 TOTAL=1
+17:06:51  Error sending message, disabling tracking</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Check the data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">jaffle_shop.duckdb&gt; select last_name,count(*) from raw_customers group by last_name;
++-----------+--------------+
+| last_name | count_star() |
++-----------+--------------+
+| Astley    | 100          |
++-----------+--------------+
+1 row in set
+Time: 0.011s
+jaffle_shop.duckdb&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So it looks like it’s not changed. BUT…if we re-launch the DuckDB CLI you’ll see something different:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">jaffle_shop.duckdb&gt;
+Goodbye!
+$ duckcli jaffle_shop.duckdb
+Version: 0.0.1
+GitHub: https://github.com/dbcli/duckcli
+jaffle_shop.duckdb&gt; select last_name,count(*) from raw_customers group by last_name;
++-----------+--------------+
+| last_name | count_star() |
++-----------+--------------+
+| P.        | 7            |
+| M.        | 8            |
+| C.        | 7            |
+| R.        | 13           |
+| F.        | 5            |
+| W.        | 11           |
+| S.        | 3            |
+| D.        | 3            |
+| H.        | 11           |
+| K.        | 4            |
+| A.        | 6            |
+| G.        | 4            |
+| B.        | 5            |
+| O.        | 4            |
+| T.        | 2            |
+| J.        | 3            |
+| N.        | 2            |
+| L.        | 1            |
+| E.        | 1            |
++-----------+--------------+
+19 rows in set
+Time: 0.023s
+jaffle_shop.duckdb&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So, the CLI queries the state of the DuckDB file as it was on launch, perhaps? But for sure, we can say that the <code>dbt seed</code> operation will reset the seed data and fix any changes that have been made.</p>
+</div>
+<div class="paragraph">
+<p>Let’s run the rest of the seed steps (including the one we’ve been changing):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt seed
+17:11:30  Running with dbt=1.1.1
+17:11:30  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+17:11:30
+17:11:31  Concurrency: 1 threads (target=&#39;dev&#39;)
+17:11:31
+17:11:31  1 of 3 START seed file main.raw_customers ...................................... [RUN]
+17:11:31  1 of 3 OK loaded seed file main.raw_customers .................................. [INSERT 100 in 0.16s]
+17:11:31  2 of 3 START seed file main.raw_orders ......................................... [RUN]
+17:11:31  2 of 3 OK loaded seed file main.raw_orders ..................................... [INSERT 99 in 0.08s]
+17:11:31  3 of 3 START seed file main.raw_payments ....................................... [RUN]
+17:11:31  3 of 3 OK loaded seed file main.raw_payments ................................... [INSERT 113 in 0.06s]
+17:11:31
+17:11:31  Finished running 3 seeds in 0.44s.
+17:11:31
+17:11:31  Completed successfully
+17:11:31
+17:11:31  Done. PASS=3 WARN=0 ERROR=0 SKIP=0 TOTAL=3
+17:11:31  Error sending message, disabling tracking</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Re-launch the DuckDB CLI and observe that the three seed tables now exist and have data in them:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">$ duckcli jaffle_shop.duckdb
+Version: 0.0.1
+GitHub: https://github.com/dbcli/duckcli
+jaffle_shop.duckdb&gt; \dt
++---------------+
+| name          |
++---------------+
+| raw_customers |
+| raw_orders    |
+| raw_payments  |
++---------------+
+Time: 0.021s
+
+jaffle_shop.duckdb&gt; select * from raw_payments limit 1;
++----+----------+----------------+--------+
+| id | order_id | payment_method | amount |
++----+----------+----------------+--------+
+| 1  | 1        | credit_card    | 1000   |
++----+----------+----------------+--------+
+1 row in set
+Time: 0.007s
+jaffle_shop.duckdb&gt; select * from raw_customers limit 1;
++----+------------+-----------+
+| id | first_name | last_name |
++----+------------+-----------+
+| 1  | Michael    | P.        |
++----+------------+-----------+
+1 row in set
+Time: 0.007s
+jaffle_shop.duckdb&gt; select * from raw_orders limit 1;
++----+---------+------------+----------+
+| id | user_id | order_date | status   |
++----+---------+------------+----------+
+| 1  | 1       | 2018-01-01 | returned |
++----+---------+------------+----------+
+1 row in set
+Time: 0.067s</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Using DBeaver you can open the DuckDB database and visualise the tables with their FK relationships (I added these; they’re not defined by default)</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2022/10/SCR-20221011-n9u.png" alt="DuckDB ERD"/>
+</div>
+</div>
+<hr/>
+<div class="paragraph">
+<p>The next bit we’ll poke at, based on the <a href="https://docs.getdbt.com/reference/commands/build"><code>build</code></a> docs is <code>dbt run</code>.</p>
+</div>
+<div class="paragraph">
+<p>But before we quite get to that, <a href="https://docs.getdbt.com/reference/commands/run">the docs</a> for <code>dbt run</code> say in turn:</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p><code>dbt run</code> executes compiled sql model files against the current <code>target</code> database</p>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>Which makes me think it would be interesting to first check out <a href="https://docs.getdbt.com/reference/commands/compile"><code>dbt compile</code></a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_dbt_compile"><code>dbt compile</code></h3>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p><code>dbt compile</code> generates executable SQL from source <code>model</code>, <code>test</code>, and <code>analysis</code> files. You can find these compiled SQL files in the <code>target/</code> directory of your dbt project.</p>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>I noted that <code>target/</code> is in the <code>.gitignore</code> so I figure can be deleted (from being created in the  <code>dbt build</code> above) and then observed to see the output in each step.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ rm -rf target</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Whilst there are three source file types described above (<code>model</code>, <code>test</code>, and <code>analysis</code>) I only see <code>/models</code> present (the paths, as before, are defined in <code>dbt_project.yml</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ ls -l models tests analysis
+ls: analysis: No such file or directory
+ls: tests: No such file or directory
+models:
+total 40
+-rw-r--r--  1 rmoff  staff  1195 27 Sep 21:33 customers.sql
+-rw-r--r--  1 rmoff  staff  1068 27 Sep 21:33 docs.md
+-rw-r--r--  1 rmoff  staff   970 27 Sep 21:33 orders.sql
+-rw-r--r--  1 rmoff  staff   272 27 Sep 21:33 overview.md
+-rw-r--r--  1 rmoff  staff  2311 27 Sep 21:33 schema.yml
+drwxr-xr-x  6 rmoff  staff   192 27 Sep 21:33 staging</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s compile one of the models. If I take a look at the top of <code>customers.sql</code> it’s clearly referencing something else:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">$ head models/customers.sql
+with customers as (
+
+    select * from {{ ref(&#39;stg_customers&#39;) }}
+
+),
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So where’s <code>stg_customers</code> defined? In <code>models/staging/stg_customers.sql</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">with source as (
+
+    {#-
+    Normally we would select from the table here, but we are using seeds to load
+    our data in this project
+    #}
+    select * from {{ ref(&#39;raw_customers&#39;) }}
+
+),
+
+renamed as (
+
+    select
+        id as customer_id,
+        first_name,
+        last_name
+
+    from source
+
+)
+
+select * from renamed</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So this pulls from the <code>raw_customers</code> that was loaded in the seed step and changes a column name (<code>id</code> to <code>customer_id</code>). Let’s <code>dbt compile</code> it and see what happens.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt compile --model models/staging/stg_customers.sql
+16:14:53  Running with dbt=1.1.1
+16:14:53  Partial parse save file not found. Starting full parse.
+16:14:54  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+16:14:54
+16:14:54  Concurrency: 1 threads (target=&#39;dev&#39;)
+16:14:54
+16:14:54  Done.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If we head over to <code>target/</code> (which we removed before the compile, so whatever we see was created by this step) we see a bunch of new content:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ ls -lR target
+total 984
+drwxr-xr-x  3 rmoff  staff      96 11 Oct 17:14 compiled
+-rw-r--r--  1 rmoff  staff   23490 11 Oct 17:14 graph.gpickle
+-rw-r--r--  1 rmoff  staff  239522 11 Oct 17:14 manifest.json
+-rw-r--r--  1 rmoff  staff  232476 11 Oct 17:14 partial_parse.msgpack
+-rw-r--r--  1 rmoff  staff    2077 11 Oct 17:14 run_results.json
+
+target/compiled:
+total 0
+drwxr-xr-x  3 rmoff  staff  96 11 Oct 17:14 jaffle_shop
+
+target/compiled/jaffle_shop:
+total 0
+drwxr-xr-x  3 rmoff  staff  96 11 Oct 17:14 models
+
+target/compiled/jaffle_shop/models:
+total 0
+drwxr-xr-x  4 rmoff  staff  128 11 Oct 17:14 staging
+
+target/compiled/jaffle_shop/models/staging:
+total 8
+drwxr-xr-x  4 rmoff  staff  128 11 Oct 17:14 schema.yml
+-rw-r--r--  1 rmoff  staff  202 11 Oct 17:14 stg_customers.sql
+
+target/compiled/jaffle_shop/models/staging/schema.yml:
+total 16
+-rw-r--r--  1 rmoff  staff   96 11 Oct 17:14 not_null_stg_customers_customer_id.sql
+-rw-r--r--  1 rmoff  staff  187 11 Oct 17:14 unique_stg_customers_customer_id.sql</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If we look at the compiled version of the <code>compiled/jaffle_shop/models/staging/stg_customers.sql</code> model that we saw above you’ll see the reference is now resolved, with the rest of the file remaining the same:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">with source as (
+    select * from &#34;main&#34;.&#34;main&#34;.&#34;raw_customers&#34;
+
+),
+
+renamed as (
+
+    select
+        id as customer_id,
+        first_name,
+        last_name
+
+    from source
+
+)
+
+select * from renamed</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Another SQL file that you’ll notice has appeared is under <code>target/compiled/jaffle_shop/models/staging/schema.yml</code> (yes it’s a folder, even if its got a <code>.yml</code> extension, welcome to UNIX):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ ls -lR target/compiled/jaffle_shop/models/staging/schema.yml
+total 16
+-rw-r--r--  1 rmoff  staff   96 11 Oct 17:14 not_null_stg_customers_customer_id.sql
+-rw-r--r--  1 rmoff  staff  187 11 Oct 17:14 unique_stg_customers_customer_id.sql</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>These two SQL files look like they’re to check two different constraints (NOT NULL and uniqueness):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">$ head target/compiled/jaffle_shop/models/staging/schema.yml/*
+==&gt; target/compiled/jaffle_shop/models/staging/schema.yml/not_null_stg_customers_customer_id.sql &lt;==
+
+select customer_id
+from &#34;main&#34;.&#34;main&#34;.&#34;stg_customers&#34;
+where customer_id is null
+
+==&gt; target/compiled/jaffle_shop/models/staging/schema.yml/unique_stg_customers_customer_id.sql &lt;==
+
+select
+    customer_id as unique_field,
+    count(*) as n_records
+
+from &#34;main&#34;.&#34;main&#34;.&#34;stg_customers&#34;
+where customer_id is not null</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But where are these constraints defined? It’s not in the <code>staging/stg_customers.sql</code> because we saw that above and there was no DDL there. Instead the clue is in the name of the folder - <code>staging/schema.yml</code>. If we head back to the <code>models</code> folder and look at <code>staging/schema.yml</code> we’ll see the constraints defined in YAML:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">$ cat models/staging/schema.yml
+version: 2
+
+models:
+  - name: stg_customers
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So this is starting to come together (<em>it would still be easier to learn if I just read the docs instead of reverse engineering this stuff…but that’s how I learn by poking things and see what yelps 🤷‍♂️</em>): the <code>schema.yml</code> defines the names of the objects in a schema folder (my assumption is that <code>staging</code> is seen as a schema, and the parent folder under <code>models</code> another schema), and then the <code>.sql</code> files in that folder define the objects themselves and their derivations from their source. The source is referenced and resolved and compilation time.</p>
+</div>
+<div class="paragraph">
+<p>The only other files under <code>target/</code> at this point look like runtime info, metadata, and other such stuff. For example, here’s <code>run_results.json</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">$ jq &#39;.&#39; target/run_results.json
+{
+  &#34;metadata&#34;: {
+    &#34;dbt_schema_version&#34;: &#34;https://schemas.getdbt.com/dbt/run-results/v4.json&#34;,
+    &#34;dbt_version&#34;: &#34;1.1.1&#34;,
+    &#34;generated_at&#34;: &#34;2022-10-11T16:14:54.519780Z&#34;,
+    &#34;invocation_id&#34;: &#34;3363ffe7-90aa-4fc1-9a4b-306b180414b8&#34;,
+    &#34;env&#34;: {}
+  },
+  &#34;results&#34;: [
+    {
+      &#34;status&#34;: &#34;success&#34;,
+      &#34;timing&#34;: [
+        {
+          &#34;name&#34;: &#34;compile&#34;,
+          &#34;started_at&#34;: &#34;2022-10-11T16:14:54.419911Z&#34;,
+          &#34;completed_at&#34;: &#34;2022-10-11T16:14:54.423616Z&#34;
+        },
+[…]</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_dbt_run"><code>dbt run</code></h3>
+<div class="paragraph">
+<p>Having poked around what goes on during compilation, let’s look at <a href="https://docs.getdbt.com/reference/commands/run"><code>dbt run</code></a>. Before I do that I’ll just double-check the state of the database first:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ duckdb jaffle_shop.duckdb -c show
+┌───────────────┬────────────────────────────────────────┬──────────────────────────────────────┬───────────┐
+│  table_name   │              column_names              │             column_types             │ temporary │
+├───────────────┼────────────────────────────────────────┼──────────────────────────────────────┼───────────┤
+│ raw_customers │ [first_name, id, last_name]            │ [VARCHAR, INTEGER, VARCHAR]          │ false     │
+│ raw_orders    │ [id, order_date, status, user_id]      │ [INTEGER, DATE, VARCHAR, INTEGER]    │ false     │
+│ raw_payments  │ [amount, id, order_id, payment_method] │ [INTEGER, INTEGER, INTEGER, VARCHAR] │ false     │
+└───────────────┴────────────────────────────────────────┴──────────────────────────────────────┴───────────┘</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Only the seed tables are there, as we’d expect (from the <code>dbt seed</code> step; the <code>dbt compile</code> doesn’t execute any data movement). Now we <code>run</code> - I’m going to run it just for one of the models (<code>customers</code>) to start with:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">dbt run --models raw_customers</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The response to doing something daft (running the <code>raw_customers</code> model, instead of <code>customers</code>) is pleasingly forgiving (<code>[WARNING]: Nothing to do</code>) and informative (<code>Try checking your model configs and model specification args</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt run --models raw_customers
+09:39:14  Running with dbt=1.1.1
+09:39:14  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+09:39:14
+09:39:14  [WARNING]: Nothing to do. Try checking your model configs and model specification args</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s try the correct one:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt run --models customers
+09:40:59  Running with dbt=1.1.1
+09:41:00  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+09:41:00
+09:41:00  Concurrency: 1 threads (target=&#39;dev&#39;)
+09:41:00
+09:41:00  1 of 1 START table model main.customers ........................................ [RUN]
+09:41:00  1 of 1 ERROR creating table model main.customers ............................... [ERROR in 0.05s]
+09:41:00
+09:41:00  Finished running 1 table model in 0.18s.
+09:41:00
+09:41:00  Completed with 1 error and 0 warnings:
+09:41:00
+09:41:00  Runtime Error in model customers (models/customers.sql)
+09:41:00    Catalog Error: Table with name stg_customers does not exist!
+09:41:00    Did you mean &#34;raw_customers&#34;?
+09:41:00
+09:41:00  Done. PASS=0 WARN=0 ERROR=1 SKIP=0 TOTAL=1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Agh, still not quite there. There’s probably a reason the docs exist.</p>
+</div>
+<div class="paragraph">
+<p><code>Table with name stg_customers does not exist</code> tells us that <code>stg_customers</code> is needed first, so let’s cross our fingers for third-time-lucky:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt run --models stg_customers
+09:49:04  Running with dbt=1.1.1
+09:49:04  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+09:49:04
+09:49:04  Concurrency: 1 threads (target=&#39;dev&#39;)
+09:49:04
+09:49:04  1 of 1 START view model main.stg_customers ..................................... [RUN]
+09:49:04  1 of 1 OK created view model main.stg_customers ................................ [OK in 0.07s]
+09:49:04
+09:49:04  Finished running 1 view model in 0.18s.
+09:49:04
+09:49:04  Completed successfully
+09:49:04
+09:49:04  Done. PASS=1 WARN=0 ERROR=0 SKIP=0 TOTAL=1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>🎉🎉</p>
+</div>
+<div class="paragraph">
+<p>It’s almost like flailing around without reading the docs can be productive 🤔</p>
+</div>
+<div class="paragraph">
+<p>If we look at what’s changed in the local folder we can see a few interesting things:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ find . -mtime -5m -print
+.
+./target/graph.gpickle
+./target/compiled/jaffle_shop/models/staging/stg_customers.sql
+./target/run_results.json
+./target/manifest.json
+./target/run/jaffle_shop/models
+./target/run/jaffle_shop/models/staging
+./target/run/jaffle_shop/models/staging/stg_customers.sql
+./jaffle_shop.duckdb.wal
+./jaffle_shop.duckdb
+./logs/dbt.log</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>There’s the same <code>./target/compiled/jaffle_shop/models/staging/stg_customers.sql</code> which we saw above when we ran <code>dbt compile</code> — although its timestamp shows that it was updated when we just ran <code>dbt run</code>. Alongside this <code>./target/compiled</code> file there a <code>./target/run</code> of the same name</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">$ cat ./target/run/jaffle_shop/models/staging/stg_customers.sql
+
+  create view &#34;main&#34;.&#34;stg_customers__dbt_tmp&#34; as (
+    with source as (
+    select * from &#34;main&#34;.&#34;main&#34;.&#34;raw_customers&#34;
+
+),
+
+renamed as (
+
+    select
+        id as customer_id,
+        first_name,
+        last_name
+
+    from source
+
+)
+
+select * from renamed
+  );</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You’ll notice here that we’ve actually got some DML: <code>create view … as</code>. Other than that, the <code>run</code> version of the SQL is the same as the <code>compile</code> version. If we head over to DuckDB we can see there’s now a view which performs the described transformation (rename <code>id</code> to <code>customer_id</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">jaffle_shop.duckdb&gt; select table_name, table_type from information_schema.tables;
++---------------+------------+
+| table_name    | table_type |
++---------------+------------+
+| raw_payments  | BASE TABLE |
+| raw_customers | BASE TABLE |
+| raw_orders    | BASE TABLE |
+| stg_customers | VIEW       |
++---------------+------------+
+4 rows in set
+
+jaffle_shop.duckdb&gt; select definition from pg_views where viewname=&#39;stg_customers&#39;;
++-------------------------------------------------------------------------------------------------------------------------------------------------+
+| definition                                                                                                                                      |
++-------------------------------------------------------------------------------------------------------------------------------------------------+
+| /* {&#34;app&#34;: &#34;dbt&#34;, &#34;dbt_version&#34;: &#34;1.1.1&#34;, &#34;profile_name&#34;: &#34;jaffle_shop&#34;, &#34;target_name&#34;: &#34;dev&#34;, &#34;node_id&#34;: &#34;model.jaffle_shop.stg_customers&#34;} */ |
+|   create view &#34;main&#34;.&#34;stg_customers__dbt_tmp&#34; as (                                                                                              |
+|     with source as (                                                                                                                            |
+|     select * from &#34;main&#34;.&#34;main&#34;.&#34;raw_customers&#34;                                                                                                 |
+| ),                                                                                                                                              |
+| renamed as (                                                                                                                                    |
+|     select                                                                                                                                      |
+|         id as customer_id,                                                                                                                      |
+|         first_name,                                                                                                                             |
+|         last_name                                                                                                                               |
+|     from source                                                                                                                                 |
+| )                                                                                                                                               |
+| select * from renamed                                                                                                                           |
+|   );                                                                                                                                            |
+| ;                                                                                                                                               |
++-------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set
+Time: 0.012s
+
+jaffle_shop.duckdb&gt; select customer_id, first_name, last_name from stg_customers using sample 1;
++-------------+------------+-----------+
+| customer_id | first_name | last_name |
++-------------+------------+-----------+
+| 84          | Christina  | R.        |
++-------------+------------+-----------+
+1 row in set
+Time: 0.016s</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now I’ll run the other two staging tables which will also create views. The <code>stg_orders</code> is the same as customers with just a change to the <code>id</code> field name. <code>stg_payments</code> also applies a transform to a currency field in the data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">    select
+        […]
+        -- `amount` is currently stored in cents, so we convert it to dollars
+        amount / 100 as amount
+        […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Whereas before I used the name of the model, <a href="https://docs.getdbt.com/reference/node-selection/syntax#examples">per the docs</a> you can also specify a folder of models (<code>--models staging</code>).</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+<code>--models</code> is deprecated in favour of <code>--select</code>
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">dbt run --models staging
+10:48:11  Running with dbt=1.1.1
+10:48:11  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+10:48:11
+10:48:11  Concurrency: 1 threads (target=&#39;dev&#39;)
+10:48:11
+10:48:11  1 of 3 START view model main.stg_customers ..................................... [RUN]
+10:48:11  1 of 3 OK created view model main.stg_customers ................................ [OK in 0.09s]
+10:48:11  2 of 3 START view model main.stg_orders ........................................ [RUN]
+10:48:11  2 of 3 OK created view model main.stg_orders ................................... [OK in 0.04s]
+10:48:11  3 of 3 START view model main.stg_payments ...................................... [RUN]
+10:48:11  3 of 3 OK created view model main.stg_payments ................................. [OK in 0.06s]
+10:48:11
+10:48:11  Finished running 3 view models in 0.30s.
+10:48:11
+10:48:11  Completed successfully
+10:48:11
+10:48:11  Done. PASS=3 WARN=0 ERROR=0 SKIP=0 TOTAL=3</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we’ve got three views in DuckDB representing the staging models over the raw seed data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">$ duckdb jaffle_shop.duckdb -c &#34;select table_name, table_type from information_schema.tables;&#34;
+┌───────────────┬────────────┐
+│  table_name   │ table_type │
+├───────────────┼────────────┤
+│ raw_payments  │ BASE TABLE │
+│ raw_customers │ BASE TABLE │
+│ raw_orders    │ BASE TABLE │
+│ stg_orders    │ VIEW       │
+│ stg_customers │ VIEW       │
+│ stg_payments  │ VIEW       │
+└───────────────┴────────────┘</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So that’s staging run. dbt creates views here because that’s the <a href="https://docs.getdbt.com/docs/build/materializations">materialization config</a> that’s specified in the <code>dbt_project.yml</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">[…]
+models:
+  jaffle_shop:
+      materialized: table
+      staging:
+        materialized: view</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s now take a look at the main models that build tables from staging.</p>
+</div>
+<div class="sect3">
+<h4 id="_the_main_models_customers_sql">The Main Models: <code>customers.sql</code></h4>
+<div class="paragraph">
+<p>Looking at <a href="https://github.com/dbt-labs/jaffle_shop_duckdb/blob/duckdb/models/customers.sql">this model’s SQL</a> you can see that calculates several aggregates by customer:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>From <strong>order data</strong> (earliest &amp; most recent order date, number of orders)</p>
+</li>
+<li>
+<p>From <strong>payment data</strong> (total amount paid)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>and builds a table of all customers with order and payment data where it exists (<code>LEFT JOIN</code>).</p>
+</div>
+<div class="paragraph">
+<p>Let’s run it.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt run --select customers
+13:39:39  Running with dbt=1.1.1
+13:39:39  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+13:39:39
+13:39:39  Concurrency: 1 threads (target=&#39;dev&#39;)
+13:39:39
+13:39:39  1 of 1 START table model main.customers ........................................ [RUN]
+13:39:39  1 of 1 OK created table model main.customers ................................... [OK in 0.10s]
+13:39:39
+13:39:39  Finished running 1 table model in 0.31s.
+13:39:39
+13:39:39  Completed successfully
+13:39:39
+13:39:39  Done. PASS=1 WARN=0 ERROR=0 SKIP=0 TOTAL=1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>over in DuckDB we have a nice <code>customers</code> table populated for us:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">jaffle_shop.duckdb&gt; select table_name, table_type from information_schema.tables;
++---------------+------------+
+| table_name    | table_type |
++---------------+------------+
+| raw_orders    | BASE TABLE |
+| raw_customers | BASE TABLE |
+| raw_payments  | BASE TABLE |
+| customers     | BASE TABLE |
+| stg_payments  | VIEW       |
+| stg_customers | VIEW       |
+| stg_orders    | VIEW       |
++---------------+------------+
+7 rows in set
+Time: 0.019s
+
+jaffle_shop.duckdb&gt; describe customers;
++-----+-------------------------+---------+---------+------------+-------+
+| cid | name                    | type    | notnull | dflt_value | pk    |
++-----+-------------------------+---------+---------+------------+-------+
+| 0   | customer_id             | INTEGER | False   | &lt;null&gt;     | False |
+| 1   | first_name              | VARCHAR | False   | &lt;null&gt;     | False |
+| 2   | last_name               | VARCHAR | False   | &lt;null&gt;     | False |
+| 3   | first_order             | DATE    | False   | &lt;null&gt;     | False |
+| 4   | most_recent_order       | DATE    | False   | &lt;null&gt;     | False |
+| 5   | number_of_orders        | BIGINT  | False   | &lt;null&gt;     | False |
+| 6   | customer_lifetime_value | HUGEINT | False   | &lt;null&gt;     | False |
++-----+-------------------------+---------+---------+------------+-------+
+Time: 0.008s
+
+jaffle_shop.duckdb&gt; select * from customers using sample 5;
++-------------+------------+-----------+-------------+-------------------+------------------+-------------------------+
+| customer_id | first_name | last_name | first_order | most_recent_order | number_of_orders | customer_lifetime_value |
++-------------+------------+-----------+-------------+-------------------+------------------+-------------------------+
+| 67          | Michael    | H.        | &lt;null&gt;      | &lt;null&gt;            | &lt;null&gt;           | &lt;null&gt;                  |
+| 35          | Sara       | T.        | 2018-02-21  | 2018-03-21        | 2                | 34                      |
+| 12          | Amy        | D.        | 2018-03-03  | 2018-03-03        | 1                | 4                       |
+| 52          | Laura      | F.        | 2018-03-23  | 2018-03-23        | 1                | 27                      |
+| 94          | Gregory    | H.        | 2018-01-04  | 2018-01-29        | 2                | 24                      |
++-------------+------------+-----------+-------------+-------------------+------------------+-------------------------+
+5 rows in set
+Time: 0.012s
+
+jaffle_shop.duckdb&gt; select count(*) from customers;
++--------------+
+| count_star() |
++--------------+
+| 100          |
++--------------+
+1 row in set
+Time: 0.009s
+jaffle_shop.duckdb&gt;</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_the_main_models_orders_sql">The Main Models: <code>orders.sql</code></h4>
+<div class="paragraph">
+<p><a href="https://github.com/dbt-labs/jaffle_shop_duckdb/blob/duckdb/models/orders.sql">The orders.sql model</a> is not quite as straight forward. Check out the first line of it</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">{% set payment_methods = [&#39;credit_card&#39;, &#39;coupon&#39;, &#39;bank_transfer&#39;, &#39;gift_card&#39;] %}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What SQL-devil magic is this?!</p>
+</div>
+<div class="tenor-gif-embed" data-postid="16135803" data-share-method="host" data-aspect-ratio="1.25" data-width="100%"><a href="https://tenor.com/view/friends-joey-scared-terrified-horrified-gif-16135803">Friends Joey GIF</a>from <a href="https://tenor.com/search/friends-gifs">Friends GIFs</a></div> <script type="text/javascript" async="" src="https://tenor.com/embed.js"></script>
+<div class="paragraph">
+<p>Well it turns out that you can super-charge SQL by adding <a href="https://docs.getdbt.com/docs/build/jinja-macros">Jinja</a> to it. <em>Which when you hear it on a podcast sounds exactly like &#39;Ginger&#39; and is really confusing.</em></p>
+</div>
+<div class="paragraph">
+<p>The particular snippet above (<code>payment_methods</code>) is actually used in <a href="https://docs.getdbt.com/docs/build/jinja-macros#jinja">the doc page</a> as an example. It explains that, as seen later in the model, the variable <code>payment_methods</code> can then be iterated over:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">{% for payment_method in payment_methods %}
+sum(case when payment_method = &#39;{{payment_method}}&#39; then amount end) as {{payment_method}}_amount,
+{% endfor %}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>to generate the desired SQL:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">sum(case when payment_method = &#39;bank_transfer&#39; then amount end) as bank_transfer_amount,
+sum(case when payment_method = &#39;credit_card&#39; then amount end) as credit_card_amount,
+sum(case when payment_method = &#39;gift_card&#39; then amount end) as gift_card_amount,</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is pretty smart. We <em>could</em> just write the SQL directly itself, but what happens when we start taking cheques and cryptocurrencies for payment? We either end up copy-and-pasting and search &amp; replace on this line twice:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">sum(case when payment_method = &#39;cheque&#39; then amount end) as cheque_amount,
+sum(case when payment_method = &#39;crypto&#39; then amount end) as crypto_amount,</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>which is fiddly and error prone. In addition if you look further down the model’s SQL you can see that the variable is used again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">{% for payment_method in payment_methods -%}
+  order_payments.{{ payment_method }}_amount,
+{% endfor -%}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So now your chances of making errors is even more so because you need to work out all the places in the SQL has appeared, and no way of telling which fields need replicating without knowing the code logic closely.</p>
+</div>
+<div class="paragraph">
+<p>Alternatively, we just add them once to the nicely obvious and declared enum:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">{% set payment_methods = [&#39;cheque&#39;,&#39;crypto&#39;,&#39;credit_card&#39;, &#39;coupon&#39;, &#39;bank_transfer&#39;, &#39;gift_card&#39;] %}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Pretty smart huh.</p>
+</div>
+<div class="tenor-gif-embed" data-postid="16733420" data-share-method="host" data-aspect-ratio="1.40351" data-width="100%"><a href="https://tenor.com/view/thumbs-up-friends-approve-gif-16733420">Thumbs Up Friends GIF</a>from <a href="https://tenor.com/search/thumbs+up-gifs">Thumbs Up GIFs</a></div> <script type="text/javascript" async="" src="https://tenor.com/embed.js"></script>
+<div class="paragraph">
+<p>This is where <code>dbt compile</code> comes into its own too. It was useful above to understand a bit more about the flow of things, but here it’s going to let us take the model and check how the Jinja will resolve into SQL:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt compile --select orders
+15:13:58  Running with dbt=1.1.1
+15:13:58  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+15:13:58
+15:13:58  Concurrency: 1 threads (target=&#39;dev&#39;)
+15:13:58
+15:13:58  Done.</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">$ cat target/compiled/jaffle_shop/models/orders.sql
+[…]
+
+order_payments as (
+
+    select
+        order_id,
+
+        sum(case when payment_method = &#39;cheque&#39; then amount else 0 end) as cheque_amount,
+        sum(case when payment_method = &#39;crypto&#39; then amount else 0 end) as crypto_amount,
+        sum(case when payment_method = &#39;credit_card&#39; then amount else 0 end) as credit_card_amount,
+        sum(case when payment_method = &#39;coupon&#39; then amount else 0 end) as coupon_amount,
+        sum(case when payment_method = &#39;bank_transfer&#39; then amount else 0 end) as bank_transfer_amount,
+        sum(case when payment_method = &#39;gift_card&#39; then amount else 0 end) as gift_card_amount,
+        sum(amount) as total_amount
+[…]
+    select
+        orders.order_id,
+        orders.customer_id,
+        orders.order_date,
+        orders.status,
+        order_payments.cheque_amount,
+        order_payments.crypto_amount,
+        order_payments.credit_card_amount,
+        order_payments.coupon_amount,
+        order_payments.bank_transfer_amount,
+        order_payments.gift_card_amount,
+        order_payments.total_amount as amount
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>There’s a nice <a href="https://docs.getdbt.com/docs/build/jinja-macros#dbtonic-jinja">note in the docs</a> about a <em>dbtonic</em> approach to the use of Jinja (<em>this is nothing to do with Gin, but a nice nod to the</em> pythonic <em>concept</em>) which is worth a read including strong advice to <del>not be a smartarse</del> <a href="https://docs.getdbt.com/docs/build/jinja-macros#favor-readability-over—​ness">favour readability over DRY-ness</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_dbt_run_2"><code>dbt run</code></h3>
+<div class="paragraph">
+<p>Now that we’ve understood how all of this works, let’s run it all:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ dbt run
+15:51:46  Running with dbt=1.1.1
+15:51:46  Found 5 models, 20 tests, 0 snapshots, 0 analyses, 167 macros, 0 operations, 3 seed files, 0 sources, 0 exposures, 0 metrics
+15:51:46
+15:51:46  Concurrency: 1 threads (target=&#39;dev&#39;)
+15:51:46
+15:51:46  1 of 5 START view model main.stg_customers ..................................... [RUN]
+15:51:46  1 of 5 OK created view model main.stg_customers ................................ [OK in 0.11s]
+15:51:46  2 of 5 START view model main.stg_orders ........................................ [RUN]
+15:51:47  2 of 5 OK created view model main.stg_orders ................................... [OK in 0.06s]
+15:51:47  3 of 5 START view model main.stg_payments ...................................... [RUN]
+15:51:47  3 of 5 OK created view model main.stg_payments ................................. [OK in 0.07s]
+15:51:47  4 of 5 START table model main.customers ........................................ [RUN]
+15:51:47  4 of 5 OK created table model main.customers ................................... [OK in 0.09s]
+15:51:47  5 of 5 START table model main.orders ........................................... [RUN]
+15:51:47  5 of 5 OK created table model main.orders ...................................... [OK in 0.05s]
+15:51:47
+15:51:47  Finished running 3 view models, 2 table models in 0.54s.
+15:51:47
+15:51:47  Completed successfully
+15:51:47
+15:51:47  Done. PASS=5 WARN=0 ERROR=0 SKIP=0 TOTAL=5</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We end up with two final tables built and populated from this, <code>customers</code> and <code>orders</code></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">$ duckdb jaffle_shop.duckdb -c &#34;select table_name, table_type from information_schema.tables;&#34;
+┌───────────────┬────────────┐
+│  table_name   │ table_type │
+├───────────────┼────────────┤
+│ orders        │ BASE TABLE │
+│ customers     │ BASE TABLE │
+[…]
+└───────────────┴────────────┘</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_wrapping_up">Wrapping up…</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>So that was fun. Slightly back-to-front, but fun nonetheless.</p>
+</div>
+<div class="paragraph">
+<p>dbt gives us a nice way to use SQL to declare the transformations that we’d like to do on our data. It’s predicated on your data being in place already — <a href="https://rmoff.net/2022/10/02/data-engineering-in-2022-architectures-terminology/">it’s the T of the ELT/ETL process</a>.</p>
+</div>
+<div class="paragraph">
+<p>With dozens of <a href="https://docs.getdbt.com/docs/supported-data-platforms">adaptors</a> you can use the same build platform but with different targets. I can see the appeal of this massively both as a way early in a project to evaluate different data stores side-by-side, as well as later on in a project as technology perhaps evolves to the point that you want to move your workload elsewhere.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_learning_more">Learning More</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://docs.getdbt.com/docs/introduction">dbt Documentation</a></p>
+</li>
+<li>
+<p><a href="https://courses.getdbt.com/collections">dbt Training</a></p>
+</li>
+<li>
+<p><a href="https://docs.getdbt.com/community/join">dbt Community</a></p>
+</li>
+</ul>
+</div>
+<hr/>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_data_engineering_in_2022">Data Engineering in 2022</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><a href="/2022/09/14/stretching-my-legs-in-the-data-engineering-ecosystem-in-2022/">Introduction</a></p>
+</li>
+<li>
+<p><a href="/2022/09/14/data-engineering-in-2022-storage-and-access/">Storage and Access</a></p>
+</li>
+<li>
+<p><a href="/2022/09/16/data-engineering-in-2022-exploring-lakefs-with-jupyter-and-pyspark/">Exploring LakeFS with Jupyter and PySpark</a></p>
+</li>
+<li>
+<p><a href="/2022/10/02/data-engineering-in-2022-architectures-terminology/">Architectures &amp; Terminology</a></p>
+</li>
+<li>
+<p>Query &amp; Transformation Engines [TODO]</p>
+</li>
+<li>
+<p>ETL/ELT tools &amp; Orchestration [TODO]</p>
+</li>
+<li>
+<p><a href="/2022/09/14/data-engineering-resources/">Resources</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em>Robin Moffatt is a Principal Developer Advocate at Confluent, and an Oracle ACE Director (Alumnus). He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2022 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
