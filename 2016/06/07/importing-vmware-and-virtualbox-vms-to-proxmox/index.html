@@ -9,8 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.85.0" />
-
+		
 		
 		<meta property="og:title" content="Importing VMWare and VirtualBox VMs to Proxmox" />
 		<meta property="og:type" content="article" />
@@ -86,80 +85,80 @@
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw8">
 	<p>(<a href="/2016/06/07/a-new-arrival/">Previously</a>, <a href="/2016/06/07/commissioning-my-proxmox-server-os-and-filesystems/">previously</a>)</p>
 <p>I&rsquo;ve got a bunch of existing VirtualBox and VMWare VMs that I want to run on Proxmox. Eventually I&rsquo;ll migrate them to containers, but for the time being run them as &ldquo;fat&rdquo; VMs using Proxmox&rsquo;s KVM virtualisation. After copying the OVA files that I had to the server, I uncompressed them:</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">root@proxmox01:/data04/vms/bdl44-biwa# <span style="color:#008000">cd</span> ../bdl44
-root@proxmox01:/data04/vms/bdl44# ll
-total <span style="color:#666">27249328</span>
--rw------- <span style="color:#666">1</span> root root <span style="color:#666">27903306752</span> Jun  <span style="color:#666">1</span> 10:14 BigDataLite440.ova
-root@proxmox01:/data04/vms/bdl44# tar -xf BigDataLite440.ova
-root@proxmox01:/data04/vms/bdl44# ll
-total <span style="color:#666">54498668</span>
--rw------- <span style="color:#666">1</span> root root  <span style="color:#666">7300486656</span> Feb <span style="color:#666">18</span> 21:25 BigDataLite440-disk1.vmdk
--rw------- <span style="color:#666">1</span> root root  <span style="color:#666">1261044224</span> Feb <span style="color:#666">18</span> 21:26 BigDataLite440-disk2.vmdk
--rw------- <span style="color:#666">1</span> root root <span style="color:#666">19295202816</span> Feb <span style="color:#666">18</span> 21:48 BigDataLite440-disk3.vmdk
--rw------- <span style="color:#666">1</span> root root    <span style="color:#666">46550528</span> Feb <span style="color:#666">18</span> 21:48 BigDataLite440-disk4.vmdk
--rw------- <span style="color:#666">1</span> root root <span style="color:#666">27903306752</span> Jun  <span style="color:#666">1</span> 10:14 BigDataLite440.ova
--rw------- <span style="color:#666">1</span> root root       <span style="color:#666">19619</span> Feb <span style="color:#666">18</span> 21:15 BigDataLite440.ovf
-</code></pre></div><p>and then converted each disk image to qcow2 format:
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:/data04/vms/bdl44-biwa# <span style="color:#008000">cd</span> ../bdl44
+</span></span><span style="display:flex;"><span>root@proxmox01:/data04/vms/bdl44# ll
+</span></span><span style="display:flex;"><span>total <span style="color:#666">27249328</span>
+</span></span><span style="display:flex;"><span>-rw------- <span style="color:#666">1</span> root root <span style="color:#666">27903306752</span> Jun  <span style="color:#666">1</span> 10:14 BigDataLite440.ova
+</span></span><span style="display:flex;"><span>root@proxmox01:/data04/vms/bdl44# tar -xf BigDataLite440.ova
+</span></span><span style="display:flex;"><span>root@proxmox01:/data04/vms/bdl44# ll
+</span></span><span style="display:flex;"><span>total <span style="color:#666">54498668</span>
+</span></span><span style="display:flex;"><span>-rw------- <span style="color:#666">1</span> root root  <span style="color:#666">7300486656</span> Feb <span style="color:#666">18</span> 21:25 BigDataLite440-disk1.vmdk
+</span></span><span style="display:flex;"><span>-rw------- <span style="color:#666">1</span> root root  <span style="color:#666">1261044224</span> Feb <span style="color:#666">18</span> 21:26 BigDataLite440-disk2.vmdk
+</span></span><span style="display:flex;"><span>-rw------- <span style="color:#666">1</span> root root <span style="color:#666">19295202816</span> Feb <span style="color:#666">18</span> 21:48 BigDataLite440-disk3.vmdk
+</span></span><span style="display:flex;"><span>-rw------- <span style="color:#666">1</span> root root    <span style="color:#666">46550528</span> Feb <span style="color:#666">18</span> 21:48 BigDataLite440-disk4.vmdk
+</span></span><span style="display:flex;"><span>-rw------- <span style="color:#666">1</span> root root <span style="color:#666">27903306752</span> Jun  <span style="color:#666">1</span> 10:14 BigDataLite440.ova
+</span></span><span style="display:flex;"><span>-rw------- <span style="color:#666">1</span> root root       <span style="color:#666">19619</span> Feb <span style="color:#666">18</span> 21:15 BigDataLite440.ovf
+</span></span></code></pre></div><p>and then converted each disk image to qcow2 format:
 (<em>You can read more about how and why <a href="https://www.jamescoyle.net/how-to/1218-upload-ova-to-proxmox-kvm">here</a> and <a href="https://pve.proxmox.com/wiki/Migration_of_servers_to_Proxmox_VE#VMware_to_Proxmox_VE_.28KVM.29">here</a></em>).</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">root@proxmox01:/data04/vms/bdl44# <span style="color:#008000">time</span> qemu-img convert -f vmdk BigDataLite440-disk1.vmdk -O qcow2 BigDataLite440-disk1.qcow2
-
-real    2m14.986s
-user    1m39.976s
-sys     0m23.548s
-root@proxmox01:/data04/vms/bdl44# <span style="color:#008000">time</span> qemu-img convert -f vmdk BigDataLite440-disk2.vmdk -O qcow2 BigDataLite440-disk2.qcow2
-
-real    0m47.865s
-user    0m35.556s
-sys     0m3.684s
-root@proxmox01:/data04/vms/bdl44# <span style="color:#008000">time</span> qemu-img convert -f vmdk BigDataLite440-disk3.vmdk -O qcow2 BigDataLite440-disk3.qcow2
-
-real    5m21.469s
-user    3m49.736s
-sys     1m0.348s
-root@proxmox01:/data04/vms/bdl44# <span style="color:#008000">time</span> qemu-img convert -f vmdk BigDataLite440-disk4.vmdk -O qcow2 BigDataLite440-disk4.qcow2
-
-real    0m13.419s
-user    0m5.716s
-sys     0m0.296s
-</code></pre></div><p>For re-usability, this will convert all found vmdk files in one fell swoop:</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#008000;font-weight:bold">for</span> file in *.vmdk; <span style="color:#008000;font-weight:bold">do</span>   <span style="color:#19177c">i</span><span style="color:#666">=</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">file</span>##*/<span style="color:#b68;font-weight:bold">}</span>;qemu-img convert -f vmdk <span style="color:#19177c">$i</span> -O qcow2 <span style="color:#008000;font-weight:bold">$(</span><span style="color:#008000">echo</span> <span style="color:#19177c">$i</span> |sed <span style="color:#ba2121">&#39;s/vmdk/qcow2/g&#39;</span><span style="color:#008000;font-weight:bold">)</span>; <span style="color:#008000;font-weight:bold">done</span>
-</code></pre></div><p>I then created a new VM using the Proxmox web interface, specifying the disk to match the size of the first disk listed in the <code>OVF</code> of the unpacked <code>OVA</code></p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-xml" data-lang="xml">  <span style="color:#008000;font-weight:bold">&lt;DiskSection&gt;</span>
-    <span style="color:#008000;font-weight:bold">&lt;Info&gt;</span>List of the virtual disks used in the package<span style="color:#008000;font-weight:bold">&lt;/Info&gt;</span>
-    <span style="color:#008000;font-weight:bold">&lt;Disk</span> <span style="color:#7d9029">ovf:capacity=</span><span style="color:#ba2121">&#34;41943040000&#34;</span> <span style="color:#7d9029">ovf:diskId=</span><span style="color:#ba2121">&#34;vmdisk2&#34;</span> <span style="color:#7d9029">ovf:fileRef=</span><span style="color:#ba2121">&#34;file1&#34;</span> <span style="color:#7d9029">ovf:format=</span><span style="color:#ba2121">&#34;http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized&#34;</span> <span style="color:#7d9029">vbox:uuid=</span><span style="color:#ba2121">&#34;150dbbe8-0c88-48d0-9fcf-e80d7d7d4c2f&#34;</span><span style="color:#008000;font-weight:bold">/&gt;</span>
-    <span style="color:#008000;font-weight:bold">&lt;Disk</span> <span style="color:#7d9029">ovf:capacity=</span><span style="color:#ba2121">&#34;104857600000&#34;</span> <span style="color:#7d9029">ovf:diskId=</span><span style="color:#ba2121">&#34;vmdisk3&#34;</span> <span style="color:#7d9029">ovf:fileRef=</span><span style="color:#ba2121">&#34;file2&#34;</span> <span style="color:#7d9029">ovf:format=</span><span style="color:#ba2121">&#34;http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized&#34;</span> <span style="color:#7d9029">vbox:uuid=</span><span style="color:#ba2121">&#34;64101bef-46af-4e89-8c02-0e6315d6be41&#34;</span><span style="color:#008000;font-weight:bold">/&gt;</span>
-    <span style="color:#008000;font-weight:bold">&lt;Disk</span> <span style="color:#7d9029">ovf:capacity=</span><span style="color:#ba2121">&#34;62914560000&#34;</span> <span style="color:#7d9029">ovf:diskId=</span><span style="color:#ba2121">&#34;vmdisk4&#34;</span> <span style="color:#7d9029">ovf:fileRef=</span><span style="color:#ba2121">&#34;file3&#34;</span> <span style="color:#7d9029">ovf:format=</span><span style="color:#ba2121">&#34;http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized&#34;</span> <span style="color:#7d9029">vbox:uuid=</span><span style="color:#ba2121">&#34;d7fae10b-aac3-4675-b295-6a5ab9db3e7f&#34;</span><span style="color:#008000;font-weight:bold">/&gt;</span>
-    <span style="color:#008000;font-weight:bold">&lt;Disk</span> <span style="color:#7d9029">ovf:capacity=</span><span style="color:#ba2121">&#34;20971520000&#34;</span> <span style="color:#7d9029">ovf:diskId=</span><span style="color:#ba2121">&#34;vmdisk5&#34;</span> <span style="color:#7d9029">ovf:fileRef=</span><span style="color:#ba2121">&#34;file4&#34;</span> <span style="color:#7d9029">ovf:format=</span><span style="color:#ba2121">&#34;http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized&#34;</span> <span style="color:#7d9029">vbox:uuid=</span><span style="color:#ba2121">&#34;e29ccf7f-69f1-4338-ac2d-909344d74f75&#34;</span><span style="color:#008000;font-weight:bold">/&gt;</span>
-  <span style="color:#008000;font-weight:bold">&lt;/DiskSection&gt;</span>
-</code></pre></div><p>and once created added the three remaining disks to the VM configuration. I removed the CD device so as to be able to sequence the four IDE disks as per the original OVF configuration.</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:/data04/vms/bdl44# <span style="color:#008000">time</span> qemu-img convert -f vmdk BigDataLite440-disk1.vmdk -O qcow2 BigDataLite440-disk1.qcow2
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>real    2m14.986s
+</span></span><span style="display:flex;"><span>user    1m39.976s
+</span></span><span style="display:flex;"><span>sys     0m23.548s
+</span></span><span style="display:flex;"><span>root@proxmox01:/data04/vms/bdl44# <span style="color:#008000">time</span> qemu-img convert -f vmdk BigDataLite440-disk2.vmdk -O qcow2 BigDataLite440-disk2.qcow2
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>real    0m47.865s
+</span></span><span style="display:flex;"><span>user    0m35.556s
+</span></span><span style="display:flex;"><span>sys     0m3.684s
+</span></span><span style="display:flex;"><span>root@proxmox01:/data04/vms/bdl44# <span style="color:#008000">time</span> qemu-img convert -f vmdk BigDataLite440-disk3.vmdk -O qcow2 BigDataLite440-disk3.qcow2
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>real    5m21.469s
+</span></span><span style="display:flex;"><span>user    3m49.736s
+</span></span><span style="display:flex;"><span>sys     1m0.348s
+</span></span><span style="display:flex;"><span>root@proxmox01:/data04/vms/bdl44# <span style="color:#008000">time</span> qemu-img convert -f vmdk BigDataLite440-disk4.vmdk -O qcow2 BigDataLite440-disk4.qcow2
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>real    0m13.419s
+</span></span><span style="display:flex;"><span>user    0m5.716s
+</span></span><span style="display:flex;"><span>sys     0m0.296s
+</span></span></code></pre></div><p>For re-usability, this will convert all found vmdk files in one fell swoop:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">for</span> file in *.vmdk; <span style="color:#008000;font-weight:bold">do</span>   <span style="color:#19177c">i</span><span style="color:#666">=</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">file</span>##*/<span style="color:#b68;font-weight:bold">}</span>;qemu-img convert -f vmdk <span style="color:#19177c">$i</span> -O qcow2 <span style="color:#008000;font-weight:bold">$(</span><span style="color:#008000">echo</span> <span style="color:#19177c">$i</span> |sed <span style="color:#ba2121">&#39;s/vmdk/qcow2/g&#39;</span><span style="color:#008000;font-weight:bold">)</span>; <span style="color:#008000;font-weight:bold">done</span>
+</span></span></code></pre></div><p>I then created a new VM using the Proxmox web interface, specifying the disk to match the size of the first disk listed in the <code>OVF</code> of the unpacked <code>OVA</code></p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span>  <span style="color:#008000;font-weight:bold">&lt;DiskSection&gt;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#008000;font-weight:bold">&lt;Info&gt;</span>List of the virtual disks used in the package<span style="color:#008000;font-weight:bold">&lt;/Info&gt;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#008000;font-weight:bold">&lt;Disk</span> <span style="color:#7d9029">ovf:capacity=</span><span style="color:#ba2121">&#34;41943040000&#34;</span> <span style="color:#7d9029">ovf:diskId=</span><span style="color:#ba2121">&#34;vmdisk2&#34;</span> <span style="color:#7d9029">ovf:fileRef=</span><span style="color:#ba2121">&#34;file1&#34;</span> <span style="color:#7d9029">ovf:format=</span><span style="color:#ba2121">&#34;http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized&#34;</span> <span style="color:#7d9029">vbox:uuid=</span><span style="color:#ba2121">&#34;150dbbe8-0c88-48d0-9fcf-e80d7d7d4c2f&#34;</span><span style="color:#008000;font-weight:bold">/&gt;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#008000;font-weight:bold">&lt;Disk</span> <span style="color:#7d9029">ovf:capacity=</span><span style="color:#ba2121">&#34;104857600000&#34;</span> <span style="color:#7d9029">ovf:diskId=</span><span style="color:#ba2121">&#34;vmdisk3&#34;</span> <span style="color:#7d9029">ovf:fileRef=</span><span style="color:#ba2121">&#34;file2&#34;</span> <span style="color:#7d9029">ovf:format=</span><span style="color:#ba2121">&#34;http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized&#34;</span> <span style="color:#7d9029">vbox:uuid=</span><span style="color:#ba2121">&#34;64101bef-46af-4e89-8c02-0e6315d6be41&#34;</span><span style="color:#008000;font-weight:bold">/&gt;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#008000;font-weight:bold">&lt;Disk</span> <span style="color:#7d9029">ovf:capacity=</span><span style="color:#ba2121">&#34;62914560000&#34;</span> <span style="color:#7d9029">ovf:diskId=</span><span style="color:#ba2121">&#34;vmdisk4&#34;</span> <span style="color:#7d9029">ovf:fileRef=</span><span style="color:#ba2121">&#34;file3&#34;</span> <span style="color:#7d9029">ovf:format=</span><span style="color:#ba2121">&#34;http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized&#34;</span> <span style="color:#7d9029">vbox:uuid=</span><span style="color:#ba2121">&#34;d7fae10b-aac3-4675-b295-6a5ab9db3e7f&#34;</span><span style="color:#008000;font-weight:bold">/&gt;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#008000;font-weight:bold">&lt;Disk</span> <span style="color:#7d9029">ovf:capacity=</span><span style="color:#ba2121">&#34;20971520000&#34;</span> <span style="color:#7d9029">ovf:diskId=</span><span style="color:#ba2121">&#34;vmdisk5&#34;</span> <span style="color:#7d9029">ovf:fileRef=</span><span style="color:#ba2121">&#34;file4&#34;</span> <span style="color:#7d9029">ovf:format=</span><span style="color:#ba2121">&#34;http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized&#34;</span> <span style="color:#7d9029">vbox:uuid=</span><span style="color:#ba2121">&#34;e29ccf7f-69f1-4338-ac2d-909344d74f75&#34;</span><span style="color:#008000;font-weight:bold">/&gt;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#008000;font-weight:bold">&lt;/DiskSection&gt;</span>
+</span></span></code></pre></div><p>and once created added the three remaining disks to the VM configuration. I removed the CD device so as to be able to sequence the four IDE disks as per the original OVF configuration.</p>
 <p><img src="/images/2016/06/prox01.png" alt=""></p>
 <p>The config for the server looks like this:</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">root@proxmox01:/data04/vms/bdl44# cat /etc/pve/nodes/proxmox01/qemu-server/100.conf
-bootdisk: ide0
-cores: <span style="color:#666">4</span>
-ide0: data01:100/vm-100-disk-1.qcow2,size<span style="color:#666">=</span>40G
-ide1: data01:100/vm-100-disk-2.qcow2,size<span style="color:#666">=</span>100G
-ide2: data01:100/vm-100-disk-4.qcow2,size<span style="color:#666">=</span>60G
-ide3: data01:100/vm-100-disk-5.qcow2,size<span style="color:#666">=</span>20G
-memory: <span style="color:#666">16000</span>
-name: bdl44
-net0: <span style="color:#19177c">bridge</span><span style="color:#666">=</span>vmbr0,e1000<span style="color:#666">=</span>66:65:31:38:36:64
-numa: <span style="color:#666">1</span>
-ostype: l26
-smbios1: <span style="color:#19177c">uuid</span><span style="color:#666">=</span>58e05db8-1bae-4ccf-90fe-9ea036a58056
-sockets: <span style="color:#666">2</span>
-</code></pre></div><p>I copied the qcow2 files (converted from VMDK) <strong>over</strong> the existing qcow2 files:</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#008000">time</span> mv -f /data04/vms/bdl44/BigDataLite440-disk1.qcow2 /data01/images/100/vm-100-disk-1.qcow2
-<span style="color:#008000">time</span> mv -f /data04/vms/bdl44/BigDataLite440-disk2.qcow2 /data01/images/100/vm-100-disk-2.qcow2
-<span style="color:#008000">time</span> mv -f /data04/vms/bdl44/BigDataLite440-disk3.qcow2 /data01/images/100/vm-100-disk-3.qcow2
-<span style="color:#008000">time</span> mv -f /data04/vms/bdl44/BigDataLite440-disk4.qcow2 /data01/images/100/vm-100-disk-4.qcow2
-</code></pre></div><p>From the Proxmox GUI I started the migrated VM, but it failed with the error <code>Unable to resolve 'LABEL=oracle_sw'</code></p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:/data04/vms/bdl44# cat /etc/pve/nodes/proxmox01/qemu-server/100.conf
+</span></span><span style="display:flex;"><span>bootdisk: ide0
+</span></span><span style="display:flex;"><span>cores: <span style="color:#666">4</span>
+</span></span><span style="display:flex;"><span>ide0: data01:100/vm-100-disk-1.qcow2,size<span style="color:#666">=</span>40G
+</span></span><span style="display:flex;"><span>ide1: data01:100/vm-100-disk-2.qcow2,size<span style="color:#666">=</span>100G
+</span></span><span style="display:flex;"><span>ide2: data01:100/vm-100-disk-4.qcow2,size<span style="color:#666">=</span>60G
+</span></span><span style="display:flex;"><span>ide3: data01:100/vm-100-disk-5.qcow2,size<span style="color:#666">=</span>20G
+</span></span><span style="display:flex;"><span>memory: <span style="color:#666">16000</span>
+</span></span><span style="display:flex;"><span>name: bdl44
+</span></span><span style="display:flex;"><span>net0: <span style="color:#19177c">bridge</span><span style="color:#666">=</span>vmbr0,e1000<span style="color:#666">=</span>66:65:31:38:36:64
+</span></span><span style="display:flex;"><span>numa: <span style="color:#666">1</span>
+</span></span><span style="display:flex;"><span>ostype: l26
+</span></span><span style="display:flex;"><span>smbios1: <span style="color:#19177c">uuid</span><span style="color:#666">=</span>58e05db8-1bae-4ccf-90fe-9ea036a58056
+</span></span><span style="display:flex;"><span>sockets: <span style="color:#666">2</span>
+</span></span></code></pre></div><p>I copied the qcow2 files (converted from VMDK) <strong>over</strong> the existing qcow2 files:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#008000">time</span> mv -f /data04/vms/bdl44/BigDataLite440-disk1.qcow2 /data01/images/100/vm-100-disk-1.qcow2
+</span></span><span style="display:flex;"><span><span style="color:#008000">time</span> mv -f /data04/vms/bdl44/BigDataLite440-disk2.qcow2 /data01/images/100/vm-100-disk-2.qcow2
+</span></span><span style="display:flex;"><span><span style="color:#008000">time</span> mv -f /data04/vms/bdl44/BigDataLite440-disk3.qcow2 /data01/images/100/vm-100-disk-3.qcow2
+</span></span><span style="display:flex;"><span><span style="color:#008000">time</span> mv -f /data04/vms/bdl44/BigDataLite440-disk4.qcow2 /data01/images/100/vm-100-disk-4.qcow2
+</span></span></code></pre></div><p>From the Proxmox GUI I started the migrated VM, but it failed with the error <code>Unable to resolve 'LABEL=oracle_sw'</code></p>
 <p><img src="/images/2016/06/prox02.png" alt=""></p>
 <p>The reason being I&rsquo;d got the disks wrong - look at the above configuration (1,2,4,5) and list of disk images (1-4). After fixing this the VM (a version of Big Data Lite 4.4) started up just fine. As did SampleApp v506:</p>
 <p><img src="/images/2016/06/prox03.png" alt=""></p>
 <p>If you want you can tidy up by uninstalling the VirtualBox support modules:</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">sudo /opt/VBoxGuestAdditions-4.3.22/uninstall.sh
-</code></pre></div><p>For reference:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>sudo /opt/VBoxGuestAdditions-4.3.22/uninstall.sh
+</span></span></code></pre></div><p>For reference:</p>
 <ol>
 <li>I&rsquo;m not sure if it makes too much difference on the exact sizing of the disk images in the qemu configuration file, since they grow as needed - hence sticking a size of 200G is going to do no harm (unless you actually don&rsquo;t have that disk space) and makes importing the image easier.</li>
 <li>You can update the configuration file to make the disk image names match those that you have, instead of renaming them to match the pattern that qemu generates. Swings &amp; roundabouts.</li>

@@ -9,8 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.85.0" />
-
+		
 		
 		<meta property="og:title" content="Flatten CDC records in KSQL" />
 		<meta property="og:type" content="article" />
@@ -86,25 +85,25 @@
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw8">
 	<h3 id="the-problem---nested-messages-in-kafka">The problem - nested messages in Kafka</h3>
 <p>Data comes into Kafka in many shapes and sizes. Sometimes it&rsquo;s from CDC tools, and may be nested like this:</p>
-<pre><code>{
-  &quot;SCN&quot;: 12206116841348,
-  &quot;SEG_OWNER&quot;: &quot;KFKUSER&quot;,
-  &quot;TABLE_NAME&quot;: &quot;CDCTAB2&quot;,
-  &quot;TIMESTAMP&quot;: 1539162785000,
-  &quot;SQL_REDO&quot;: &quot;insert into \&quot;KFKUSER\&quot;.\&quot;CDCTAB2\&quot;(\&quot;ID\&quot;,\&quot;CITY\&quot;,\&quot;NATIONALITY\&quot;) values (634789,'AHMEDABAD','INDIA')&quot;,
-  &quot;OPERATION&quot;: &quot;INSERT&quot;,
-  &quot;data&quot;: {
-    &quot;value&quot;: {
-      &quot;ID&quot;: 634789,
-      &quot;CITY&quot;: {
-        &quot;string&quot;: &quot;AHMEDABAD&quot;
+<pre tabindex="0"><code>{
+  &#34;SCN&#34;: 12206116841348,
+  &#34;SEG_OWNER&#34;: &#34;KFKUSER&#34;,
+  &#34;TABLE_NAME&#34;: &#34;CDCTAB2&#34;,
+  &#34;TIMESTAMP&#34;: 1539162785000,
+  &#34;SQL_REDO&#34;: &#34;insert into \&#34;KFKUSER\&#34;.\&#34;CDCTAB2\&#34;(\&#34;ID\&#34;,\&#34;CITY\&#34;,\&#34;NATIONALITY\&#34;) values (634789,&#39;AHMEDABAD&#39;,&#39;INDIA&#39;)&#34;,
+  &#34;OPERATION&#34;: &#34;INSERT&#34;,
+  &#34;data&#34;: {
+    &#34;value&#34;: {
+      &#34;ID&#34;: 634789,
+      &#34;CITY&#34;: {
+        &#34;string&#34;: &#34;AHMEDABAD&#34;
       },
-      &quot;NATIONALITY&quot;: {
-        &quot;string&quot;: &quot;INDIA&quot;
+      &#34;NATIONALITY&#34;: {
+        &#34;string&#34;: &#34;INDIA&#34;
       }
     }
   },
-  &quot;before&quot;: null
+  &#34;before&#34;: null
 }
 </code></pre><p>Note that the &lsquo;payload&rsquo; is nested under <code>data</code>-&gt;<code>value</code>. A user on the <a href="https://groups.google.com/forum/#!forum/confluent-platform">Confluent Community mailing list</a> recently posted <a href="https://groups.google.com/d/msg/confluent-platform/vWle1i3TibI/a9sgDWzAAgAJ">a question</a> in which they wanted to use the Kafka Connect JDBC Sink connector to stream this data to a target database. The problem was that the field they wanted to use as the primary key (<code>ID</code>) was nested (as you can see above). This caused the error:</p>
 <pre><code>Caused by: org.apache.kafka.connect.errors.ConnectException: PK mode for table 'CDCTAB2' is RECORD_VALUE with configured PK fields [ID], but record value schema does not contain field: ID
@@ -113,16 +112,16 @@
 <h3 id="the-solution---ksql-to-flatten-messages">The solution - KSQL to flatten messages</h3>
 <p>You can use <a href="https://www.confluent.io/ksql">KSQL</a> to transform every record on the source topic as it arrives, writing to a new topic and using <em>that</em> topic as the source for the JDBC Sink.</p>
 <p>In KSQL, register the topic in KSQL:</p>
-<pre><code>CREATE STREAM CDC_SOURCE_DATA \
+<pre tabindex="0"><code>CREATE STREAM CDC_SOURCE_DATA \
     (SCN BIGINT, TABLE_NAME VARCHAR, OPERATION VARCHAR, \
      DATA STRUCT&lt;VALUE STRUCT&lt;\
        ID BIGINT, \
        CITY STRUCT&lt;string VARCHAR&gt;, \
        NATIONALITY STRUCT&lt;string VARCHAR&gt;&gt;&gt;\
     ) \
-    WITH (KAFKA_TOPIC='asif_test2', VALUE_FORMAT='JSON');
+    WITH (KAFKA_TOPIC=&#39;asif_test2&#39;, VALUE_FORMAT=&#39;JSON&#39;);
 </code></pre><p>Verify the schema—observe that it is nested</p>
-<pre><code>ksql&gt; describe CDC_SOURCE_DATA;
+<pre tabindex="0"><code>ksql&gt; describe CDC_SOURCE_DATA;
 
 Name                 : CDC_SOURCE_DATA
  Field      | Type
@@ -136,14 +135,14 @@ Name                 : CDC_SOURCE_DATA
 -------------------------------------------------------------------------------------------------------------------------------
 For runtime statistics and query details run: DESCRIBE EXTENDED &lt;Stream,Table&gt;;
 </code></pre><p>Create a flattened topic:</p>
-<pre><code>CREATE STREAM FLATTENED_DATA AS \
+<pre tabindex="0"><code>CREATE STREAM FLATTENED_DATA AS \
   SELECT SCN, TABLE_NAME, OPERATION, \
           DATA-&gt;VALUE-&gt;ID AS ID, \
           DATA-&gt;VALUE-&gt;CITY-&gt;string AS CITY, \
           DATA-&gt;VALUE-&gt;NATIONALITY-&gt;string AS NATIONALITY \
   FROM CDC_SOURCE_DATA;
 </code></pre><p>Verify the new schema - note there are no nested fields</p>
-<pre><code>ksql&gt; DESCRIBE FLATTENED_DATA;
+<pre tabindex="0"><code>ksql&gt; DESCRIBE FLATTENED_DATA;
 
 Name                 : FLATTENED_DATA
  Field       | Type
@@ -160,9 +159,9 @@ Name                 : FLATTENED_DATA
 For runtime statistics and query details run: DESCRIBE EXTENDED &lt;Stream,Table&gt;;
 ksql&gt;
 </code></pre><p>Query the new topic, e.g. using kafkacat:</p>
-<pre><code>kafkacat -b kafka:29092 -t FLATTENED_DATA -C
+<pre tabindex="0"><code>kafkacat -b kafka:29092 -t FLATTENED_DATA -C
 
-{&quot;SCN&quot;:12206116841348,&quot;TABLE_NAME&quot;:&quot;CDCTAB2&quot;,&quot;OPERATION&quot;:&quot;INSERT&quot;,&quot;ID&quot;:634789,&quot;CITY&quot;:&quot;AHMEDABAD&quot;,&quot;NATIONALITY&quot;:&quot;INDIA&quot;}
+{&#34;SCN&#34;:12206116841348,&#34;TABLE_NAME&#34;:&#34;CDCTAB2&#34;,&#34;OPERATION&#34;:&#34;INSERT&#34;,&#34;ID&#34;:634789,&#34;CITY&#34;:&#34;AHMEDABAD&#34;,&#34;NATIONALITY&#34;:&#34;INDIA&#34;}
 </code></pre><p>Now you can use the target topic (<code>FLATTENED_DATA</code>) as the source for the JDBC sink, with <code>ID</code> and other columns exposed as top-level elements.</p>
 <p>KSQL is a continuous query language and so every new event on the source topic will automatically be processed and written to the target topic.</p>
 </article>

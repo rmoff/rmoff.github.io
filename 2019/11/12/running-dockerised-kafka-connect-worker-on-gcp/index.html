@@ -9,8 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.85.0" />
-
+		
 		
 		<meta property="og:title" content="Running Dockerised Kafka Connect worker on GCP" />
 		<meta property="og:type" content="article" />
@@ -97,49 +96,49 @@
 <p>Here’s a walk through of what the script’s doing and how to use it. First up, you need to create a <code>.env</code> file with your secrets and config in:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#19177c">CONFLUENTPLATFORM_VERSION</span><span style="color:#666">=</span>5.4.0-beta1
-<span style="color:#408080;font-style:italic">#   </span>
-<span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#666">=</span>
-<span style="color:#19177c">CCLOUD_API_KEY</span><span style="color:#666">=</span>
-<span style="color:#19177c">CCLOUD_API_SECRET</span><span style="color:#666">=</span>
-<span style="color:#408080;font-style:italic">#</span>
-<span style="color:#19177c">CCLOUD_SCHEMA_REGISTRY_URL</span><span style="color:#666">=</span>
-<span style="color:#19177c">CCLOUD_SCHEMA_REGISTRY_API_KEY</span><span style="color:#666">=</span>
-<span style="color:#19177c">CCLOUD_SCHEMA_REGISTRY_API_SECRET</span><span style="color:#666">=</span></code></pre></div>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#19177c">CONFLUENTPLATFORM_VERSION</span><span style="color:#666">=</span>5.4.0-beta1
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic">#   </span>
+</span></span><span style="display:flex;"><span><span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#666">=</span>
+</span></span><span style="display:flex;"><span><span style="color:#19177c">CCLOUD_API_KEY</span><span style="color:#666">=</span>
+</span></span><span style="display:flex;"><span><span style="color:#19177c">CCLOUD_API_SECRET</span><span style="color:#666">=</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic">#</span>
+</span></span><span style="display:flex;"><span><span style="color:#19177c">CCLOUD_SCHEMA_REGISTRY_URL</span><span style="color:#666">=</span>
+</span></span><span style="display:flex;"><span><span style="color:#19177c">CCLOUD_SCHEMA_REGISTRY_API_KEY</span><span style="color:#666">=</span>
+</span></span><span style="display:flex;"><span><span style="color:#19177c">CCLOUD_SCHEMA_REGISTRY_API_SECRET</span><span style="color:#666">=</span></span></span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>This is then passed to <code>source</code> to make the values available to the shell</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#008000">source</span> .env</code></pre></div>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#008000">source</span> .env</span></span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>I’m running Kafka Connect in distributed mode, which <a href="http://rmoff.dev/ksldn19-kafka-connect">I generally recommend in all instances - even on a single node</a>. There’s no reason not to, and it makes it easier to understand (and work with IMO) to learn a single deployment method instead of two. Since I’m using distributed mode, all of the state for the worker is stored in Kafka itself. This is pretty cool, but it does mean that if you run multiple workers with the same persistence topics configured things will get funky. For that reason, I have a prefix for the worker and topics, which is based on the current timestamp—if you’re using this script yourself you might want to vary this (or not; YMMV):</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#19177c">epoch</span><span style="color:#666">=</span><span style="color:#008000;font-weight:bold">$(</span>date +%s<span style="color:#008000;font-weight:bold">)</span></code></pre></div>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#19177c">epoch</span><span style="color:#666">=</span><span style="color:#008000;font-weight:bold">$(</span>date +%s<span style="color:#008000;font-weight:bold">)</span></span></span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>Whilst Kafka Connect uses the Admin API to create its own internal topics (for state persistence) the topic(s) that the connector itself writes to need to be created manually. Here I use <code>kafka-topics</code> to do that, through Docker running locally. I use Docker just for isolation and ease portability; if you want to use your own local install then you can. To use Confluent Cloud with <code>kafka-topics</code> you need to have a local file with the necessary authentication details in, which is then passed with <code>--command-config</code> in <code>kafka-topics</code>:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">cat &gt; /tmp/config-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span>.properties <span style="color:#ba2121">&lt;&lt;EOF
-</span><span style="color:#ba2121">ssl.endpoint.identification.algorithm=https
-</span><span style="color:#ba2121">sasl.mechanism=PLAIN
-</span><span style="color:#ba2121">sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=&#34;${CCLOUD_API_KEY}&#34; password=&#34;${CCLOUD_API_SECRET}&#34;;
-</span><span style="color:#ba2121">security.protocol=SASL_SSL
-</span><span style="color:#ba2121">request.timeout.ms=20000
-</span><span style="color:#ba2121">retry.backoff.ms=500
-</span><span style="color:#ba2121">EOF</span>
-
-docker run --rm --volume /tmp/config-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span>.properties:/tmp/config.properties <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    confluentinc/cp-kafka:<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CONFLUENTPLATFORM_VERSION</span><span style="color:#b68;font-weight:bold">}</span> /usr/bin/kafka-topics <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    --command-config /tmp/config.properties <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    --bootstrap-server <span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#b68;font-weight:bold">}</span>:9092 <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    --create <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    --topic data_mqtt <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    --partitions <span style="color:#666">6</span> <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    --replication-factor <span style="color:#666">3</span></code></pre></div>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>cat &gt; /tmp/config-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span>.properties <span style="color:#ba2121">&lt;&lt;EOF
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">ssl.endpoint.identification.algorithm=https
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">sasl.mechanism=PLAIN
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=&#34;${CCLOUD_API_KEY}&#34; password=&#34;${CCLOUD_API_SECRET}&#34;;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">security.protocol=SASL_SSL
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">request.timeout.ms=20000
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">retry.backoff.ms=500
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">EOF</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>docker run --rm --volume /tmp/config-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span>.properties:/tmp/config.properties <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    confluentinc/cp-kafka:<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CONFLUENTPLATFORM_VERSION</span><span style="color:#b68;font-weight:bold">}</span> /usr/bin/kafka-topics <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    --command-config /tmp/config.properties <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    --bootstrap-server <span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#b68;font-weight:bold">}</span>:9092 <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    --create <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    --topic data_mqtt <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    --partitions <span style="color:#666">6</span> <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    --replication-factor <span style="color:#666">3</span></span></span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>Now that we’ve got the topic created, we can spin up the worker itself. Or, almost. Because first we need to build a file with the necessary environment variables in for the worker. You <em>can</em> pass environment variables directly in the <code>gcloud</code> invocation but it’s not a pretty sight</p>
@@ -153,47 +152,47 @@ docker run --rm --volume /tmp/config-<span style="color:#b68;font-weight:bold">$
 <p>Even if it works, it’s not particularly maintainable. Whilst you can externalise the environment variables into a file that you pass in with <code>container-env-file</code> you can’t interpolate secure values in that file which means that you end up with a file which is both config and authentication credentials, which is not ideal. Hence, the config is inline in this script and interpolated with credentials held in environment variables (via <code>.env</code>) at runtime into a temporary file:</p>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#19177c">PROPERTIES_FILE</span><span style="color:#666">=</span>/tmp/connect-worker-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span>_gcloud_env.properties
-
-cat &gt; <span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">PROPERTIES_FILE</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&lt;&lt;EOF
-</span><span style="color:#ba2121">CONNECT_LOG4J_APPENDER_STDOUT_LAYOUT_CONVERSIONPATTERN=[%d] %p %X{connector.context}%m (%c:%L)%n
-</span><span style="color:#ba2121">CONNECT_CUB_KAFKA_TIMEOUT=300  
-</span><span style="color:#ba2121">CONNECT_BOOTSTRAP_SERVERS=${CCLOUD_BROKER_HOST}:9092
-</span><span style="color:#ba2121">CONNECT_REST_ADVERTISED_HOST_NAME=kafka-connect-01
-</span><span style="color:#ba2121">CONNECT_REST_PORT=8083  
-</span><span style="color:#ba2121">CONNECT_GROUP_ID=kafka-connect-group-${epoch}
-</span><span style="color:#ba2121">CONNECT_CONFIG_STORAGE_TOPIC=_kafka-connect-group-${epoch}-configs  
-</span><span style="color:#ba2121">CONNECT_OFFSET_STORAGE_TOPIC=_kafka-connect-group-${epoch}-offsets  
-</span><span style="color:#ba2121">CONNECT_STATUS_STORAGE_TOPIC=_kafka-connect-group-${epoch}-status  
-</span><span style="color:#ba2121">CONNECT_KEY_CONVERTER=io.confluent.connect.avro.AvroConverter  
-</span><span style="color:#ba2121">CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL=${CCLOUD_SCHEMA_REGISTRY_URL}
-</span><span style="color:#ba2121">CONNECT_KEY_CONVERTER_BASIC_AUTH_CREDENTIALS_SOURCE=USER_INFO
-</span><span style="color:#ba2121">CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO=${CCLOUD_SCHEMA_REGISTRY_API_KEY}:${CCLOUD_SCHEMA_REGISTRY_API_SECRET}
-</span><span style="color:#ba2121">CONNECT_VALUE_CONVERTER=io.confluent.connect.avro.AvroConverter  
-</span><span style="color:#ba2121">CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL=${CCLOUD_SCHEMA_REGISTRY_URL}
-</span><span style="color:#ba2121">CONNECT_VALUE_CONVERTER_BASIC_AUTH_CREDENTIALS_SOURCE=USER_INFO
-</span><span style="color:#ba2121">CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO=${CCLOUD_SCHEMA_REGISTRY_API_KEY}:${CCLOUD_SCHEMA_REGISTRY_API_SECRET}
-</span><span style="color:#ba2121">CONNECT_INTERNAL_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
-</span><span style="color:#ba2121">CONNECT_INTERNAL_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
-</span><span style="color:#ba2121">CONNECT_LOG4J_ROOT_LOGLEVEL=INFO
-</span><span style="color:#ba2121">CONNECT_LOG4J_LOGGERS=org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR
-</span><span style="color:#ba2121">CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=3
-</span><span style="color:#ba2121">CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=3
-</span><span style="color:#ba2121">CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=3
-</span><span style="color:#ba2121">CONNECT_PLUGIN_PATH=/usr/share/java,/usr/share/confluent-hub-components/
-</span><span style="color:#ba2121">CONNECT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM=https
-</span><span style="color:#ba2121">CONNECT_SASL_MECHANISM=PLAIN
-</span><span style="color:#ba2121">CONNECT_SECURITY_PROTOCOL=SASL_SSL
-</span><span style="color:#ba2121">CONNECT_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username=&#34;${CCLOUD_API_KEY}&#34; password=&#34;${CCLOUD_API_SECRET}&#34;;
-</span><span style="color:#ba2121">CONNECT_CONSUMER_SECURITY_PROTOCOL=SASL_SSL
-</span><span style="color:#ba2121">CONNECT_CONSUMER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM=https
-</span><span style="color:#ba2121">CONNECT_CONSUMER_SASL_MECHANISM=PLAIN
-</span><span style="color:#ba2121">CONNECT_CONSUMER_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username=&#34;${CCLOUD_API_KEY}&#34; password=&#34;${CCLOUD_API_SECRET}&#34;;
-</span><span style="color:#ba2121">CONNECT_PRODUCER_SECURITY_PROTOCOL=SASL_SSL
-</span><span style="color:#ba2121">CONNECT_PRODUCER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM=https
-</span><span style="color:#ba2121">CONNECT_PRODUCER_SASL_MECHANISM=PLAIN
-</span><span style="color:#ba2121">CONNECT_PRODUCER_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username=&#34;${CCLOUD_API_KEY}&#34; password=&#34;${CCLOUD_API_SECRET}&#34;;
-</span><span style="color:#ba2121">EOF</span></code></pre></div>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#19177c">PROPERTIES_FILE</span><span style="color:#666">=</span>/tmp/connect-worker-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span>_gcloud_env.properties
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>cat &gt; <span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">PROPERTIES_FILE</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&lt;&lt;EOF
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_LOG4J_APPENDER_STDOUT_LAYOUT_CONVERSIONPATTERN=[%d] %p %X{connector.context}%m (%c:%L)%n
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_CUB_KAFKA_TIMEOUT=300  
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_BOOTSTRAP_SERVERS=${CCLOUD_BROKER_HOST}:9092
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_REST_ADVERTISED_HOST_NAME=kafka-connect-01
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_REST_PORT=8083  
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_GROUP_ID=kafka-connect-group-${epoch}
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_CONFIG_STORAGE_TOPIC=_kafka-connect-group-${epoch}-configs  
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_OFFSET_STORAGE_TOPIC=_kafka-connect-group-${epoch}-offsets  
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_STATUS_STORAGE_TOPIC=_kafka-connect-group-${epoch}-status  
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_KEY_CONVERTER=io.confluent.connect.avro.AvroConverter  
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL=${CCLOUD_SCHEMA_REGISTRY_URL}
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_KEY_CONVERTER_BASIC_AUTH_CREDENTIALS_SOURCE=USER_INFO
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO=${CCLOUD_SCHEMA_REGISTRY_API_KEY}:${CCLOUD_SCHEMA_REGISTRY_API_SECRET}
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_VALUE_CONVERTER=io.confluent.connect.avro.AvroConverter  
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL=${CCLOUD_SCHEMA_REGISTRY_URL}
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_VALUE_CONVERTER_BASIC_AUTH_CREDENTIALS_SOURCE=USER_INFO
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO=${CCLOUD_SCHEMA_REGISTRY_API_KEY}:${CCLOUD_SCHEMA_REGISTRY_API_SECRET}
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_INTERNAL_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_INTERNAL_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_LOG4J_ROOT_LOGLEVEL=INFO
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_LOG4J_LOGGERS=org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=3
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=3
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=3
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_PLUGIN_PATH=/usr/share/java,/usr/share/confluent-hub-components/
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM=https
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_SASL_MECHANISM=PLAIN
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_SECURITY_PROTOCOL=SASL_SSL
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username=&#34;${CCLOUD_API_KEY}&#34; password=&#34;${CCLOUD_API_SECRET}&#34;;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_CONSUMER_SECURITY_PROTOCOL=SASL_SSL
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_CONSUMER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM=https
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_CONSUMER_SASL_MECHANISM=PLAIN
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_CONSUMER_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username=&#34;${CCLOUD_API_KEY}&#34; password=&#34;${CCLOUD_API_SECRET}&#34;;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_PRODUCER_SECURITY_PROTOCOL=SASL_SSL
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_PRODUCER_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM=https
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_PRODUCER_SASL_MECHANISM=PLAIN
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">CONNECT_PRODUCER_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username=&#34;${CCLOUD_API_KEY}&#34; password=&#34;${CCLOUD_API_SECRET}&#34;;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">EOF</span></span></span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>Now, finally, we can launch the container, using the <code>gcloud beta compute instances create-with-container</code> option. The options I built out using the GCP web UI and then before launching clicked the magic button</p>
@@ -223,62 +222,62 @@ cat &gt; <span style="color:#b68;font-weight:bold">${</span><span style="color:#
 </ol>
 </div>
 <div class="paragraph">
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">gcloud beta compute <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--project<span style="color:#666">=</span>devx-testing instances create-with-container rmoff-connect-mqtt-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span> <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--machine-type<span style="color:#666">=</span>n1-standard-1 <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--subnet<span style="color:#666">=</span>default <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--metadata<span style="color:#666">=</span>google-logging-enabled<span style="color:#666">=</span><span style="color:#008000">true</span> <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--maintenance-policy<span style="color:#666">=</span>MIGRATE <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--image<span style="color:#666">=</span>cos-stable-77-12371-114-0 <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--image-project<span style="color:#666">=</span>cos-cloud <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    --no-scopes <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    --no-service-account <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--boot-disk-size<span style="color:#666">=</span>10GB <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--boot-disk-type<span style="color:#666">=</span>pd-standard <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--boot-disk-device-name<span style="color:#666">=</span>rmoff-connect-mqtt-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span> <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--container-restart-policy<span style="color:#666">=</span>always <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--labels<span style="color:#666">=</span>container-vm<span style="color:#666">=</span>cos-stable-77-12371-114-0 <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--container-image<span style="color:#666">=</span>confluentinc/cp-kafka-connect:<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CONFLUENTPLATFORM_VERSION</span><span style="color:#b68;font-weight:bold">}</span> <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>    --container-env-file<span style="color:#666">=</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">PROPERTIES_FILE</span><span style="color:#b68;font-weight:bold">}</span> <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--container-command<span style="color:#666">=</span>bash <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--container-arg<span style="color:#666">=</span>-c <span style="color:#b62;font-weight:bold">\
-</span><span style="color:#b62;font-weight:bold"></span>	--container-arg<span style="color:#666">=</span><span style="color:#ba2121">&#39;set -x
-</span><span style="color:#ba2121">        echo &#34;Installing connector plugins&#34; 
-</span><span style="color:#ba2121">        confluent-hub install --no-prompt confluentinc/kafka-connect-mqtt:1.2.3
-</span><span style="color:#ba2121">        #
-</span><span style="color:#ba2121">        echo &#34;Launching Kafka Connect worker&#34;
-</span><span style="color:#ba2121">        /etc/confluent/docker/run &amp; 
-</span><span style="color:#ba2121">        #
-</span><span style="color:#ba2121">        echo &#34;Waiting for Kafka Connect to start listening on localhost:8083 ⏳&#34;
-</span><span style="color:#ba2121">        while : ; do
-</span><span style="color:#ba2121">            curl_status=$(curl -s -o /dev/null -w %{http_code} http://localhost:8083/connectors)
-</span><span style="color:#ba2121">            echo -e $(date) &#34; Kafka Connect listener HTTP state: &#34; $curl_status &#34; (waiting for 200)&#34;
-</span><span style="color:#ba2121">            if [ $curl_status -eq 200 ] ; then
-</span><span style="color:#ba2121">            break
-</span><span style="color:#ba2121">            fi
-</span><span style="color:#ba2121">            sleep 5 
-</span><span style="color:#ba2121">        done
-</span><span style="color:#ba2121">        #
-</span><span style="color:#ba2121">        echo -e &#34;\n--\n+&gt; Creating Kafka Connect MQTT source&#34;
-</span><span style="color:#ba2121">        curl -s -X PUT -H  &#34;Content-Type:application/json&#34; http://localhost:8083/connectors/source-mqtt/config \
-</span><span style="color:#ba2121">            -d &#39;</span><span style="color:#ba2121">&#34;&#39;&#34;</span><span style="color:#ba2121">&#39;{  
-</span><span style="color:#ba2121">            &#34;connector.class&#34; : &#34;io.confluent.connect.mqtt.MqttSourceConnector&#34;, 
-</span><span style="color:#ba2121">            &#34;mqtt.server.uri&#34; : &#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">MQTT_URL</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;&#34;, 
-</span><span style="color:#ba2121">            &#34;mqtt.password&#34; : &#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">MQTT_PASSWORD</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;&#34;, 
-</span><span style="color:#ba2121">            &#34;mqtt.username&#34; : &#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">MQTT_USERNAME</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;&#34;, 
-</span><span style="color:#ba2121">            &#34;mqtt.topics&#34; : &#34;owntracks/#&#34;, 
-</span><span style="color:#ba2121">            &#34;kafka.topic&#34; : &#34;data_mqtt&#34;, 
-</span><span style="color:#ba2121">            &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;, 
-</span><span style="color:#ba2121">            &#34;value.converter&#34;: &#34;org.apache.kafka.connect.converters.ByteArrayConverter&#34;, 
-</span><span style="color:#ba2121">            &#34;tasks.max&#34; : &#34;1&#34;, 
-</span><span style="color:#ba2121">            &#34;confluent.topic.bootstrap.servers&#34; : &#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;:9092&#34;, 
-</span><span style="color:#ba2121">            &#34;confluent.topic.sasl.jaas.config&#34; : &#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_KEY</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;\&#34; password=\&#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_SECRET</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;\&#34;;&#34;, 
-</span><span style="color:#ba2121">            &#34;confluent.topic.security.protocol&#34;: &#34;SASL_SSL&#34;, 
-</span><span style="color:#ba2121">            &#34;confluent.topic.ssl.endpoint.identification.algorithm&#34;: &#34;https&#34;, 
-</span><span style="color:#ba2121">            &#34;confluent.topic.sasl.mechanism&#34;: &#34;PLAIN&#34; 
-</span><span style="color:#ba2121">            }&#39;</span><span style="color:#ba2121">&#34;&#39;&#34;</span><span style="color:#ba2121">&#39;
-</span><span style="color:#ba2121">        #    
-</span><span style="color:#ba2121">        sleep infinity&#39;</span></code></pre></div>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>gcloud beta compute <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--project<span style="color:#666">=</span>devx-testing instances create-with-container rmoff-connect-mqtt-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span> <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--machine-type<span style="color:#666">=</span>n1-standard-1 <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--subnet<span style="color:#666">=</span>default <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--metadata<span style="color:#666">=</span>google-logging-enabled<span style="color:#666">=</span><span style="color:#008000">true</span> <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--maintenance-policy<span style="color:#666">=</span>MIGRATE <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--image<span style="color:#666">=</span>cos-stable-77-12371-114-0 <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--image-project<span style="color:#666">=</span>cos-cloud <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    --no-scopes <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    --no-service-account <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--boot-disk-size<span style="color:#666">=</span>10GB <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--boot-disk-type<span style="color:#666">=</span>pd-standard <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--boot-disk-device-name<span style="color:#666">=</span>rmoff-connect-mqtt-<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">epoch</span><span style="color:#b68;font-weight:bold">}</span> <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--container-restart-policy<span style="color:#666">=</span>always <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--labels<span style="color:#666">=</span>container-vm<span style="color:#666">=</span>cos-stable-77-12371-114-0 <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--container-image<span style="color:#666">=</span>confluentinc/cp-kafka-connect:<span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CONFLUENTPLATFORM_VERSION</span><span style="color:#b68;font-weight:bold">}</span> <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>    --container-env-file<span style="color:#666">=</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">PROPERTIES_FILE</span><span style="color:#b68;font-weight:bold">}</span> <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--container-command<span style="color:#666">=</span>bash <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--container-arg<span style="color:#666">=</span>-c <span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>	--container-arg<span style="color:#666">=</span><span style="color:#ba2121">&#39;set -x
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        echo &#34;Installing connector plugins&#34; 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        confluent-hub install --no-prompt confluentinc/kafka-connect-mqtt:1.2.3
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        #
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        echo &#34;Launching Kafka Connect worker&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        /etc/confluent/docker/run &amp; 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        #
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        echo &#34;Waiting for Kafka Connect to start listening on localhost:8083 ⏳&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        while : ; do
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            curl_status=$(curl -s -o /dev/null -w %{http_code} http://localhost:8083/connectors)
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            echo -e $(date) &#34; Kafka Connect listener HTTP state: &#34; $curl_status &#34; (waiting for 200)&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            if [ $curl_status -eq 200 ] ; then
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            break
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            fi
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            sleep 5 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        done
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        #
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        echo -e &#34;\n--\n+&gt; Creating Kafka Connect MQTT source&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        curl -s -X PUT -H  &#34;Content-Type:application/json&#34; http://localhost:8083/connectors/source-mqtt/config \
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            -d &#39;</span><span style="color:#ba2121">&#34;&#39;&#34;</span><span style="color:#ba2121">&#39;{  
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;connector.class&#34; : &#34;io.confluent.connect.mqtt.MqttSourceConnector&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;mqtt.server.uri&#34; : &#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">MQTT_URL</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;mqtt.password&#34; : &#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">MQTT_PASSWORD</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;mqtt.username&#34; : &#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">MQTT_USERNAME</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;mqtt.topics&#34; : &#34;owntracks/#&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;kafka.topic&#34; : &#34;data_mqtt&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;key.converter&#34;: &#34;org.apache.kafka.connect.storage.StringConverter&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;value.converter&#34;: &#34;org.apache.kafka.connect.converters.ByteArrayConverter&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;tasks.max&#34; : &#34;1&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;confluent.topic.bootstrap.servers&#34; : &#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_BROKER_HOST</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;:9092&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;confluent.topic.sasl.jaas.config&#34; : &#34;org.apache.kafka.common.security.plain.PlainLoginModule required username=\&#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_KEY</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;\&#34; password=\&#34;&#39;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">CCLOUD_API_SECRET</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">&#39;\&#34;;&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;confluent.topic.security.protocol&#34;: &#34;SASL_SSL&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;confluent.topic.ssl.endpoint.identification.algorithm&#34;: &#34;https&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            &#34;confluent.topic.sasl.mechanism&#34;: &#34;PLAIN&#34; 
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">            }&#39;</span><span style="color:#ba2121">&#34;&#39;&#34;</span><span style="color:#ba2121">&#39;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        #    
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        sleep infinity&#39;</span></span></span></code></pre></div>
 </div>
 <div class="paragraph">
 <p>The bash script that’s embedded as an argument to <code>bash -c</code> is mostly as you’d run it natively, except some funky quoting to deal with single quotes within the command (that enclose the <code>-d</code> value of <code>curl</code>)—these are done with <code>&#39;&#34;&#39;&#34;&#39;</code> which breaks down to:</p>

@@ -9,8 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.85.0" />
-
+		
 		
 		<meta property="og:title" content="Oracle 11g - How to force a sql_id to use a plan_hash_value using SQL Baselines" />
 		<meta property="og:type" content="article" />
@@ -94,7 +93,7 @@
 <p>In this example, sql_id is 939abmqmvcc4d and the plan_hash_value of the good plan that we want to force is 1239572551 */</p>
 <p>-- Drop SQL Tuning Set (STS) BEGIN DBMS_SQLTUNE.DROP_SQLSET( sqlset_name =&gt; &lsquo;MySTS01&rsquo;); END;</p>
 <p>-- Create SQL Tuning Set (STS) BEGIN DBMS_SQLTUNE.CREATE_SQLSET( sqlset_name =&gt; &lsquo;MySTS01&rsquo;, description =&gt; &lsquo;SQL Tuning Set for loading plan into SQL Plan Baseline&rsquo;); END;</p>
-<p>-- Populate STS from AWR, using a time duration when the desired plan was used &ndash; List out snapshot times using : SELECT SNAP_ID, BEGIN_INTERVAL_TIME, END_INTERVAL_TIME FROM dba_hist_snapshot ORDER BY END_INTERVAL_TIME DESC; &ndash; Specify the sql_id in the basic_filter (other predicates are available, see documentation) DECLARE cur sys_refcursor; BEGIN OPEN cur FOR SELECT VALUE(P) FROM TABLE( dbms_sqltune.select_workload_repository(begin_snap=&gt;22673, end_snap=&gt;22710,basic_filter=&gt;&lsquo;sql_id = &lsquo;&lsquo;939abmqmvcc4d&rsquo;'',attribute_list=&gt;&lsquo;ALL&rsquo;) ) p; DBMS_SQLTUNE.LOAD_SQLSET( sqlset_name=&gt; &lsquo;MySTS01&rsquo;, populate_cursor=&gt;cur); CLOSE cur; END; /</p>
+<p>-- Populate STS from AWR, using a time duration when the desired plan was used &ndash; List out snapshot times using : SELECT SNAP_ID, BEGIN_INTERVAL_TIME, END_INTERVAL_TIME FROM dba_hist_snapshot ORDER BY END_INTERVAL_TIME DESC; &ndash; Specify the sql_id in the basic_filter (other predicates are available, see documentation) DECLARE cur sys_refcursor; BEGIN OPEN cur FOR SELECT VALUE(P) FROM TABLE( dbms_sqltune.select_workload_repository(begin_snap=&gt;22673, end_snap=&gt;22710,basic_filter=&gt;&lsquo;sql_id = &lsquo;&lsquo;939abmqmvcc4d&rsquo;&rsquo;&rsquo;,attribute_list=&gt;&lsquo;ALL&rsquo;) ) p; DBMS_SQLTUNE.LOAD_SQLSET( sqlset_name=&gt; &lsquo;MySTS01&rsquo;, populate_cursor=&gt;cur); CLOSE cur; END; /</p>
 <p>-- List out SQL Tuning Set contents to check we got what we wanted SELECT first_load_time , executions as execs , parsing_schema_name , elapsed_time / 1000000 as elapsed_time_secs , cpu_time / 1000000 as cpu_time_secs , buffer_gets , disk_reads , direct_writes , rows_processed , fetches , optimizer_cost , sql_plan , plan_hash_value , sql_id , sql_text FROM TABLE(DBMS_SQLTUNE.SELECT_SQLSET(sqlset_name =&gt; &lsquo;MySTS01&rsquo;) );</p>
 <p>-- List out the Baselines to see what&rsquo;s there SELECT * FROM dba_sql_plan_baselines ;</p>
 <p>-- Load desired plan from STS as SQL Plan Baseline &ndash; Filter explicitly for the plan_hash_value here if you want DECLARE my_plans pls_integer; BEGIN my_plans := DBMS_SPM.LOAD_PLANS_FROM_SQLSET( sqlset_name =&gt; &lsquo;MySTS01&rsquo;, basic_filter=&gt;&lsquo;plan_hash_value = &lsquo;&lsquo;1239572551&rsquo;&rsquo;&rsquo; ); END; /</p>

@@ -9,8 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.85.0" />
-
+		
 		
 		<meta property="og:title" content="Monitoring Logstash Ingest Rates with InfluxDB and Grafana" />
 		<meta property="og:type" content="article" />
@@ -95,37 +94,37 @@
 <h3 id="logstash-instrumentation">Logstash Instrumentation</h3>
 <p>First job is to get Logstash to track, and then output, the rate at which it&rsquo;s processing events. One row read from a log, one message pulled from Kafka - each is one &ldquo;event&rdquo;.</p>
 <p>We&rsquo;ll use the <strong><a href="https://www.elastic.co/guide/en/logstash/current/plugins-filters-metrics.html">metric</a></strong> filter to do this. In the <strong>filter</strong> stanza of my Logstash configuration, I add:</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ruby" data-lang="ruby">filter {
-    <span style="color:#408080;font-style:italic"># Any other filter code here</span>
-    <span style="color:#408080;font-style:italic"># [...]</span>
-    <span style="color:#408080;font-style:italic">#</span>
-    <span style="color:#408080;font-style:italic"># Add events per second metric</span>
-    metrics {
-        meter <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;events&#34;</span>
-        add_tag <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;metric&#34;</span>
-    }
-}
-</code></pre></div><p>and then to get it written over to InfluxDB, via the graphite protocol, I amend my <strong>output</strong> stanza to split out the events based on tag - metrics go to Influx (and stdout for debug), everything else to Elasticsearch as before:</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ruby" data-lang="ruby">output {
-    <span style="color:#008000;font-weight:bold">if</span> <span style="color:#ba2121">&#34;metric&#34;</span> <span style="color:#008000;font-weight:bold">in</span> <span style="color:#666">[</span>tags<span style="color:#666">]</span> {
-        stdout {
-            codec <span style="color:#666">=&gt;</span> line {
-            <span style="color:#008000">format</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;Events per second ingest rate (1/5/15 min avg): %{[events][rate_1m]} | %{[events][rate_5m]} | %{[events][rate_15m]}&#34;</span>
-            }
-        }
-        graphite {
-            host <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;localhost&#34;</span>
-            metrics_format <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;logstash.*&#34;</span>
-            include_metrics <span style="color:#666">=&gt;</span> <span style="color:#666">[</span> <span style="color:#ba2121">&#34;events.*&#34;</span> <span style="color:#666">]</span>
-            fields_are_metrics <span style="color:#666">=&gt;</span> <span style="color:#008000">true</span>
-        }
-    } <span style="color:#008000;font-weight:bold">else</span> {
-        <span style="color:#408080;font-style:italic"># Output configuration as before,</span>
-        <span style="color:#408080;font-style:italic"># to Elasticsearch or wherever</span>
-        <span style="color:#408080;font-style:italic"># [...]</span>
-    }
-}
-</code></pre></div><p>Fire up your Logstash agent (the new <code>--auto-reload</code> parameter I&rsquo;ve found great for development stuff like this):</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span>filter {
+</span></span><span style="display:flex;"><span>    <span style="color:#408080;font-style:italic"># Any other filter code here</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#408080;font-style:italic"># [...]</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#408080;font-style:italic">#</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#408080;font-style:italic"># Add events per second metric</span>
+</span></span><span style="display:flex;"><span>    metrics {
+</span></span><span style="display:flex;"><span>        meter <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;events&#34;</span>
+</span></span><span style="display:flex;"><span>        add_tag <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;metric&#34;</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>and then to get it written over to InfluxDB, via the graphite protocol, I amend my <strong>output</strong> stanza to split out the events based on tag - metrics go to Influx (and stdout for debug), everything else to Elasticsearch as before:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span>output {
+</span></span><span style="display:flex;"><span>    <span style="color:#008000;font-weight:bold">if</span> <span style="color:#ba2121">&#34;metric&#34;</span> <span style="color:#008000;font-weight:bold">in</span> <span style="color:#666">[</span>tags<span style="color:#666">]</span> {
+</span></span><span style="display:flex;"><span>        stdout {
+</span></span><span style="display:flex;"><span>            codec <span style="color:#666">=&gt;</span> line {
+</span></span><span style="display:flex;"><span>            <span style="color:#008000">format</span> <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;Events per second ingest rate (1/5/15 min avg): %{[events][rate_1m]} | %{[events][rate_5m]} | %{[events][rate_15m]}&#34;</span>
+</span></span><span style="display:flex;"><span>            }
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>        graphite {
+</span></span><span style="display:flex;"><span>            host <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;localhost&#34;</span>
+</span></span><span style="display:flex;"><span>            metrics_format <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;logstash.*&#34;</span>
+</span></span><span style="display:flex;"><span>            include_metrics <span style="color:#666">=&gt;</span> <span style="color:#666">[</span> <span style="color:#ba2121">&#34;events.*&#34;</span> <span style="color:#666">]</span>
+</span></span><span style="display:flex;"><span>            fields_are_metrics <span style="color:#666">=&gt;</span> <span style="color:#008000">true</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    } <span style="color:#008000;font-weight:bold">else</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># Output configuration as before,</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># to Elasticsearch or wherever</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># [...]</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Fire up your Logstash agent (the new <code>--auto-reload</code> parameter I&rsquo;ve found great for development stuff like this):</p>
 <pre><code>bin/logstash --auto-reload --config logstash-twitter-kafka.conf
 </code></pre>
 <p>And, aside from any other stdout that your script is writing, you&rsquo;ll now see the 1/5/15 minute moving averages for events per second being processed:</p>

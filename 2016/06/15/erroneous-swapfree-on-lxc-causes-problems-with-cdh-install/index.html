@@ -9,8 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.85.0" />
-
+		
 		
 		<meta property="og:title" content="Erroneous SwapFree on LXC causes problems with CDH install" />
 		<meta property="og:type" content="article" />
@@ -93,7 +92,7 @@
 java.lang.NumberFormatException: For input string: &quot;18446744073709550364&quot;
 </code></pre>
 <p>Looking down the stack trace, this came from <code>org.apache.hadoop.yarn.util.LinuxResourceCalculatorPlugin.readProcMemInfoFile</code>, which the <a href="http://grepcode.com/file/repo1.maven.org/maven2/org.apache.hadoop/hadoop-yarn-common/0.23.1/org/apache/hadoop/yarn/util/LinuxResourceCalculatorPlugin.java#LinuxResourceCalculatorPlugin.readProcMemInfoFile%28boolean%29">source code</a> shows is reading <code>/proc/meminfo</code>. Looking at this file on each node showed:</p>
-<pre><code>[root@cdh57-01-node-02 hadoop-yarn]# cat /proc/meminfo
+<pre tabindex="0"><code>[root@cdh57-01-node-02 hadoop-yarn]# cat /proc/meminfo
 MemTotal:       24576000 kB
 MemFree:        22123008 kB
 MemAvailable:   22123008 kB
@@ -116,34 +115,34 @@ Dirty:              2008 kB
 <p>In my LXC configuration in Proxmox I&rsquo;d set zero swap, thinking that disabling swap would be a good idea. Evidently not.</p>
 <p><img src="/images/2016/06/cdh-yarn-02.png" alt=""></p>
 <p>As soon as I updated the container Swap to 128Mb, the SwapFree looked better:</p>
-<pre><code>[root@cdh57-01-node-02 hadoop-yarn]# cat /proc/meminfo
+<pre tabindex="0"><code>[root@cdh57-01-node-02 hadoop-yarn]# cat /proc/meminfo
 [...]
 SwapTotal:        131072 kB
 SwapFree:         129840 kB
 [...]
 </code></pre><p>To apply this to all the six container nodes, I could have used the Proxmox web GUI, but took advantage of the CLI to save some time with a little bash iteration over the six container IDs (111 to 116) and the <code>pct set</code> command</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#008000;font-weight:bold">for</span> i in 11<span style="color:#666">{</span>1..6<span style="color:#666">}</span>; <span style="color:#008000;font-weight:bold">do</span> pct <span style="color:#008000">set</span> <span style="color:#19177c">$i</span> -swap 512;<span style="color:#008000;font-weight:bold">done</span>
-</code></pre></div><p>To check the value across each node at once, I used <a href="http://www.rittmanmead.com/2014/12/linux-cluster-sysadmin-parallel-command-execution-with-pdsh/">pdsh</a> from my laptop to run the same command on each node directly:</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">rmoff@asgard:~&gt; pdsh -l root -w cdh57-01-node-0<span style="color:#666">[</span>1-6<span style="color:#666">]</span> <span style="color:#ba2121">&#34;grep Swap /proc/meminfo&#34;</span>|sort
-cdh57-01-node-01: SwapCached:            <span style="color:#666">0</span> kB
-cdh57-01-node-01: SwapFree:         <span style="color:#666">515496</span> kB
-cdh57-01-node-01: SwapTotal:        <span style="color:#666">524288</span> kB
-cdh57-01-node-02: SwapCached:            <span style="color:#666">0</span> kB
-cdh57-01-node-02: SwapFree:         <span style="color:#666">523056</span> kB
-cdh57-01-node-02: SwapTotal:        <span style="color:#666">524288</span> kB
-cdh57-01-node-03: SwapCached:            <span style="color:#666">0</span> kB
-cdh57-01-node-03: SwapFree:         <span style="color:#666">523476</span> kB
-cdh57-01-node-03: SwapTotal:        <span style="color:#666">524288</span> kB
-cdh57-01-node-04: SwapCached:            <span style="color:#666">0</span> kB
-cdh57-01-node-04: SwapFree:         <span style="color:#666">523760</span> kB
-cdh57-01-node-04: SwapTotal:        <span style="color:#666">524288</span> kB
-cdh57-01-node-05: SwapCached:            <span style="color:#666">0</span> kB
-cdh57-01-node-05: SwapFree:         <span style="color:#666">522272</span> kB
-cdh57-01-node-05: SwapTotal:        <span style="color:#666">524288</span> kB
-cdh57-01-node-06: SwapCached:            <span style="color:#666">0</span> kB
-cdh57-01-node-06: SwapFree:         <span style="color:#666">519456</span> kB
-cdh57-01-node-06: SwapTotal:        <span style="color:#666">524288</span> kB
-</code></pre></div><p>From the Cloudera Manager <strong>Cluster Setup</strong> page I then clicked <strong>Retry</strong> and YARN came up successfully.</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">for</span> i in 11<span style="color:#666">{</span>1..6<span style="color:#666">}</span>; <span style="color:#008000;font-weight:bold">do</span> pct <span style="color:#008000">set</span> <span style="color:#19177c">$i</span> -swap 512;<span style="color:#008000;font-weight:bold">done</span>
+</span></span></code></pre></div><p>To check the value across each node at once, I used <a href="http://www.rittmanmead.com/2014/12/linux-cluster-sysadmin-parallel-command-execution-with-pdsh/">pdsh</a> from my laptop to run the same command on each node directly:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>rmoff@asgard:~&gt; pdsh -l root -w cdh57-01-node-0<span style="color:#666">[</span>1-6<span style="color:#666">]</span> <span style="color:#ba2121">&#34;grep Swap /proc/meminfo&#34;</span>|sort
+</span></span><span style="display:flex;"><span>cdh57-01-node-01: SwapCached:            <span style="color:#666">0</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-01: SwapFree:         <span style="color:#666">515496</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-01: SwapTotal:        <span style="color:#666">524288</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-02: SwapCached:            <span style="color:#666">0</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-02: SwapFree:         <span style="color:#666">523056</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-02: SwapTotal:        <span style="color:#666">524288</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-03: SwapCached:            <span style="color:#666">0</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-03: SwapFree:         <span style="color:#666">523476</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-03: SwapTotal:        <span style="color:#666">524288</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-04: SwapCached:            <span style="color:#666">0</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-04: SwapFree:         <span style="color:#666">523760</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-04: SwapTotal:        <span style="color:#666">524288</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-05: SwapCached:            <span style="color:#666">0</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-05: SwapFree:         <span style="color:#666">522272</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-05: SwapTotal:        <span style="color:#666">524288</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-06: SwapCached:            <span style="color:#666">0</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-06: SwapFree:         <span style="color:#666">519456</span> kB
+</span></span><span style="display:flex;"><span>cdh57-01-node-06: SwapTotal:        <span style="color:#666">524288</span> kB
+</span></span></code></pre></div><p>From the Cloudera Manager <strong>Cluster Setup</strong> page I then clicked <strong>Retry</strong> and YARN came up successfully.</p>
 
 </article>
 

@@ -9,8 +9,7 @@
 		
 		
 		
-		<meta name="generator" content="Hugo 0.85.0" />
-
+		
 		
 		<meta property="og:title" content="Fun and Games with Oracle GoldenGate, Kafka, and Logstash on BigDataLite 4.4" />
 		<meta property="og:type" content="article" />
@@ -199,7 +198,7 @@ Turns out <a href="https://docs.oracle.com/goldengate/bd1221/gg-bd/GADBD/hdfs_ha
 <p>Obviously this has performance implications in a real-life implementation, but for proving out functionality, it saved me from complete insanity :-)</p>
 <h3 id="sidenote---error-in-reset_bigdataoby">Sidenote - error in reset_bigdata.oby?</h3>
 <p>I might be missing something here, but it looks like there&rsquo;s a minor fubar in <code>/u01/ogg-bd/dirprm/reset_bigdata.oby</code>:</p>
-<pre><code>start mgr
+<pre tabindex="0"><code>start mgr
 stop rmov
 stop rkafka
 shell sleep 5
@@ -210,147 +209,146 @@ stop rkafka
 <h3 id="logstash">Logstash</h3>
 <p>I&rsquo;m a long-time fan of the <a href="http://elastic.co">Elastic stack</a>, and Logstash has an input plugin for Kafka, so let&rsquo;s see if that can fit the jigsaw here too.</p>
 <p>The data from GoldenGate is serialised using <a href="https://avro.apache.org/">Avro</a>. The schema is put by Goldengate onto a separate Kafka topic, <code>mySchemaTopic</code>. There&rsquo;s probably a more proper way to get it but I dumped it to file thus:</p>
-<pre><code>kafka-console-consumer --zookeeper localhost:2181 --topic mySchemaTopic --from-beginning &gt; ~/schema.avsc
+<pre tabindex="0"><code>kafka-console-consumer --zookeeper localhost:2181 --topic mySchemaTopic --from-beginning &gt; ~/schema.avsc
 </code></pre><p>Here&rsquo;s a snippet of what it looks like:</p>
-<pre><code>{
-  &quot;type&quot; : &quot;record&quot;,
-  &quot;name&quot; : &quot;MOVIE&quot;,
-  &quot;namespace&quot; : &quot;ORCL.MOVIEDEMO&quot;,
-  &quot;fields&quot; : [ {
-    &quot;name&quot; : &quot;table&quot;,
-    &quot;type&quot; : &quot;string&quot;
+<pre tabindex="0"><code>{
+  &#34;type&#34; : &#34;record&#34;,
+  &#34;name&#34; : &#34;MOVIE&#34;,
+  &#34;namespace&#34; : &#34;ORCL.MOVIEDEMO&#34;,
+  &#34;fields&#34; : [ {
+    &#34;name&#34; : &#34;table&#34;,
+    &#34;type&#34; : &#34;string&#34;
   }, {
-    &quot;name&quot; : &quot;op_type&quot;,
-    &quot;type&quot; : &quot;string&quot;
+    &#34;name&#34; : &#34;op_type&#34;,
+    &#34;type&#34; : &#34;string&#34;
   }, {
 [...]
 </code></pre><p>Logstash can use the Avro <strong>codec</strong> to deserialise the data it&rsquo;s going to be pulling from Kafka. It isn&rsquo;t part of the standard distribution, so needs installing thus:</p>
-<pre><code>/opt/logstash-2.2.0/bin/plugin install logstash-codec-avro
+<pre tabindex="0"><code>/opt/logstash-2.2.0/bin/plugin install logstash-codec-avro
 </code></pre><p>Now we can build our Logstash config file:</p>
-<div class="highlight"><pre style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ruby" data-lang="ruby"> input {
-     kafka {
-         zk_connect <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#39;bigdatalite:2181&#39;</span>
-         topic_id <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#39;oggtopic&#39;</span>
-         codec <span style="color:#666">=&gt;</span>
-             avro {
-                 schema_uri <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;/home/oracle/schema.avsc&#34;</span>
-             }
-         <span style="color:#408080;font-style:italic"># These next two options will force logstash to pull</span>
-         <span style="color:#408080;font-style:italic"># the entire contents of the topic.</span>
-         reset_beginning <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#39;true&#39;</span>
-         auto_offset_reset <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#39;smallest&#39;</span>
-     }
- }
-
- output {
-     stdout {
-         codec <span style="color:#666">=&gt;</span> rubydebug
-     }
- }
-</code></pre></div><p>Note the syntax for referencing the Avro codec - if you follow the syntax in the docs it will fail with the error <code>undefined method `decode' for [&quot;avro&quot;</code>. Thanks to <a href="http://stackoverflow.com/a/33211940/350613">this Stackoverflow post</a> for help on fixing that problem.</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span> input {
+</span></span><span style="display:flex;"><span>     kafka {
+</span></span><span style="display:flex;"><span>         zk_connect <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#39;bigdatalite:2181&#39;</span>
+</span></span><span style="display:flex;"><span>         topic_id <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#39;oggtopic&#39;</span>
+</span></span><span style="display:flex;"><span>         codec <span style="color:#666">=&gt;</span>
+</span></span><span style="display:flex;"><span>             avro {
+</span></span><span style="display:flex;"><span>                 schema_uri <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#34;/home/oracle/schema.avsc&#34;</span>
+</span></span><span style="display:flex;"><span>             }
+</span></span><span style="display:flex;"><span>         <span style="color:#408080;font-style:italic"># These next two options will force logstash to pull</span>
+</span></span><span style="display:flex;"><span>         <span style="color:#408080;font-style:italic"># the entire contents of the topic.</span>
+</span></span><span style="display:flex;"><span>         reset_beginning <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#39;true&#39;</span>
+</span></span><span style="display:flex;"><span>         auto_offset_reset <span style="color:#666">=&gt;</span> <span style="color:#ba2121">&#39;smallest&#39;</span>
+</span></span><span style="display:flex;"><span>     }
+</span></span><span style="display:flex;"><span> }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span> output {
+</span></span><span style="display:flex;"><span>     stdout {
+</span></span><span style="display:flex;"><span>         codec <span style="color:#666">=&gt;</span> rubydebug
+</span></span><span style="display:flex;"><span>     }
+</span></span><span style="display:flex;"><span> }
+</span></span></code></pre></div><p>Note the syntax for referencing the Avro codec - if you follow the syntax in the docs it will fail with the error <code>undefined method `decode' for [&quot;avro&quot;</code>. Thanks to <a href="http://stackoverflow.com/a/33211940/350613">this Stackoverflow post</a> for help on fixing that problem.</p>
 <p>Because we&rsquo;ve told Logstash to use the <strong>stdout</strong> output plugin we can see everything that it&rsquo;s reading from Kafka, and the <strong>rubydebug</strong> codec ensures that field names etc are nicely formatted. You can see from this the point of the Avro schema - it supports the idea of records deletions, as in this one:</p>
-<pre><code>[oracle@bigdatalite logstash-2.2.0]$ /opt/logstash-2.2.0/bin/logstash -f ~/logstash-kafka-stdout.conf
+<pre tabindex="0"><code>[oracle@bigdatalite logstash-2.2.0]$ /opt/logstash-2.2.0/bin/logstash -f ~/logstash-kafka-stdout.conf
 Settings: Default pipeline workers: 4
 Logstash startup completed
 {
-           &quot;table&quot; =&gt; &quot;ORCL.MOVIEDEMO.MOVIE&quot;,
-         &quot;op_type&quot; =&gt; &quot;D&quot;,
-           &quot;op_ts&quot; =&gt; &quot;2016-03-16 22:14:47.000000&quot;,
-      &quot;current_ts&quot; =&gt; &quot;2016-03-16T22:26:29.515000&quot;,
-             &quot;pos&quot; =&gt; &quot;00000000010000002172&quot;,
-    &quot;primary_keys&quot; =&gt; [
-        [0] &quot;MOVIE_ID&quot;
+           &#34;table&#34; =&gt; &#34;ORCL.MOVIEDEMO.MOVIE&#34;,
+         &#34;op_type&#34; =&gt; &#34;D&#34;,
+           &#34;op_ts&#34; =&gt; &#34;2016-03-16 22:14:47.000000&#34;,
+      &#34;current_ts&#34; =&gt; &#34;2016-03-16T22:26:29.515000&#34;,
+             &#34;pos&#34; =&gt; &#34;00000000010000002172&#34;,
+    &#34;primary_keys&#34; =&gt; [
+        [0] &#34;MOVIE_ID&#34;
     ],
-          &quot;tokens&quot; =&gt; {},
-          &quot;before&quot; =&gt; {
-                      &quot;MOVIE_ID&quot; =&gt; &quot;1&quot;,
-            &quot;MOVIE_ID_isMissing&quot; =&gt; false,
-                         &quot;TITLE&quot; =&gt; &quot;Foo&quot;,
-               &quot;TITLE_isMissing&quot; =&gt; false,
-                          &quot;YEAR&quot; =&gt; &quot;2014&quot;,
-                &quot;YEAR_isMissing&quot; =&gt; false,
-                        &quot;BUDGET&quot; =&gt; &quot;500000&quot;,
-              &quot;BUDGET_isMissing&quot; =&gt; false,
-                         &quot;GROSS&quot; =&gt; &quot;20000000&quot;,
-               &quot;GROSS_isMissing&quot; =&gt; false,
-                  &quot;PLOT_SUMMARY&quot; =&gt; &quot;give you up&quot;,
-        &quot;PLOT_SUMMARY_isMissing&quot; =&gt; false
+          &#34;tokens&#34; =&gt; {},
+          &#34;before&#34; =&gt; {
+                      &#34;MOVIE_ID&#34; =&gt; &#34;1&#34;,
+            &#34;MOVIE_ID_isMissing&#34; =&gt; false,
+                         &#34;TITLE&#34; =&gt; &#34;Foo&#34;,
+               &#34;TITLE_isMissing&#34; =&gt; false,
+                          &#34;YEAR&#34; =&gt; &#34;2014&#34;,
+                &#34;YEAR_isMissing&#34; =&gt; false,
+                        &#34;BUDGET&#34; =&gt; &#34;500000&#34;,
+              &#34;BUDGET_isMissing&#34; =&gt; false,
+                         &#34;GROSS&#34; =&gt; &#34;20000000&#34;,
+               &#34;GROSS_isMissing&#34; =&gt; false,
+                  &#34;PLOT_SUMMARY&#34; =&gt; &#34;give you up&#34;,
+        &#34;PLOT_SUMMARY_isMissing&#34; =&gt; false
     },
-           &quot;after&quot; =&gt; nil,
-        &quot;@version&quot; =&gt; &quot;1&quot;,
-      &quot;@timestamp&quot; =&gt; &quot;2016-03-16T22:53:48.675Z&quot;
+           &#34;after&#34; =&gt; nil,
+        &#34;@version&#34; =&gt; &#34;1&#34;,
+      &#34;@timestamp&#34; =&gt; &#34;2016-03-16T22:53:48.675Z&#34;
 }
 </code></pre><p>as well as inserts and updates:</p>
-<pre><code>{
-           &quot;table&quot; =&gt; &quot;ORCL.MOVIEDEMO.MOVIE&quot;,
-         &quot;op_type&quot; =&gt; &quot;I&quot;,
-           &quot;op_ts&quot; =&gt; &quot;2016-03-16 22:32:21.000000&quot;,
-      &quot;current_ts&quot; =&gt; &quot;2016-03-16T22:32:22.941000&quot;,
-             &quot;pos&quot; =&gt; &quot;00000000010000003090&quot;,
-    &quot;primary_keys&quot; =&gt; [
-        [0] &quot;MOVIE_ID&quot;
+<pre tabindex="0"><code>{
+           &#34;table&#34; =&gt; &#34;ORCL.MOVIEDEMO.MOVIE&#34;,
+         &#34;op_type&#34; =&gt; &#34;I&#34;,
+           &#34;op_ts&#34; =&gt; &#34;2016-03-16 22:32:21.000000&#34;,
+      &#34;current_ts&#34; =&gt; &#34;2016-03-16T22:32:22.941000&#34;,
+             &#34;pos&#34; =&gt; &#34;00000000010000003090&#34;,
+    &#34;primary_keys&#34; =&gt; [
+        [0] &#34;MOVIE_ID&#34;
     ],
-          &quot;tokens&quot; =&gt; {},
-          &quot;before&quot; =&gt; nil,
-           &quot;after&quot; =&gt; {
-                      &quot;MOVIE_ID&quot; =&gt; &quot;4242&quot;,
-            &quot;MOVIE_ID_isMissing&quot; =&gt; false,
-                         &quot;TITLE&quot; =&gt; &quot;never gonna&quot;,
-               &quot;TITLE_isMissing&quot; =&gt; false,
-                          &quot;YEAR&quot; =&gt; &quot;2014&quot;,
-                &quot;YEAR_isMissing&quot; =&gt; false,
-                        &quot;BUDGET&quot; =&gt; &quot;500000&quot;,
-              &quot;BUDGET_isMissing&quot; =&gt; false,
-                         &quot;GROSS&quot; =&gt; &quot;20000000&quot;,
-               &quot;GROSS_isMissing&quot; =&gt; false,
-                  &quot;PLOT_SUMMARY&quot; =&gt; &quot;give you up&quot;,
-        &quot;PLOT_SUMMARY_isMissing&quot; =&gt; false
+          &#34;tokens&#34; =&gt; {},
+          &#34;before&#34; =&gt; nil,
+           &#34;after&#34; =&gt; {
+                      &#34;MOVIE_ID&#34; =&gt; &#34;4242&#34;,
+            &#34;MOVIE_ID_isMissing&#34; =&gt; false,
+                         &#34;TITLE&#34; =&gt; &#34;never gonna&#34;,
+               &#34;TITLE_isMissing&#34; =&gt; false,
+                          &#34;YEAR&#34; =&gt; &#34;2014&#34;,
+                &#34;YEAR_isMissing&#34; =&gt; false,
+                        &#34;BUDGET&#34; =&gt; &#34;500000&#34;,
+              &#34;BUDGET_isMissing&#34; =&gt; false,
+                         &#34;GROSS&#34; =&gt; &#34;20000000&#34;,
+               &#34;GROSS_isMissing&#34; =&gt; false,
+                  &#34;PLOT_SUMMARY&#34; =&gt; &#34;give you up&#34;,
+        &#34;PLOT_SUMMARY_isMissing&#34; =&gt; false
     },
-        &quot;@version&quot; =&gt; &quot;1&quot;,
-      &quot;@timestamp&quot; =&gt; &quot;2016-03-16T23:08:58.804Z&quot;
+        &#34;@version&#34; =&gt; &#34;1&#34;,
+      &#34;@timestamp&#34; =&gt; &#34;2016-03-16T23:08:58.804Z&#34;
 }
 {
-           &quot;table&quot; =&gt; &quot;ORCL.MOVIEDEMO.MOVIE&quot;,
-         &quot;op_type&quot; =&gt; &quot;U&quot;,
-           &quot;op_ts&quot; =&gt; &quot;2016-03-16 23:09:58.000000&quot;,
-      &quot;current_ts&quot; =&gt; &quot;2016-03-16T23:10:01.023000&quot;,
-             &quot;pos&quot; =&gt; &quot;00000000010000003700&quot;,
-    &quot;primary_keys&quot; =&gt; [
-        [0] &quot;MOVIE_ID&quot;
+           &#34;table&#34; =&gt; &#34;ORCL.MOVIEDEMO.MOVIE&#34;,
+         &#34;op_type&#34; =&gt; &#34;U&#34;,
+           &#34;op_ts&#34; =&gt; &#34;2016-03-16 23:09:58.000000&#34;,
+      &#34;current_ts&#34; =&gt; &#34;2016-03-16T23:10:01.023000&#34;,
+             &#34;pos&#34; =&gt; &#34;00000000010000003700&#34;,
+    &#34;primary_keys&#34; =&gt; [
+        [0] &#34;MOVIE_ID&#34;
     ],
-          &quot;tokens&quot; =&gt; {},
-          &quot;before&quot; =&gt; {
-                      &quot;MOVIE_ID&quot; =&gt; &quot;4242&quot;,
-            &quot;MOVIE_ID_isMissing&quot; =&gt; false,
-                         &quot;TITLE&quot; =&gt; &quot;never gonna&quot;,
-               &quot;TITLE_isMissing&quot; =&gt; false,
-                          &quot;YEAR&quot; =&gt; &quot;2014&quot;,
-                &quot;YEAR_isMissing&quot; =&gt; false,
-                        &quot;BUDGET&quot; =&gt; &quot;500000&quot;,
-              &quot;BUDGET_isMissing&quot; =&gt; false,
-                         &quot;GROSS&quot; =&gt; &quot;20000000&quot;,
-               &quot;GROSS_isMissing&quot; =&gt; false,
-                  &quot;PLOT_SUMMARY&quot; =&gt; &quot;give you up&quot;,
-        &quot;PLOT_SUMMARY_isMissing&quot; =&gt; false
+          &#34;tokens&#34; =&gt; {},
+          &#34;before&#34; =&gt; {
+                      &#34;MOVIE_ID&#34; =&gt; &#34;4242&#34;,
+            &#34;MOVIE_ID_isMissing&#34; =&gt; false,
+                         &#34;TITLE&#34; =&gt; &#34;never gonna&#34;,
+               &#34;TITLE_isMissing&#34; =&gt; false,
+                          &#34;YEAR&#34; =&gt; &#34;2014&#34;,
+                &#34;YEAR_isMissing&#34; =&gt; false,
+                        &#34;BUDGET&#34; =&gt; &#34;500000&#34;,
+              &#34;BUDGET_isMissing&#34; =&gt; false,
+                         &#34;GROSS&#34; =&gt; &#34;20000000&#34;,
+               &#34;GROSS_isMissing&#34; =&gt; false,
+                  &#34;PLOT_SUMMARY&#34; =&gt; &#34;give you up&#34;,
+        &#34;PLOT_SUMMARY_isMissing&#34; =&gt; false
     },
-           &quot;after&quot; =&gt; {
-                      &quot;MOVIE_ID&quot; =&gt; &quot;4242&quot;,
-            &quot;MOVIE_ID_isMissing&quot; =&gt; false,
-                         &quot;TITLE&quot; =&gt; &quot;Foobar&quot;,
-               &quot;TITLE_isMissing&quot; =&gt; false,
-                          &quot;YEAR&quot; =&gt; &quot;2014&quot;,
-                &quot;YEAR_isMissing&quot; =&gt; false,
-                        &quot;BUDGET&quot; =&gt; &quot;500000&quot;,
-              &quot;BUDGET_isMissing&quot; =&gt; false,
-                         &quot;GROSS&quot; =&gt; &quot;20000000&quot;,
-               &quot;GROSS_isMissing&quot; =&gt; false,
-                  &quot;PLOT_SUMMARY&quot; =&gt; &quot;give you up&quot;,
-        &quot;PLOT_SUMMARY_isMissing&quot; =&gt; false
+           &#34;after&#34; =&gt; {
+                      &#34;MOVIE_ID&#34; =&gt; &#34;4242&#34;,
+            &#34;MOVIE_ID_isMissing&#34; =&gt; false,
+                         &#34;TITLE&#34; =&gt; &#34;Foobar&#34;,
+               &#34;TITLE_isMissing&#34; =&gt; false,
+                          &#34;YEAR&#34; =&gt; &#34;2014&#34;,
+                &#34;YEAR_isMissing&#34; =&gt; false,
+                        &#34;BUDGET&#34; =&gt; &#34;500000&#34;,
+              &#34;BUDGET_isMissing&#34; =&gt; false,
+                         &#34;GROSS&#34; =&gt; &#34;20000000&#34;,
+               &#34;GROSS_isMissing&#34; =&gt; false,
+                  &#34;PLOT_SUMMARY&#34; =&gt; &#34;give you up&#34;,
+        &#34;PLOT_SUMMARY_isMissing&#34; =&gt; false
     },
-        &quot;@version&quot; =&gt; &quot;1&quot;,
-      &quot;@timestamp&quot; =&gt; &quot;2016-03-16T23:10:11.043Z&quot;
+        &#34;@version&#34; =&gt; &#34;1&#34;,
+      &#34;@timestamp&#34; =&gt; &#34;2016-03-16T23:10:11.043Z&#34;
 }
-
 </code></pre><p>If you want to get this into Elasticsearch you can send it there from Logstash, just by adding</p>
 <pre><code> elasticsearch { hosts =&gt; &quot;localhost&quot;}
 </code></pre>
