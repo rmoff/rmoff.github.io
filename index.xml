@@ -21,7 +21,7 @@
 &lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;Py4JJavaError: An error occurred while calling o45.save.
 : java.lang.ClassNotFoundException: 
 Failed to find data source: delta.
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;strong&gt;In short, the problem was that I was creating both a &lt;code&gt;SparkSession&lt;/code&gt; &lt;em&gt;and&lt;/em&gt; a &lt;code&gt;SparkContext&lt;/code&gt;&lt;/strong&gt;. I honestly don&amp;rsquo;t understand enough about Spark to tell you why this causes the error, but through a lot of painful trial and error I can tell you that it does. &lt;em&gt;Someone more knowledgable than me can perhaps tell me (&lt;a href=&#34;mailto:robin@rmoff.net&#34;&gt;email&lt;/a&gt; / &lt;a href=&#34;https://twitter.com/rmoff/&#34;&gt;twitter&lt;/a&gt; / &lt;a href=&#34;https://data-folks.masto.host/@rmoff&#34;&gt;mastodon&lt;/a&gt;) why this is and if what I&amp;rsquo;ve ended up with is the right code&lt;/em&gt;.&lt;/p&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;strong&gt;In short, the problem was that I was creating both a &lt;code&gt;SparkSession&lt;/code&gt; &lt;em&gt;and&lt;/em&gt; a &lt;code&gt;SparkContext&lt;/code&gt;&lt;/strong&gt;. I honestly don&amp;rsquo;t understand enough about Spark to tell you why this causes the error, but through a lot of painful trial and error I can tell you that it does. &lt;em&gt;Someone more knowledgable than me can perhaps tell me (&lt;a href=&#34;mailto:robin@rmoff.net&#34;&gt;email&lt;/a&gt; / &lt;a href=&#34;https://twitter.com/rmoff/&#34;&gt;twitter&lt;/a&gt; / &lt;a href=&#34;https://data-folks.masto.host/@rmoff&#34;&gt;mastodon&lt;/a&gt;) why this is and if what I&amp;rsquo;ve ended up with is the right code&lt;/em&gt;. &lt;strong&gt;UPDATE: Damon Cortesi explained it to me :) See below for details.&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;Here&amp;rsquo;re the salient points of the Jupyter notebook:&lt;/p&gt;
 &lt;h2 id=&#34;versions-and-stuff&#34;&gt;Versions and stuff&lt;/h2&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;sys&lt;/span&gt;
@@ -205,6 +205,134 @@ Setting default log level to &amp;#34;WARN&amp;#34;.
 To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
 23/04/05 16:30:36 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
 23/04/05 16:30:36 WARN Utils: Service &amp;#39;SparkUI&amp;#39; could not bind on port 4040. Attempting port 4041.
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;why-did-it-do-what-it-did&#34;&gt;Why Did it Do What It Did?&lt;/h2&gt;
+&lt;p&gt;Courtesy of &lt;a href=&#34;https://www.linkedin.com/feed/update/urn:li:activity:7049423288099319809?commentUrn=urn%3Ali%3Acomment%3A%28activity%3A7049423288099319809%2C7049433950406021120%29&amp;amp;dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287049433950406021120%2Curn%3Ali%3Aactivity%3A7049423288099319809%29&#34;&gt;Damon Cortesi&lt;/a&gt;:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;In the example that doesn&amp;rsquo;t work, you explicitly create a &lt;code&gt;SparkContext&lt;/code&gt; first with &lt;code&gt;sc = SparkContext(&#39;local[*]&#39;)&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;When you use &lt;code&gt;SparkSession.builder&lt;/code&gt;&amp;hellip;&lt;code&gt;getOrCreate()&lt;/code&gt;, it reuses the &lt;code&gt;SparkContext&lt;/code&gt; you already created. You should be able to see this by running &lt;code&gt;spark.sparkContext&lt;/code&gt;. That &lt;code&gt;SparkContext&lt;/code&gt; unfortunately doesn&amp;rsquo;t have the config variables you specified and, based on some reason I don&amp;rsquo;t totally understand, the config variables you specify later are not updated. I&amp;rsquo;m guessing this is because &lt;code&gt;SparkContext&lt;/code&gt; spins up a JVM and some options (like &lt;code&gt;spark.jars.packages&lt;/code&gt;) would need to be specified before you spin up the JVM.&lt;/p&gt;
+&lt;p&gt;In the example that works, it doesn&amp;rsquo;t have a &lt;code&gt;SparkContext&lt;/code&gt; to reuse, so it creates a one using the config you provided.&lt;/p&gt;
+&lt;p&gt;😅 I love Spark! /s&lt;/p&gt;
+&lt;p&gt;This post does a pretty good job of explaining what&amp;rsquo;s going on: &lt;a href=&#34;https://medium.com/@achilleus/spark-session-10d0d66d1d24&#34;&gt;A tale of Spark Session and Spark Context&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;proving-it-to-myself&#34;&gt;Proving it to myself&lt;/h2&gt;
+&lt;p&gt;Damon&amp;rsquo;s explanation and the linked blog were good, so to close the loop I wanted to prove to myself that I could reproduce this explanation locally. Here&amp;rsquo;s &lt;a href=&#34;https://gist.github.com/rmoff/1d86204b559f8ffce83be4b3206b1fa0&#34;&gt;the notebook itself if you want to try it&lt;/a&gt; and reproduced here too:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;sys&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000&#34;&gt;print&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Kernel:&amp;#34;&lt;/span&gt;, sys&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;executable)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000&#34;&gt;print&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Python version:&amp;#34;&lt;/span&gt;, sys&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;version)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000&#34;&gt;print&lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;PySpark version:&amp;#34;&lt;/span&gt;, pyspark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;__version__)
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;Kernel: /opt/conda/bin/python
+Python version: 3.9.7 | packaged by conda-forge | (default, Oct 10 2021, 15:08:54) 
+[GCC 9.4.0]
+PySpark version: 3.2.0
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;spark-context-and-session---no-config-to-pick-up&#34;&gt;Spark Context and Session - no config to pick up&lt;/h2&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark.context&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkContext
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkFiles
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark.sql.session&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkSession
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;sc &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; SparkContext(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;local&amp;#39;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;spark &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; SparkSession(sc)
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;sparkContext&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;getConf()&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;getAll()
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;[(&#39;spark.master&#39;, &#39;local&#39;),
+ (&#39;spark.app.startTime&#39;, &#39;1680720996903&#39;),
+ (&#39;spark.executor.id&#39;, &#39;driver&#39;),
+ (&#39;spark.app.name&#39;, &#39;pyspark-shell&#39;),
+ (&#39;spark.driver.extraJavaOptions&#39;,
+  &#39;-Dio.netty.tryReflectionSetAccessible=true&#39;),
+ (&#39;spark.driver.port&#39;, &#39;33339&#39;),
+ (&#39;spark.driver.host&#39;, &#39;358d949974bd&#39;),
+ (&#39;spark.rdd.compress&#39;, &#39;True&#39;),
+ (&#39;spark.serializer.objectStreamReset&#39;, &#39;100&#39;),
+ (&#39;spark.app.id&#39;, &#39;local-1680720997412&#39;),
+ (&#39;spark.submit.pyFiles&#39;, &#39;&#39;),
+ (&#39;spark.submit.deployMode&#39;, &#39;client&#39;),
+ (&#39;spark.executor.extraJavaOptions&#39;,
+  &#39;-Dio.netty.tryReflectionSetAccessible=true&#39;),
+ (&#39;spark.ui.showConsoleProgress&#39;, &#39;true&#39;)]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;em&gt;Now restart the kernel&lt;/em&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;no-explicit-spark-context---picks-up-config-as-expected&#34;&gt;No explicit Spark Context - picks up config as expected&lt;/h2&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark.context&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkContext
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkFiles
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark.sql.session&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkSession
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;spark &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; (
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    SparkSession&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;builder&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;master(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;local[*]&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;config(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;spark.jars.packages&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.delta:delta-core_2.12:2.2.0&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;config(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;spark.sql.extensions&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.delta.sql.DeltaSparkSessionExtension&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;config(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;spark.sql.catalog.spark_catalog&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;org.apache.spark.sql.delta.catalog.DeltaCatalog&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;getOrCreate()
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;)        
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;sparkContext&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;getConf()&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;getAll()
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;[(&#39;spark.repl.local.jars&#39;,
+  &#39;file:///home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar,file:///home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar&#39;),
+ (&#39;spark.app.id&#39;, &#39;local-1680721007128&#39;),
+ (&#39;spark.app.startTime&#39;, &#39;1680721006667&#39;),
+ (&#39;spark.files&#39;,
+  &#39;file:///home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar,file:///home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar&#39;),
+ (&#39;spark.app.initial.file.urls&#39;,
+  &#39;file:///home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar&#39;),
+ (&#39;spark.executor.id&#39;, &#39;driver&#39;),
+ (&#39;spark.app.name&#39;, &#39;pyspark-shell&#39;),
+ (&#39;spark.driver.extraJavaOptions&#39;,
+  &#39;-Dio.netty.tryReflectionSetAccessible=true&#39;),
+ (&#39;spark.app.initial.jar.urls&#39;,
+  &#39;spark://358d949974bd:41145/jars/io.delta_delta-core_2.12-2.2.0.jar,spark://358d949974bd:41145/jars/io.delta_delta-storage-2.2.0.jar,spark://358d949974bd:41145/jars/org.antlr_antlr4-runtime-4.8.jar&#39;),
+ (&#39;spark.jars.packages&#39;, &#39;io.delta:delta-core_2.12:2.2.0&#39;),
+ (&#39;spark.driver.host&#39;, &#39;358d949974bd&#39;),
+ (&#39;spark.sql.warehouse.dir&#39;, &#39;file:/home/jovyan/spark-warehouse&#39;),
+ (&#39;spark.sql.extensions&#39;, &#39;io.delta.sql.DeltaSparkSessionExtension&#39;),
+ (&#39;spark.rdd.compress&#39;, &#39;True&#39;),
+ (&#39;spark.submit.pyFiles&#39;,
+  &#39;/home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,/home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar,/home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar&#39;),
+ (&#39;spark.driver.port&#39;, &#39;41145&#39;),
+ (&#39;spark.jars&#39;,
+  &#39;file:///home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar,file:///home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar&#39;),
+ (&#39;spark.serializer.objectStreamReset&#39;, &#39;100&#39;),
+ (&#39;spark.master&#39;, &#39;local[*]&#39;),
+ (&#39;spark.submit.deployMode&#39;, &#39;client&#39;),
+ (&#39;spark.executor.extraJavaOptions&#39;,
+  &#39;-Dio.netty.tryReflectionSetAccessible=true&#39;),
+ (&#39;spark.ui.showConsoleProgress&#39;, &#39;true&#39;),
+ (&#39;spark.sql.catalog.spark_catalog&#39;,
+  &#39;org.apache.spark.sql.delta.catalog.DeltaCatalog&#39;)]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;em&gt;Now restart the kernel&lt;/em&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;existing-spark-context-with-attempted-config-for-the-session-&#34;&gt;Existing Spark Context with attempted config for the Session 💀&lt;/h2&gt;
+&lt;p&gt;&lt;em&gt;SparkContext gets implictly reused by the Spark Session and so config is ignored&lt;/em&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark.context&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkContext
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkFiles
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#00f;font-weight:bold&#34;&gt;pyspark.sql.session&lt;/span&gt; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;import&lt;/span&gt; SparkSession
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;sc &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; SparkContext(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;local&amp;#39;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;spark &lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt; (
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    SparkSession&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;builder&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;master(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;local[*]&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;config(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;spark.jars.packages&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.delta:delta-core_2.12:2.2.0&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;config(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;spark.sql.extensions&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;io.delta.sql.DeltaSparkSessionExtension&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;config(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;spark.sql.catalog.spark_catalog&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;org.apache.spark.sql.delta.catalog.DeltaCatalog&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;getOrCreate()
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;)        
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;spark&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;sparkContext&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;getConf()&lt;span style=&#34;color:#666&#34;&gt;.&lt;/span&gt;getAll()
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre&gt;&lt;code&gt;[(&#39;spark.master&#39;, &#39;local&#39;),
+ (&#39;spark.app.startTime&#39;, &#39;1680721019537&#39;),
+ (&#39;spark.executor.id&#39;, &#39;driver&#39;),
+ (&#39;spark.app.name&#39;, &#39;pyspark-shell&#39;),
+ (&#39;spark.app.id&#39;, &#39;local-1680721020036&#39;),
+ (&#39;spark.driver.extraJavaOptions&#39;,
+  &#39;-Dio.netty.tryReflectionSetAccessible=true&#39;),
+ (&#39;spark.driver.host&#39;, &#39;358d949974bd&#39;),
+ (&#39;spark.sql.warehouse.dir&#39;, &#39;file:/home/jovyan/spark-warehouse&#39;),
+ (&#39;spark.rdd.compress&#39;, &#39;True&#39;),
+ (&#39;spark.serializer.objectStreamReset&#39;, &#39;100&#39;),
+ (&#39;spark.submit.pyFiles&#39;, &#39;&#39;),
+ (&#39;spark.driver.port&#39;, &#39;46397&#39;),
+ (&#39;spark.submit.deployMode&#39;, &#39;client&#39;),
+ (&#39;spark.executor.extraJavaOptions&#39;,
+  &#39;-Dio.netty.tryReflectionSetAccessible=true&#39;),
+ (&#39;spark.ui.showConsoleProgress&#39;, &#39;true&#39;)]
 &lt;/code&gt;&lt;/pre&gt;</description>
     </item>
     <item>

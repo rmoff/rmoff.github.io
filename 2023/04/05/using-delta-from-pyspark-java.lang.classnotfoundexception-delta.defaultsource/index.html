@@ -94,7 +94,7 @@
 <pre tabindex="0"><code>Py4JJavaError: An error occurred while calling o45.save.
 : java.lang.ClassNotFoundException: 
 Failed to find data source: delta.
-</code></pre><p><strong>In short, the problem was that I was creating both a <code>SparkSession</code> <em>and</em> a <code>SparkContext</code></strong>. I honestly don&rsquo;t understand enough about Spark to tell you why this causes the error, but through a lot of painful trial and error I can tell you that it does. <em>Someone more knowledgable than me can perhaps tell me (<a href="mailto:robin@rmoff.net">email</a> / <a href="https://twitter.com/rmoff/">twitter</a> / <a href="https://data-folks.masto.host/@rmoff">mastodon</a>) why this is and if what I&rsquo;ve ended up with is the right code</em>.</p>
+</code></pre><p><strong>In short, the problem was that I was creating both a <code>SparkSession</code> <em>and</em> a <code>SparkContext</code></strong>. I honestly don&rsquo;t understand enough about Spark to tell you why this causes the error, but through a lot of painful trial and error I can tell you that it does. <em>Someone more knowledgable than me can perhaps tell me (<a href="mailto:robin@rmoff.net">email</a> / <a href="https://twitter.com/rmoff/">twitter</a> / <a href="https://data-folks.masto.host/@rmoff">mastodon</a>) why this is and if what I&rsquo;ve ended up with is the right code</em>. <strong>UPDATE: Damon Cortesi explained it to me :) See below for details.</strong></p>
 <p>Here&rsquo;re the salient points of the Jupyter notebook:</p>
 <h2 id="versions-and-stuff">Versions and stuff</h2>
 <div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">import</span> <span style="color:#00f;font-weight:bold">sys</span>
@@ -278,6 +278,134 @@ Setting default log level to &#34;WARN&#34;.
 To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
 23/04/05 16:30:36 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
 23/04/05 16:30:36 WARN Utils: Service &#39;SparkUI&#39; could not bind on port 4040. Attempting port 4041.
+</code></pre><h2 id="why-did-it-do-what-it-did">Why Did it Do What It Did?</h2>
+<p>Courtesy of <a href="https://www.linkedin.com/feed/update/urn:li:activity:7049423288099319809?commentUrn=urn%3Ali%3Acomment%3A%28activity%3A7049423288099319809%2C7049433950406021120%29&amp;dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287049433950406021120%2Curn%3Ali%3Aactivity%3A7049423288099319809%29">Damon Cortesi</a>:</p>
+<blockquote>
+<p>In the example that doesn&rsquo;t work, you explicitly create a <code>SparkContext</code> first with <code>sc = SparkContext('local[*]')</code>.</p>
+<p>When you use <code>SparkSession.builder</code>&hellip;<code>getOrCreate()</code>, it reuses the <code>SparkContext</code> you already created. You should be able to see this by running <code>spark.sparkContext</code>. That <code>SparkContext</code> unfortunately doesn&rsquo;t have the config variables you specified and, based on some reason I don&rsquo;t totally understand, the config variables you specify later are not updated. I&rsquo;m guessing this is because <code>SparkContext</code> spins up a JVM and some options (like <code>spark.jars.packages</code>) would need to be specified before you spin up the JVM.</p>
+<p>In the example that works, it doesn&rsquo;t have a <code>SparkContext</code> to reuse, so it creates a one using the config you provided.</p>
+<p>😅 I love Spark! /s</p>
+<p>This post does a pretty good job of explaining what&rsquo;s going on: <a href="https://medium.com/@achilleus/spark-session-10d0d66d1d24">A tale of Spark Session and Spark Context</a></p>
+</blockquote>
+<h2 id="proving-it-to-myself">Proving it to myself</h2>
+<p>Damon&rsquo;s explanation and the linked blog were good, so to close the loop I wanted to prove to myself that I could reproduce this explanation locally. Here&rsquo;s <a href="https://gist.github.com/rmoff/1d86204b559f8ffce83be4b3206b1fa0">the notebook itself if you want to try it</a> and reproduced here too:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">import</span> <span style="color:#00f;font-weight:bold">sys</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">import</span> <span style="color:#00f;font-weight:bold">pyspark</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">print</span>(<span style="color:#ba2121">&#34;Kernel:&#34;</span>, sys<span style="color:#666">.</span>executable)
+</span></span><span style="display:flex;"><span><span style="color:#008000">print</span>(<span style="color:#ba2121">&#34;Python version:&#34;</span>, sys<span style="color:#666">.</span>version)
+</span></span><span style="display:flex;"><span><span style="color:#008000">print</span>(<span style="color:#ba2121">&#34;PySpark version:&#34;</span>, pyspark<span style="color:#666">.</span>__version__)
+</span></span></code></pre></div><pre><code>Kernel: /opt/conda/bin/python
+Python version: 3.9.7 | packaged by conda-forge | (default, Oct 10 2021, 15:08:54) 
+[GCC 9.4.0]
+PySpark version: 3.2.0
+</code></pre>
+<h2 id="spark-context-and-session---no-config-to-pick-up">Spark Context and Session - no config to pick up</h2>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">from</span> <span style="color:#00f;font-weight:bold">pyspark.context</span> <span style="color:#008000;font-weight:bold">import</span> SparkContext
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">from</span> <span style="color:#00f;font-weight:bold">pyspark</span> <span style="color:#008000;font-weight:bold">import</span> SparkFiles
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">from</span> <span style="color:#00f;font-weight:bold">pyspark.sql.session</span> <span style="color:#008000;font-weight:bold">import</span> SparkSession
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>sc <span style="color:#666">=</span> SparkContext(<span style="color:#ba2121">&#39;local&#39;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>spark <span style="color:#666">=</span> SparkSession(sc)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>spark<span style="color:#666">.</span>sparkContext<span style="color:#666">.</span>getConf()<span style="color:#666">.</span>getAll()
+</span></span></code></pre></div><pre><code>[('spark.master', 'local'),
+ ('spark.app.startTime', '1680720996903'),
+ ('spark.executor.id', 'driver'),
+ ('spark.app.name', 'pyspark-shell'),
+ ('spark.driver.extraJavaOptions',
+  '-Dio.netty.tryReflectionSetAccessible=true'),
+ ('spark.driver.port', '33339'),
+ ('spark.driver.host', '358d949974bd'),
+ ('spark.rdd.compress', 'True'),
+ ('spark.serializer.objectStreamReset', '100'),
+ ('spark.app.id', 'local-1680720997412'),
+ ('spark.submit.pyFiles', ''),
+ ('spark.submit.deployMode', 'client'),
+ ('spark.executor.extraJavaOptions',
+  '-Dio.netty.tryReflectionSetAccessible=true'),
+ ('spark.ui.showConsoleProgress', 'true')]
+</code></pre>
+<p><em>Now restart the kernel</em></p>
+<hr>
+<h2 id="no-explicit-spark-context---picks-up-config-as-expected">No explicit Spark Context - picks up config as expected</h2>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">from</span> <span style="color:#00f;font-weight:bold">pyspark.context</span> <span style="color:#008000;font-weight:bold">import</span> SparkContext
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">from</span> <span style="color:#00f;font-weight:bold">pyspark</span> <span style="color:#008000;font-weight:bold">import</span> SparkFiles
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">from</span> <span style="color:#00f;font-weight:bold">pyspark.sql.session</span> <span style="color:#008000;font-weight:bold">import</span> SparkSession
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>spark <span style="color:#666">=</span> (
+</span></span><span style="display:flex;"><span>    SparkSession<span style="color:#666">.</span>builder<span style="color:#666">.</span>master(<span style="color:#ba2121">&#34;local[*]&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#666">.</span>config(<span style="color:#ba2121">&#34;spark.jars.packages&#34;</span>, <span style="color:#ba2121">&#34;io.delta:delta-core_2.12:2.2.0&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#666">.</span>config(<span style="color:#ba2121">&#34;spark.sql.extensions&#34;</span>, <span style="color:#ba2121">&#34;io.delta.sql.DeltaSparkSessionExtension&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#666">.</span>config(<span style="color:#ba2121">&#34;spark.sql.catalog.spark_catalog&#34;</span>, <span style="color:#ba2121">&#34;org.apache.spark.sql.delta.catalog.DeltaCatalog&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#666">.</span>getOrCreate()
+</span></span><span style="display:flex;"><span>)        
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>spark<span style="color:#666">.</span>sparkContext<span style="color:#666">.</span>getConf()<span style="color:#666">.</span>getAll()
+</span></span></code></pre></div><pre><code>[('spark.repl.local.jars',
+  'file:///home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar,file:///home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar'),
+ ('spark.app.id', 'local-1680721007128'),
+ ('spark.app.startTime', '1680721006667'),
+ ('spark.files',
+  'file:///home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar,file:///home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar'),
+ ('spark.app.initial.file.urls',
+  'file:///home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar'),
+ ('spark.executor.id', 'driver'),
+ ('spark.app.name', 'pyspark-shell'),
+ ('spark.driver.extraJavaOptions',
+  '-Dio.netty.tryReflectionSetAccessible=true'),
+ ('spark.app.initial.jar.urls',
+  'spark://358d949974bd:41145/jars/io.delta_delta-core_2.12-2.2.0.jar,spark://358d949974bd:41145/jars/io.delta_delta-storage-2.2.0.jar,spark://358d949974bd:41145/jars/org.antlr_antlr4-runtime-4.8.jar'),
+ ('spark.jars.packages', 'io.delta:delta-core_2.12:2.2.0'),
+ ('spark.driver.host', '358d949974bd'),
+ ('spark.sql.warehouse.dir', 'file:/home/jovyan/spark-warehouse'),
+ ('spark.sql.extensions', 'io.delta.sql.DeltaSparkSessionExtension'),
+ ('spark.rdd.compress', 'True'),
+ ('spark.submit.pyFiles',
+  '/home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,/home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar,/home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar'),
+ ('spark.driver.port', '41145'),
+ ('spark.jars',
+  'file:///home/jovyan/.ivy2/jars/io.delta_delta-core_2.12-2.2.0.jar,file:///home/jovyan/.ivy2/jars/io.delta_delta-storage-2.2.0.jar,file:///home/jovyan/.ivy2/jars/org.antlr_antlr4-runtime-4.8.jar'),
+ ('spark.serializer.objectStreamReset', '100'),
+ ('spark.master', 'local[*]'),
+ ('spark.submit.deployMode', 'client'),
+ ('spark.executor.extraJavaOptions',
+  '-Dio.netty.tryReflectionSetAccessible=true'),
+ ('spark.ui.showConsoleProgress', 'true'),
+ ('spark.sql.catalog.spark_catalog',
+  'org.apache.spark.sql.delta.catalog.DeltaCatalog')]
+</code></pre>
+<hr>
+<p><em>Now restart the kernel</em></p>
+<hr>
+<h2 id="existing-spark-context-with-attempted-config-for-the-session-">Existing Spark Context with attempted config for the Session 💀</h2>
+<p><em>SparkContext gets implictly reused by the Spark Session and so config is ignored</em></p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">from</span> <span style="color:#00f;font-weight:bold">pyspark.context</span> <span style="color:#008000;font-weight:bold">import</span> SparkContext
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">from</span> <span style="color:#00f;font-weight:bold">pyspark</span> <span style="color:#008000;font-weight:bold">import</span> SparkFiles
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">from</span> <span style="color:#00f;font-weight:bold">pyspark.sql.session</span> <span style="color:#008000;font-weight:bold">import</span> SparkSession
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>sc <span style="color:#666">=</span> SparkContext(<span style="color:#ba2121">&#39;local&#39;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>spark <span style="color:#666">=</span> (
+</span></span><span style="display:flex;"><span>    SparkSession<span style="color:#666">.</span>builder<span style="color:#666">.</span>master(<span style="color:#ba2121">&#34;local[*]&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#666">.</span>config(<span style="color:#ba2121">&#34;spark.jars.packages&#34;</span>, <span style="color:#ba2121">&#34;io.delta:delta-core_2.12:2.2.0&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#666">.</span>config(<span style="color:#ba2121">&#34;spark.sql.extensions&#34;</span>, <span style="color:#ba2121">&#34;io.delta.sql.DeltaSparkSessionExtension&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#666">.</span>config(<span style="color:#ba2121">&#34;spark.sql.catalog.spark_catalog&#34;</span>, <span style="color:#ba2121">&#34;org.apache.spark.sql.delta.catalog.DeltaCatalog&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#666">.</span>getOrCreate()
+</span></span><span style="display:flex;"><span>)        
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>spark<span style="color:#666">.</span>sparkContext<span style="color:#666">.</span>getConf()<span style="color:#666">.</span>getAll()
+</span></span></code></pre></div><pre><code>[('spark.master', 'local'),
+ ('spark.app.startTime', '1680721019537'),
+ ('spark.executor.id', 'driver'),
+ ('spark.app.name', 'pyspark-shell'),
+ ('spark.app.id', 'local-1680721020036'),
+ ('spark.driver.extraJavaOptions',
+  '-Dio.netty.tryReflectionSetAccessible=true'),
+ ('spark.driver.host', '358d949974bd'),
+ ('spark.sql.warehouse.dir', 'file:/home/jovyan/spark-warehouse'),
+ ('spark.rdd.compress', 'True'),
+ ('spark.serializer.objectStreamReset', '100'),
+ ('spark.submit.pyFiles', ''),
+ ('spark.driver.port', '46397'),
+ ('spark.submit.deployMode', 'client'),
+ ('spark.executor.extraJavaOptions',
+  '-Dio.netty.tryReflectionSetAccessible=true'),
+ ('spark.ui.showConsoleProgress', 'true')]
 </code></pre>
 </article>
 
