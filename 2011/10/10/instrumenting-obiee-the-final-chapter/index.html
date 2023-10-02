@@ -87,13 +87,13 @@
 	<p> </p>
 <hr>
 <p> </p>
-<h3 id="_this-article-has-been-superseded-by-a-newer-versioninstrumenting-obiee-database-connections-for-improved-performance-diagnosticshttpwwwrittmanmeadcom201503instrumenting-obiee-database-connections-for-improved-performance-diagnostics_"><em><strong>This article has been superseded by a newer version: <a href="http://www.rittmanmead.com/2015/03/instrumenting-obiee-database-connections-for-improved-performance-diagnostics/">Instrumenting OBIEE Database Connections For Improved Performance Diagnostics</a></strong></em></h3>
+<h3 id="_this-article-has-been-superseded-by-a-newer-versioninstrumenting-obiee-database-connections-for-improved-performance-diagnosticshttpwwwrittmanmeadcom201503instrumenting-obiee-database-connections-for-improved-performance-diagnostics_"><em><strong>This article has been superseded by a newer version: <a href="http://www.rittmanmead.com/2015/03/instrumenting-obiee-database-connections-for-improved-performance-diagnostics/">Instrumenting OBIEE Database Connections For Improved Performance Diagnostics</a></strong></em>&nbsp;<a class="headline-hash" href="#_this-article-has-been-superseded-by-a-newer-versioninstrumenting-obiee-database-connections-for-improved-performance-diagnosticshttpwwwrittmanmeadcom201503instrumenting-obiee-database-connections-for-improved-performance-diagnostics_">#</a> </h3>
 <hr>
 <p> </p>
 <p>(<em>Previously on this blog: <a href="/2010/01/26/identify-your-obiee-users-by-setting-client-id-in-oracle-connection/">1</a>, <a href="/2011/02/02/instrumenting-obiee-for-tracing-oracle-db-calls/">2</a>, <a href="/2011/08/08/have-you-defined-client_id-in-obiee-yet/">3</a>&hellip;</em>)</p>
-<h2 id="summary">Summary</h2>
+<h2 id="summary">Summary&nbsp;<a class="headline-hash" href="#summary">#</a> </h2>
 <p>Instrument your code. Stop guessing. Make your DBA happy. Make your life as a BI Admin easier.</p>
-<h2 id="the-problem">The Problem</h2>
+<h2 id="the-problem">The Problem&nbsp;<a class="headline-hash" href="#the-problem">#</a> </h2>
 <p>OBIEE will typically connect to the database using a generic application account. (Hopefully, you&rsquo;ll have isolated it to an account used only for this purpose - if you haven&rsquo;t, you should.)</p>
 <p>The problem is that you lose a lot of visibility of work both up and down the stack.</p>
 <ul>
@@ -102,23 +102,23 @@
 </ul>
 <p><img src="/images/rnm1978/2011-10-10_1032_-0000.png" alt="" title="2011-10-10_1032_ 0000"> We know SID 491 is causing a problem, but how do we identify the originating OBIEE user?</p>
 <p>You <strong>could</strong> start piecing together Usage Tracking and NQQuery.log files, but it&rsquo;s hardly convenient or instantaneous is it?</p>
-<h2 id="the-solution">The solution</h2>
+<h2 id="the-solution">The solution&nbsp;<a class="headline-hash" href="#the-solution">#</a> </h2>
 <p>By taking advantage of native Oracle procedures, we can instrument our OBIEE code to pass through lots of valuable information:</p>
 <p><img src="/images/rnm1978/2011-10-10_1033_-0001.png" alt="" title="2011-10-10_1033_ 0001"> Now we can see which OBIEE user fired the query resulting in SID 491, and not only the user, but the dashboard and request name they are running.</p>
 <p>This works in both OBIEE 10g and 11g.</p>
 <p>See <a href="/2011/02/02/instrumenting-obiee-for-tracing-oracle-db-calls/">my previous post here for further background</a>, and discussion of the procedures used.</p>
-<h2 id="implementing-it---overview">Implementing it - overview</h2>
+<h2 id="implementing-it---overview">Implementing it - overview&nbsp;<a class="headline-hash" href="#implementing-it---overview">#</a> </h2>
 <p>In essence, we harness internal OBIEE session variables which hold the user ID, name, dashboard and report name. We put a set of database calls on the connection pool(s) associated with query requests.</p>
 <p>We have to do a bit of trickery to work around two issues.</p>
 <p>Firstly, the variables may not be set (you may not have saved your new request yet, or may be running it outside of a dashboard). To get around this, we create two dummy session variables with the same names, and populate them with dummy init blocks.</p>
 <p>Secondly, there is a limitation to the number of characters that can be passed through, and so we manipulate the string if necessary to use the right-most characters.</p>
-<h2 id="implementing-it---init-block-and-dummy-variables">Implementing it - Init Block and Dummy Variables</h2>
-<h3 id="summary-1">Summary:</h3>
+<h2 id="implementing-it---init-block-and-dummy-variables">Implementing it - Init Block and Dummy Variables&nbsp;<a class="headline-hash" href="#implementing-it---init-block-and-dummy-variables">#</a> </h2>
+<h3 id="summary-1">Summary:&nbsp;<a class="headline-hash" href="#summary-1">#</a> </h3>
 <p>Create two init block/session variable pairs:</p>
 <p><img src="/images/rnm1978/2011-10-10_1145_-0000.png" alt="" title="2011-10-10_1145_ 0000"> Session Variables</p>
 <p><img src="/images/rnm1978/2011-10-10_1145_-0001.png" alt="" title="2011-10-10_1145_ 0001"> Initialisation Blocks</p>
 <p>Be sure to use a connection pool which isn&rsquo;t used for queries.</p>
-<h3 id="step-by-step">Step-by-step</h3>
+<h3 id="step-by-step">Step-by-step&nbsp;<a class="headline-hash" href="#step-by-step">#</a> </h3>
 <p>Load up your RPD. If you haven&rsquo;t already, create a new connection pool that is just for these init blocks. It can be to any database - in the examples below it&rsquo;s an Oracle one, but any that supports selecting from a dummy table like DUAL in Oracle.</p>
 <p>Go to Manage -&gt; Variables, click on Session -&gt; Initialisation Blocks. Right click in the section to the right, and select New Initialization Block. <img src="/images/rnm1978/2011-10-10_1051_-0000.png" alt="" title="2011-10-10_1051_ 0000"></p>
 <p>Call the init block Dummy_SawSrcPath_InitBlock, and then click on &ldquo;Edit Data Source&rdquo;<img src="/images/rnm1978/2011-10-10_1053_-0000.png" alt="" title="2011-10-10_1053_ 0000"></p>
@@ -132,7 +132,7 @@
 <p>When you&rsquo;ve finished, you should have two init block/variables pairs set up like this:</p>
 <p><img src="/images/rnm1978/2011-10-10_1145_-0000.png" alt="" title="2011-10-10_1145_ 0000"> Session Variables</p>
 <p><img src="/images/rnm1978/2011-10-10_1145_-0001.png" alt="" title="2011-10-10_1145_ 0001"> Initialisation Blocks</p>
-<h2 id="implementing-it---connection-pool">Implementing it - connection pool</h2>
+<h2 id="implementing-it---connection-pool">Implementing it - connection pool&nbsp;<a class="headline-hash" href="#implementing-it---connection-pool">#</a> </h2>
 <p>Add these three SQL statements to the &ldquo;Execute before query&rdquo; of &ldquo;Connection Scripts&rdquo; of each Connection Pool which is used for queries. Do not add them to ones which are used for init blocks / authentication etc.</p>
 <p>[sourcecode language=&ldquo;sql&rdquo;] call dbms_application_info.set_client_info(client_info=&gt;&lsquo;VALUEOF(NQ_SESSION.DISPLAYNAME)&rsquo;) call dbms_session.set_identifier(&lsquo;VALUEOF(NQ_SESSION.USER)&rsquo;) call dbms_application_info.set_module(module_name=&gt;&lsquo;OBIEE: &rsquo; || case when length(&lsquo;VALUEOF(NQ_SESSION.SAW_DASHBOARD)&rsquo;)&lt;40 then &lsquo;VALUEOF(NQ_SESSION.SAW_DASHBOARD)&rsquo; else &lsquo;&hellip;&rsquo; || substr(&lsquo;VALUEOF(NQ_SESSION.SAW_DASHBOARD)&rsquo;,-37) end,action_name=&gt;case when length(&lsquo;VALUEOF(NQ_SESSION.SAW_SRC_PATH)&rsquo;)&lt;31 then &lsquo;VALUEOF(NQ_SESSION.SAW_SRC_PATH)&rsquo; else &lsquo;&hellip;&rsquo; || substr(&lsquo;VALUEOF(NQ_SESSION.SAW_SRC_PATH)&rsquo;,-28) end); [/sourcecode]</p>
 <p><img src="/images/rnm1978/2011-10-10_1156_-0000.png" alt="" title="2011-10-10_1156_ 0000"></p>
@@ -145,20 +145,20 @@
 <p>NB CLIENT_IDENTIFIER and CLIENT_INFO have a larger capacity so could be used if you want to view more of the report/dashboard detail:</p>
 <p>[sourcecode light=&ldquo;true&rdquo; highlight=&ldquo;1&rdquo;] V$SESSION column Max value length MODULE 47 ACTION 31 CLIENT_INFO 63 CLIENT_IDENTIFIER 63 [/sourcecode]</p>
 <p>Reference: <a href="http://download.oracle.com/docs/cd/B28359_01/appdev.111/b28419/d_appinf.htm#i999290">DBMS_APPLICATION_INFO</a> <a href="http://download.oracle.com/docs/cd/B28359_01/appdev.111/b28419/d_sessio.htm#ARPLS054">DBMS_SESSION</a></p>
-<h2 id="testing-the-changes">Testing the changes</h2>
+<h2 id="testing-the-changes">Testing the changes&nbsp;<a class="headline-hash" href="#testing-the-changes">#</a> </h2>
 <p>If you&rsquo;re currently logged into Answers, logout and log back in. This is necessary for the dummy session variables to populate.</p>
 <p>Run this sql*plus SQL script below to look at any existing OBIEE queries running on the database.</p>
 <p>[sourcecode language=&ldquo;sql&rdquo;]</p>
 <p>set linesize 170 col program for a30 col client_info for a20 col client_identifier for a18 col module for a47 col action for a31</p>
 <p>SELECT SID,PROGRAM, CLIENT_IDENTIFIER, CLIENT_INFO, MODULE, ACTION FROM V$SESSION WHERE LOWER(PROGRAM) LIKE &rsquo;nqsserver%&rsquo;; [/sourcecode]</p>
 <p>Now login to Answers, and run an existing report, or create a new one. When you re-run the SQL script you should see your session now listed: <img src="/images/rnm1978/2011-10-10_1206_-0000.png" alt="" title="2011-10-10_1206_ 0000"></p>
-<h2 id="not-a-fan-of-sqlplus">Not a fan of sql*plus?</h2>
+<h2 id="not-a-fan-of-sqlplus">Not a fan of sql*plus?&nbsp;<a class="headline-hash" href="#not-a-fan-of-sqlplus">#</a> </h2>
 <p><a href="http://www.thatjeffsmith.com/archive/2011/05/i-only-use-sqlplus-a-desperate-cry-for-help/">If for some strange reason you don&rsquo;t love sql*plus</a>, you can obviously use the above SQL in any other SQL client. Or, you can fire up Enterprise Manager and see the same set of information: <img src="/images/rnm1978/2011-10-10_1308_-0000.png" alt="" title="2011-10-10_1308_ 0000"> (run at a different time from the SQL above, so different report and dashboard names)</p>
-<h2 id="warning">Warning</h2>
+<h2 id="warning">Warning&nbsp;<a class="headline-hash" href="#warning">#</a> </h2>
 <p>It&rsquo;s occurred to me that by parsing in user-provided values to a string that&rsquo;s executed on the database, there could be the potential for a breach through SQL Injection via a maliciously named report or dashboard.</p>
 <p>I&rsquo;ve not been able to find a report name which does cause trouble, but I have never tried exploiting SQL injection before.</p>
 <p>It is another good reason to make sure that you&rsquo;re using a DB account solely created for reporting queries from OBIEE, because then its privileges can be greatly restricted. This isn&rsquo;t an excuse not to test for SQL Injection, but a reminder of why good practices such as granting of least privileges exist.</p>
-<h2 id="troubleshooting">Troubleshooting</h2>
+<h2 id="troubleshooting">Troubleshooting&nbsp;<a class="headline-hash" href="#troubleshooting">#</a> </h2>
 <ul>
 <li>
 <p>Make sure you <strong>don&rsquo;t</strong>suffix the database calls with semi-colons (statement terminators). If you do you&rsquo;ll probably get an error like this:</p>

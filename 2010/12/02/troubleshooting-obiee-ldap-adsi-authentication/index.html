@@ -86,16 +86,16 @@
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw8">
 	<p>They say about travelling that it&rsquo;s the journey and not the destination, and the same is true with this problem we hit during a deployment to Production.</p>
 <p>We were deploying a new OBIEE 10g implementation, with authentication provided by Microsoft Active Directory (AD) through the LDAP functionality in OBIEE. As a side note, it&rsquo;s a rather nice way to do authentication, although maybe I&rsquo;m biased coming from our previous implementation which used EBS integrated authentication and was a bugger to set up and work with.</p>
-<h2 id="the-error">The Error</h2>
+<h2 id="the-error">The Error&nbsp;<a class="headline-hash" href="#the-error">#</a> </h2>
 <p>Testing of the LDAP authentication worked fine, but when we moved to Production we started hitting this error, <strong>intermittently</strong>. When we did hit the error, we saw the OBIEE &ldquo;Logging On&hellip;&rdquo; screen for a while before the error. <img src="http://rnm1978.files.wordpress.com/2010/12/snag-2010-11-22-20-43-57-0000.png?w=300" alt="" title="SNAG-2010-11-22-20.43.57-0000"> <img src="/images/rnm1978/snag-2010-11-22-20-42-27-000021.png" alt="" title="SNAG-2010-11-22-20.42.27-00002"></p>
 <p>[sourcecode] [nQSError: 13011] Query for Initialization Block &lsquo;LDAP User Access Initialization Block&rsquo; has failed. [53003] LDAP bind failure: Can&rsquo;t contact LDAP server. [/sourcecode]</p>
 <p>Sporadically, it would all start working, until BI Server was next bounced, at which point it often stopped again.</p>
-<h2 id="the-cause">The Cause</h2>
+<h2 id="the-cause">The Cause&nbsp;<a class="headline-hash" href="#the-cause">#</a> </h2>
 <p>I&rsquo;ll jump ahead to the answer here in case you&rsquo;re not interested in the diagnostics.</p>
 <p>Our Active Directory domain has multiple Domain Controllers (DCs). The Active Directory server defined in the LDAP connection is a DNS entry with multiple IPs, for the different DCs (for resilience). The IPs are returned in round-robin fasion, not load-balanced. <em>For some reason one of the IPs returned by DNS lookup was not valid.</em></p>
 <p>What was happening was that OBIEE was sporadically hitting the duff IP from the resolution of the AD server address. It would timeout after failing to connect to the duff IP, which is when we would get the &ldquo;<strong>LDAP bind failure: Can&rsquo;t contact LDAP server</strong>&rdquo; error. An SR we raised confirmed that OBIEE won&rsquo;t retry a failed connection, otherwise I guess we might have moved on to the next (valid) IP.</p>
 <p>To workaround this until DNS could be fixed, we hardcoded (yuck)the AD server name as a specific IP rather than DNS entry, and crossed our fingers that the server doesn&rsquo;t go pop :-) A permanent solution would be to specify multiple LDAP servers in the RPD.</p>
-<h2 id="diagnostics">Diagnostics</h2>
+<h2 id="diagnostics">Diagnostics&nbsp;<a class="headline-hash" href="#diagnostics">#</a> </h2>
 <p>(OBIEE 10.1.3.4.1, HP-UX Itanium 11.31) Starting off with the most obvious, and then getting more and more detailed as the problem still couldn&rsquo;t be resolved (pun intended).</p>
 <ul>
 <li>Opening up the RPD in online mode and testing the LDAP Init Block and LDAP Server connection from within the Admin Tool both worked, proving that the connectivity from the BI Server to the LDAP server was not the problem</li>
@@ -146,7 +146,7 @@
 <p>100% packet loss. uh oh.</p>
 <p> </p>
 <p>From here I did an nslookup up of the AD server name that we were using, and pinged each of the addresses returned - one of them was the one I happened to hit above, and was dead. The rest I&rsquo;ve explained above under &ldquo;The Cause&rdquo;.</p>
-<h2 id="geeky-footnote">Geeky footnote</h2>
+<h2 id="geeky-footnote">Geeky footnote&nbsp;<a class="headline-hash" href="#geeky-footnote">#</a> </h2>
 <p>With that wonderful thing known as hindsight, I dug too deep too quickly, as I should have understood more around our AD server and what its name resolved to. Instead, I got stuck in to some <strong>tusc</strong> tracing:</p>
 <p>[sourcecode language=&ldquo;bash&rdquo;] # Determine the process ID of nqserver, and attach tusc to it echo &ldquo;Starting tusc&rdquo; ps -ef|grep nqsserver|grep -v grep|awk &lsquo;{print $2}&rsquo;|xargs tusc -aDeEfT &ldquo;%F-%H:%M:%S&rdquo; -Ao ~/tusc.`hostname`.out &amp; [/sourcecode]</p>
 <p>This writes acres of wonderful gobbledegook like this:</p>

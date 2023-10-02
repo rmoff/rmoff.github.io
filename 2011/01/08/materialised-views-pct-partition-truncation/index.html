@@ -100,7 +100,7 @@
 <li>When existing data is updated on the base table: corresponding weekly MV partition truncated and reloaded</li>
 </ol>
 <p>From what I read in the documentation, this is what PCT would be expected to do. However, it didn&rsquo;t work like this for us at first.</p>
-<h2 id="the-answer">The Answer</h2>
+<h2 id="the-answer">The Answer&nbsp;<a class="headline-hash" href="#the-answer">#</a> </h2>
 <p>I&rsquo;ve discussed these elements in more detail in sections below, but to cut to the chase, here is how we got PCT Partition Truncation to work for a detail table partitioned on day and aggregate table partitioned on week:</p>
 <ul>
 <li>
@@ -131,7 +131,7 @@
 </li>
 </ul>
 <p>Note: this is what <strong>we</strong> did to get it to work; it may be that other versions differ particularly around the _mv_refresh_costing parameter and its default value. I presume there is standard disclaimer around using undocumented parameters too.</p>
-<h2 id="rtfm">RTFM!</h2>
+<h2 id="rtfm">RTFM!&nbsp;<a class="headline-hash" href="#rtfm">#</a> </h2>
 <p>Links to 11gR1 docs:</p>
 <ul>
 <li><a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28313/basicmv.htm">Basic Materialized Views</a></li>
@@ -140,7 +140,7 @@
 <li><a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28286/statements_6002.htm">CREATE MATERIALIZED VIEW</a></li>
 <li><a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28286/statements_2001.htm">ALTER MATERIALIZED VIEW</a></li>
 </ul>
-<h2 id="what-it-says-in-the-manual">What it says in the manual</h2>
+<h2 id="what-it-says-in-the-manual">What it says in the manual&nbsp;<a class="headline-hash" href="#what-it-says-in-the-manual">#</a> </h2>
 <p><a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28313/advmv.htm#i1009128">See here for the documentation regarding PCT partition truncation.</a> There are three conditions that you must obey for it to work (although see below for a further condition):</p>
 <ol>
 <li><strong>The materialized view is partitioned on the partitioning key column or join dependent expressions of the detail table.</strong> If you think about this it makes a lot of sense. PCT is about tracking change on the partition of the detail table, and so if data in this partition changes, Oracle must be told how this relates to the data in the MView, so that it can refresh just the relevant subset of it.
@@ -158,7 +158,7 @@
 </li>
 </ol>
 <p><grumble> The documentation on all this is there, if you look for it. My personal opinion is that other functionality of Oracle DB is better documented than this, and that DBMS_MVIEW as a whole gives away its long history in the disjointed nature of the documentation. If it were re-written today with a focus on data warehousing I&rsquo;m confident it would be clearer. Anyway, that&rsquo;s my excuse for not RTFMing properly&hellip; </grumble></p>
-<h2 id="what-it-doesnt-say-in-the-manual">What it doesn&rsquo;t say in the manual</h2>
+<h2 id="what-it-doesnt-say-in-the-manual">What it doesn&rsquo;t say in the manual&nbsp;<a class="headline-hash" href="#what-it-doesnt-say-in-the-manual">#</a> </h2>
 <p>Despite having met all the above conditions for PCT partition truncation, it still wasn’t happening. When adding or updating data for an existing weekly partition, we always saw DELETE … INSERT, rather than TRUNCATE … INSERT. The DELETE took ages, as would be expected</p>
 <p>A 10979 trace (see below) on the MView refresh showed this crucial line : [sourcecode] [&hellip;]</p>
 <p>Value of _mv_refresh_costing : rule</p>
@@ -173,7 +173,7 @@
 </ul>
 <p>(Credit: &ldquo;wilhelm2000&rdquo; on <a href="http://forums.oracle.com/forums/thread.jspa?threadID=569191">this OTN forum post</a>)</p>
 <p>N.B. Despite the &lsquo;TRUNC&rsquo; in the name, &ldquo;PCT - DEL/TRUNC&rdquo; does not do a TRUNCATE - maybe the name comes from DELETE being used as a kind of TRUNCATE?</p>
-<h2 id="what-it-kind-of-says-in-the-manual---default-global-index">[What it kind of says in the manual] - Default global index</h2>
+<h2 id="what-it-kind-of-says-in-the-manual---default-global-index">[What it kind of says in the manual] - Default global index&nbsp;<a class="headline-hash" href="#what-it-kind-of-says-in-the-manual---default-global-index">#</a> </h2>
 <p>Our elation at seeing a TRUNCATE occur was short-lived, because the refresh still took ages to run.</p>
 <p>After a bit of head-scratching and more RTFMing, we found that the reason for the slow refresh time was down to a default global index that is created on MViews. Named I_SNAP$.[&hellip;], they are used when you do &ldquo;fast&rdquo; (incremental) refreshes, using the mv$log tables. However, if you&rsquo;re only doing PCT refreshes of a MView, they are a positive hindrance because they need rebuilding every time. On an MView with millions of rows this takes a long time.</p>
 <p>Here is an abridged trace for a PCT-Truncate refresh of an MView with the default global index in place: [sourcecode language=&ldquo;sql&rdquo;] /* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &ldquo;HR&rdquo;.&ldquo;I_SNAP$_MV_WEEK&rdquo; UNUSABLE</p>
@@ -182,16 +182,16 @@
 <p>BEGIN sys.dbms_index_utl.multi_level_build(index_list=&gt;&rsquo;&ldquo;HR&rdquo;.&ldquo;I_SNAP$_MV_WEEK&rdquo;&rsquo;,just_unusable=&gt;TRUE, cont_after_err=&gt;TRUE, concurrent=&gt;TRUE); END; [/sourcecode]</p>
 <p>By defining the MView using the USING NO INDEX clause, the global index is not created and the PCT-Truncate works much more efficiently: [sourcecode language=&ldquo;sql&rdquo;] ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION[…]</p>
 <p>/* MV_REFRESH (INS) */ INSERT /*+ APPEND […] [/sourcecode]</p>
-<h2 id="refresh-method">Refresh method</h2>
+<h2 id="refresh-method">Refresh method&nbsp;<a class="headline-hash" href="#refresh-method">#</a> </h2>
 <p>To get PCT refresh, use method=&gt;&lsquo;P&rsquo; [sourcecode language=&ldquo;sql&rdquo;]EXEC DBMS_MVIEW.REFRESH( […], […], method=&gt;&lsquo;P&rsquo;, […]); [/sourcecode] You can also use method=&gt;&rsquo;?&rsquo; where Oracle will try PCT first, and then Complete if PCT is not possible. However, if PCT isn&rsquo;t possible you may have a problem that you want to know about rather than rebuilding the MV each time without you being aware of it.</p>
-<h2 id="bug-interval-partitioned-mview-and-pct-partition-truncation">Bug: Interval Partitioned MView and PCT Partition Truncation</h2>
+<h2 id="bug-interval-partitioned-mview-and-pct-partition-truncation">Bug: Interval Partitioned MView and PCT Partition Truncation&nbsp;<a class="headline-hash" href="#bug-interval-partitioned-mview-and-pct-partition-truncation">#</a> </h2>
 <p>Interval partitioning removes the headache of partition management for new data. Unfortunately, it appears that you can’t partition MViews and refresh them using PCT partition truncation. If you try to PCT partition truncate refresh an interval-partitioned MView, you get this error: [sourcecode] ERROR at line 1: ORA-12008: error in materialized view refresh path ORA-00936: missing expression ORA-06512: at &ldquo;SYS.DBMS_SNAPSHOT&rdquo;, line 2545 ORA-06512: at &ldquo;SYS.DBMS_SNAPSHOT&rdquo;, line 2751 ORA-06512: at &ldquo;SYS.DBMS_SNAPSHOT&rdquo;, line 2720 ORA-06512: at line 1 [/sourcecode]</p>
 <p>You don&rsquo;t get the error if you do a non-atomic refresh - but if you do a non-atomic refresh you don&rsquo;t get partition truncation (you get DELETE instead).</p>
 <p>Test case: <a href="http://rnm1978.wordpress.com/mv_issue_01a-sql/">mv_issue_01a.sql</a></p>
-<h2 id="bug-mview-defined-with-ansi-sql">Bug: MView defined with ANSI SQL</h2>
+<h2 id="bug-mview-defined-with-ansi-sql">Bug: MView defined with ANSI SQL&nbsp;<a class="headline-hash" href="#bug-mview-defined-with-ansi-sql">#</a> </h2>
 <p>This will probably have some people exclaiming &ldquo;serves you right &hellip;&rdquo; but ANSI SQL joins (INNER JOIN etc, instead of joining tables in the WHERE clause) is what I was brought up on. I discovered after several frustrating hours that you shouldn&rsquo;t use it when you define MViews, as it can result in an erroneous &ldquo;COMPILATION ERROR&rdquo; state for the MView when data on the base table is changed. There&rsquo;s a of MOS article: <a href="https://supporthtml.oracle.com/ep/faces/secure/km/DocumentDisplay.jspx?id=1081493.1">Mview Refresh Fails And COMPILE_STATE =&gt; COMPILATION_ERROR (Doc ID 1081493.1)</a>, which refers to bug <a href="https://supporthtml.oracle.com/ep/faces/secure/km/BugDisplay.jspx?id=5759944&amp;bugProductSource=Oracle">5759944</a> and for which there&rsquo;s a patch number. It&rsquo;s supposedly fixed in 11.2 but appears to still be present in 11.2.0.1.0.</p>
 <p>Test case: <a href="http://rnm1978.wordpress.com/mv_issue_02-sql/">mv_issue_02.sql</a></p>
-<h2 id="10979-tracing">10979 Tracing</h2>
+<h2 id="10979-tracing">10979 Tracing&nbsp;<a class="headline-hash" href="#10979-tracing">#</a> </h2>
 <p>To understand exactly what happens when a MView refresh takes place, you can enable tracing using: [sourcecode language=&ldquo;sql&rdquo;] &ndash; enable the trace alter session set events &lsquo;10979 trace name context forever&rsquo;; &ndash; SQL commands to trace go here [&hellip;] &ndash; Disable the trace alter session set events &lsquo;10979 trace name context off&rsquo;; [/sourcecode]</p>
 <p>Here&rsquo;s an annotated trace log of a successful PCT partition truncation MView refresh:</p>
 <p>First is one of the key bits - is the refresh atomic (atomic_refresh=&gt;&lsquo;true&rsquo;, which is the default) or non-atomic (atomic_refresh=&gt;&lsquo;false&rsquo;) which is required for PCT partition truncation [sourcecode] NON ATOMIC REFRESH ON DEMAND REFRESH</p>
