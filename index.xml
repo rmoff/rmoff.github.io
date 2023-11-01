@@ -5,9 +5,162 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2023-10-25</lastBuildDate>
+    <lastBuildDate>2023-11-01</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Using Apache Kafka with ngrok</title>
+      <link>https://rmoff.net/2023/11/01/using-apache-kafka-with-ngrok/</link>
+      <pubDate>2023-11-01</pubDate>
+      
+      <guid>https://rmoff.net/2023/11/01/using-apache-kafka-with-ngrok/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2023/11/ngrok02.webp" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;p&gt;Sometimes you might want to access Apache Kafka that&amp;rsquo;s running on your local machine from another device not on the same network. I&amp;rsquo;m not sure I can think of a production use-case, but there are a dozen examples for sandbox, demo, and playground environments.&lt;/p&gt;
+&lt;p&gt;In this post we&amp;rsquo;ll see how you can use &lt;a href=&#34;https://ngrok.com/&#34;&gt;ngrok&lt;/a&gt; to, in their words, &lt;code&gt;Put localhost on the internet&lt;/code&gt;. And specifically, your local Kafka broker on the internet.&lt;/p&gt;
+&lt;h2 id=&#34;overview&#34;&gt;Overview&lt;/h2&gt;
+&lt;p&gt;Why? In my case, I wanted to expose my local Kafka as a source (and target) to &lt;a href=&#34;https://decodable.co/&#34;&gt;Decodable&lt;/a&gt; so that I can process streams of data with Apache Flink through the managed service that Decodable provides.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/ngrok01.webp&#34; alt=&#34;Overview of Kafka solution&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The example I&amp;rsquo;m going to show has ngrok and the Kafka broker running in a Docker Compose environment:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/ngrok02.webp&#34; alt=&#34;Overview of Kafka/ngrok solution&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;ngrok&#34;&gt;ngrok&lt;/h3&gt;
+&lt;p&gt;ngrok has a free tier to use which works just fine for this, but you will need to &lt;a href=&#34;https://dashboard.ngrok.com/signup&#34;&gt;create a free account&lt;/a&gt; to get your &lt;a href=&#34;https://dashboard.ngrok.com/get-started/your-authtoken&#34;&gt;auth token&lt;/a&gt;. In this article I&amp;rsquo;m assuming you&amp;rsquo;ve exported your auth token to the environment variable &lt;code&gt;NGROK_AUTH_TOKEN&lt;/code&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;kafka-and-listeners-and-advertised-listenersoh-my&#34;&gt;Kafka and Listeners and Advertised Listeners…oh my&lt;/h2&gt;
+&lt;p&gt;In theory, using ngrok is straightforward. You configure a &lt;em&gt;tunnel&lt;/em&gt; which routes a publicly-accessible host/port to one accessed from the ngrok agent running locally. Here we&amp;rsquo;re telling it to route the public tunnel to a machine called &lt;code&gt;broker&lt;/code&gt; on port &lt;code&gt;9092&lt;/code&gt;:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;ngrok tcp broker:9092 --authtoken &lt;span style=&#34;color:#19177c&#34;&gt;$NGROK_AUTH_TOKEN&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;From this you get the tunnel url details:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;t=2023-11-01T10:57:41+0000 lvl=info msg=&amp;#34;started tunnel&amp;#34; obj=tunnels name=command_line addr=//broker:9092 url=tcp://6.tcp.eu.ngrok.io:13075
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;The tunnel URL is &lt;code&gt;6.tcp.eu.ngrok.io:13075&lt;/code&gt;. This is accessible from anywhere on the interwebz—locally or remote. Let&amp;rsquo;s try accessing our Kafka broker from another machine. I&amp;rsquo;m using my favourite tool, &lt;code&gt;kcat&lt;/code&gt;. We&amp;rsquo;ll start by interogating the broker (&lt;code&gt;-b&lt;/code&gt;) for metadata (&lt;code&gt;-L&lt;/code&gt;):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ kcat -L -b 6.tcp.eu.ngrok.io:13075
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Metadata &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; all topics &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;from broker -1: 6.tcp.eu.ngrok.io:13075/bootstrap&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt; &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; brokers:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  broker &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; at localhost:9092 &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;controller&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt; &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt; topics:
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Look at that! It worked! 👏&lt;/p&gt;
+&lt;p&gt;Or did it…&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;hello world&amp;#34;&lt;/span&gt; | kcat -b 6.tcp.eu.ngrok.io:13075 -P -t test_topic
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;%3|1698837177.570|FAIL|rdkafka#producer-1| &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;thrd:localhost:9092/1&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;: localhost:9092/1: Connect to ipv4#127.0.0.1:9092 failed: Connection refused &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;after 0ms in state CONNECT&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;% ERROR: Local: Broker transport failure: localhost:9092/1: Connect to ipv4#127.0.0.1:9092 failed: Connection refused &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;after 0ms in state CONNECT&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;%3|1698837177.804|FAIL|rdkafka#producer-1| &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;thrd:localhost:9092/1&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;: localhost:9092/1: Connect to ipv6#&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;::1&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;:9092 failed: Connection refused &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;after 0ms in state CONNECT&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;% ERROR: Local: Broker transport failure: localhost:9092/1: Connect to ipv6#&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;::1&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;:9092 failed: Connection refused &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;after 0ms in state CONNECT&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;…&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;oh no! 😖&lt;/p&gt;
+&lt;p&gt;So here&amp;rsquo;s what&amp;rsquo;s happening. Kafka is a distributed system; it&amp;rsquo;s only in sandbox/demo environments that you&amp;rsquo;d ever be running just a single broker. For this reason, you have a &lt;em&gt;bootstrap&lt;/em&gt; address for one or more servers in the cluster. When you &lt;em&gt;initially&lt;/em&gt; connect it&amp;rsquo;s to the bootstrap server (&lt;code&gt;6.tcp.eu.ngrok.io:13075&lt;/code&gt;).&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/ngrok03a.webp&#34; alt=&#34;The initial bootstrap connection between Kafka broker and client&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The server returns the &lt;strong&gt;&lt;code&gt;advertised.listener&lt;/code&gt;&lt;/strong&gt; for each of the brokers in the cluster as the address at which each of them can be found for subsequent connections.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/ngrok03b.webp&#34; alt=&#34;The advertised listeners exchange between Kafka broker and client&#34;&gt;&lt;/p&gt;
+&lt;p&gt;After the initial bootstrap connection, the client uses the address that was returned to connect to when producing or consuming records.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/ngrok04.webp&#34; alt=&#34;The Kafka client using advertised.listener to find which the broker&amp;amp;rsquo;s connection address for produce/consume&#34;&gt;&lt;/p&gt;
+&lt;p&gt;If we introduce ngrok into the mix it looks like this:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;The Kafka client connects via the public ngrok tunnel address to the broker for bootstrap connection&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/ngrok05.webp&#34; alt=&#34;Kafka client connects via ngrok to the broker for bootstrap&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The Kafka broker returns a list of available brokers, with their &lt;code&gt;advertised.listener&lt;/code&gt; address (&lt;code&gt;localhost:9092&lt;/code&gt;)&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/ngrok06.webp&#34; alt=&#34;The Kafka broker returns a list of available brokers, with their advertised.listener address&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The Kafka client tries to connect to the address given—&lt;code&gt;localhost:9092&lt;/code&gt;—to produce/consume data. Since there&amp;rsquo;s no Kafka broker running local to the Kafka client (i.e. at &lt;code&gt;localhost:9092&lt;/code&gt;) the connection fails.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/ngrok07.webp&#34; alt=&#34;The Kafka client tries to connect to the address given—localhost:9092—to produce/consume data. Since there&amp;amp;rsquo;s no Kafka broker running local to the Kafka client (i.e. at localhost:9092) the connection fails.&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;em&gt;(If you want to get into this in more detail about this please see my previous article about &lt;a href=&#34;https://rmoff.net/2018/08/02/kafka-listeners-explained/&#34;&gt;working with advertised.listeners&lt;/a&gt;)&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;making-it-work&#34;&gt;Making it work&lt;/h2&gt;
+&lt;p&gt;We need to get the ngrok tunnel URL and configure that as the Kafka broker&amp;rsquo;s advertised.listener:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/ngrok08.webp&#34; alt=&#34;Correct configuration of Kafka and ngrok&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Let&amp;rsquo;s look at what&amp;rsquo;s actually involved in doing this.&lt;/p&gt;
+&lt;p&gt;I&amp;rsquo;m using Docker to run Kafka, so the configuration I&amp;rsquo;m going to discuss is through the environment variables passed to the image.&lt;/p&gt;
+&lt;p&gt;The first thing is to configure the &lt;strong&gt;listeners&lt;/strong&gt;. This defines where the broker binds to for listening to inbound connections. I&amp;rsquo;m using two listeners; one for regular traffic between Docker containers, and the other for ngrok traffic. Listeners can be arbitrarily named, so I&amp;rsquo;m using nice clear labels here. The listener&amp;rsquo;s label servers as a prefix to the host and port.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;DOCKER&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;NGROK&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The only—but crucial—difference is the port on which they listen. &lt;strong&gt;The port on which a connection receives determines the listener used, and therefore the advertised listener that&amp;rsquo;s served in response.&lt;/strong&gt;&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;KAFKA_LISTENERS: DOCKER://broker:29092, NGROK://broker:9092
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Now we configure the &lt;strong&gt;advertised listeners&lt;/strong&gt;:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;KAFKA_ADVERTISED_LISTENERS: DOCKER://broker:29092, NGROK://6.tcp.eu.ngrok.io:13075
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;For completeness, we need two more listener configuration items:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: DOCKER:PLAINTEXT,NGROK:PLAINTEXT
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;automating-it&#34;&gt;Automating it&lt;/h2&gt;
+&lt;p&gt;Now, this is all very well. But there&amp;rsquo;s a complication. ngrok uses a random host and port &lt;em&gt;each time the tunnel is created&lt;/em&gt;. This means that to configure the Kafka broker with the correct advertised listener we need to know the tunnel &lt;em&gt;first&lt;/em&gt;. That also makes building a static configuration for our Kafka broker tricky—for example, in Docker Compose.&lt;/p&gt;
+&lt;p&gt;So what we need to do is:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Launch ngrok and create tunnel&lt;/li&gt;
+&lt;li&gt;Determine the tunnel URL and add it to the advertised listener configuration for Kafka&lt;/li&gt;
+&lt;li&gt;Launch the Kafka broker&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;What prompted this whole exercise was wanting to build a standalone artefact that could be used to easily spin up Kafka locally to connect to Decodable in the cloud. Manually hacking around config is fine as a one-off, but I wanted something repeatable and as automated as possible.&lt;/p&gt;
+&lt;h2 id=&#34;wrangling-around-docker-compose&#34;&gt;Wrangling around Docker Compose&lt;/h2&gt;
+&lt;p&gt;This is what I ended up doing in Docker Compose. I&amp;rsquo;d love to hear your feedback if there&amp;rsquo;s a smarter or more idiomatic way in which to accomplish the same :)&lt;/p&gt;
+&lt;p&gt;First, run ngrok and create the tunnel. This is hardcoded to direct traffic to the Kafka container at &lt;code&gt;broker:9092&lt;/code&gt;.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;ngrok&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;image&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;ngrok/ngrok:latest&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;container_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;ngrok&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;command&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;tcp broker:9092 --log stdout --authtoken $NGROK_AUTH_TOKEN&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;ports&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#666&#34;&gt;4040&lt;/span&gt;:&lt;span style=&#34;color:#666&#34;&gt;4040&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;ngrok has a REST API, which we can query to get the tunnel URL (&lt;code&gt;public_url&lt;/code&gt;):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;&#34;&gt;$&lt;/span&gt; &lt;span style=&#34;&#34;&gt;curl&lt;/span&gt; &lt;span style=&#34;&#34;&gt;http:&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;//localhost:4040/api/tunnels/command_line | jq &amp;#39;.&amp;#39;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;{
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;name&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;command_line&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;ID&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;10c495e397bd65f42f3d4ebbd1bb74f5&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;uri&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;/api/tunnels/command_line&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;public_url&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tcp://0.tcp.eu.ngrok.io:16761&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;proto&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;tcp&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;config&amp;#34;&lt;/span&gt;: {
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;addr&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;broker:9092&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;&amp;#34;inspect&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;false&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  },
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now we are ready to look at the Kafka broker. The chaining is defined with the Docker Compose&amp;rsquo;s &lt;code&gt;depends_on&lt;/code&gt;:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;depends_on&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;- zookeeper&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;- ngrok&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;What I&amp;rsquo;ve done is define the &lt;em&gt;constant&lt;/em&gt; listener variables in the Docker Compose service entry for the broker, whilst leaving &lt;code&gt;KAFKA_ADVERTISED_LISTENERS&lt;/code&gt; with a single entry and nothing for ngrok yet:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;KAFKA_LISTENERS&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;DOCKER://broker:29092, NGROK://broker:9092&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;KAFKA_ADVERTISED_LISTENERS&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;DOCKER://broker:29092&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;KAFKA_INTER_BROKER_LISTENER_NAME&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;DOCKER&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;KAFKA_LISTENER_SECURITY_PROTOCOL_MAP&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;DOCKER:PLAINTEXT,NGROK:PLAINTEXT&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;I&amp;rsquo;ve then overriden the &lt;code&gt;entrypoint&lt;/code&gt; of the container. First, it will wait for the tunnel to be created:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Waiting for ngrok tunnel to be created&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;while&lt;/span&gt; : ; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#19177c&#34;&gt;curl_status&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;curl -s -o /dev/null -w %&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;http_code&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt; http://ngrok:4040/api/tunnels/command_line&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; -e &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;date&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;\tTunnels API HTTP state: &amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;$curl_status&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34; (waiting for 200)&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;$curl_status&lt;/span&gt; -eq &lt;span style=&#34;color:#666&#34;&gt;200&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; ; &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;then&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#008000&#34;&gt;break&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;fi&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    sleep &lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;done&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;ngrok tunnel is up&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then—in the absence of &lt;code&gt;jq&lt;/code&gt; on the &lt;code&gt;confluentinc/cp-kafka&lt;/code&gt; image—I use some fairly nasty shell tool code (which will probably break if the JSON structure from the ngrok API changes) to add the tunnel&amp;rsquo;s URL to the advertised listeners environment variable:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;NGROK_LISTENER&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;$(&lt;/span&gt;curl -s  http://ngrok:4040/api/tunnels/command_line | grep -Po &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;&amp;#34;public_url&amp;#34;:.*?[^\\]&amp;#34;,&amp;#39;&lt;/span&gt; | cut -d&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;:&amp;#39;&lt;/span&gt; -f2- | tr -d &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;,&amp;#34;&amp;#39;&lt;/span&gt; | sed &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/tcp:\/\//NGROK:\/\//g&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;KAFKA_ADVERTISED_LISTENERS&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$KAFKA_ADVERTISED_LISTENERS&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;, &lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$NGROK_LISTENER&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;KAFKA_ADVERTISED_LISTENERS is set to &amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#19177c&#34;&gt;$KAFKA_ADVERTISED_LISTENERS&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;And then, finally, we launch the Kafka broker (using the original value of the Docker image&amp;rsquo;s &lt;code&gt;entrypoint&lt;/code&gt;):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;/etc/confluent/docker/run
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;ngrok-with-kafka-on-docker-compose-in-action&#34;&gt;ngrok with Kafka on Docker Compose, in action&lt;/h2&gt;
+&lt;p&gt;&lt;em&gt;You can find the Docker Compose file &lt;a href=&#34;https://rmoff.net/code/docker-compose-ngrok-kafka.yml&#34;&gt;here&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Launch the Docker Compose stack:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ docker compose up
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Get the ngrok tunnel URL:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ curl -s localhost:4040/api/tunnels | jq -r &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.tunnels[0].public_url&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;tcp://2.tcp.eu.ngrok.io:16738
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;(you can also use the Web UI at http://localhost:4040 to get this info)&lt;/p&gt;
+&lt;p&gt;Now from anywhere on the interwebz, use your local Kafka broker based on the URL returned from ngrok (minus the &lt;code&gt;tcp://&lt;/code&gt; prefix):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ &lt;span style=&#34;color:#008000&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;hello world&amp;#34;&lt;/span&gt; | kcat -b 2.tcp.eu.ngrok.io:16738 -P -t test_topic
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ kcat -b 2.tcp.eu.ngrok.io:16738 -C -t test_topic
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;hello world
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;% Reached end of topic test_topic &lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;0&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt; at offset &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;If you go and have a look at your Docker Compose log you&amp;rsquo;ll see information about network traffic flowing through the tunnel:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;ngrok      | t=2023-11-01T12:17:59+0000 lvl=info msg=&amp;#34;join connections&amp;#34; obj=join id=8db744a20159 l=192.168.117.4:9092 r=82.20.253.111:34870
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;So there we have it—ngrok and Kafka, nicely automated in a standalone Docker Compose file 😎&lt;/p&gt;</description>
+    </item>
     <item>
       <title>Learning Apache Flink S01E05: Installing PyFlink (with some bumps along the way…)</title>
       <link>https://rmoff.net/2023/10/25/learning-apache-flink-s01e05-installing-pyflink-with-some-bumps-along-the-way/</link>
@@ -873,112 +1026,6 @@ org.apache.flink.shaded.netty4.io.netty.channel.ConnectTimeoutException: connect
 &lt;/ul&gt;
 &lt;h3 id=&#34;isnt-this-the-same-as-developer-advocacy&#34;&gt;Isn&amp;rsquo;t this the same as Developer Advocacy?&lt;/h3&gt;
 &lt;p&gt;To an extent, yes. I&amp;rsquo;m not interested in a discussion about job titles really, short to say that most people assume a Developer Advocate travels and does conference talks with other activities fitting around it. For me a DevX Engineer is more focussed on the building and writing, than speaking.&lt;/p&gt;</description>
-    </item>
-    <item>
-      <title>Authoring Wordpress blogs in Markdown (with Google Docs for review)</title>
-      <link>https://rmoff.net/2023/05/03/authoring-wordpress-blogs-in-markdown-with-google-docs-for-review/</link>
-      <pubDate>2023-05-03</pubDate>
-      
-      <guid>https://rmoff.net/2023/05/03/authoring-wordpress-blogs-in-markdown-with-google-docs-for-review/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2023/05/t_IMG_2565.jpeg" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;p&gt;Wordpress still, to an extent, rules the blogging world. Its longevity is testament to…something about it ;) However, it&amp;rsquo;s not my favourite platform in which to write a blog by a long way. It doesn&amp;rsquo;t support Markdown to the extent that I want. Yes, I&amp;rsquo;ve tried the plugins; no, they didn&amp;rsquo;t do what I needed.&lt;/p&gt;
-&lt;p&gt;I like to write all my content in a structured format - ideally &lt;a href=&#34;https://asciidoc.org/&#34;&gt;Asciidoc&lt;/a&gt;, but &lt;a href=&#34;https://rmoff.net/2017/09/12/what-is-markdown-and-why-is-it-awesome/&#34;&gt;I&amp;rsquo;ll settle for Markdown too&lt;/a&gt;. Here&amp;rsquo;s how I stayed [almost] sane whilst composing a blog in Markdown, reviewing it in Google Docs, and then publishing it in Wordpress in a non-lossy way.&lt;/p&gt;
-&lt;h1 id=&#34;author&#34;&gt;Author&lt;/h1&gt;
-&lt;ol&gt;
-&lt;li&gt;Write your blog in Markdown. &lt;em&gt;Perhaps this approach will work with Asciidoc too, since pandoc also works with it - I&amp;rsquo;ve just not tried it.&lt;/em&gt;&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h1 id=&#34;review&#34;&gt;Review&lt;/h1&gt;
-&lt;p&gt;Google Docs is still the best way that I&amp;rsquo;ve found to collaboratively review a blog. It&amp;rsquo;s accessible to technical and less-technical users alike.&lt;/p&gt;
-&lt;p&gt;We&amp;rsquo;ll get your Markdown into GDocs via a &lt;code&gt;.docx&lt;/code&gt; export/import.&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;code&gt;pandoc&lt;/code&gt; to convert the Markdown to &lt;code&gt;.docx&lt;/code&gt;&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;pandoc Securing&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\ &lt;/span&gt;lakeFS&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\ &lt;/span&gt;with&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\ &lt;/span&gt;Role-Based&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\ &lt;/span&gt;Access&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\ &lt;/span&gt;Control&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\ \(&lt;/span&gt;RBAC&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\)&lt;/span&gt;.md &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;       -o ~/Downloads/blog.docx   
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Import the &lt;code&gt;.docx&lt;/code&gt; file to Google Docs&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Save GDoc as native Google Doc, share with comment access&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Review / Copyedit&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Make edits, accept proposed changes, etc directly in GDocs.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;&lt;em&gt;If you&amp;rsquo;re using Asciidoc, see this related blog that I wrote on &lt;a href=&#34;https://rmoff.net/2020/04/16/converting-from-asciidoc-to-google-docs-and-ms-word/&#34;&gt;Converting from AsciiDoc to Google Docs and MS Word&lt;/a&gt;.&lt;/em&gt;&lt;/p&gt;
-&lt;h1 id=&#34;publish&#34;&gt;Publish&lt;/h1&gt;
-&lt;p&gt;At this point the Google Doc is ready to publish. However, Google Docs doesn&amp;rsquo;t have a concept of code blocks (and other formatting such as figure captions) that your Markdown has. We don&amp;rsquo;t want lose these in a straightforward copy and paste into Wordpress&amp;rsquo; WYSIWYG editor directly&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/05/1.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h2 id=&#34;import-the-changed-gdoc-with-edits-back-into-markdown&#34;&gt;Import the changed GDoc with edits back into Markdown&lt;/h2&gt;
-&lt;ol&gt;
-&lt;li&gt;
-&lt;p&gt;Export the copy edited &amp;amp; reviewed &lt;a href=&#34;https://workspace.google.com/marketplace/app/docs_to_markdown/700168918607?ref=iain-broome&#34;&gt;GDoc back to Markdown using a Chrome plugin&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Do a diff and import changes back to original Markdown document (so that code blocks &amp;amp; language are not lost)
-&lt;img src=&#34;https://rmoff.net/images/2023/05/CleanShot%202023-03-17%20at%2006.39.02@2x.png&#34; alt=&#34;|700&#34;&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h2 id=&#34;publish-the-markdown-to-wordpress&#34;&gt;Publish the Markdown to Wordpress&lt;/h2&gt;
-&lt;ol&gt;
-&lt;li&gt;
-&lt;p&gt;Convert the markdown to HTML.&lt;/p&gt;
-&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;cd &amp;#34;/Users/rmoff/my_blogs/&amp;#34;
-pandoc &amp;#34;Here&amp;#39;s Something Diff-erent - lakeFS adds support for diff of Delta tables.md&amp;#34; \
-    -o ~/Downloads/blog.html \
-    --wrap=none \
-    --no-highlight \
-    --extract-media=/Users/rmoff/Downloads/
-&lt;/code&gt;&lt;/pre&gt;&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;--no-highlight&lt;/code&gt; is important to stop the HTML being generated with syntax highlighting - we want to keep the pure code block intact and let WP doing its highlighting instead.&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;extract-media&lt;/code&gt; path does not support &lt;code&gt;~&lt;/code&gt; and a relative path is from the working directory in which the command is executed.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;In Wordpress, create a new post.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;From the top-right dropdown menu select &lt;strong&gt;Code editor&lt;/strong&gt; (⇧⌥⌘M) to view the raw HTML. Copy and paste the HTML that pandoc generated into Wordpress.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/05/Pasted%20image%2020230317104543.png&#34; alt=&#34;|300&#34;&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Upload all the images needed to the WordPress Media Library. Look at the resulting URL prefix (e.g. &lt;code&gt;https://lakefs.io/wp-content/uploads/2023/03/&lt;/code&gt;) and search and replace all the image paths in the source HTML as needed.&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;You will need to amend &lt;code&gt;%20&lt;/code&gt; in the URL for &lt;code&gt;-&lt;/code&gt; for files with spaces in&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;At this point the code should render OK, but without syntax highlighting&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/05/Pasted%20image%2020230317105230.png&#34; alt=&#34;|500&#34;&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;To add in the syntax highlighting:&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;
-&lt;p&gt;Search and replace in the raw HTML to replace:  &lt;code&gt;&amp;lt;pre class=&amp;quot;bash&amp;quot;&amp;gt;&amp;lt;code&amp;gt;&lt;/code&gt; with &lt;code&gt;&amp;lt;pre class=&amp;quot;bash&amp;quot;&amp;gt;&amp;lt;code lang=&amp;quot;bash&amp;quot; class=&amp;quot;language-bash&amp;quot;&amp;gt;&lt;/code&gt;. You can do this in your favourite text editor, or use this little bash snippet:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;sed -i &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;.bak&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;s/&amp;lt;pre class=&amp;#34;\(.*\)&amp;#34;&amp;gt;&amp;lt;code&amp;gt;/&amp;lt;pre class=&amp;#34;\1&amp;#34;&amp;gt;&amp;lt;code lang=&amp;#34;\1&amp;#34; class=&amp;#34;language-\1&amp;#34;&amp;gt;/&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;    ~/Downloads/blog.html
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Copy and paste the HTML into the blog&amp;rsquo;s code editor afresh&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;strong&gt;Use this one weird trick…&lt;/strong&gt; switch back to the visual editor, put the cursor in the editor box, and click the &lt;strong&gt;Convert to blocks&lt;/strong&gt; option that appears&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/05/CleanShot%202023-03-17%20at%2011.01.58@2x.png&#34; alt=&#34;|400&#34;&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;If you click in one of the code blocks you&amp;rsquo;ll see that it&amp;rsquo;s picked up the language, and when you preview the blog it should highlight its syntax correctly
-&lt;img src=&#34;https://rmoff.net/images/2023/05/CleanShot%202023-03-17%20at%2011.04.18@2x.png&#34; alt=&#34;|400&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2023/05/CleanShot%202023-03-17%20at%2011.11.29@2x.png&#34; alt=&#34;|500&#34;&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/li&gt;
-&lt;/ol&gt;</description>
     </item>
     
   </channel>

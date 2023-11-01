@@ -86,10 +86,10 @@
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw8">
 	<p>This problem, which in essence is bad behaviour from Informatica bringing down Oracle, is a good illustration of unintended consequences of an apparently innocuous security setting. Per our company&rsquo;s security standards, database passwords expire every 90 days. When this happens users are prompted to change their password before they can continue logging into Oracle. This applies to application user IDs too. It appears that Informatica 8.6.1 HF6 (part of OBIA 7.9.6.1) doesn&rsquo;t handle an expired password well, spawning multiple connections to the database, eventually bringing Oracle down through memory SWAP space exhaustion.</p>
 <p>As a side note, one of our DBAs has been investigating how to prevent a client connection accidentally (through bad coding) or maliciously (DoS) bringing down Oracle in this way, his findings are <a href="http://jhdba.wordpress.com/2010/09/02/using-the-connection_rate-parameter-to-stop-dos-attacks/">documented here</a>.</p>
-<h2 id="investigation">Investigation&nbsp;<a class="headline-hash" href="#investigation">#</a> </h2>
+<h2 id="investigation">Investigation&nbsp;<a class="headline-hash" href="#investigation">🔗</a> </h2>
 <p>As the introduction to any good IT horror story goes &hellip; &ldquo;Everything was running fine; nothing had changed&rdquo;.</p>
 <p>Then our monitoring showed swap space usage on our Oracle 11g database server increasing, and soon after Oracle crashed. The DBAs restarted Oracle, but shortly after the swap space usage was on its way up. The unix tool Glance showed a lot of Oracle processes on the box.</p>
-<h3 id="database">Database&nbsp;<a class="headline-hash" href="#database">#</a> </h3>
+<h3 id="database">Database&nbsp;<a class="headline-hash" href="#database">🔗</a> </h3>
 <p>Our Informatica repository user expired on the day on which this happened (Aug 27th):</p>
 <p>[sourcecode] select username, account_status, expiry_date from dba_users</p>
 <p>USERNAME ACCOUNT_STATUS EXPIRY_DATE &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash; &mdash;&mdash;&mdash; INF_REPO EXPIRED 27-AUG-10 [/sourcecode]</p>
@@ -100,12 +100,12 @@
 <p>ERROR: ORA-28001: the password has expired</p>
 <p>Changing password for INF_REPO New password: [/sourcecode]</p>
 <p>This is the throughput figures for Oracle from Enterprise Manager, note the Logons rate starting to increase at c.13:30 (The rate at 03:00AM is representative of the usual logon load on the database): <img src="http://rnm1978.files.wordpress.com/2010/09/inf_repo_exp_03.png?w=1024" alt="" title="inf_repo_exp_03"></p>
-<h3 id="server">Server&nbsp;<a class="headline-hash" href="#server">#</a> </h3>
+<h3 id="server">Server&nbsp;<a class="headline-hash" href="#server">🔗</a> </h3>
 <p>Note SWAP space increase (dark blue line) at c. midday (nb GMT/BST mean not all the graphs will align):</p>
 <p><img src="/images/rnm1978/inf_repo_exp_011.png" alt="Database server metrics" title="inf_repo_exp_01"></p>
 <p>Note number of Alive Oracle processes (faint yellow line!):</p>
 <p><img src="/images/rnm1978/inf_repo_exp_021.png" alt="Database server metrics - Oracle application only" title="inf_repo_exp_02"></p>
-<h3 id="informatica">Informatica&nbsp;<a class="headline-hash" href="#informatica">#</a> </h3>
+<h3 id="informatica">Informatica&nbsp;<a class="headline-hash" href="#informatica">🔗</a> </h3>
 <p>In the Informatica exceptions.log and node.log are the initial errors:</p>
 <p>[sourcecode] ERROR [Master Elect Data Writer] [DOM_10162] An exception occurred while updating the master election row. java.sql.SQLException: [informatica][Oracle JDBC Driver]No more data available to read.</p>
 <p>ERROR [Master Elect Data Writer] [DOM_10162] An exception occurred while updating the master election row. java.sql.SQLException: [informatica][Oracle JDBC Driver][Oracle]ORA-01034: ORACLE not available ORA-27101: shared memory realm does not exist HPUX-ia64 Error: 2: No such file or directory</p>
@@ -115,7 +115,7 @@
 <p>There are also final errors in the log, occuring once only just after midnight:</p>
 <p>[sourcecode] FATAL [Domain Monitor] [PCSF_10374] Failed to persist [CpuUsageSummary] with error [[informatica][Oracle JDBC Driver]No more data available to read.]. FATAL [Domain Monitor] [PCSF_10374] Failed to persist [RepoUsageSummary] with error [[informatica][Oracle JDBC Driver]No more data available to read.]. [/sourcecode]</p>
 <p>After these Informatica shut down.</p>
-<h2 id="theory">Theory&nbsp;<a class="headline-hash" href="#theory">#</a> </h2>
+<h2 id="theory">Theory&nbsp;<a class="headline-hash" href="#theory">🔗</a> </h2>
 <p>This is what I think is happening:</p>
 <ul>
 <li>Informatica has a polling component (&quot;[Master Elect Data Writer]&quot;) that updates a database table (part of the Informatica repository) every minute</li>
@@ -128,7 +128,7 @@
 <li>At midnight another Informatica component (&quot;[Domain Monitor]&quot;) tries to update a database table (part of the Informatica repository), and gets the ORA-28001 error.</li>
 <li>This second component (&quot;[Domain Monitor]&quot;) correctly takes the error as fatal and aborts the Informatica server process</li>
 </ul>
-<h2 id="resolution">Resolution&nbsp;<a class="headline-hash" href="#resolution">#</a> </h2>
+<h2 id="resolution">Resolution&nbsp;<a class="headline-hash" href="#resolution">🔗</a> </h2>
 <p>In my opinion, Informatica should consistently treat ORA-28001 as fatal.</p>
 <p>At the very least, if Informatica isn&rsquo;t treating ORA-28001 as fatal it should close the connection to the database correctly.</p>
 <hr>

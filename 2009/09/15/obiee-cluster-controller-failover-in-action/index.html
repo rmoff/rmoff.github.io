@@ -86,9 +86,9 @@
 <article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw8">
 	<p>Production cluster is 2x BI Server and 2x Presentation Services, with a BIG-IP F5 load balancer on the front.</p>
 <p><img src="/images/rnm1978/1pub1.png" alt="1pub" title="1pub"></p>
-<h2 id="symptoms">Symptoms&nbsp;<a class="headline-hash" href="#symptoms">#</a> </h2>
+<h2 id="symptoms">Symptoms&nbsp;<a class="headline-hash" href="#symptoms">🔗</a> </h2>
 <p>Users started reporting slow login times to BI. Our monitoring tool (Openview) reported that &ldquo;BIServer01 may be down. Failed to contact it using ping.&rdquo;. BIServer01 cannot be reached by ping or ssh from Windows network.</p>
-<h2 id="diagnostics">Diagnostics&nbsp;<a class="headline-hash" href="#diagnostics">#</a> </h2>
+<h2 id="diagnostics">Diagnostics&nbsp;<a class="headline-hash" href="#diagnostics">🔗</a> </h2>
 <p>nqsserver and nqsclustercontroller on BIServer01 was logging these repeated errors:</p>
 <blockquote>
 <p>[nQSError: 12002] Socket communication error at call=send: (Number=9) Bad file number</p>
@@ -97,24 +97,24 @@
 <p>Majority of the login time spent on the OBIEE &ldquo;Logging in &hellip; &quot; screen, which is not normally seen because login is quick.</p>
 <p>Network configuration issues found on BIServer01.</p>
 <p>Initial suspicion was that EBS authentication was the cause of the delay, as this is only used at login time so would fit with the behaviour observed. They checked their system and could see no problems. They also reported that the authentication SQL only hit EBS just before OBIEE logged in.</p>
-<h2 id="diagnosis">Diagnosis&nbsp;<a class="headline-hash" href="#diagnosis">#</a> </h2>
+<h2 id="diagnosis">Diagnosis&nbsp;<a class="headline-hash" href="#diagnosis">🔗</a> </h2>
 <p>Using nqcmd on one of the Presentation Services boxes it could be determined that failover of Cluster Controllers was occuring, but only after timing out on contacting the Primary Cluster Controller (BIServer01). <img src="/images/rnm1978/2pub2.png" alt="2pub" title="2pub"> [sourcecode language=&ldquo;bash&rdquo;] [biadm@PSServer01]/app/oracle/product/obiee/setup $set +u [biadm@PSServer01]/app/oracle/product/obiee/setup $. ./sa-init64.sh [biadm@PSServer01]/app/oracle/product/obiee/setup $nqcmd</p>
 <p>-&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; Oracle BI Server Copyright (c) 1997-2006 Oracle Corporation, All rights reserved &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</p>
 <p>Give data source name: Cluster64 Give user name: Administrator Give password: xxxxxxxxxxxxx [60+ second wait here] [/sourcecode] This conclusion was reached because after setting PrimaryCCS to BIServer02 there was no delay in connecting. I changed the odbc.ini entry for Cluster64 to switch the CCS server order around [&hellip;] PrimaryCCS=BIServer02 SecondaryCCS=BIServer01 [&hellip;]</p>
 <p>[sourcecode language=&ldquo;bash&rdquo;] [biadm@PSServer01]/app/oracle/product/obiee/setup $nqcmd</p>
 <p>-&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; Oracle BI Server Copyright (c) 1997-2006 Oracle Corporation, All rights reserved &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</p>
 <p>Give data source name: Cluster64 Give user name: Administrator Give password: xxxxxxxxxxxxx [logs straight in] [/sourcecode] Any changes to odbc.ini have to be followed by a bounce of sawserver.</p>
-<h2 id="resolution">Resolution&nbsp;<a class="headline-hash" href="#resolution">#</a> </h2>
+<h2 id="resolution">Resolution&nbsp;<a class="headline-hash" href="#resolution">🔗</a> </h2>
 <p>To fix the slow login for users whilst the network problems were investigated I switched the order of CCS in the odbc.ini configuration and bounced each sawserver: <img src="/images/rnm1978/3pub1.png" alt="3pub" title="3pub"> For the end-users the problem was resolved as they could now log straight in. However at this stage we&rsquo;re still running with half a cluster. If BIServer02 had failed at this point then the BI service would have become unavailable.</p>
 <p>The root-cause was a network configuration error on the four servers combined with a possible hardware failure.</p>
-<h2 id="summary">Summary&nbsp;<a class="headline-hash" href="#summary">#</a> </h2>
+<h2 id="summary">Summary&nbsp;<a class="headline-hash" href="#summary">🔗</a> </h2>
 <p>Ignoring Scheduler, a two-machine OBIEE cluster has an Active:Active pair of BI Servers. Analytics traffic to these servers is routed via an Active:Passive pair of Cluster Controllers.</p>
 <p>The client (eg sawserver) uses ODBC config syntax to define which Cluster Controller to try contacting first. This is the PrimaryCCS. If it connects then the PrimaryCCS will return the name of the BI Server to the client, which will then send all subsequent ODBC connections to the BI Server direct.</p>
 <p>If the client cannot connect to the PrimaryCCS in the time defined it will try the SecondaryCCS instead. The SecondaryCCS behaves exactly the same as the PrimaryCCS - it returns the name of the BI Server to the client for direct ODBC connection.</p>
 <p>The Cluster Controller maintains the state of the BI Servers and if one becomes unavailable will know not to route any Analytics traffic to it.</p>
 <p>The failover of the Cluster Controller itself is stateless, it is local only to the client session context. This means that each new client session has to go through the failover from Primary to Secondary CCS with the associated timeout delay.</p>
 <p>[update 21st Sept] I&rsquo;ve tested out the same configuration over four VM OEL 4 servers, and cannot reproduce the delayed login time. When one CCS is taken down failover to the other appears almost instantaneous [/update]</p>
-<h2 id="finaltimeoutforcontactingccs">FinalTimeOutForContactingCCS&nbsp;<a class="headline-hash" href="#finaltimeoutforcontactingccs">#</a> </h2>
+<h2 id="finaltimeoutforcontactingccs">FinalTimeOutForContactingCCS&nbsp;<a class="headline-hash" href="#finaltimeoutforcontactingccs">🔗</a> </h2>
 <p>odbc.ini has the parameter FinalTimeOutForContactingCCS set to 60 seconds. Changing this to a lower value does NOT appear to reduce the failover time.</p>
 
 </article>

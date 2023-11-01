@@ -87,12 +87,12 @@
 	<p>In this article I&rsquo;m going to show you how to easily monitor the rate at which Logstash is ingesting data, as well as in future articles the rate at which Elasticsearch is indexing it. It&rsquo;s a nice little touch to add to any project involving Logstash, and it&rsquo;s easy to do.</p>
 <p>Logstash is powerful tool for data ingest, processing, and distribution. It originated as simply the pipe to slurp at log files and put them into Elasticsearch, but has evolved into a whole bunch more. With connectors to JDBC and Kafka, as well as many other <a href="https://www.elastic.co/guide/en/logstash/current/input-plugins.html">input</a> and <a href="https://www.elastic.co/guide/en/logstash/current/output-plugins.html">output</a> options (not to mention the <a href="https://www.elastic.co/guide/en/logstash/current/filter-plugins.html">filtering</a> possibilities), it really is a great bit of software to use. I&rsquo;ve used it over the years with <a href="http://www.rittmanmead.com/2014/10/monitoring-obiee-with-elasticsearch-logstash-and-kibana/">OBIEE</a>, as well as more recently to <a href="https://www.elastic.co/blog/visualising-oracle-performance-data-with-the-elastic-stack">pull data from Oracle</a>, and even <a href="/2016/03/24/my-latest-irc-client-kibana/">IRC</a>. Another great set of tools is <a href="http://influxdb.com">InfluxDB</a> and <a href="http://grafana.org">Grafana</a>, which for me really round off the standalone Elastic platform (previously known as ELK - Elasticsearch, Logstash, and Kibana). What InfluxDB and Grafana give is a powerful dedicated time series database and flexible time series-based dashboarding tool respectively. A topic for another day is the Elasticsearch vs InfluxDB overlap, and Kibana vs Grafana - but for now, just take it as read that it&rsquo;s horses for course, right tool for the right job, etc.</p>
 <p>Let&rsquo;s get started&hellip;</p>
-<h3 id="pre-requisites">Pre-Requisites&nbsp;<a class="headline-hash" href="#pre-requisites">#</a> </h3>
+<h3 id="pre-requisites">Pre-Requisites&nbsp;<a class="headline-hash" href="#pre-requisites">🔗</a> </h3>
 <p>I&rsquo;m not going to cover setup &amp; install here - I&rsquo;m assuming that you&rsquo;ve got Logstash &gt;=2.3.1, InfluxDB &gt;= 0.12, Grafana &gt;= 2.6 running. In this example it&rsquo;s all running on a single node, localhost, default ports for everything. The only non-standard configuration is that I&rsquo;ve <a href="https://github.com/influxdata/influxdb/blob/master/services/graphite/README.md">enabled the <strong>graphite</strong> listener in InfluxDB</a>.</p>
-<h3 id="overview">Overview&nbsp;<a class="headline-hash" href="#overview">#</a> </h3>
+<h3 id="overview">Overview&nbsp;<a class="headline-hash" href="#overview">🔗</a> </h3>
 <p>We&rsquo;ll get Logstash to send event rates over to InfluxDB, from where we&rsquo;ll visualise it in Grafana.</p>
 <p>The example I&rsquo;m using it based on pulling some data in from a Kafka topic (similar to the <a href="/2016/04/12/decoupling-the-data-pipeline-with-kafka-a-very-simple-real-life-example/">pattern described here</a>) and indexing it into Elasticsearch. I can start and stop my Logstash configuration when I want, and it picks up from where it left off in consuming the data from Kafka.</p>
-<h3 id="logstash-instrumentation">Logstash Instrumentation&nbsp;<a class="headline-hash" href="#logstash-instrumentation">#</a> </h3>
+<h3 id="logstash-instrumentation">Logstash Instrumentation&nbsp;<a class="headline-hash" href="#logstash-instrumentation">🔗</a> </h3>
 <p>First job is to get Logstash to track, and then output, the rate at which it&rsquo;s processing events. One row read from a log, one message pulled from Kafka - each is one &ldquo;event&rdquo;.</p>
 <p>We&rsquo;ll use the <strong><a href="https://www.elastic.co/guide/en/logstash/current/plugins-filters-metrics.html">metric</a></strong> filter to do this. In the <strong>filter</strong> stanza of my Logstash configuration, I add:</p>
 <div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span>filter {
@@ -132,7 +132,7 @@
 <pre><code>Events per second ingest rate (1/5/15 min avg): 2.0609812156329577 | 2.327820782492659 | 2.3756847177898033
 </code></pre>
 <p>But &hellip; that stdout is just debug, remember? Where we really want it is over in InfluxDB, so we can build some lovely charts against it.</p>
-<h3 id="checking-the-data-in-influxdb">Checking the data in InfluxDB&nbsp;<a class="headline-hash" href="#checking-the-data-in-influxdb">#</a> </h3>
+<h3 id="checking-the-data-in-influxdb">Checking the data in InfluxDB&nbsp;<a class="headline-hash" href="#checking-the-data-in-influxdb">🔗</a> </h3>
 <p>You can use the <a href="https://docs.influxdata.com/influxdb/v0.12/tools/web_admin/">InfluxDB GUI</a> for this, or the <a href="https://docs.influxdata.com/influxdb/v0.12/tools/shell/">command line</a>. Here I&rsquo;ll use the command line.</p>
 <p>Launch the client</p>
 <pre><code>$ influx
@@ -167,7 +167,7 @@ time                    value
 </code></pre>
 <p>The time value is epoch microseconds. For more information on the InfluxDB query language, <a href="https://docs.influxdata.com/influxdb/v0.12/query_language/data_exploration/">see here</a>.</p>
 <p>So, we&rsquo;ve instrumented Logstash configuration to generate and send the data, we&rsquo;ve validated that InfluxDB is getting the data &hellip; now let&rsquo;s graph the data!</p>
-<h3 id="charting-it-in-grafana">Charting it in Grafana&nbsp;<a class="headline-hash" href="#charting-it-in-grafana">#</a> </h3>
+<h3 id="charting-it-in-grafana">Charting it in Grafana&nbsp;<a class="headline-hash" href="#charting-it-in-grafana">🔗</a> </h3>
 <p>In Grafana I&rsquo;ve added a datasource pointing to my InfluxDB, and then headed over to my dashboard. When done in real life, this kind of chart makes a lot of sense alongside other &ldquo;health check&rdquo; visualisations, enabling you to see not only what the data coming into the system is telling you, but also the status of that data flow. There&rsquo;s nothing worse than thinking &ldquo;hey cool, no errors&rdquo; when the reason there&rsquo;s no errors is that all the errors are backed up in the pipeline and not even making it into your monitoring system &hellip;</p>
 <p>So here&rsquo;s the basic chart:</p>
 <p><img src="/images/2016/05/lsir01.png" alt=""></p>
