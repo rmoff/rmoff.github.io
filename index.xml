@@ -5,9 +5,362 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2024-04-26</lastBuildDate>
+    <lastBuildDate>2024-05-03</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>ngrok DNS headaches</title>
+      <link>https://rmoff.net/2024/05/03/ngrok-dns-headaches/</link>
+      <pubDate>2024-05-03</pubDate>
+      
+      <guid>https://rmoff.net/2024/05/03/ngrok-dns-headaches/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2024/05/t_IMG_1316.webp" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s not bury the lede: it was DNS. However, unlike the meme (&lt;em&gt;&amp;#34;It’s not DNS, it’s never DNS. It was DNS&amp;#34;&lt;/em&gt;), I didn’t even have an inkling that DNS might be the problem.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’m writing a new blog about streaming Apache Kafka data to Apache Iceberg and wanted to provision a local Kafka cluster to pull data from remotely. I got this working nicely just last year using &lt;a href=&#34;https://rmoff.net/2023/11/01/using-apache-kafka-with-ngrok/&#34;&gt;ngrok to expose the broker to the interwebz&lt;/a&gt;, so figured I’d use this again. Simple, right?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Nope.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ kcat &lt;span style=&#34;color: #000080&#34;&gt;-L&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; 4.tcp.eu.ngrok.io:16689
+%3|1714734085.241|FAIL|rdkafka#producer-1| &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;thrd:4.tcp.eu.ngrok.io:16689/bootstrap]: 4.tcp.eu.ngrok.io:16689/bootstrap: Connect to ipv4#0.0.0.0:16689 failed: Connection refused &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;after 4ms &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;state CONNECT&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+%3|1714734086.246|FAIL|rdkafka#producer-1| &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;thrd:4.tcp.eu.ngrok.io:16689/bootstrap]: 4.tcp.eu.ngrok.io:16689/bootstrap: Connect to ipv4#0.0.0.0:16689 failed: Connection refused &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;after 2ms &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;state CONNECT, 1 identical error&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;s&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt; suppressed&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+% ERROR: Failed to acquire metadata: Local: Broker transport failure &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;Are the brokers reachable? Also try increasing the metadata &lt;span style=&#34;color: #0086B3&#34;&gt;timeout &lt;/span&gt;with &lt;span style=&#34;color: #000080&#34;&gt;-m&lt;/span&gt; &amp;lt;&lt;span style=&#34;color: #0086B3&#34;&gt;timeout&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;?&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Spinning up &lt;a href=&#34;https://rmoff.net/code/docker-compose-ngrok-kafka.yml&#34;&gt;this Docker Compose&lt;/a&gt; should have worked just fine (it did last year!). But for some reason my Kafka broker couldn’t be reached (&lt;code&gt;Connection refused&lt;/code&gt;).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_basic_setup&#34;&gt;The Basic Setup&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;After a lot of poking and prodding and changing stuff and still no luck with Kafka, I decided to strip it back. No Docker Compose, just Kafka. Just netcat listening on a port:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;nc &lt;span style=&#34;color: #000080&#34;&gt;-lk&lt;/span&gt; 4242&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;From another terminal window I can test connectivity to the host/port:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ nc &lt;span style=&#34;color: #000080&#34;&gt;-z&lt;/span&gt; localhost 4242
+Connection to localhost port 4242 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;tcp/&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;]&lt;/span&gt; succeeded!&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now let us layer in ngrok, and add a route for the local netcat listener:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ ngrok tcp 4242
+
+Session Status                online
+Account                       Robin Moffatt &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;Plan: Free&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+Version                       3.9.0
+Region                        Europe &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;eu&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+Web Interface                 http://127.0.0.1:4040
+Forwarding                    tcp://0.tcp.eu.ngrok.io:13810 -&amp;gt; localhost:4242
+
+Connections                   ttl     opn     rt1     rt5     p50     p90
+                              0       0       0.00    0.00    0.00    0.00&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With this, we should be able to connect with netcat on the tcp host/port given:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ nc &lt;span style=&#34;color: #000080&#34;&gt;-vz&lt;/span&gt; 0.tcp.eu.ngrok.io 13810
+nc: connectx to 0.tcp.eu.ngrok.io port 13810 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;tcp&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt; failed: Connection refused&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_lets_dig_into_the_problem&#34;&gt;Let’s dig into the problem&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;One thing that I did think of early on was that I run &lt;a href=&#34;https://nextdns.io/&#34;&gt;nextDNS&lt;/a&gt; (similar to &lt;a href=&#34;https://pi-hole.net/&#34;&gt;Pi-Hole&lt;/a&gt;, if you’re familiar with that) which can occassionally have unintended sideeffects when it comes to networking and resolving names. So I disabled it, and tried again:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ nc &lt;span style=&#34;color: #000080&#34;&gt;-vz&lt;/span&gt; 0.tcp.eu.ngrok.io 13810
+nc: connectx to 0.tcp.eu.ngrok.io port 13810 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;tcp&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt; failed: Connection refused&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;If this was a cop chase movie, at this point the camera would be panning to the side street where the villian is hiding and the police car just drove by…&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Dusting off my troubleshooting command line toolbox, I tried a &lt;code&gt;mtr&lt;/code&gt; (like &lt;code&gt;traceroute&lt;/code&gt; but fancier):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;                                                                          My traceroute  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;v0.95]
+asgard08 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;192.168.10.50&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt; -&amp;gt; 0.tcp.eu.ngrok.io &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;81.99.162.48&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;                                                                                     2024-05-03T13:43:42+0100
+Keys:  Help   Display mode   Restart statistics   Order of fields   quit
+                                                                                                                                 Packets               Pings
+ Host                                                                                                                          Loss%   Snt   Last   Avg  Best  Wrst StDev
+ 1. usgmoffattme                                                                                                                0.0%     4    4.2   6.3   4.2   9.0   2.2
+ 2. 10.53.34.17                                                                                                                 0.0%     4   20.8  18.1  16.4  20.8   2.0
+ 3. brad-core-2a-ae41-650.network.virginmedia.net                                                                               0.0%     4   41.3  23.7  11.4  41.3  14.0
+ 4. &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;waiting &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for &lt;/span&gt;reply&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+ 5. &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;waiting &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for &lt;/span&gt;reply&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+ 6. lang-dclcore-1a-port-channel1.network.virginmedia.net                                                                       0.0%     3   23.6  22.4  20.8  23.6   1.4
+ 7. lang-sspiprxy.network.virginmedia.net                                                                                       0.0%     3   23.4  24.3  23.4  25.3   0.9&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What caught my eye here was the final hop—&lt;code&gt;lang-sspiprxy.network.virginmedia.net&lt;/code&gt;. My ISP is Virgin Media, but the only entry I’d expected to see relating to it was my own IP.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Why is traffic for &lt;code&gt;0.tcp.eu.ngrok.io&lt;/code&gt; going to &lt;code&gt;81.99.162.48&lt;/code&gt; (&lt;code&gt;lang-sspiprxy.network.virginmedia.net&lt;/code&gt;)?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2024/05/confused.webp&#34; alt=&#34;Confused&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s check the DNS resolution:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ dig 0.tcp.eu.ngrok.io
+
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &amp;lt;&amp;lt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&amp;gt;&lt;/span&gt; DiG 9.10.6 &amp;lt;&amp;lt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&amp;gt;&lt;/span&gt; 0.tcp.eu.ngrok.io
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; global options: +cmd
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; Got answer:
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; -&amp;gt;&amp;gt;HEADER&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;opcode&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;: QUERY, status: NOERROR, id: 64676
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 512
+;; QUESTION SECTION:
+;0.tcp.eu.ngrok.io.             IN      A
+
+;; ANSWER SECTION:
+0.tcp.eu.ngrok.io.      0       IN      A       81.99.162.48
+
+;; Query time: 85 msec
+;; SERVER: 192.168.10.1#53(192.168.10.1)
+;; WHEN: Fri May 03 13:47:39 BST 2024
+;; MSG SIZE  rcvd: 62&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The DNS server is my local router (&lt;code&gt;192.168.10.1&lt;/code&gt;) which in turn is defaulting to the ISP’s DNS servers. What about if we use a &lt;a href=&#34;https://www.cloudflare.com/learning/dns/what-is-1.1.1.1/&#34;&gt;trusted public DNS like Cloudflare&lt;/a&gt;&amp;#39;s?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ dig @1.1.1.1 0.tcp.eu.ngrok.io
+
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &amp;lt;&amp;lt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&amp;gt;&lt;/span&gt; DiG 9.10.6 &amp;lt;&amp;lt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&amp;gt;&lt;/span&gt; @1.1.1.1 0.tcp.eu.ngrok.io
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;1 server found&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; global options: +cmd
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; Got answer:
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; -&amp;gt;&amp;gt;HEADER&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;opcode&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;: QUERY, status: NOERROR, id: 4513
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; QUESTION SECTION:
+;0.tcp.eu.ngrok.io.             IN      A
+
+;; ANSWER SECTION:
+0.tcp.eu.ngrok.io.      60      IN      A       18.197.239.5
+
+;; Query time: 67 msec
+;; SERVER: 1.1.1.1#53(1.1.1.1)
+;; WHEN: Fri May 03 13:49:41 BST 2024
+;; MSG SIZE  rcvd: 62&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Huh. &lt;code&gt;18.197.239.5&lt;/code&gt; is different from &lt;code&gt;81.99.162.48&lt;/code&gt;, definitely. Now that we’re in the realms of DNS, let’s switch NextDNS back on and see what happens:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ dig 0.tcp.eu.ngrok.io
+
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &amp;lt;&amp;lt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&amp;gt;&lt;/span&gt; DiG 9.10.6 &amp;lt;&amp;lt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&amp;gt;&lt;/span&gt; 0.tcp.eu.ngrok.io
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; global options: +cmd
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; Got answer:
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; -&amp;gt;&amp;gt;HEADER&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;opcode&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;: QUERY, status: NOERROR, id: 34593
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 4096
+; OPT=15: 00 11 42 6c 6f 63 6b 65 64 20 62 79 20 4e 65 78 74 44 4e 53 (&amp;#34;..Blocked by NextDNS&amp;#34;)
+;; QUESTION SECTION:
+;0.tcp.eu.ngrok.io.             IN      A
+
+;; ANSWER SECTION:
+0.tcp.eu.ngrok.io.      300     IN      A       0.0.0.0
+
+;; Query time: 41 msec
+;; SERVER: 192.0.2.42#53(192.0.2.42)
+;; WHEN: Fri May 03 13:52:06 BST 2024
+;; MSG SIZE  rcvd: 103&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Well, just look at that:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;..Blocked by NextDNS&lt;/code&gt;&lt;/strong&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now the penny is starting to drop. If you’re particularly observant you’ll notice the error that I showed at the very top of this blog says &lt;code&gt;Connect to ipv4#0.0.0.0:16689 failed&lt;/code&gt; —and &lt;code&gt;0.0.0.0&lt;/code&gt; is what the &lt;code&gt;dig&lt;/code&gt; above shows NextDNS resolves the ngrok hostname to.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In the logs that NextDNS provides I can see:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2024/05/nextdns01.webp&#34; alt=&#34;NextDNS screenshot showing DNS resolution for ngrok blocked by Threat Intelligence Feeds blocklist&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As well as blocking crap like ads and tracking domains, NextDNS also blocks DNS resolutions for sites that are deemed nefarious. It looks like ngrok ended up on one of &lt;a href=&#34;https://www.cloudflare.com/learning/security/glossary/threat-intelligence-feed/&#34;&gt;these lists&lt;/a&gt; - probably because ngrok could be used to serve phishing websites etc. After adding &lt;code&gt;*.ngrok.io&lt;/code&gt; to my NextDNS Allowlist I got this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ nc &lt;span style=&#34;color: #000080&#34;&gt;-vz&lt;/span&gt; 0.tcp.eu.ngrok.io 13810
+Connection to 0.tcp.eu.ngrok.io port 13810 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;tcp/&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;]&lt;/span&gt; succeeded!&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Success!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2024/05/yay.webp&#34; alt=&#34;Yay&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So NextDNS was, in a sense, a problem of my own making. But my ISP blocking this traffic is not something I’d expected. It turns out that Virgin Media offer &amp;#34;Web Safe&amp;#34; which includes &amp;#34;Virus Safe&amp;#34; which is enabled by default. After opting out of it, the ngrok address resolved correctly for me too:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ dig 2.tcp.eu.ngrok.io
+
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &amp;lt;&amp;lt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&amp;gt;&lt;/span&gt; DiG 9.10.6 &amp;lt;&amp;lt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&amp;gt;&lt;/span&gt; 2.tcp.eu.ngrok.io
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; global options: +cmd
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; Got answer:
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;;&lt;/span&gt; -&amp;gt;&amp;gt;HEADER&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;-&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;opcode&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;: QUERY, status: NOERROR, id: 6068
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 4096
+;; QUESTION SECTION:
+;2.tcp.eu.ngrok.io.             IN      A
+
+;; ANSWER SECTION:
+2.tcp.eu.ngrok.io.      13      IN      A       18.197.239.5
+
+;; Query time: 76 msec
+;; SERVER: 192.168.10.1#53(192.168.10.1)
+;; WHEN: Fri May 03 14:07:49 BST 2024
+;; MSG SIZE  rcvd: 62&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_its_all_working&#34;&gt;It’s all working 😅&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ kcat &lt;span style=&#34;color: #000080&#34;&gt;-L&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-b&lt;/span&gt; 6.tcp.eu.ngrok.io:12916
+Metadata &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;for &lt;/span&gt;all topics &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;from broker 1: 6.tcp.eu.ngrok.io:12916/1&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;:
+ 1 brokers:
+  broker 1 at 6.tcp.eu.ngrok.io:12916 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;(&lt;/span&gt;controller&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;)&lt;/span&gt;
+ 0 topics:&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With ngrok on the Allowlist for NextDNS, everything works great. I’ll probably leave the &amp;#34;Virus Safe&amp;#34; at my ISP switched on unless it continues to cause these kind of problems. I’m also going to switch over my router’s DNS to use Cloudflare (1.1.1.1) in the future.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_footnote_a_final_puzzle_why_does_trace_on_dig_bypass_the_filtering&#34;&gt;Footnote: A final puzzle - why does &lt;code&gt;+trace&lt;/code&gt; on &lt;code&gt;dig&lt;/code&gt; bypass the filtering?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This is the case on both NextDNS and Virgin Media. If I put the blocks back to how they were when I started looking at this and run &lt;code&gt;dig&lt;/code&gt; normally, I get the blocked IP result as expected:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# NextDNS&lt;/span&gt;
+❯ dig +short 0.tcp.eu.ngrok.io
+0.0.0.0
+
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Virgin Media&lt;/span&gt;
+❯ dig +short 0.tcp.eu.ngrok.io
+81.99.162.48&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But if I use &lt;code&gt;+trace&lt;/code&gt; then in amongst the detailed trace info, I get the correct ngrok IP resolution:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# NextDNS&lt;/span&gt;
+❯ dig +short +trace 0.tcp.eu.ngrok.io
+NS a.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS b.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS c.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS d.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS e.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS f.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS g.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS h.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS i.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS j.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS k.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS l.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+NS m.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+RRSIG NS 8 0 518400 20240516050000 20240503040000 5613 &lt;span style=&#34;color: #0086B3&#34;&gt;.&lt;/span&gt; Gz7tfgerwhD0FAUDn+c/U3b/SrOgMyWaFh+575O7DxjF+yv0hND7AsLL 1gYcf8+n0V77G0XnAOkPJVPpe5cj/75xL6L/+PsaBteVJ0p9ZrsRDV7V
+ c+wxa2mR5mgKy4DsAk3PjgI3KfKlzm1YIg82UWs6AFS98V9m59uHM9gK DOTLXm6q38RwaU1cSuxU+QAhxK8xjbt8cbVUjmOyE6GYilZ6Peai02r9 EljH8UM1ulBiSSl4nUo1dgoxabTSVsmV/+CmdaUN8k97alg/vAzRhFc
+L YKIg/Y0nryoSZq/wUkwweFvcrr0UrMeH0f6iR5rfaxrrjPcL7E8UrNRU &lt;span style=&#34;color: #008080&#34;&gt;9aHjHg&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;==&lt;/span&gt; from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;65 ms.
+A 18.158.249.75 from server 205.251.192.146 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;20 ms.
+
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Virgin Media&lt;/span&gt;
+❯ dig +short +trace 0.tcp.eu.ngrok.io
+NS a.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS b.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS c.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS d.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS e.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS f.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS g.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS h.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS i.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS j.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS k.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS l.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+NS m.root-servers.net. from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+RRSIG NS 8 0 518400 20240516050000 20240503040000 5613 &lt;span style=&#34;color: #0086B3&#34;&gt;.&lt;/span&gt; Gz7tfgerwhD0FAUDn+c/U3b/SrOgMyWaFh+575O7DxjF+yv0hND7AsLL 1gYcf8+n0V77G0XnAOkPJVPpe5cj/75xL6L/+PsaBteVJ0p9ZrsRDV7V
+ c+wxa2mR5mgKy4DsAk3PjgI3KfKlzm1YIg82UWs6AFS98V9m59uHM9gK DOTLXm6q38RwaU1cSuxU+QAhxK8xjbt8cbVUjmOyE6GYilZ6Peai02r9 EljH8UM1ulBiSSl4nUo1dgoxabTSVsmV/+CmdaUN8k97alg/vAzRhFc
+L YKIg/Y0nryoSZq/wUkwweFvcrr0UrMeH0f6iR5rfaxrrjPcL7E8UrNRU &lt;span style=&#34;color: #008080&#34;&gt;9aHjHg&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;==&lt;/span&gt; from server 192.168.10.1 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;106 ms.
+A 18.158.249.75 from server 205.251.192.146 &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;19 ms.&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’d love to hear from you if you can explain what’s happening with this :)&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
     <item>
       <title>How to stop AWS CLI clearing the screen</title>
       <link>https://rmoff.net/2024/04/26/how-to-stop-aws-cli-clearing-the-screen/</link>
@@ -1622,234 +1975,6 @@ Total in 163 ms
 &lt;p&gt;I found &lt;a href=&#34;https://github.com/orbstack/orbstack/issues/58&#34;&gt;this issue&lt;/a&gt; but it says it&amp;rsquo;s fixed in OrbStack  0.8, and I&amp;rsquo;m running 1.1.0. &lt;a href=&#34;https://github.com/orbstack/orbstack/issues/739&#34;&gt;This issue&lt;/a&gt; is more recent but not directly relevant from what I can see.&lt;/p&gt;
 &lt;p&gt;💡 I&amp;rsquo;ve logged this issue: &lt;a href=&#34;https://github.com/orbstack/orbstack/issues/797&#34;&gt;Hugo does not detect changed files when run under OrbStack; works fine with Docker Desktop #797&lt;/a&gt;&lt;/p&gt;
 </description>
-    </item>
-    <item>
-      <title>Learning Apache Flink S01E06: The Flink JDBC Driver</title>
-      <link>https://rmoff.net/2023/11/16/learning-apache-flink-s01e06-the-flink-jdbc-driver/</link>
-      <pubDate>2023-11-16</pubDate>
-      
-      <guid>https://rmoff.net/2023/11/16/learning-apache-flink-s01e06-the-flink-jdbc-driver/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2023/11/t_IMG_6381.webp" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;p&gt;As a newcomer to Apache Flink one of the first things I did was join the &lt;a href=&#34;https://flink.apache.org/what-is-flink/community/#slack&#34;&gt;Slack community&lt;/a&gt; (which is vendor-neutral and controlled by the Flink PMC). At the moment I&amp;rsquo;m pretty much in full-time lurker mode, soaking up the kind of questions that people have and how they&amp;rsquo;re using Flink.&lt;/p&gt;
-&lt;p&gt;One &lt;a href=&#34;https://apache-flink.slack.com/archives/C03G7LJTS2G/p1699672468626739&#34;&gt;question&lt;/a&gt; that caught my eye was from Marco Villalobos, in which he asked about the Flink JDBC driver and a &lt;code&gt;SQLDataException&lt;/code&gt;  he was getting with a particular datatype. Now, unfortunately, I have no idea about the answer to this question—but the idea of a JDBC driver through which Flink SQL could be run sounded like a fascinating path to follow after &lt;a href=&#34;https://rmoff.net/2023/10/10/learning-apache-flink-s01e04-a-partial-exploration-of-the-flink-sql-client/&#34;&gt;previously looking at the SQL Client&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;This took me down a bit of a rabbit hole, because after digging through the docs my understanding is that there are two options if you have a client that you want to connect to Flink using JDBC&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/jdbc_choice.webp&#34; alt=&#34;Button choice meme - Flink JDBC or Hive JDBC via HiveServer2&#34;&gt;&lt;/p&gt;
-&lt;p&gt;At this point in time (and I would love to be corrected if I&amp;rsquo;m wrong!) my understanding is this:&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;&lt;strong&gt;tl;dr: If all you want to do is quickly hook up a JDBC client to Flink, then the Flink JDBC driver is the route to go—&lt;em&gt;if you&amp;rsquo;re not bothered about a catalog to persist metadata&lt;/em&gt;.
-In either case, you also need to be running the SQL Gateway.&lt;/strong&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;h2 id=&#34;what-are-the-jdbc-options-with-flink&#34;&gt;What are the JDBC options with Flink?&lt;/h2&gt;
-&lt;p&gt;The docs don&amp;rsquo;t particularly help with this confusion, instead having two seemingly unconnected examples both with JDBC, and each using the SQL Gateway.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/jdbcdriver/#use-with-a-jdbc-tool&#34;&gt;Flink JDBC via SQL Gateway REST Endpoint&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/hive-compatibility/hiveserver2/#clients--tools&#34;&gt;Hive JDBC via SQL Gateway HiveServer2 Endpoint&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Looking at the history of the project brings to light how these pages have probably evolved.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;A new Flink JDBC Driver was added in 1.18 (&lt;a href=&#34;https://cwiki.apache.org/confluence/display/FLINK/FLIP-293%3A+Introduce+Flink+Jdbc+Driver+For+Sql+Gateway&#34;&gt;FLIP-293&lt;/a&gt;) and &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/jdbcdriver/#flink-jdbc-driver&#34;&gt;uses&lt;/a&gt; the SQL Gateway&amp;rsquo;s REST interface.&lt;/p&gt;
-&lt;p&gt;A JDBC driver and SQL gateway existed before as &lt;a href=&#34;https://github.com/ververica/flink-sql-gateway&#34;&gt;community&lt;/a&gt; &lt;a href=&#34;https://github.com/ververica/flink-jdbc-driver&#34;&gt;projects&lt;/a&gt; which had fallen out of maintenance and were written for older versions of Flink. The SQL Gateway had previously been brought into Flink in &lt;a href=&#34;https://cwiki.apache.org/confluence/display/FLINK/FLIP-91%3A+Support+SQL+Gateway&#34;&gt;FLIP-91&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;The other JDBC route is through the Hive JDBC Driver which &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/hive-compatibility/hiveserver2/#dbeaver&#34;&gt;can be used&lt;/a&gt; in conjunction with the HiveServer2 support which was added to the SQL Gateway last year in Flink 1.16 with &lt;a href=&#34;https://cwiki.apache.org/confluence/display/FLINK/FLIP-223:+Support+HiveServer2+Endpoint&#34;&gt;FLIP-223&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;The motivation around adding HiveServer2 was the assertion that Hive is still the de-facto interface for those doing batch processing in the &amp;ldquo;Big Data&amp;rdquo; world.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h3 id=&#34;catalogs-and-metadata&#34;&gt;Catalogs and Metadata…&lt;/h3&gt;
-&lt;p&gt;In looking at &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/hive/overview/#dependencies&#34;&gt;the requirements&lt;/a&gt; for using HiveServer2 (via the original page&amp;rsquo;s &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/hive-compatibility/hiveserver2/#setting-up&#34;&gt;Setup section&lt;/a&gt;) I got scared off ;-)&lt;/p&gt;
-&lt;p&gt;I suspect at some point I will have to bite this bullet because Flink itself doesn&amp;rsquo;t have its own metadata store, and per &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/hive/hive_catalog/&#34;&gt;the docs&lt;/a&gt;:&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;HiveCatalog is the only persistent catalog provided out-of-box by Flink.&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;When we talk about catalogs and persisting metadata we&amp;rsquo;re talking about the tables and other objects that we define being there the next time we connect to the system. For transient processing, and indeed for sandbox and experimentation purposes, this might not be an issue. But this is something so fundamental that for something like an RDBMS that we wouldn&amp;rsquo;t even think to check that it does it - we just assume that whether MySQL, Oracle, or whatever, when we create a table it will &lt;em&gt;of course&lt;/em&gt; be there next time we connect to the server.&lt;/p&gt;
-&lt;hr&gt;
-&lt;p&gt;So all that said, we&amp;rsquo;re going to just use the Flink JDBC Driver for now, and save the HiveServer2 endpoint of the SQL Gateway for another day.&lt;/p&gt;
-&lt;h2 id=&#34;hands-on-with-the-flink-jdbc-driver&#34;&gt;Hands-on with the Flink JDBC Driver&lt;/h2&gt;
-&lt;p&gt;My favourite way to learn something is by actually trying it out. The first step is to run the Flink cluster:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ ./bin/start-cluster.sh
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Starting cluster.
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Starting standalonesession daemon on host asgard08.
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Starting taskexecutor daemon on host asgard08.
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;and then the &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/sql-gateway/overview/&#34;&gt;SQL Gateway&lt;/a&gt;:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ ./bin/sql-gateway.sh start -Dsql-gateway.endpoint.rest.address&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;localhost
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Starting sql-gateway daemon on host asgard08.
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The SQL Gateway exposes two &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/sql-gateway/overview/#supported-endpoints&#34;&gt;endpoints&lt;/a&gt;: REST (default) and &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/hive-compatibility/hiveserver2/&#34;&gt;HiveServer2&lt;/a&gt; . Let&amp;rsquo;s use the REST endpoint to check that it&amp;rsquo;s working:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ curl http://localhost:8083/v1/info
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#666&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;productName&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Apache Flink&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;version&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1.18.0&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;}&lt;/span&gt;%
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now we&amp;rsquo;ll use the JDBC driver, through the SQL gateway, from a suitable client. The JDBC driver isn&amp;rsquo;t bundled with Flink itself so you need to download it:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ curl https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-jdbc-driver-bundle/1.18.0/flink-sql-jdbc-driver-bundle-1.18.0.jar -O
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now to choose our JDBC client.&lt;/p&gt;
-&lt;h2 id=&#34;-attempt-1-jisql&#34;&gt;❌ Attempt 1: &lt;code&gt;jisql&lt;/code&gt;&lt;/h2&gt;
-&lt;p&gt;Many years ago and in a different life &lt;a href=&#34;https://rmoff.net/2016/03/28/connecting-to-obiee-via-jdbc-with-jisql/&#34;&gt;I used&lt;/a&gt; &lt;a href=&#34;https://github.com/stdunbar/jisql&#34;&gt;jisql&lt;/a&gt;, so that was my first choice here simply for familiarity.&lt;/p&gt;
-&lt;p&gt;After cloning &lt;a href=&#34;https://github.com/stdunbar/jisql&#34;&gt;the jisql repo&lt;/a&gt; and building it (&lt;code&gt;mvn package&lt;/code&gt;) I copied the Flink JDBC driver to the &lt;code&gt;target&lt;/code&gt; folder that the build created.&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ ls -l *.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff  &lt;span style=&#34;color:#666&#34;&gt;22258619&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 11:54 flink-sql-jdbc-driver-bundle-1.18.0.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff     &lt;span style=&#34;color:#666&#34;&gt;86883&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 10:41 jisql-jar-with-dependencies.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff     &lt;span style=&#34;color:#666&#34;&gt;19917&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 10:40 jisql.jar
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now to run it:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;java -cp &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$PWD&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;/*&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;	   com.xigole.util.sql.Jisql &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;	   -driver org.apache.flink.table.jdbc.FlinkDriver &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;	   -cstring jdbc:flink://localhost:8083 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;	   -user none -password none -driverinfo
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;How I love the smell of Java stack traces in the morning 🙄&lt;/p&gt;
-&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;Exception in thread &amp;#34;main&amp;#34; java.lang.NoClassDefFoundError: org/slf4j/LoggerFactory
-        at org.apache.flink.table.jdbc.FlinkDriver.&amp;lt;clinit&amp;gt;(FlinkDriver.java:40)
-        at java.base/java.lang.Class.forName0(Native Method)
-        at java.base/java.lang.Class.forName(Class.java:315)
-        at com.xigole.util.sql.Jisql.run(Jisql.java:288)
-        at com.xigole.util.sql.Jisql.main(Jisql.java:275)
-Caused by: java.lang.ClassNotFoundException: org.slf4j.LoggerFactory
-        at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:581)
-        at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:178)
-        at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:527)
-        ... 5 more
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;One of the challenges for non-Java users of Flink (like me) is navigating these stacktraces which &lt;a href=&#34;https://rmoff.net/2023/10/10/learning-apache-flink-s01e04-a-partial-exploration-of-the-flink-sql-client/#it-was-all-going-so-well-&#34;&gt;pop up&lt;/a&gt; even when you&amp;rsquo;re using the SQL side of things. From bitter experience, I know that &lt;code&gt;NoClassDefFoundError&lt;/code&gt; means I&amp;rsquo;m probably missing a jar, or have a jar but in the wrong place, or the wrong colour, or something.&lt;/p&gt;
-&lt;p&gt;There&amp;rsquo;s also a line in &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/jdbcdriver/#use-with-sqlline&#34;&gt;the docs&lt;/a&gt; that I missed the first time around:&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;&lt;em&gt;Notice that you need to copy slf4j-api-{slf4j.version}.jar to &lt;code&gt;target&lt;/code&gt; which will be used by flink JDBC driver&lt;/em&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;This jar is for the &lt;a href=&#34;https://www.slf4j.org/&#34;&gt;SLF4J API Module&lt;/a&gt;. It&amp;rsquo;s beyond my pay grade to explain why this isn&amp;rsquo;t included with the Flink JDBC driver, so for now we&amp;rsquo;ll deal with the sharp edge and just go and download that too.&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ curl https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar -O
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ cp slf4j-api-2.0.9.jar target
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ ls -l *.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff  &lt;span style=&#34;color:#666&#34;&gt;22258619&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 11:54 flink-sql-jdbc-driver-bundle-1.18.0.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff     &lt;span style=&#34;color:#666&#34;&gt;86883&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 10:41 jisql-jar-with-dependencies.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff     &lt;span style=&#34;color:#666&#34;&gt;19917&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 10:40 jisql.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff     &lt;span style=&#34;color:#666&#34;&gt;64579&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 11:54 slf4j-api-2.0.9.jar
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Trying again:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ java -cp &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$PWD&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;/*&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           com.xigole.util.sql.Jisql &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -driver org.apache.flink.table.jdbc.FlinkDriver &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -cstring jdbc:flink://localhost:8083 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -user none -password none &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -driverinfo
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;           
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;…&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;driver.getMajorVersion&lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt; is &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;driver.getMinorVersion&lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt; is &lt;span style=&#34;color:#666&#34;&gt;18&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;driver is not JDBC compliant
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;metaData.getDatabaseProductName&lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;Flink JDBC Driver&amp;#34;&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;metaData.getDatabaseProductVersion&lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1.18.0&amp;#34;&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;metaData.getDriverName&lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;org.apache.flink.table.jdbc.FlinkDriver&amp;#34;&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;metaData.getDriverVersion&lt;span style=&#34;color:#666&#34;&gt;()&lt;/span&gt;: &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;1.18.0&amp;#34;&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Nice, we&amp;rsquo;re getting somewhere! Unfortunately, this is as far as we get. If we remove the &lt;code&gt;-driverinfo&lt;/code&gt; flag (which gave us the driver info as seen above) so that we can get into the SQL prompt itself, we hit a problem:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ java -cp &lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;$PWD&lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;/*&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           com.xigole.util.sql.Jisql &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -driver org.apache.flink.table.jdbc.FlinkDriver &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -cstring jdbc:flink://localhost:8083 &lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;\
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#b62;font-weight:bold&#34;&gt;&lt;/span&gt;           -user none -password none
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;SLF4J: No SLF4J providers were found.
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;SLF4J: Defaulting to no-operation &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;NOP&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt; logger implementation
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;SLF4J: See https://www.slf4j.org/codes.html#noProviders &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; further details.
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;SQLException : SQL state: null java.sql.SQLFeatureNotSupportedException: FlinkConnection#clearWarnings is not supported yet. ErrorCode: &lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;code&gt;SQLFeatureNotSupportedException&lt;/code&gt; is a recurred theme with the Flink JDBC Driver. In this case, it&amp;rsquo;s &lt;a href=&#34;https://docs.oracle.com/javase/8/docs/api/java/sql/Connection.html#clearWarnings--&#34;&gt;&lt;code&gt;clearWarnings&lt;/code&gt;&lt;/a&gt; that isn&amp;rsquo;t supported.&lt;/p&gt;
-&lt;p&gt;Even if I go into the code and comment out the call to &lt;code&gt;clearWarnings&lt;/code&gt; and rebuild jisql (&lt;em&gt;look at me delving into Java code which I have no idea about what I&amp;rsquo;m doing!&lt;/em&gt; 🤪), it soon bombs out on further &lt;code&gt;SQLFeatureNotSupportedException&lt;/code&gt; errors.&lt;/p&gt;
-&lt;h2 id=&#34;-attempt-2-sqlline&#34;&gt;✅ Attempt 2: &lt;code&gt;sqlline&lt;/code&gt;&lt;/h2&gt;
-&lt;p&gt;The &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/jdbcdriver/#use-with-sqlline&#34;&gt;docs themselves demonstrate the JDBC Driver with sqlline&lt;/a&gt; so I was hoping that this would at least work.&lt;/p&gt;
-&lt;p&gt;As before, I cloned the &lt;a href=&#34;https://github.com/julianhyde/sqlline&#34;&gt;repo&lt;/a&gt; and built it (&lt;code&gt;./mvnw package -DskipTests&lt;/code&gt; - one of the tests seems to be broken, hence skipping it). Learning from my lesson before I put both the Flink JDBC driver &lt;em&gt;and&lt;/em&gt; slf4j jars in the same folder as the sqlline jar:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ ls -l target/*.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff  &lt;span style=&#34;color:#666&#34;&gt;22258619&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 11:06 flink-sql-jdbc-driver-bundle-1.18.0.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff     &lt;span style=&#34;color:#666&#34;&gt;64579&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 11:11 slf4j-api-2.0.9.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff   &lt;span style=&#34;color:#666&#34;&gt;3128007&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 10:54 sqlline-1.13.0-SNAPSHOT-jar-with-dependencies.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff    &lt;span style=&#34;color:#666&#34;&gt;505697&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 10:54 sqlline-1.13.0-SNAPSHOT-javadoc.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff    &lt;span style=&#34;color:#666&#34;&gt;151338&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 10:54 sqlline-1.13.0-SNAPSHOT-sources.jar
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;-rw-r--r--@ &lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt; rmoff  staff    &lt;span style=&#34;color:#666&#34;&gt;243014&lt;/span&gt; &lt;span style=&#34;color:#666&#34;&gt;13&lt;/span&gt; Nov 10:54 sqlline-1.13.0-SNAPSHOT.jar
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now to run it. There are two options - the helper shell script that ships with sqlline and sets up the classpath nicely, or just directly like with jisql above. I opted for the former since it&amp;rsquo;s tidier on the CLI:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;$ ./bin/sqlline
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;sqlline version 1.13.0-SNAPSHOT
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;sqlline&amp;gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;So far, so good.&lt;/p&gt;
-&lt;p&gt;Let&amp;rsquo;s connect to the Flink cluster using the gateway&amp;rsquo;s REST endpoint using the &lt;code&gt;connect&lt;/code&gt; command and JDBC URL:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;sqlline&amp;gt; !connect jdbc:flink://localhost:8083
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#666&#34;&gt;[&lt;/span&gt;…&lt;span style=&#34;color:#666&#34;&gt;]&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;We&amp;rsquo;re prompted for credentials, even though the driver doesn&amp;rsquo;t support them at this stage. Hit return for both, ignore the &lt;code&gt;is not supported yet&lt;/code&gt; errors, and we&amp;rsquo;re now at a prompt from which we can enter some Flink SQL!&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Enter username &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; jdbc:flink://localhost:8083:
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Enter password &lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;for&lt;/span&gt; jdbc:flink://localhost:8083:
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Error: FlinkConnection#setReadOnly is not supported yet. &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;state&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;,code&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;0&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Error: FlinkDatabaseMetaData#getDefaultTransactionIsolation is not supported &lt;span style=&#34;color:#666&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#19177c&#34;&gt;state&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;,code&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;0&lt;span style=&#34;color:#666&#34;&gt;)&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;0: jdbc:flink://localhost:8083&amp;gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Let&amp;rsquo;s run a query using the same example as &lt;a href=&#34;https://rmoff.net/2023/10/10/learning-apache-flink-s01e04-a-partial-exploration-of-the-flink-sql-client/&#34;&gt;last time&lt;/a&gt;:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;jdbc:flink:&lt;span style=&#34;color:#666&#34;&gt;//&lt;/span&gt;localhost:&lt;span style=&#34;color:#666&#34;&gt;8083&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.semicolon&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;name,&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.semicolon&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;COUNT&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;)&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;cnt&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.semicolon&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.semicolon&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;(&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;VALUES&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Bob&amp;#39;&lt;/span&gt;),&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Alice&amp;#39;&lt;/span&gt;),&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Greg&amp;#39;&lt;/span&gt;),&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;Bob&amp;#39;&lt;/span&gt;))&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;AS&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;NameTable(name)&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.semicolon&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;GROUP&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;BY&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;name;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-------+-----+
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;name&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;cnt&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-------+-----+
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Bob&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Alice&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Greg&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Bob&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Bob&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-------+-----+
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;rows&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;selected&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;1&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;044&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;seconds)&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;What about streaming? We&amp;rsquo;ll create a table using &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/datagen/&#34;&gt;the &lt;code&gt;datagen&lt;/code&gt; connector&lt;/a&gt;. This connector basically stuffs random values into each field to match the respective data type.&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;jdbc:flink:&lt;span style=&#34;color:#666&#34;&gt;//&lt;/span&gt;localhost:&lt;span style=&#34;color:#666&#34;&gt;8083&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TABLE&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;foo&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.)&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;     &lt;/span&gt;a_number&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;BIGINT&lt;/span&gt;,&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.)&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;     &lt;/span&gt;a_decimal&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;DECIMAL&lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;32&lt;/span&gt;,&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;),&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.)&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;     &lt;/span&gt;a_string&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;STRING&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.)&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;)&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WITH&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.)&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;datagen&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;.)&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;);&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;No&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;rows&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;affected&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;145&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;seconds)&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;It&amp;rsquo;s not pretty, but it is effective. Here&amp;rsquo;s a bounded query against the table:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;jdbc:flink:&lt;span style=&#34;color:#666&#34;&gt;//&lt;/span&gt;localhost:&lt;span style=&#34;color:#666&#34;&gt;8083&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;foo&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;LIMIT&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----------------------+-----------------------------------+------------------------------------------------------------------------------------------------------+
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;       &lt;/span&gt;a_number&lt;span style=&#34;color:#bbb&#34;&gt;       &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;             &lt;/span&gt;a_decimal&lt;span style=&#34;color:#bbb&#34;&gt;             &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;                                               &lt;/span&gt;a_string&lt;span style=&#34;color:#bbb&#34;&gt;                                               &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----------------------+-----------------------------------+------------------------------------------------------------------------------------------------------+
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5498399883014354114&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;74212271515046392498116100096&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;702&lt;/span&gt;e6aa4b8c69d6fdd67ec90fcf90253377357b250e74d40934ab25cd6aa0c631309f49789b80678a522379b1ad3861187af&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;3618213315685925891&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;93385166264069454971029946368&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;4&lt;/span&gt;e1ec64676a13eacb7d58757492c1ea3c0c77138dbdedca63827d516cd7849aa1c73fa714fb8d07d98e18c3a20a42ce24c53&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;9058675481861391925&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;651238545085586500000000000000&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;b81f3859c94f37088821df93d2e5284ab0778b49d4c89729a45ef82634a8f1c7313224f1dca03e437653a563b93c15841c1e&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;607555464239338146&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;214827744726156960000000000000&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;a15acba4276bcbb2b0846599d79c44fd23a22acc178f0c76abdc951c793149bd2735b734ccbc1f4b65c1294f09cb84cc153b&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2603485567200316583&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;413883713557198900000000000000&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;7266&lt;/span&gt;d08ef4fa9f84677ce01d536475e798f1218fdf63fdb174f7ce07e0511c6511f0d981ddc6a3d08b8e7a1fd5c01304d673&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;----------------------+-----------------------------------+------------------------------------------------------------------------------------------------------+
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;5&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;rows&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;selected&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;832&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;seconds)&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Without the &lt;code&gt;LIMIT&lt;/code&gt; clause, it&amp;rsquo;s unbounded:&lt;/p&gt;
-&lt;script async id=&#34;asciicast-SPNS2j5ci6Tu7QE0ggRdiNxqq&#34; src=&#34;https://asciinema.org/a/SPNS2j5ci6Tu7QE0ggRdiNxqq.js&#34;&gt;&lt;/script&gt;
-&lt;p&gt;One of the issues with using the JDBC Driver is that there is &lt;em&gt;extreme&lt;/em&gt; verbosity. This might be from the REST endpoint rather than the JDBC driver itself (I&amp;rsquo;m not sure) but either way, the user is left with a screenful of noise if they try to do something that causes a problem. For example, if you tell Flink to run as a batch job:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SET&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;execution.runtime&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;mode&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;batch;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;and then run a &lt;code&gt;SELECT&lt;/code&gt; against the above &lt;code&gt;foo&lt;/code&gt; table (which is defined as an unbounded source) you get a sensible and well-formed error:&lt;/p&gt;
-&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;org.apache.flink.table.api.ValidationException:
-Querying an unbounded table &amp;#39;default_catalog.default_database.foo&amp;#39; in batch mode is not allowed.
-The table source is unbounded.
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;However, this error is buried amongst vast stacktrace noise. Here&amp;rsquo;s what the above &lt;em&gt;&lt;strong&gt;one&lt;/strong&gt;&lt;/em&gt; error looks like—I had to zoom my font size right down to even get all the messages on the viewable screen:&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/jdbc_stack.webp&#34; alt=&#34;JDBC Stack Trace&#34;&gt;&lt;/p&gt;
-&lt;p&gt;As a side note—since we&amp;rsquo;ve gone down this bounded/unbounded batch/streaming path—you can also use datagen as a bounded source by setting the &lt;code&gt;number-of-rows&lt;/code&gt; &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/datagen/#connector-options&#34;&gt;option&lt;/a&gt; in the DDL:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;CREATE&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;TABLE&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;bar&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;c1&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000&#34;&gt;INT&lt;/span&gt;,&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;c2&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;STRING&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;)&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;WITH&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;datagen&amp;#39;&lt;/span&gt;,&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;number-of-rows&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#ba2121&#34;&gt;&amp;#39;8&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;);&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;jdbc:flink:&lt;span style=&#34;color:#666&#34;&gt;//&lt;/span&gt;localhost:&lt;span style=&#34;color:#666&#34;&gt;8083&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;FROM&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;bar;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-------------+------------------------------------------------------------------------------------------------------+
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;     &lt;/span&gt;c1&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;                                                  &lt;/span&gt;c2&lt;span style=&#34;color:#bbb&#34;&gt;                                                  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-------------+------------------------------------------------------------------------------------------------------+
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;596725830&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;e2286a4c7200d165502c49d58793f3867ec3462b75c029d0552f0475c36e95aff2cedd17e7c2fd0e12dfc90f4ca561513eaf&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;288846669&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;f39a0c31abd89ff15841d2875fd6669bb88e31357bdcf75a4d67c3d4aa67283497800fe820881a3bac6fbaddcce301d916b7&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;1278589269&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;ad9f5d238476c34dfaf4c60f42e1a1a38f64201f93ad5e9d59ea3831fdf1fcf47240820e437aa3db280917c4740169773558&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2001314692&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt;aefa715dbb1cfabf4705b5e89263b95e09953605663861c0dba79b566b24f17f0f7e43f51f4192120c8e85c06922cf24b41&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;523937178&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;66&lt;/span&gt;e5a9e560b0014bdbb3393f660c6ad9cd5ddb098eef205ebfc13ffc819b50d31809bb1ebf2356d5943ec2f1b395b3c78fc0&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;445642724&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;   &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;7311&lt;/span&gt;f7970f709ccbb724bf7386cf3baed4c6957d54fb4625f4a2f6fa958cf58617c812eb1cd4373e809234e5704e2141364f&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2038995175&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;ef84598989c488bda2a75d3138ec3cd08f7449b06a1b8321a63e46009f5dcea27e158023a2dabc6851c379f06cdad9e93f6&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2071526857&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;2&lt;/span&gt;b0152d3da610caad8c7256e2e410b55979bde72c34f918ccd53f438f5ca5104d996db448e41edff536ba01f5664472e52c8&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;|&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;-------------+------------------------------------------------------------------------------------------------------+
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#408080;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#666&#34;&gt;8&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#008000;font-weight:bold&#34;&gt;rows&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;selected&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;(&lt;span style=&#34;color:#666&#34;&gt;0&lt;/span&gt;.&lt;span style=&#34;color:#666&#34;&gt;813&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;seconds)&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;-dbeaver&#34;&gt;🦫 DBeaver&lt;/h2&gt;
-&lt;p&gt;A popular open-source GUI for databases (and more) is &lt;a href=&#34;https://github.com/dbeaver&#34;&gt;DBeaver&lt;/a&gt;. You can already use it with Flink through the HiveServer2 support in SQL Gateway, and the Flink JDBC Driver means it can natively support it.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/dbeaver1.webp&#34; alt=&#34;DBeaver connection for Apache Flink&#34;&gt;&lt;/p&gt;
-&lt;p&gt;Just like with sqlline, you can run Flink SQL statements to create and query tables. DBeaver seems happy querying both bounded tables:&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://rmoff.net/images/2023/11/dbeaver2.webp&#34; alt=&#34;Querying Apache Flink from DBeaver&#34;&gt;&lt;/p&gt;
-&lt;p&gt;as well as unbounded:&lt;/p&gt;
-&lt;p&gt;&lt;video autoplay=&#34;true&#34; loop=&#34;true&#34; width=800 src=&#34;https://rmoff.net/images/2023/11/dbeaver_streaming_flink.mp4&#34;&gt;&lt;/video&gt;&lt;/p&gt;
-&lt;p&gt;In the case of the unbounded table, it&amp;rsquo;s hard to tell because of the random nature of datagen&amp;rsquo;s data whether what I&amp;rsquo;m seeing is results from &lt;em&gt;one&lt;/em&gt; query paged into 200-row chunks, or if each time it goes to get more data it&amp;rsquo;s the &lt;em&gt;first&lt;/em&gt; 200 rows of a new result set that&amp;rsquo;s shown.&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;You can add Flink JDBC to DBeaver yourself by modifying &lt;code&gt;plugins/org.jkiss.dbeaver.ext.generic/plugin.xml&lt;/code&gt; and rebuilding it (which isn&amp;rsquo;t as scary as it sounds; it&amp;rsquo;s &lt;a href=&#34;https://github.com/dbeaver/dbeaver/wiki/Build-from-sources&#34;&gt;documented&lt;/a&gt; and just watch out for &lt;a href=&#34;https://github.com/dbeaver/dbeaver/issues/21841&#34;&gt;this issue&lt;/a&gt;). I&amp;rsquo;ve submitted &lt;a href=&#34;https://github.com/dbeaver/dbeaver/pull/21842&#34;&gt;a PR&lt;/a&gt; so hopefully by the time you read this it might even be in the downloadable version of the tool :)&lt;/em&gt;&lt;/p&gt;</description>
     </item>
     
   </channel>

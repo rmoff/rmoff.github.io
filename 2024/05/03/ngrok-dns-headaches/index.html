@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>ngrok DNS headaches</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2024/05/03/ngrok-dns-headaches/">
+		
+		
+		
+		
+		
+		<meta property="og:title" content="ngrok DNS headaches" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2024/05/h_IMG_1338.webp" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2024/05/03/ngrok-dns-headaches/" />
+		<meta property="og:site_name" content="ngrok DNS headaches" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2024/05/h_IMG_1338.webp'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://data-folks.masto.host/@rmoff"><i class="fab fa-mastodon"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">ngrok DNS headaches</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2024-05-03T10:56:30Z">May 3, 2024</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/ngrok" class="no-underline category near-white dim">Ngrok</a>, <a href="https://rmoff.net/categories/dns" class="no-underline category near-white dim">Dns</a>
+								<span class="display-print">at https://rmoff.net/2024/05/03/ngrok-dns-headaches/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://twitter.com/rmoff/" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw8">
+	<div class="paragraph">
+<p>Let’s not bury the lede: it was DNS. However, unlike the meme (<em>&#34;It’s not DNS, it’s never DNS. It was DNS&#34;</em>), I didn’t even have an inkling that DNS might be the problem.</p>
+</div>
+<div class="paragraph">
+<p>I’m writing a new blog about streaming Apache Kafka data to Apache Iceberg and wanted to provision a local Kafka cluster to pull data from remotely. I got this working nicely just last year using <a href="/2023/11/01/using-apache-kafka-with-ngrok/">ngrok to expose the broker to the interwebz</a>, so figured I’d use this again. Simple, right?</p>
+</div>
+<div class="paragraph">
+<p>Nope.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ kcat <span style="color: #000080">-L</span> <span style="color: #000080">-b</span> 4.tcp.eu.ngrok.io:16689
+%3|1714734085.241|FAIL|rdkafka#producer-1| <span style="color: #000000;font-weight: bold">[</span>thrd:4.tcp.eu.ngrok.io:16689/bootstrap]: 4.tcp.eu.ngrok.io:16689/bootstrap: Connect to ipv4#0.0.0.0:16689 failed: Connection refused <span style="color: #000000;font-weight: bold">(</span>after 4ms <span style="color: #000000;font-weight: bold">in </span>state CONNECT<span style="color: #000000;font-weight: bold">)</span>
+%3|1714734086.246|FAIL|rdkafka#producer-1| <span style="color: #000000;font-weight: bold">[</span>thrd:4.tcp.eu.ngrok.io:16689/bootstrap]: 4.tcp.eu.ngrok.io:16689/bootstrap: Connect to ipv4#0.0.0.0:16689 failed: Connection refused <span style="color: #000000;font-weight: bold">(</span>after 2ms <span style="color: #000000;font-weight: bold">in </span>state CONNECT, 1 identical error<span style="color: #000000;font-weight: bold">(</span>s<span style="color: #000000;font-weight: bold">)</span> suppressed<span style="color: #000000;font-weight: bold">)</span>
+% ERROR: Failed to acquire metadata: Local: Broker transport failure <span style="color: #000000;font-weight: bold">(</span>Are the brokers reachable? Also try increasing the metadata <span style="color: #0086B3">timeout </span>with <span style="color: #000080">-m</span> &lt;<span style="color: #0086B3">timeout</span><span style="color: #000000;font-weight: bold">&gt;</span>?<span style="color: #000000;font-weight: bold">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Spinning up <a href="https://rmoff.net/code/docker-compose-ngrok-kafka.yml">this Docker Compose</a> should have worked just fine (it did last year!). But for some reason my Kafka broker couldn’t be reached (<code>Connection refused</code>).</p>
+</div>
+<div class="sect1">
+<h2 id="_the_basic_setup">The Basic Setup&nbsp;<a class="headline-hash" href="#_the_basic_setup">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>After a lot of poking and prodding and changing stuff and still no luck with Kafka, I decided to strip it back. No Docker Compose, just Kafka. Just netcat listening on a port:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">nc <span style="color: #000080">-lk</span> 4242</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>From another terminal window I can test connectivity to the host/port:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ nc <span style="color: #000080">-z</span> localhost 4242
+Connection to localhost port 4242 <span style="color: #000000;font-weight: bold">[</span>tcp/<span style="color: #000000;font-weight: bold">*</span><span style="color: #000000;font-weight: bold">]</span> succeeded!</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now let us layer in ngrok, and add a route for the local netcat listener:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ ngrok tcp 4242
+
+Session Status                online
+Account                       Robin Moffatt <span style="color: #000000;font-weight: bold">(</span>Plan: Free<span style="color: #000000;font-weight: bold">)</span>
+Version                       3.9.0
+Region                        Europe <span style="color: #000000;font-weight: bold">(</span>eu<span style="color: #000000;font-weight: bold">)</span>
+Web Interface                 http://127.0.0.1:4040
+Forwarding                    tcp://0.tcp.eu.ngrok.io:13810 -&gt; localhost:4242
+
+Connections                   ttl     opn     rt1     rt5     p50     p90
+                              0       0       0.00    0.00    0.00    0.00</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With this, we should be able to connect with netcat on the tcp host/port given:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ nc <span style="color: #000080">-vz</span> 0.tcp.eu.ngrok.io 13810
+nc: connectx to 0.tcp.eu.ngrok.io port 13810 <span style="color: #000000;font-weight: bold">(</span>tcp<span style="color: #000000;font-weight: bold">)</span> failed: Connection refused</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_lets_dig_into_the_problem">Let’s dig into the problem&nbsp;<a class="headline-hash" href="#_lets_dig_into_the_problem">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>One thing that I did think of early on was that I run <a href="https://nextdns.io/">nextDNS</a> (similar to <a href="https://pi-hole.net/">Pi-Hole</a>, if you’re familiar with that) which can occassionally have unintended sideeffects when it comes to networking and resolving names. So I disabled it, and tried again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ nc <span style="color: #000080">-vz</span> 0.tcp.eu.ngrok.io 13810
+nc: connectx to 0.tcp.eu.ngrok.io port 13810 <span style="color: #000000;font-weight: bold">(</span>tcp<span style="color: #000000;font-weight: bold">)</span> failed: Connection refused</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><em>If this was a cop chase movie, at this point the camera would be panning to the side street where the villian is hiding and the police car just drove by…</em></p>
+</div>
+<div class="paragraph">
+<p>Dusting off my troubleshooting command line toolbox, I tried a <code>mtr</code> (like <code>traceroute</code> but fancier):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">                                                                          My traceroute  <span style="color: #000000;font-weight: bold">[</span>v0.95]
+asgard08 <span style="color: #000000;font-weight: bold">(</span>192.168.10.50<span style="color: #000000;font-weight: bold">)</span> -&gt; 0.tcp.eu.ngrok.io <span style="color: #000000;font-weight: bold">(</span>81.99.162.48<span style="color: #000000;font-weight: bold">)</span>                                                                                     2024-05-03T13:43:42+0100
+Keys:  Help   Display mode   Restart statistics   Order of fields   quit
+                                                                                                                                 Packets               Pings
+ Host                                                                                                                          Loss%   Snt   Last   Avg  Best  Wrst StDev
+ 1. usgmoffattme                                                                                                                0.0%     4    4.2   6.3   4.2   9.0   2.2
+ 2. 10.53.34.17                                                                                                                 0.0%     4   20.8  18.1  16.4  20.8   2.0
+ 3. brad-core-2a-ae41-650.network.virginmedia.net                                                                               0.0%     4   41.3  23.7  11.4  41.3  14.0
+ 4. <span style="color: #000000;font-weight: bold">(</span>waiting <span style="color: #000000;font-weight: bold">for </span>reply<span style="color: #000000;font-weight: bold">)</span>
+ 5. <span style="color: #000000;font-weight: bold">(</span>waiting <span style="color: #000000;font-weight: bold">for </span>reply<span style="color: #000000;font-weight: bold">)</span>
+ 6. lang-dclcore-1a-port-channel1.network.virginmedia.net                                                                       0.0%     3   23.6  22.4  20.8  23.6   1.4
+ 7. lang-sspiprxy.network.virginmedia.net                                                                                       0.0%     3   23.4  24.3  23.4  25.3   0.9</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What caught my eye here was the final hop—<code>lang-sspiprxy.network.virginmedia.net</code>. My ISP is Virgin Media, but the only entry I’d expected to see relating to it was my own IP.</p>
+</div>
+<div class="paragraph">
+<p>Why is traffic for <code>0.tcp.eu.ngrok.io</code> going to <code>81.99.162.48</code> (<code>lang-sspiprxy.network.virginmedia.net</code>)?</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/05/confused.webp" alt="Confused"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s check the DNS resolution:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ dig 0.tcp.eu.ngrok.io
+
+<span style="background-color: #f8f8f8">;</span> &lt;&lt;<span style="color: #000000;font-weight: bold">&gt;&gt;</span> DiG 9.10.6 &lt;&lt;<span style="color: #000000;font-weight: bold">&gt;&gt;</span> 0.tcp.eu.ngrok.io
+<span style="background-color: #f8f8f8">;;</span> global options: +cmd
+<span style="background-color: #f8f8f8">;;</span> Got answer:
+<span style="background-color: #f8f8f8">;;</span> -&gt;&gt;HEADER<span style="color: #000000;font-weight: bold">&lt;&lt;-</span> <span style="color: #008080">opcode</span><span style="color: #d14">: QUERY, status: NOERROR, id: 64676
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 512
+;; QUESTION SECTION:
+;0.tcp.eu.ngrok.io.             IN      A
+
+;; ANSWER SECTION:
+0.tcp.eu.ngrok.io.      0       IN      A       81.99.162.48
+
+;; Query time: 85 msec
+;; SERVER: 192.168.10.1#53(192.168.10.1)
+;; WHEN: Fri May 03 13:47:39 BST 2024
+;; MSG SIZE  rcvd: 62</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The DNS server is my local router (<code>192.168.10.1</code>) which in turn is defaulting to the ISP’s DNS servers. What about if we use a <a href="https://www.cloudflare.com/learning/dns/what-is-1.1.1.1/">trusted public DNS like Cloudflare</a>&#39;s?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ dig @1.1.1.1 0.tcp.eu.ngrok.io
+
+<span style="background-color: #f8f8f8">;</span> &lt;&lt;<span style="color: #000000;font-weight: bold">&gt;&gt;</span> DiG 9.10.6 &lt;&lt;<span style="color: #000000;font-weight: bold">&gt;&gt;</span> @1.1.1.1 0.tcp.eu.ngrok.io
+<span style="background-color: #f8f8f8">;</span> <span style="color: #000000;font-weight: bold">(</span>1 server found<span style="color: #000000;font-weight: bold">)</span>
+<span style="background-color: #f8f8f8">;;</span> global options: +cmd
+<span style="background-color: #f8f8f8">;;</span> Got answer:
+<span style="background-color: #f8f8f8">;;</span> -&gt;&gt;HEADER<span style="color: #000000;font-weight: bold">&lt;&lt;-</span> <span style="color: #008080">opcode</span><span style="color: #d14">: QUERY, status: NOERROR, id: 4513
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; QUESTION SECTION:
+;0.tcp.eu.ngrok.io.             IN      A
+
+;; ANSWER SECTION:
+0.tcp.eu.ngrok.io.      60      IN      A       18.197.239.5
+
+;; Query time: 67 msec
+;; SERVER: 1.1.1.1#53(1.1.1.1)
+;; WHEN: Fri May 03 13:49:41 BST 2024
+;; MSG SIZE  rcvd: 62</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Huh. <code>18.197.239.5</code> is different from <code>81.99.162.48</code>, definitely. Now that we’re in the realms of DNS, let’s switch NextDNS back on and see what happens:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ dig 0.tcp.eu.ngrok.io
+
+<span style="background-color: #f8f8f8">;</span> &lt;&lt;<span style="color: #000000;font-weight: bold">&gt;&gt;</span> DiG 9.10.6 &lt;&lt;<span style="color: #000000;font-weight: bold">&gt;&gt;</span> 0.tcp.eu.ngrok.io
+<span style="background-color: #f8f8f8">;;</span> global options: +cmd
+<span style="background-color: #f8f8f8">;;</span> Got answer:
+<span style="background-color: #f8f8f8">;;</span> -&gt;&gt;HEADER<span style="color: #000000;font-weight: bold">&lt;&lt;-</span> <span style="color: #008080">opcode</span><span style="color: #d14">: QUERY, status: NOERROR, id: 34593
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 4096
+; OPT=15: 00 11 42 6c 6f 63 6b 65 64 20 62 79 20 4e 65 78 74 44 4e 53 (&#34;..Blocked by NextDNS&#34;)
+;; QUESTION SECTION:
+;0.tcp.eu.ngrok.io.             IN      A
+
+;; ANSWER SECTION:
+0.tcp.eu.ngrok.io.      300     IN      A       0.0.0.0
+
+;; Query time: 41 msec
+;; SERVER: 192.0.2.42#53(192.0.2.42)
+;; WHEN: Fri May 03 13:52:06 BST 2024
+;; MSG SIZE  rcvd: 103</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Well, just look at that:</p>
+</div>
+<div class="paragraph">
+<p><strong><code>..Blocked by NextDNS</code></strong></p>
+</div>
+<div class="paragraph">
+<p>Now the penny is starting to drop. If you’re particularly observant you’ll notice the error that I showed at the very top of this blog says <code>Connect to ipv4#0.0.0.0:16689 failed</code> —and <code>0.0.0.0</code> is what the <code>dig</code> above shows NextDNS resolves the ngrok hostname to.</p>
+</div>
+<div class="paragraph">
+<p>In the logs that NextDNS provides I can see:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/05/nextdns01.webp" alt="NextDNS screenshot showing DNS resolution for ngrok blocked by Threat Intelligence Feeds blocklist"/>
+</div>
+</div>
+<div class="paragraph">
+<p>As well as blocking crap like ads and tracking domains, NextDNS also blocks DNS resolutions for sites that are deemed nefarious. It looks like ngrok ended up on one of <a href="https://www.cloudflare.com/learning/security/glossary/threat-intelligence-feed/">these lists</a> - probably because ngrok could be used to serve phishing websites etc. After adding <code>*.ngrok.io</code> to my NextDNS Allowlist I got this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ nc <span style="color: #000080">-vz</span> 0.tcp.eu.ngrok.io 13810
+Connection to 0.tcp.eu.ngrok.io port 13810 <span style="color: #000000;font-weight: bold">[</span>tcp/<span style="color: #000000;font-weight: bold">*</span><span style="color: #000000;font-weight: bold">]</span> succeeded!</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Success!</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/05/yay.webp" alt="Yay"/>
+</div>
+</div>
+<div class="paragraph">
+<p>So NextDNS was, in a sense, a problem of my own making. But my ISP blocking this traffic is not something I’d expected. It turns out that Virgin Media offer &#34;Web Safe&#34; which includes &#34;Virus Safe&#34; which is enabled by default. After opting out of it, the ngrok address resolved correctly for me too:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ dig 2.tcp.eu.ngrok.io
+
+<span style="background-color: #f8f8f8">;</span> &lt;&lt;<span style="color: #000000;font-weight: bold">&gt;&gt;</span> DiG 9.10.6 &lt;&lt;<span style="color: #000000;font-weight: bold">&gt;&gt;</span> 2.tcp.eu.ngrok.io
+<span style="background-color: #f8f8f8">;;</span> global options: +cmd
+<span style="background-color: #f8f8f8">;;</span> Got answer:
+<span style="background-color: #f8f8f8">;;</span> -&gt;&gt;HEADER<span style="color: #000000;font-weight: bold">&lt;&lt;-</span> <span style="color: #008080">opcode</span><span style="color: #d14">: QUERY, status: NOERROR, id: 6068
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 4096
+;; QUESTION SECTION:
+;2.tcp.eu.ngrok.io.             IN      A
+
+;; ANSWER SECTION:
+2.tcp.eu.ngrok.io.      13      IN      A       18.197.239.5
+
+;; Query time: 76 msec
+;; SERVER: 192.168.10.1#53(192.168.10.1)
+;; WHEN: Fri May 03 14:07:49 BST 2024
+;; MSG SIZE  rcvd: 62</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_its_all_working">It’s all working 😅&nbsp;<a class="headline-hash" href="#_its_all_working">🔗</a> </h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ kcat <span style="color: #000080">-L</span> <span style="color: #000080">-b</span> 6.tcp.eu.ngrok.io:12916
+Metadata <span style="color: #000000;font-weight: bold">for </span>all topics <span style="color: #000000;font-weight: bold">(</span>from broker 1: 6.tcp.eu.ngrok.io:12916/1<span style="color: #000000;font-weight: bold">)</span>:
+ 1 brokers:
+  broker 1 at 6.tcp.eu.ngrok.io:12916 <span style="color: #000000;font-weight: bold">(</span>controller<span style="color: #000000;font-weight: bold">)</span>
+ 0 topics:</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With ngrok on the Allowlist for NextDNS, everything works great. I’ll probably leave the &#34;Virus Safe&#34; at my ISP switched on unless it continues to cause these kind of problems. I’m also going to switch over my router’s DNS to use Cloudflare (1.1.1.1) in the future.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_footnote_a_final_puzzle_why_does_trace_on_dig_bypass_the_filtering">Footnote: A final puzzle - why does <code>+trace</code> on <code>dig</code> bypass the filtering?&nbsp;<a class="headline-hash" href="#_footnote_a_final_puzzle_why_does_trace_on_dig_bypass_the_filtering">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This is the case on both NextDNS and Virgin Media. If I put the blocks back to how they were when I started looking at this and run <code>dig</code> normally, I get the blocked IP result as expected:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #999988;font-style: italic"># NextDNS</span>
+❯ dig +short 0.tcp.eu.ngrok.io
+0.0.0.0
+
+<span style="color: #999988;font-style: italic"># Virgin Media</span>
+❯ dig +short 0.tcp.eu.ngrok.io
+81.99.162.48</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But if I use <code>+trace</code> then in amongst the detailed trace info, I get the correct ngrok IP resolution:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #999988;font-style: italic"># NextDNS</span>
+❯ dig +short +trace 0.tcp.eu.ngrok.io
+NS a.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS b.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS c.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS d.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS e.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS f.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS g.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS h.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS i.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS j.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS k.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS l.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+NS m.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+RRSIG NS 8 0 518400 20240516050000 20240503040000 5613 <span style="color: #0086B3">.</span> Gz7tfgerwhD0FAUDn+c/U3b/SrOgMyWaFh+575O7DxjF+yv0hND7AsLL 1gYcf8+n0V77G0XnAOkPJVPpe5cj/75xL6L/+PsaBteVJ0p9ZrsRDV7V
+ c+wxa2mR5mgKy4DsAk3PjgI3KfKlzm1YIg82UWs6AFS98V9m59uHM9gK DOTLXm6q38RwaU1cSuxU+QAhxK8xjbt8cbVUjmOyE6GYilZ6Peai02r9 EljH8UM1ulBiSSl4nUo1dgoxabTSVsmV/+CmdaUN8k97alg/vAzRhFc
+L YKIg/Y0nryoSZq/wUkwweFvcrr0UrMeH0f6iR5rfaxrrjPcL7E8UrNRU <span style="color: #008080">9aHjHg</span><span style="color: #000000;font-weight: bold">==</span> from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>65 ms.
+A 18.158.249.75 from server 205.251.192.146 <span style="color: #000000;font-weight: bold">in </span>20 ms.
+
+<span style="color: #999988;font-style: italic"># Virgin Media</span>
+❯ dig +short +trace 0.tcp.eu.ngrok.io
+NS a.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS b.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS c.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS d.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS e.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS f.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS g.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS h.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS i.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS j.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS k.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS l.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+NS m.root-servers.net. from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+RRSIG NS 8 0 518400 20240516050000 20240503040000 5613 <span style="color: #0086B3">.</span> Gz7tfgerwhD0FAUDn+c/U3b/SrOgMyWaFh+575O7DxjF+yv0hND7AsLL 1gYcf8+n0V77G0XnAOkPJVPpe5cj/75xL6L/+PsaBteVJ0p9ZrsRDV7V
+ c+wxa2mR5mgKy4DsAk3PjgI3KfKlzm1YIg82UWs6AFS98V9m59uHM9gK DOTLXm6q38RwaU1cSuxU+QAhxK8xjbt8cbVUjmOyE6GYilZ6Peai02r9 EljH8UM1ulBiSSl4nUo1dgoxabTSVsmV/+CmdaUN8k97alg/vAzRhFc
+L YKIg/Y0nryoSZq/wUkwweFvcrr0UrMeH0f6iR5rfaxrrjPcL7E8UrNRU <span style="color: #008080">9aHjHg</span><span style="color: #000000;font-weight: bold">==</span> from server 192.168.10.1 <span style="color: #000000;font-weight: bold">in </span>106 ms.
+A 18.158.249.75 from server 205.251.192.146 <span style="color: #000000;font-weight: bold">in </span>19 ms.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I’d love to hear from you if you can explain what’s happening with this :)</p>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://www.youtube.com/c/rmoff"><b class="fab fa-youtube-square"></b></a> <a href="https://www.linkedin.com/in/robinmoffatt/"><b class="fab fa-linkedin"></b></a> <em><a rel="me" href="https://data-folks.masto.host/@rmoff">Robin Moffatt</a> is a Principal DevEx Engineer at <a href="https://decodable.co">Decodable</a>. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2024 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
