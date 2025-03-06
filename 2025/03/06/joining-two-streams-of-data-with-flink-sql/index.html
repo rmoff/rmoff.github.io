@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Joining two streams of data with Flink SQL</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2025/03/06/joining-two-streams-of-data-with-flink-sql/">
+		
+		
+		
+		
+		
+		<meta property="og:title" content="Joining two streams of data with Flink SQL" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2025/03/h_IMG_8205.webp" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2025/03/06/joining-two-streams-of-data-with-flink-sql/" />
+		<meta property="og:site_name" content="Joining two streams of data with Flink SQL" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2025/03/h_IMG_8205.webp'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://data-folks.masto.host/@rmoff"><i class="fab fa-mastodon"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Joining two streams of data with Flink SQL</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2025-03-06T15:45:41Z">Mar 6, 2025</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/flink-sql" class="no-underline category near-white dim">Flink SQL</a>, <a href="https://rmoff.net/categories/apache-flink" class="no-underline category near-white dim">Apache Flink</a>
+								<span class="display-print">at https://rmoff.net/2025/03/06/joining-two-streams-of-data-with-flink-sql/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw8">
+	<div class="paragraph">
+<p>There was a useful question on the <a href="https://flink.apache.org/what-is-flink/community/#slack">Apache Flink Slack</a> recently about joining data in Flink SQL:</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>How can I join two streams of data by id in Flink, to get a combined view of the latest data?</p>
+</div>
+</blockquote>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>For example say I have input tables with schema</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>items_a</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="json"><span style="background-color: #f8f8f8">{</span><span style="color: #990000;font-weight: bold">&#34;id&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #bbbbbb"> </span><span style="color: #a61717;background-color: #e3d2d2">&lt;INT&gt;</span><span style="background-color: #f8f8f8">,</span><span style="color: #bbbbbb"> </span><span style="color: #990000;font-weight: bold">&#34;ts&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #bbbbbb"> </span><span style="color: #a61717;background-color: #e3d2d2">&lt;TIMESTAMP(</span><span style="color: #009999">3</span><span style="color: #a61717;background-color: #e3d2d2">)&gt;</span><span style="background-color: #f8f8f8">,</span><span style="color: #bbbbbb"> </span><span style="color: #990000;font-weight: bold">&#34;a&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #bbbbbb"> </span><span style="color: #a61717;background-color: #e3d2d2">&lt;STRING&gt;</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>items_b</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="javascript"><span style="background-color: #f8f8f8">{</span><span style="color: #d14">&#34;</span><span style="color: #d14">id</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&lt;</span><span style="background-color: #f8f8f8">INT</span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #d14">&#34;</span><span style="color: #d14">ts</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&lt;</span><span style="background-color: #f8f8f8">TIMESTAMP</span><span style="background-color: #f8f8f8">(</span><span style="color: #009999">3</span><span style="background-color: #f8f8f8">)</span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #d14">&#34;</span><span style="color: #d14">b</span><span style="color: #d14">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&lt;</span><span style="background-color: #f8f8f8">STRING</span><span style="color: #000000;font-weight: bold">&gt;</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>and would like to join on <code>id</code> using the latest record by timestamp <code>ts</code> in each table, to get the output table</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>out</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="json"><span style="background-color: #f8f8f8">{</span><span style="color: #990000;font-weight: bold">&#34;id&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #bbbbbb"> </span><span style="color: #a61717;background-color: #e3d2d2">&lt;INT&gt;</span><span style="background-color: #f8f8f8">,</span><span style="color: #bbbbbb"> </span><span style="color: #990000;font-weight: bold">&#34;ts&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #bbbbbb"> </span><span style="color: #a61717;background-color: #e3d2d2">&lt;TIMESTAMP(</span><span style="color: #009999">3</span><span style="color: #a61717;background-color: #e3d2d2">)&gt;</span><span style="background-color: #f8f8f8">,</span><span style="color: #bbbbbb"> </span><span style="color: #990000;font-weight: bold">&#34;a&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #bbbbbb"> </span><span style="color: #a61717;background-color: #e3d2d2">&lt;STRING&gt;</span><span style="background-color: #f8f8f8">,</span><span style="color: #bbbbbb"> </span><span style="color: #990000;font-weight: bold">&#34;b&#34;</span><span style="background-color: #f8f8f8">:</span><span style="color: #bbbbbb"> </span><span style="color: #a61717;background-color: #e3d2d2">&lt;STRING&gt;</span><span style="background-color: #f8f8f8">}</span></code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>where a new row in either input table produces a single output row</p>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>As I learn more about Flink SQL I thought it would be interesting to try and answer this.</p>
+</div>
+<div class="paragraph">
+<p>I’m using the Filesystem connector just because it’s quicker than setting up the necessary dependencies for something else—in practice the source of streaming data would often be Kafka.</p>
+</div>
+<div class="sect1">
+<h2 id="_create_the_source_tables">Create the source tables&nbsp;<a class="headline-hash" href="#_create_the_source_tables">🔗</a> </h2>
+<div class="sectionbody">
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+You can try out this full article using <a href="https://github.com/rmoff/flink-examples/tree/main/flink">this Docker Compose</a> to run Flink and the Flink SQL client.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>Based on the details above (kudos to the OP for a well-structured and informative question), I created two Flink SQL tables:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">(</span>
+    <span style="background-color: #f8f8f8">id</span> <span style="color: #0086B3">INT</span><span style="background-color: #f8f8f8">,</span>
+    <span style="background-color: #f8f8f8">ts</span> <span style="color: #0086B3">TIMESTAMP</span><span style="background-color: #f8f8f8">(</span><span style="color: #009999">3</span><span style="background-color: #f8f8f8">),</span>
+    <span style="background-color: #f8f8f8">a</span> <span style="background-color: #f8f8f8">STRING</span>
+<span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span>
+    <span style="color: #d14">&#39;connector&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;filesystem&#39;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#39;path&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;/data/items_a.csv&#39;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#39;format&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;csv&#39;</span>
+<span style="background-color: #f8f8f8">);</span>
+
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">items_b</span> <span style="background-color: #f8f8f8">(</span>
+    <span style="background-color: #f8f8f8">id</span> <span style="color: #0086B3">INT</span><span style="background-color: #f8f8f8">,</span>
+    <span style="background-color: #f8f8f8">ts</span> <span style="color: #0086B3">TIMESTAMP</span><span style="background-color: #f8f8f8">(</span><span style="color: #009999">3</span><span style="background-color: #f8f8f8">),</span>
+    <span style="background-color: #f8f8f8">b</span> <span style="background-color: #f8f8f8">STRING</span>
+<span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span>
+    <span style="color: #d14">&#39;connector&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;filesystem&#39;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#39;path&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;/data/items_b.csv&#39;</span><span style="background-color: #f8f8f8">,</span>
+    <span style="color: #d14">&#39;format&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;csv&#39;</span>
+<span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_populate_some_source_data">Populate some source data&nbsp;<a class="headline-hash" href="#_populate_some_source_data">🔗</a> </h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #0086B3">cat</span> <span style="color: #000000;font-weight: bold">&lt;&lt;</span> <span style="color: #008080">EOF</span><span style="color: #d14"> &gt; data/items_a.csv
+1,2025-03-06 10:00:00.000,item_a_1
+2,2025-03-06 10:01:00.000,item_a_2
+</span><span style="color: #008080">EOF
+
+</span><span style="color: #0086B3">cat</span> <span style="color: #000000;font-weight: bold">&lt;&lt;</span> <span style="color: #008080">EOF</span><span style="color: #d14"> &gt; data/items_b.csv
+1,2025-03-06 10:00:00.000,item_b_1
+2,2025-03-06 12:01:30.000,item_b_2
+EOF</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_query_each_table_individually_to_check_the_data">Query each table individually to check the data&nbsp;<a class="headline-hash" href="#_query_each_table_individually_to_check_the_data">🔗</a> </h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;sql-client.execution.result-mode&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;tableau&#39;</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;execution.runtime-mode&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;batch&#39;</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">Flink</span> <span style="color: #000000;font-weight: bold">SQL</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------------------+----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">|</span>                      <span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">|</span>        <span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------------------+----------+</span>
+<span style="color: #000000;font-weight: bold">|</span>  <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">item_a_1</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span>  <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">01</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">item_a_2</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------------------+----------+</span>
+<span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">rows</span> <span style="color: #000000;font-weight: bold">in</span> <span style="color: #000000;font-weight: bold">set</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">32</span> <span style="background-color: #f8f8f8">seconds</span><span style="background-color: #f8f8f8">)</span>
+
+<span style="background-color: #f8f8f8">Flink</span> <span style="color: #000000;font-weight: bold">SQL</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_b</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------------------+----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">|</span>                      <span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">|</span>        <span style="background-color: #f8f8f8">b</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------------------+----------+</span>
+<span style="color: #000000;font-weight: bold">|</span>  <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">item_b_1</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span>  <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">12</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">01</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">30</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">item_b_2</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------------------+----------+</span>
+<span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">rows</span> <span style="color: #000000;font-weight: bold">in</span> <span style="color: #000000;font-weight: bold">set</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">32</span> <span style="background-color: #f8f8f8">seconds</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_join_the_tables_batch">Join the tables - batch&nbsp;<a class="headline-hash" href="#_join_the_tables_batch">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This does a join between the tables and returns all rows where the <code>id</code> and <code>ts</code> match.</p>
+</div>
+<div class="paragraph">
+<p>A couple of notes:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>It’s a <code>FULL OUTER JOIN</code>, meaning that a row from <em>either</em> table will trigger the join. If I did a <code>LEFT</code> or <code>RIGHT</code> join then you’d only see rows where an entry existed on the <code>items_a</code> or <code>items_b</code> table respectively.</p>
+</li>
+<li>
+<p>Since we don’t know from which table we’re getting the common values (<code>id</code> and <code>ts</code>) we use a <code>COALESCE</code> to return the first non-NULL value</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">COALESCE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">COALESCE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">b</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">b</span>
+  <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">a</span>
+       <span style="color: #000000;font-weight: bold">FULL</span> <span style="color: #000000;font-weight: bold">OUTER</span> <span style="color: #000000;font-weight: bold">JOIN</span>
+       <span style="background-color: #f8f8f8">items_b</span> <span style="background-color: #f8f8f8">b</span>
+       <span style="color: #000000;font-weight: bold">ON</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span>
+       <span style="color: #000000;font-weight: bold">AND</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The output looks like this:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>+----+-------------------------+----------+----------+
+| id |                      ts |        a |        b |
++----+-------------------------+----------+----------+
+|  1 | 2025-03-06 10:00:00.000 | item_a_1 | item_b_1 |
+|  2 | 2025-03-06 12:01:30.000 |   &lt;NULL&gt; | item_b_2 |
+|  2 | 2025-03-06 10:01:00.000 | item_a_2 |   &lt;NULL&gt; |
++----+-------------------------+----------+----------+
+3 rows in set (0.32 seconds)</pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+There’s no match on <code>id=2</code> because the timestamp differs on the two tables
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_join_the_tables_changelog">Join the tables - changelog&nbsp;<a class="headline-hash" href="#_join_the_tables_changelog">🔗</a> </h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;execution.runtime-mode&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;streaming&#39;</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>+----+-------------+-------------------------+-----------+-----------+
+| op |          id |                      ts |         a |         b |
++----+-------------+-------------------------+-----------+-----------+
+| +I |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |    &lt;NULL&gt; |
+| -D |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |    &lt;NULL&gt; |
+| +I |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |  item_b_1 |
+| +I |           2 | 2025-03-06 10:01:00.000 |  item_a_2 |    &lt;NULL&gt; |
+| +I |           2 | 2025-03-06 12:01:30.000 |    &lt;NULL&gt; |  item_b_2 |
++----+-------------+-------------------------+-----------+-----------+
+Received a total of 5 rows (0.24 seconds)</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Here we see the initial <code>item_a_1</code> row unmatched (a <code>NULL</code> under <code>b</code>), and then that retracted (<code>-D</code>) and replaced (<code>+I</code>) with the successful match. <code>id=2</code> remains unmatched, as before.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_about_adding_new_data_can_we_see_it_in_action">What about adding new data? Can we see it in action?&nbsp;<a class="headline-hash" href="#_what_about_adding_new_data_can_we_see_it_in_action">🔗</a> </h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_a_detour_into_the_filesystem_connector">A detour into the Filesystem connector&nbsp;<a class="headline-hash" href="#_a_detour_into_the_filesystem_connector">🔗</a> </h3>
+<div class="paragraph">
+<p><a href="https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/connectors/table/filesystem/">By default</a> the Filesystem connector is <em>bounded</em>—that is, Flink reads the contents of the file and then stops processing it. Let’s change that, by setting <code>source.monitor-interval</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">items_a</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;source.monitor-interval&#39;</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;1s&#39;</span><span style="background-color: #f8f8f8">);</span>
+<span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">items_b</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;source.monitor-interval&#39;</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#39;1s&#39;</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now look what happens when we query the table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #999988;font-style: italic">-- This was set above, but let&#39;s re-iterate it</span>
+<span style="color: #999988;font-style: italic">-- here as it&#39;s core to the example</span>
+<span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;execution.runtime-mode&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;streaming&#39;</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="background-color: #f8f8f8">Flink</span> <span style="color: #000000;font-weight: bold">SQL</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">select</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">from</span> <span style="background-color: #f8f8f8">default_catalog</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">default_database</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">op</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">|</span>                      <span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">|</span>        <span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">item_a_1</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">01</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">item_a_2</span> <span style="color: #000000;font-weight: bold">|</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>See how there’s no <em>`&#34;Received a total of 2 rows&#34;`</em> message? Instead in your SQL Client you’ll see just a cursor flashing, indicating that the query is still running.</p>
+</div>
+<div class="paragraph">
+<p>Let’s add a row to the file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #0086B3">cat</span> <span style="color: #000000;font-weight: bold">&lt;&lt;</span> <span style="color: #008080">EOF</span><span style="color: #d14"> &gt;&gt; data/items_a.csv
+3,2025-03-06 10:02:00.000,item_a_3
+EOF</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>BUT</strong>…still nothing in the Flink query results, which stay exactly as they were—unless I cancel and re-run it (which is hardly a streaming query)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">Flink</span> <span style="color: #000000;font-weight: bold">SQL</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">select</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">from</span> <span style="background-color: #f8f8f8">default_catalog</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">default_database</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+-----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">op</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">|</span>                      <span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">|</span>         <span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+-----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_1</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">01</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_2</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">^</span><span style="background-color: #f8f8f8">CQuery</span> <span style="background-color: #f8f8f8">terminated</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">received</span> <span style="background-color: #f8f8f8">a</span> <span style="background-color: #f8f8f8">total</span> <span style="color: #000000;font-weight: bold">of</span> <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">rows</span> <span style="background-color: #f8f8f8">(</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">84</span> <span style="background-color: #f8f8f8">seconds</span><span style="background-color: #f8f8f8">)</span>
+
+<span style="background-color: #f8f8f8">Flink</span> <span style="color: #000000;font-weight: bold">SQL</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">default_catalog</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">default_database</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+-----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">op</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">|</span>                      <span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">|</span>         <span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+-----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_1</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">01</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_2</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">02</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_3</span> <span style="color: #000000;font-weight: bold">|</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The reason for this is in <a href="https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/connectors/table/filesystem/#directory-watching">the docs for Filesystem connector</a>:</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p><strong>Directory</strong> watching</p>
+</div>
+<div class="paragraph">
+<p>[…]</p>
+</div>
+<div class="paragraph">
+<p>Each <strong>file</strong> is uniquely identified by its path, and will be processed once […]</p>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>Emphasis is mine. The table above points to a single file, and the connector will only read a single file once, regardless of <code>source.monitor-interval</code>.</p>
+</div>
+<div class="paragraph">
+<p>So, let’s create a folder for <code>a</code> data and <code>b</code> data.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ <span style="color: #0086B3">mkdir </span>data/a data/b
+❯ <span style="color: #0086B3">mv </span>data/items_a.csv data/a/file1.csv
+❯ <span style="color: #0086B3">mv </span>data/items_b.csv data/b/file1.csv
+❯ tree data
+data
+├── a
+│   └── file1.csv
+└── b
+    └── file1.csv</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Both tables will need updating for the change in path:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">items_a</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;path&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;/data/a&#39;</span><span style="background-color: #f8f8f8">);</span>
+<span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">items_b</span> <span style="color: #000000;font-weight: bold">SET</span> <span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;path&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;/data/b&#39;</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s check <code>items_a</code> to make sure it still works:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">Flink</span> <span style="color: #000000;font-weight: bold">SQL</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">default_catalog</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">default_database</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+-----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">op</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">|</span>                      <span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">|</span>         <span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+-----------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_1</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">01</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_2</span> <span style="color: #000000;font-weight: bold">|</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and now add a new file to the source <em>directory</em>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #0086B3">cat</span> <span style="color: #000000;font-weight: bold">&lt;&lt;</span> <span style="color: #008080">EOF</span><span style="color: #d14"> &gt;&gt; data/a/file2.csv
+3,2025-03-06 10:02:00.000,item_a_3
+EOF</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It works!</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2025/03/flink-join1.gif" alt="flink join1"/>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_streaming_join_in_action">Streaming join in action&nbsp;<a class="headline-hash" href="#_streaming_join_in_action">🔗</a> </h3>
+<div class="paragraph">
+<p>With both tables now set up as <em>unbounded</em>, we can see how our join behaves in both streaming and batch modes:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;execution.runtime-mode&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;streaming&#39;</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">COALESCE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">COALESCE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">b</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">b</span>
+  <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">a</span>
+       <span style="color: #000000;font-weight: bold">FULL</span> <span style="color: #000000;font-weight: bold">OUTER</span> <span style="color: #000000;font-weight: bold">JOIN</span>
+       <span style="background-color: #f8f8f8">items_b</span> <span style="background-color: #f8f8f8">b</span>
+       <span style="color: #000000;font-weight: bold">ON</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span>
+       <span style="color: #000000;font-weight: bold">AND</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>+----+-------------+-------------------------+-----------+----------+
+| op |          id |                      ts |         a |        b |
++----+-------------+-------------------------+-----------+----------+
+| +I |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |   &lt;NULL&gt; |
+| -D |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |   &lt;NULL&gt; |
+| +I |           1 | 2025-03-06 10:00:00.000 |  item_a_1 | item_b_1 |
+| +I |           2 | 2025-03-06 10:01:00.000 |  item_a_2 |   &lt;NULL&gt; |
+| +I |           2 | 2025-03-06 12:01:30.000 |    &lt;NULL&gt; | item_b_2 |
+| +I |           3 | 2025-03-06 10:02:00.000 |  item_a_3 |   &lt;NULL&gt; |</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is what it should be; <code>id=2</code> is unmatched because of the different <code>ts</code> values (we could remove that from the <code>ON</code> join condition if we didn’t care about that), and <code>id=3</code> is unmatched because there’s no corresponding value for <code>item_b</code>.</p>
+</div>
+<div class="paragraph">
+<p>Let’s add an entry to <code>item_b</code> for <code>id=3</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #0086B3">cat</span> <span style="color: #000000;font-weight: bold">&lt;&lt;</span> <span style="color: #008080">EOF</span><span style="color: #d14"> &gt;&gt; data/b/file2.csv
+3,2025-03-06 10:02:00.000,item_b_3
+EOF</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now our results (which were still running from the query above) have these <em>two</em> rows added:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>| -D |           3 | 2025-03-06 10:02:00.000 |  item_a_3 |   &lt;NULL&gt; |
+| +I |           3 | 2025-03-06 10:02:00.000 |  item_a_3 | item_b_3 |</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A <code>-D</code> to remove the unmatched row, and an <code>+I</code> to add in the now-matched row with the data from <code>item_b</code>.</p>
+</div>
+<div class="paragraph">
+<p>What happens if we re-run this query as a batch? We should see just the final result of the joins, with the insert/delete steps omitted. Under the covers this is how any regular RDBMS operates—it’s just that in the batch world you never see it :)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;execution.runtime-mode&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;batch&#39;</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">COALESCE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">COALESCE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">b</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">b</span>
+  <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">a</span>
+       <span style="color: #000000;font-weight: bold">FULL</span> <span style="color: #000000;font-weight: bold">OUTER</span> <span style="color: #000000;font-weight: bold">JOIN</span>
+       <span style="background-color: #f8f8f8">items_b</span> <span style="background-color: #f8f8f8">b</span>
+       <span style="color: #000000;font-weight: bold">ON</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span>
+       <span style="color: #000000;font-weight: bold">AND</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>[ERROR] Could not execute SQL statement. Reason:
+org.apache.flink.table.api.ValidationException: Querying an unbounded table &#39;default_catalog.default_database.items_a&#39; in batch mode is not allowed. The table source is unbounded.</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Oh, I didn’t expect that! The error is pretty descriptive though. We changed the table from being <em>bounded</em> —which is the Filesystem connector default— to <em>unbounded</em> by setting <code>source.monitor-interval</code>.</p>
+</div>
+<div class="paragraph">
+<p>What we need to do is change how the SQL Client interacts with the results. Instead of displaying them in <code>tableau</code> mode (as has been shown above), we use <code>table</code> mode, which is an interactive one:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;execution.runtime-mode&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;streaming&#39;</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">SET</span> <span style="color: #d14">&#39;sql-client.execution.result-mode&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;table&#39;</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>SQL Query Result (Table)
+ Refresh: 1 s                             Page: Last of 1                    Updated: 12:50:42.756
+
+          id                      ts          a          b
+           1 2025-03-06 10:00:00.000   item_a_1   item_b_1
+           2 2025-03-06 12:01:30.000     &lt;NULL&gt;   item_b_2
+           2 2025-03-06 10:01:00.000   item_a_2     &lt;NULL&gt;
+           3 2025-03-06 10:02:00.000   item_a_3   item_b_3</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This query continues to run, but shows us the <em>current state</em> of the query output, rather than the <em>changelog</em> mode (which can’t be displayed in <code>tableau</code> mode).</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_join_using_the_latest_record_by_timestamp">“Join using the latest record by timestamp”&nbsp;<a class="headline-hash" href="#_join_using_the_latest_record_by_timestamp">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This bit of the OP’s question isn’t addressed by the above solution. In fact, it conveniently steers completely around it ;) Let’s now look at how we’d implement it.</p>
+</div>
+<div class="paragraph">
+<p>Before we dig into it, knowing which file the data is coming from will be useful, so let’s add that metadata to each table, just for debug purposes:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">items_a</span> <span style="color: #000000;font-weight: bold">ADD</span> <span style="color: #008080">`file.path`</span> <span style="background-color: #f8f8f8">STRING</span> <span style="color: #000000;font-weight: bold">NOT</span> <span style="color: #000000;font-weight: bold">NULL</span> <span style="background-color: #f8f8f8">METADATA</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">items_b</span> <span style="color: #000000;font-weight: bold">ADD</span> <span style="color: #008080">`file.path`</span> <span style="background-color: #f8f8f8">STRING</span> <span style="color: #000000;font-weight: bold">NOT</span> <span style="color: #000000;font-weight: bold">NULL</span> <span style="background-color: #f8f8f8">METADATA</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The new column shows up like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">Flink</span> <span style="color: #000000;font-weight: bold">SQL</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+-----------+--------------------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">op</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">|</span>                      <span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">|</span>         <span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="background-color: #f8f8f8">file</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">path</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+-----------+--------------------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_1</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file1</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">01</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_2</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file1</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">02</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="background-color: #f8f8f8">item_a_3</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file2</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span></code></pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_find_the_record_for_the_latest_timestamp">Find the record for the latest timestamp&nbsp;<a class="headline-hash" href="#_find_the_record_for_the_latest_timestamp">🔗</a> </h3>
+<div class="paragraph">
+<p>We’ll start simple with this new requirement, and consider just the table <code>items_a</code>. To start with we need some SQL that gives us for each <code>id</code> the value of <code>a</code> for the latest <code>ts</code>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">`file.path`</span>
+  <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">items_a_outer</span>
+ <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">ts</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">MAX</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">)</span>
+             <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">items_a_inner</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">items_a_inner</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">items_a_outer</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To begin with, we get this:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>+----+-------------+----------+-------------------------+-------------------+
+| op |          id |        a |                      ts |         file.path |
++----+-------------+----------+-------------------------+-------------------+
+| +I |           1 | item_a_1 | 2025-03-06 10:00:00.000 | /data/a/file1.csv |
+| +I |           2 | item_a_2 | 2025-03-06 10:01:00.000 | /data/a/file1.csv |
+| +I |           3 | item_a_3 | 2025-03-06 10:02:00.000 | /data/a/file2.csv |</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now let’s add a file with the same key (<code>id=3</code>) but an older timestamp. We’ll hopefully not see the table update (because the <code>WHERE ts=(SELECT MAX(ts) […]</code> predicate isn’t matched)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #0086B3">cat</span> <span style="color: #000000;font-weight: bold">&lt;&lt;</span> <span style="color: #008080">EOF</span><span style="color: #d14"> &gt;&gt; data/a/file3.csv
+3,2025-03-06 09:00:00.000,item_a_3_ts_is_older
+EOF</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Nothing changes on the table output. We can verify the row is there by looking at the table itself without predicates:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">Flink</span> <span style="color: #000000;font-weight: bold">SQL</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+----------------------+-------------------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">op</span> <span style="color: #000000;font-weight: bold">|</span>          <span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">|</span>                      <span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">|</span>                    <span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">|</span>         <span style="background-color: #f8f8f8">file</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">path</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+-------------+-------------------------+----------------------+-------------------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">02</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>             <span style="background-color: #f8f8f8">item_a_3</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file2</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">09</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">item_a_3_ts_is_older</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file3</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>             <span style="background-color: #f8f8f8">item_a_1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file1</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>           <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">01</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span>             <span style="background-color: #f8f8f8">item_a_2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file1</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What if we add another file, with a newer timestamp this time?</p>
+</div>
+<div class="paragraph">
+<p>Before we do that, we need to re-run our new query. When we do that, there’s something interesting already in the output:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">Flink</span> <span style="color: #000000;font-weight: bold">SQL</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">`file.path`</span>
+             <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">items_a_outer</span>
+            <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">ts</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">MAX</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">)</span>
+                        <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">items_a_inner</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">items_a_inner</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">items_a_outer</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">);</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+----+----------------------+-------------------------+-------------------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">op</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">|</span>                    <span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">|</span>                      <span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">|</span>         <span style="background-color: #f8f8f8">file</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">path</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">+</span><span style="color: #999988;font-style: italic">----+----+----------------------+-------------------------+-------------------+</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">|</span>             <span style="background-color: #f8f8f8">item_a_1</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file1</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">|</span>             <span style="background-color: #f8f8f8">item_a_2</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">01</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file1</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">I</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">item_a_3_ts_is_older</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">09</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file3</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">U</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span> <span style="background-color: #f8f8f8">item_a_3_ts_is_older</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">09</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file3</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span>
+<span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">+</span><span style="background-color: #f8f8f8">U</span> <span style="color: #000000;font-weight: bold">|</span>  <span style="color: #009999">3</span> <span style="color: #000000;font-weight: bold">|</span>             <span style="background-color: #f8f8f8">item_a_3</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">06</span> <span style="color: #009999">10</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">02</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000</span> <span style="color: #000000;font-weight: bold">|</span> <span style="color: #000000;font-weight: bold">/</span><span style="color: #000000;font-weight: bold">data</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">file2</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">csv</span> <span style="color: #000000;font-weight: bold">|</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Because <code>/data/a/file3.csv</code> looks like it gets read first, to start with <code>item_a_3_ts_is_older</code> value is the most recent timestamp. Then <code>/data/a/file2.csv</code> gets read, and the latest value for the key <code>id=3</code> gets restated (<code>-U</code> followed by <code>+U</code>) to <code>item_a_3</code>.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+If you’re particularly eagle-eyed, you might have noticed the operation in the changelog is <code>-U</code> /<code>+U</code> when an aggregate gets reissued, and a <code>-D</code>/<code>+I</code> when a join output changes. To learn more about changelog types, check out <a href="https://docs.confluent.io/cloud/current/flink/concepts/dynamic-tables.html#changelog-entries">this useful doc</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>Let’s now add a newer-still timestamp:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #0086B3">cat</span> <span style="color: #000000;font-weight: bold">&lt;&lt;</span> <span style="color: #008080">EOF</span><span style="color: #d14"> &gt;&gt; data/a/file4.csv
+3,2025-03-06 11:00:00.000,item_a_3_ts_is_NEWER!
+EOF</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Just as we saw above, now the value gets restated again:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>| -U | 3 |              item_a_3 | 2025-03-06 10:02:00.000 | /data/a/file2.csv |
+| +U | 3 | item_a_3_ts_is_NEWER! | 2025-03-06 11:00:00.000 | /data/a/file4.csv |</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and to prove it’s not a fluke, another older timestamp:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #0086B3">cat</span> <span style="color: #000000;font-weight: bold">&lt;&lt;</span> <span style="color: #008080">EOF</span><span style="color: #d14"> &gt;&gt; data/a/file5.csv
+3,2024-01-01 11:00:00.000,item_a_3_ts_is_old_old
+EOF</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The query output remains unchanged.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_joining_latest_records">Joining latest records&nbsp;<a class="headline-hash" href="#_joining_latest_records">🔗</a> </h3>
+<div class="paragraph">
+<p>Let’s finish by building the actual query the OP was looking for.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">item_a_newest</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">`file.path`</span>
+             <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">items_a_outer</span>
+            <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">ts</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">MAX</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">)</span>
+                        <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">items_a_inner</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">items_a_inner</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">items_a_outer</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">)),</span>
+<span style="background-color: #f8f8f8">item_b_newest</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">,</span> <span style="color: #008080">`file.path`</span>
+             <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_b</span> <span style="background-color: #f8f8f8">items_b_outer</span>
+            <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">ts</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">MAX</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">)</span>
+                        <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_b</span> <span style="background-color: #f8f8f8">items_b_inner</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">items_b_inner</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">items_b_outer</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">))</span>
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">COALESCE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">a_ts</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">b_ts</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">b</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="color: #008080">`file.path`</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">a_filepath</span><span style="background-color: #f8f8f8">,</span>
+       <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="color: #008080">`file.path`</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">b_filepath</span>
+  <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">item_a_newest</span> <span style="background-color: #f8f8f8">a</span>
+       <span style="color: #000000;font-weight: bold">FULL</span> <span style="color: #000000;font-weight: bold">OUTER</span> <span style="color: #000000;font-weight: bold">JOIN</span>
+       <span style="background-color: #f8f8f8">item_b_newest</span> <span style="background-color: #f8f8f8">b</span>
+       <span style="color: #000000;font-weight: bold">ON</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Here’s the query output as a table (<code>SET &#39;sql-client.execution.result-mode&#39; = &#39;table&#39;;</code>):</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>  id                    a_ts                    b_ts                     a        b        a_filepath        b_filepath
+   3 2025-03-06 11:00:00.000 2025-03-06 10:02:00.000 item_a_3_ts_is_NEWER! item_b_3 /data/a/file4.csv /data/b/file2.csv
+   1 2025-03-06 10:00:00.000 2025-03-06 10:00:00.000              item_a_1 item_b_1 /data/a/file1.csv /data/b/file1.csv
+   2 2025-03-06 10:01:00.000 2025-03-06 12:01:30.000              item_a_2 item_b_2 /data/a/file1.csv /data/b/file1.csv</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This matches what we’d expect to see based on the data above. Let’s take a look at the changelog now (<code>SET &#39;sql-client.execution.result-mode&#39; = &#39;tableau&#39;;</code>):</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>+----+----+-------------------------+-------------------------+-----------------------+----------+-------------------+-------------------+
+| op | id |                    a_ts |                    b_ts |                     a |        b |        a_filepath |        b_filepath |
++----+----+-------------------------+-------------------------+-----------------------+----------+-------------------+-------------------+
+| +I |  1 | 2025-03-06 10:00:00.000 |                  &lt;NULL&gt; |              item_a_1 |   &lt;NULL&gt; | /data/a/file1.csv |            &lt;NULL&gt; |
+| +I |  2 | 2025-03-06 10:01:00.000 |                  &lt;NULL&gt; |              item_a_2 |   &lt;NULL&gt; | /data/a/file1.csv |            &lt;NULL&gt; |
+| +I |  3 | 2025-03-06 09:00:00.000 |                  &lt;NULL&gt; |  item_a_3_ts_is_older |   &lt;NULL&gt; | /data/a/file3.csv |            &lt;NULL&gt; |
+| -D |  3 | 2025-03-06 09:00:00.000 |                  &lt;NULL&gt; |  item_a_3_ts_is_older |   &lt;NULL&gt; | /data/a/file3.csv |            &lt;NULL&gt; |
+| +I |  3 | 2025-03-06 10:02:00.000 |                  &lt;NULL&gt; |              item_a_3 |   &lt;NULL&gt; | /data/a/file2.csv |            &lt;NULL&gt; |
+| -D |  3 | 2025-03-06 10:02:00.000 |                  &lt;NULL&gt; |              item_a_3 |   &lt;NULL&gt; | /data/a/file2.csv |            &lt;NULL&gt; |
+| +I |  3 | 2025-03-06 11:00:00.000 |                  &lt;NULL&gt; | item_a_3_ts_is_NEWER! |   &lt;NULL&gt; | /data/a/file4.csv |            &lt;NULL&gt; |
+| -D |  3 | 2025-03-06 11:00:00.000 |                  &lt;NULL&gt; | item_a_3_ts_is_NEWER! |   &lt;NULL&gt; | /data/a/file4.csv |            &lt;NULL&gt; |
+| +I |  3 | 2025-03-06 11:00:00.000 | 2025-03-06 10:02:00.000 | item_a_3_ts_is_NEWER! | item_b_3 | /data/a/file4.csv | /data/b/file2.csv |
+| -D |  1 | 2025-03-06 10:00:00.000 |                  &lt;NULL&gt; |              item_a_1 |   &lt;NULL&gt; | /data/a/file1.csv |            &lt;NULL&gt; |
+| +I |  1 | 2025-03-06 10:00:00.000 | 2025-03-06 10:00:00.000 |              item_a_1 | item_b_1 | /data/a/file1.csv | /data/b/file1.csv |
+| -D |  2 | 2025-03-06 10:01:00.000 |                  &lt;NULL&gt; |              item_a_2 |   &lt;NULL&gt; | /data/a/file1.csv |            &lt;NULL&gt; |
+| +I |  2 | 2025-03-06 10:01:00.000 | 2025-03-06 12:01:30.000 |              item_a_2 | item_b_2 | /data/a/file1.csv | /data/b/file1.csv |</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Insert a newer-timestamped row for an existing <code>item_b</code> key:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #0086B3">cat</span> <span style="color: #000000;font-weight: bold">&lt;&lt;</span> <span style="color: #008080">EOF</span><span style="color: #d14"> &gt;&gt; data/b/file3.csv
+3,2025-03-06 10:06:00.000,item_b_newer!
+EOF</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Shows up in the table:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>+----+----+-------------------------+-------------------------+-----------------------+----------------+-------------------+-------------------+
+| op | id |                    a_ts |                    b_ts |                     a |              b |        a_filepath |        b_filepath |
++----+----+-------------------------+-------------------------+-----------------------+----------------+-------------------+-------------------+
+| -D |  3 | 2025-03-06 11:00:00.000 | 2025-03-06 10:02:00.000 | item_a_3_ts_is_NEWER! |       item_b_3 | /data/a/file4.csv | /data/b/file2.csv |
+| +I |  3 | 2025-03-06 11:00:00.000 |                  &lt;NULL&gt; | item_a_3_ts_is_NEWER! |         &lt;NULL&gt; | /data/a/file4.csv |            &lt;NULL&gt; |
+| -D |  3 | 2025-03-06 11:00:00.000 |                  &lt;NULL&gt; | item_a_3_ts_is_NEWER! |         &lt;NULL&gt; | /data/a/file4.csv |            &lt;NULL&gt; |
+| +I |  3 | 2025-03-06 11:00:00.000 | 2025-03-06 10:06:00.000 | item_a_3_ts_is_NEWER! |  item_b_newer! | /data/a/file4.csv | /data/b/file3.csv |</pre>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2025/03/flink-join2.gif" alt="flink join2"/>
+</div>
+</div>
+<hr/>
+<div class="paragraph">
+<p>To write this as a table, wrap the query in the <code>CREATE TABLE … AS SELECT</code> syntax.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="color: #008080">`out`</span> <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">(</span>
+    <span style="color: #d14">&#39;connector&#39;</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;print&#39;</span>
+<span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span>
+  <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">item_a_newest</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ts</span>
+              <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">items_a_outer</span>
+              <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">ts</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">MAX</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">)</span>
+                          <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_a</span> <span style="background-color: #f8f8f8">items_a_inner</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">items_a_inner</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">items_a_outer</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">)),</span>
+  <span style="background-color: #f8f8f8">item_b_newest</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ts</span>
+              <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_b</span> <span style="background-color: #f8f8f8">items_b_outer</span>
+              <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">ts</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">MAX</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ts</span><span style="background-color: #f8f8f8">)</span>
+                          <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">items_b</span> <span style="background-color: #f8f8f8">items_b_inner</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">items_b_inner</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">items_b_outer</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">))</span>
+  <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">COALESCE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">,</span>
+        <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">a_ts</span><span style="background-color: #f8f8f8">,</span>
+        <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">ts</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">b_ts</span><span style="background-color: #f8f8f8">,</span>
+        <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">a</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">,</span>
+        <span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">b</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">b</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">item_a_newest</span> <span style="background-color: #f8f8f8">a</span>
+        <span style="color: #000000;font-weight: bold">FULL</span> <span style="color: #000000;font-weight: bold">OUTER</span> <span style="color: #000000;font-weight: bold">JOIN</span>
+        <span style="background-color: #f8f8f8">item_b_newest</span> <span style="background-color: #f8f8f8">b</span>
+        <span style="color: #000000;font-weight: bold">ON</span> <span style="background-color: #f8f8f8">a</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="color: #000000;font-weight: bold">=</span><span style="background-color: #f8f8f8">b</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">id</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you try and use the Filesystem connector you’ll get the error:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>Table sink &#39;default_catalog.default_database.out&#39; doesn&#39;t support consuming update and delete changes which is produced by node Join(joinType=[FullOuterJoin], where=[(id = id0)], select=[id, a, ts, id0, b, ts0],
+leftInputSpec=[NoUniqueKey], rightInputSpec=[NoUniqueKey])</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Therefore I’m using the <code>print</code> connector since I don’t have anything installed that will act as an updatable sink. You can look at the Flink logs to see what gets written:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ docker compose logs taskmanager |grep <span style="color: #000080">-E</span> <span style="color: #d14">&#39;[\\+\\-][DUI]\[&#39;</span>
+taskmanager-1  | +I[1, null, 2025-03-06T10:00, null, item_b_1]
+taskmanager-1  | +I[2, null, 2025-03-06T12:01:30, null, item_b_2]
+taskmanager-1  | +I[3, null, 2025-03-06T10:06, null, item_b_newer!]
+taskmanager-1  | <span style="color: #000080">-D</span><span style="color: #000000;font-weight: bold">[</span>3, null, 2025-03-06T10:06, null, item_b_newer!]
+taskmanager-1  | +I[3, 2025-03-06T09:00, 2025-03-06T10:06, item_a_3_ts_is_older, item_b_newer!]
+taskmanager-1  | <span style="color: #000080">-D</span><span style="color: #000000;font-weight: bold">[</span>3, 2025-03-06T09:00, 2025-03-06T10:06, item_a_3_ts_is_older, item_b_newer!]
+taskmanager-1  | +I[3, null, 2025-03-06T10:06, null, item_b_newer!]
+taskmanager-1  | <span style="color: #000080">-D</span><span style="color: #000000;font-weight: bold">[</span>3, null, 2025-03-06T10:06, null, item_b_newer!]
+taskmanager-1  | +I[3, 2025-03-06T11:00, 2025-03-06T10:06, item_a_3_ts_is_NEWER!, item_b_newer!]
+taskmanager-1  | <span style="color: #000080">-D</span><span style="color: #000000;font-weight: bold">[</span>1, null, 2025-03-06T10:00, null, item_b_1]
+taskmanager-1  | +I[1, 2025-03-06T10:00, 2025-03-06T10:00, item_a_1, item_b_1]
+taskmanager-1  | <span style="color: #000080">-D</span><span style="color: #000000;font-weight: bold">[</span>2, null, 2025-03-06T12:01:30, null, item_b_2]
+taskmanager-1  | +I[2, 2025-03-06T10:01, 2025-03-06T12:01:30, item_a_2, item_b_2]</code></pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+Shortly before publishing this, my esteemed colleague Martijn Visser pointed me to <a href="https://docs.confluent.io/cloud/current/flink/how-to-guides/combine-and-track-most-recent-records.html">this doc</a> that details a more elegant way of writing the query—and which highlights several key reasons why my naïve approach of a simple <code>JOIN</code> <a href="https://docs.confluent.io/cloud/current/flink/how-to-guides/combine-and-track-most-recent-records.html#why-union-all-vs-join">isn’t such a good idea</a>. This is something for me to dig into (I do believe learning watermarks might be on the cards 🫣), so stay tuned :)
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>

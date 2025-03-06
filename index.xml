@@ -5,9 +5,826 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2025-03-03</lastBuildDate>
+    <lastBuildDate>2025-03-06</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Joining two streams of data with Flink SQL</title>
+      <link>https://rmoff.net/2025/03/06/joining-two-streams-of-data-with-flink-sql/</link>
+      <pubDate>2025-03-06</pubDate>
+      
+      <guid>https://rmoff.net/2025/03/06/joining-two-streams-of-data-with-flink-sql/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2025/03/t_IMG_8207.webp" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There was a useful question on the &lt;a href=&#34;https://flink.apache.org/what-is-flink/community/#slack&#34;&gt;Apache Flink Slack&lt;/a&gt; recently about joining data in Flink SQL:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;quoteblock&#34;&gt;
+&lt;blockquote&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;How can I join two streams of data by id in Flink, to get a combined view of the latest data?&lt;/p&gt;
+&lt;/div&gt;
+&lt;/blockquote&gt;
+&lt;/div&gt;
+&lt;div class=&#34;quoteblock&#34;&gt;
+&lt;blockquote&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For example say I have input tables with schema&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;items_a&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;json&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;id&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;&amp;lt;INT&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;ts&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;&amp;lt;TIMESTAMP(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;)&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;a&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;&amp;lt;STRING&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;items_b&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and would like to join on &lt;code&gt;id&lt;/code&gt; using the latest record by timestamp &lt;code&gt;ts&lt;/code&gt; in each table, to get the output table&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;out&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;json&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;id&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;&amp;lt;INT&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;ts&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;&amp;lt;TIMESTAMP(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;)&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;a&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;&amp;lt;STRING&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #990000;font-weight: bold&#34;&gt;&amp;#34;b&amp;#34;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #bbbbbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #a61717;background-color: #e3d2d2&#34;&gt;&amp;lt;STRING&amp;gt;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;where a new row in either input table produces a single output row&lt;/p&gt;
+&lt;/div&gt;
+&lt;/blockquote&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As I learn more about Flink SQL I thought it would be interesting to try and answer this.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’m using the Filesystem connector just because it’s quicker than setting up the necessary dependencies for something else—in practice the source of streaming data would often be Kafka.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_create_the_source_tables&#34;&gt;Create the source tables&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+You can try out this full article using &lt;a href=&#34;https://github.com/rmoff/flink-examples/tree/main/flink&#34;&gt;this Docker Compose&lt;/a&gt; to run Flink and the Flink SQL client.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Based on the details above (kudos to the OP for a well-structured and informative question), I created two Flink SQL tables:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;),&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STRING&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;
+    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;filesystem&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;path&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;/data/items_a.csv&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;format&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;csv&amp;#39;&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;
+
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #0086B3&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;),&lt;/span&gt;
+    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STRING&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;
+    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;filesystem&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;path&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;/data/items_b.csv&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;format&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;csv&amp;#39;&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_populate_some_source_data&#34;&gt;Populate some source data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;EOF&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &amp;gt; data/items_a.csv
+1,2025-03-06 10:00:00.000,item_a_1
+2,2025-03-06 10:01:00.000,item_a_2
+&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;EOF
+
+&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;EOF&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &amp;gt; data/items_b.csv
+1,2025-03-06 10:00:00.000,item_b_1
+2,2025-03-06 12:01:30.000,item_b_2
+EOF&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_query_each_table_individually_to_check_the_data&#34;&gt;Query each table individually to check the data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;sql-client.execution.result-mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;tableau&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;execution.runtime-mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;batch&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flink&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SQL&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------------------+----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------------------+----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------------------+----------+&lt;/span&gt;
+&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;rows&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;set&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;32&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;seconds&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flink&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SQL&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------------------+----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------------------+----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_b_1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;12&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;30&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_b_2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------------------+----------+&lt;/span&gt;
+&lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;rows&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;set&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;32&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;seconds&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_join_the_tables_batch&#34;&gt;Join the tables - batch&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This does a join between the tables and returns all rows where the &lt;code&gt;id&lt;/code&gt; and &lt;code&gt;ts&lt;/code&gt; match.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;A couple of notes:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;It’s a &lt;code&gt;FULL OUTER JOIN&lt;/code&gt;, meaning that a row from &lt;em&gt;either&lt;/em&gt; table will trigger the join. If I did a &lt;code&gt;LEFT&lt;/code&gt; or &lt;code&gt;RIGHT&lt;/code&gt; join then you’d only see rows where an entry existed on the &lt;code&gt;items_a&lt;/code&gt; or &lt;code&gt;items_b&lt;/code&gt; table respectively.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Since we don’t know from which table we’re getting the common values (&lt;code&gt;id&lt;/code&gt; and &lt;code&gt;ts&lt;/code&gt;) we use a &lt;code&gt;COALESCE&lt;/code&gt; to return the first non-NULL value&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COALESCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COALESCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FULL&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;OUTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;JOIN&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ON&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AND&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The output looks like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;+----+-------------------------+----------+----------+
+| id |                      ts |        a |        b |
++----+-------------------------+----------+----------+
+|  1 | 2025-03-06 10:00:00.000 | item_a_1 | item_b_1 |
+|  2 | 2025-03-06 12:01:30.000 |   &amp;lt;NULL&amp;gt; | item_b_2 |
+|  2 | 2025-03-06 10:01:00.000 | item_a_2 |   &amp;lt;NULL&amp;gt; |
++----+-------------------------+----------+----------+
+3 rows in set (0.32 seconds)&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-note&#34; title=&#34;Note&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+There’s no match on &lt;code&gt;id=2&lt;/code&gt; because the timestamp differs on the two tables
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_join_the_tables_changelog&#34;&gt;Join the tables - changelog&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;execution.runtime-mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;streaming&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;+----+-------------+-------------------------+-----------+-----------+
+| op |          id |                      ts |         a |         b |
++----+-------------+-------------------------+-----------+-----------+
+| +I |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |    &amp;lt;NULL&amp;gt; |
+| -D |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |    &amp;lt;NULL&amp;gt; |
+| +I |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |  item_b_1 |
+| +I |           2 | 2025-03-06 10:01:00.000 |  item_a_2 |    &amp;lt;NULL&amp;gt; |
+| +I |           2 | 2025-03-06 12:01:30.000 |    &amp;lt;NULL&amp;gt; |  item_b_2 |
++----+-------------+-------------------------+-----------+-----------+
+Received a total of 5 rows (0.24 seconds)&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here we see the initial &lt;code&gt;item_a_1&lt;/code&gt; row unmatched (a &lt;code&gt;NULL&lt;/code&gt; under &lt;code&gt;b&lt;/code&gt;), and then that retracted (&lt;code&gt;-D&lt;/code&gt;) and replaced (&lt;code&gt;+I&lt;/code&gt;) with the successful match. &lt;code&gt;id=2&lt;/code&gt; remains unmatched, as before.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_what_about_adding_new_data_can_we_see_it_in_action&#34;&gt;What about adding new data? Can we see it in action?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_a_detour_into_the_filesystem_connector&#34;&gt;A detour into the Filesystem connector&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/connectors/table/filesystem/&#34;&gt;By default&lt;/a&gt; the Filesystem connector is &lt;em&gt;bounded&lt;/em&gt;—that is, Flink reads the contents of the file and then stops processing it. Let’s change that, by setting &lt;code&gt;source.monitor-interval&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ALTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;source.monitor-interval&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;1s&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ALTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;source.monitor-interval&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;1s&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now look what happens when we query the table:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-- This was set above, but let&amp;#39;s re-iterate it&lt;/span&gt;
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;-- here as it&amp;#39;s core to the example&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;execution.runtime-mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;streaming&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flink&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SQL&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;select&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;default_catalog&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;default_database&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;op&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;          &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;See how there’s no &lt;em&gt;`&amp;#34;Received a total of 2 rows&amp;#34;`&lt;/em&gt; message? Instead in your SQL Client you’ll see just a cursor flashing, indicating that the query is still running.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s add a row to the file:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;EOF&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &amp;gt;&amp;gt; data/items_a.csv
+3,2025-03-06 10:02:00.000,item_a_3
+EOF&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;BUT&lt;/strong&gt;…still nothing in the Flink query results, which stay exactly as they were—unless I cancel and re-run it (which is hardly a streaming query)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flink&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SQL&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;select&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;default_catalog&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;default_database&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+-----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;op&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;          &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;         &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+-----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;^&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;CQuery&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;terminated&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;received&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;total&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;of&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;rows&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;84&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;seconds&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flink&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SQL&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;default_catalog&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;default_database&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+-----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;op&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;          &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;         &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+-----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;02&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The reason for this is in &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/connectors/table/filesystem/#directory-watching&#34;&gt;the docs for Filesystem connector&lt;/a&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;quoteblock&#34;&gt;
+&lt;blockquote&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Directory&lt;/strong&gt; watching&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;[…]&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Each &lt;strong&gt;file&lt;/strong&gt; is uniquely identified by its path, and will be processed once […]&lt;/p&gt;
+&lt;/div&gt;
+&lt;/blockquote&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Emphasis is mine. The table above points to a single file, and the connector will only read a single file once, regardless of &lt;code&gt;source.monitor-interval&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So, let’s create a folder for &lt;code&gt;a&lt;/code&gt; data and &lt;code&gt;b&lt;/code&gt; data.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ &lt;span style=&#34;color: #0086B3&#34;&gt;mkdir &lt;/span&gt;data/a data/b
+❯ &lt;span style=&#34;color: #0086B3&#34;&gt;mv &lt;/span&gt;data/items_a.csv data/a/file1.csv
+❯ &lt;span style=&#34;color: #0086B3&#34;&gt;mv &lt;/span&gt;data/items_b.csv data/b/file1.csv
+❯ tree data
+data
+├── a
+│   └── file1.csv
+└── b
+    └── file1.csv&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Both tables will need updating for the change in path:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ALTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;path&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;/data/a&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ALTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;path&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;/data/b&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s check &lt;code&gt;items_a&lt;/code&gt; to make sure it still works:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flink&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SQL&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;default_catalog&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;default_database&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+-----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;op&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;          &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;         &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+-----------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and now add a new file to the source &lt;em&gt;directory&lt;/em&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;EOF&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &amp;gt;&amp;gt; data/a/file2.csv
+3,2025-03-06 10:02:00.000,item_a_3
+EOF&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;It works!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/03/flink-join1.gif&#34; alt=&#34;flink join1&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_streaming_join_in_action&#34;&gt;Streaming join in action&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;With both tables now set up as &lt;em&gt;unbounded&lt;/em&gt;, we can see how our join behaves in both streaming and batch modes:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;execution.runtime-mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;streaming&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COALESCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COALESCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FULL&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;OUTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;JOIN&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ON&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AND&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;+----+-------------+-------------------------+-----------+----------+
+| op |          id |                      ts |         a |        b |
++----+-------------+-------------------------+-----------+----------+
+| +I |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |   &amp;lt;NULL&amp;gt; |
+| -D |           1 | 2025-03-06 10:00:00.000 |  item_a_1 |   &amp;lt;NULL&amp;gt; |
+| +I |           1 | 2025-03-06 10:00:00.000 |  item_a_1 | item_b_1 |
+| +I |           2 | 2025-03-06 10:01:00.000 |  item_a_2 |   &amp;lt;NULL&amp;gt; |
+| +I |           2 | 2025-03-06 12:01:30.000 |    &amp;lt;NULL&amp;gt; | item_b_2 |
+| +I |           3 | 2025-03-06 10:02:00.000 |  item_a_3 |   &amp;lt;NULL&amp;gt; |&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This is what it should be; &lt;code&gt;id=2&lt;/code&gt; is unmatched because of the different &lt;code&gt;ts&lt;/code&gt; values (we could remove that from the &lt;code&gt;ON&lt;/code&gt; join condition if we didn’t care about that), and &lt;code&gt;id=3&lt;/code&gt; is unmatched because there’s no corresponding value for &lt;code&gt;item_b&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s add an entry to &lt;code&gt;item_b&lt;/code&gt; for &lt;code&gt;id=3&lt;/code&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;EOF&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &amp;gt;&amp;gt; data/b/file2.csv
+3,2025-03-06 10:02:00.000,item_b_3
+EOF&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now our results (which were still running from the query above) have these &lt;em&gt;two&lt;/em&gt; rows added:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;| -D |           3 | 2025-03-06 10:02:00.000 |  item_a_3 |   &amp;lt;NULL&amp;gt; |
+| +I |           3 | 2025-03-06 10:02:00.000 |  item_a_3 | item_b_3 |&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;A &lt;code&gt;-D&lt;/code&gt; to remove the unmatched row, and an &lt;code&gt;+I&lt;/code&gt; to add in the now-matched row with the data from &lt;code&gt;item_b&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What happens if we re-run this query as a batch? We should see just the final result of the joins, with the insert/delete steps omitted. Under the covers this is how any regular RDBMS operates—it’s just that in the batch world you never see it :)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;execution.runtime-mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;batch&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COALESCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COALESCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FULL&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;OUTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;JOIN&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ON&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AND&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;[ERROR] Could not execute SQL statement. Reason:
+org.apache.flink.table.api.ValidationException: Querying an unbounded table &amp;#39;default_catalog.default_database.items_a&amp;#39; in batch mode is not allowed. The table source is unbounded.&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Oh, I didn’t expect that! The error is pretty descriptive though. We changed the table from being &lt;em&gt;bounded&lt;/em&gt; —which is the Filesystem connector default— to &lt;em&gt;unbounded&lt;/em&gt; by setting &lt;code&gt;source.monitor-interval&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What we need to do is change how the SQL Client interacts with the results. Instead of displaying them in &lt;code&gt;tableau&lt;/code&gt; mode (as has been shown above), we use &lt;code&gt;table&lt;/code&gt; mode, which is an interactive one:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;execution.runtime-mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;streaming&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;sql-client.execution.result-mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;table&amp;#39;&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;SQL Query Result (Table)
+ Refresh: 1 s                             Page: Last of 1                    Updated: 12:50:42.756
+
+          id                      ts          a          b
+           1 2025-03-06 10:00:00.000   item_a_1   item_b_1
+           2 2025-03-06 12:01:30.000     &amp;lt;NULL&amp;gt;   item_b_2
+           2 2025-03-06 10:01:00.000   item_a_2     &amp;lt;NULL&amp;gt;
+           3 2025-03-06 10:02:00.000   item_a_3   item_b_3&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This query continues to run, but shows us the &lt;em&gt;current state&lt;/em&gt; of the query output, rather than the &lt;em&gt;changelog&lt;/em&gt; mode (which can’t be displayed in &lt;code&gt;tableau&lt;/code&gt; mode).&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_join_using_the_latest_record_by_timestamp&#34;&gt;“Join using the latest record by timestamp”&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This bit of the OP’s question isn’t addressed by the above solution. In fact, it conveniently steers completely around it ;) Let’s now look at how we’d implement it.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Before we dig into it, knowing which file the data is coming from will be useful, so let’s add that metadata to each table, just for debug purposes:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ALTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ADD&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`file.path`&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STRING&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NOT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;METADATA&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ALTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ADD&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`file.path`&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;STRING&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NOT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;NULL&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;METADATA&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The new column shows up like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flink&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SQL&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+-----------+--------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;op&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;          &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;         &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;          &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;path&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+-----------+--------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;02&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_find_the_record_for_the_latest_timestamp&#34;&gt;Find the record for the latest timestamp&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We’ll start simple with this new requirement, and consider just the table &lt;code&gt;items_a&lt;/code&gt;. To start with we need some SQL that gives us for each &lt;code&gt;id&lt;/code&gt; the value of &lt;code&gt;a&lt;/code&gt; for the latest &lt;code&gt;ts&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`file.path`&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_outer&lt;/span&gt;
+ &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;MAX&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+             &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_inner&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_inner&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_outer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To begin with, we get this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;+----+-------------+----------+-------------------------+-------------------+
+| op |          id |        a |                      ts |         file.path |
++----+-------------+----------+-------------------------+-------------------+
+| +I |           1 | item_a_1 | 2025-03-06 10:00:00.000 | /data/a/file1.csv |
+| +I |           2 | item_a_2 | 2025-03-06 10:01:00.000 | /data/a/file1.csv |
+| +I |           3 | item_a_3 | 2025-03-06 10:02:00.000 | /data/a/file2.csv |&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now let’s add a file with the same key (&lt;code&gt;id=3&lt;/code&gt;) but an older timestamp. We’ll hopefully not see the table update (because the &lt;code&gt;WHERE ts=(SELECT MAX(ts) […]&lt;/code&gt; predicate isn’t matched)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;EOF&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &amp;gt;&amp;gt; data/a/file3.csv
+3,2025-03-06 09:00:00.000,item_a_3_ts_is_older
+EOF&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Nothing changes on the table output. We can verify the row is there by looking at the table itself without predicates:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flink&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SQL&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+----------------------+-------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;op&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;          &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;         &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;path&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+-------------+-------------------------+----------------------+-------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;02&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;             &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;09&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_3_ts_is_older&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file3&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;             &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;           &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;             &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What if we add another file, with a newer timestamp this time?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Before we do that, we need to re-run our new query. When we do that, there’s something interesting already in the output:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;Flink&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SQL&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`file.path`&lt;/span&gt;
+             &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_outer&lt;/span&gt;
+            &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;MAX&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+                        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_inner&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_inner&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_outer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;);&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+----+----------------------+-------------------------+-------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;op&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                    &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;                      &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;         &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;path&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;----+----+----------------------+-------------------------+-------------------+&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #009999&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;             &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_1&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #009999&#34;&gt;2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;             &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_2&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;01&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file1&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;I&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_3_ts_is_older&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;09&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file3&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;U&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_3_ts_is_older&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;09&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file3&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;U&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;  &lt;span style=&#34;color: #009999&#34;&gt;3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;             &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_3&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;2025&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;03&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;06&lt;/span&gt; &lt;span style=&#34;color: #009999&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;02&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;00&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #009999&#34;&gt;000&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;file2&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;csv&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;|&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Because &lt;code&gt;/data/a/file3.csv&lt;/code&gt; looks like it gets read first, to start with &lt;code&gt;item_a_3_ts_is_older&lt;/code&gt; value is the most recent timestamp. Then &lt;code&gt;/data/a/file2.csv&lt;/code&gt; gets read, and the latest value for the key &lt;code&gt;id=3&lt;/code&gt; gets restated (&lt;code&gt;-U&lt;/code&gt; followed by &lt;code&gt;+U&lt;/code&gt;) to &lt;code&gt;item_a_3&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-note&#34; title=&#34;Note&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+If you’re particularly eagle-eyed, you might have noticed the operation in the changelog is &lt;code&gt;-U&lt;/code&gt; /&lt;code&gt;+U&lt;/code&gt; when an aggregate gets reissued, and a &lt;code&gt;-D&lt;/code&gt;/&lt;code&gt;+I&lt;/code&gt; when a join output changes. To learn more about changelog types, check out &lt;a href=&#34;https://docs.confluent.io/cloud/current/flink/concepts/dynamic-tables.html#changelog-entries&#34;&gt;this useful doc&lt;/a&gt;.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s now add a newer-still timestamp:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;EOF&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &amp;gt;&amp;gt; data/a/file4.csv
+3,2025-03-06 11:00:00.000,item_a_3_ts_is_NEWER!
+EOF&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Just as we saw above, now the value gets restated again:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;| -U | 3 |              item_a_3 | 2025-03-06 10:02:00.000 | /data/a/file2.csv |
+| +U | 3 | item_a_3_ts_is_NEWER! | 2025-03-06 11:00:00.000 | /data/a/file4.csv |&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;and to prove it’s not a fluke, another older timestamp:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;EOF&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &amp;gt;&amp;gt; data/a/file5.csv
+3,2024-01-01 11:00:00.000,item_a_3_ts_is_old_old
+EOF&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The query output remains unchanged.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_joining_latest_records&#34;&gt;Joining latest records&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s finish by building the actual query the OP was looking for.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_newest&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`file.path`&lt;/span&gt;
+             &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_outer&lt;/span&gt;
+            &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;MAX&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+                        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_inner&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_inner&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_outer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)),&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_b_newest&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`file.path`&lt;/span&gt;
+             &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b_outer&lt;/span&gt;
+            &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;MAX&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+                        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b_inner&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b_inner&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b_outer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;))&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COALESCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a_ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b_ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;`file.path`&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a_filepath&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;`file.path`&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b_filepath&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_newest&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FULL&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;OUTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;JOIN&lt;/span&gt;
+       &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_b_newest&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;
+       &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ON&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here’s the query output as a table (&lt;code&gt;SET &amp;#39;sql-client.execution.result-mode&amp;#39; = &amp;#39;table&amp;#39;;&lt;/code&gt;):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;  id                    a_ts                    b_ts                     a        b        a_filepath        b_filepath
+   3 2025-03-06 11:00:00.000 2025-03-06 10:02:00.000 item_a_3_ts_is_NEWER! item_b_3 /data/a/file4.csv /data/b/file2.csv
+   1 2025-03-06 10:00:00.000 2025-03-06 10:00:00.000              item_a_1 item_b_1 /data/a/file1.csv /data/b/file1.csv
+   2 2025-03-06 10:01:00.000 2025-03-06 12:01:30.000              item_a_2 item_b_2 /data/a/file1.csv /data/b/file1.csv&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This matches what we’d expect to see based on the data above. Let’s take a look at the changelog now (&lt;code&gt;SET &amp;#39;sql-client.execution.result-mode&amp;#39; = &amp;#39;tableau&amp;#39;;&lt;/code&gt;):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;+----+----+-------------------------+-------------------------+-----------------------+----------+-------------------+-------------------+
+| op | id |                    a_ts |                    b_ts |                     a |        b |        a_filepath |        b_filepath |
++----+----+-------------------------+-------------------------+-----------------------+----------+-------------------+-------------------+
+| +I |  1 | 2025-03-06 10:00:00.000 |                  &amp;lt;NULL&amp;gt; |              item_a_1 |   &amp;lt;NULL&amp;gt; | /data/a/file1.csv |            &amp;lt;NULL&amp;gt; |
+| +I |  2 | 2025-03-06 10:01:00.000 |                  &amp;lt;NULL&amp;gt; |              item_a_2 |   &amp;lt;NULL&amp;gt; | /data/a/file1.csv |            &amp;lt;NULL&amp;gt; |
+| +I |  3 | 2025-03-06 09:00:00.000 |                  &amp;lt;NULL&amp;gt; |  item_a_3_ts_is_older |   &amp;lt;NULL&amp;gt; | /data/a/file3.csv |            &amp;lt;NULL&amp;gt; |
+| -D |  3 | 2025-03-06 09:00:00.000 |                  &amp;lt;NULL&amp;gt; |  item_a_3_ts_is_older |   &amp;lt;NULL&amp;gt; | /data/a/file3.csv |            &amp;lt;NULL&amp;gt; |
+| +I |  3 | 2025-03-06 10:02:00.000 |                  &amp;lt;NULL&amp;gt; |              item_a_3 |   &amp;lt;NULL&amp;gt; | /data/a/file2.csv |            &amp;lt;NULL&amp;gt; |
+| -D |  3 | 2025-03-06 10:02:00.000 |                  &amp;lt;NULL&amp;gt; |              item_a_3 |   &amp;lt;NULL&amp;gt; | /data/a/file2.csv |            &amp;lt;NULL&amp;gt; |
+| +I |  3 | 2025-03-06 11:00:00.000 |                  &amp;lt;NULL&amp;gt; | item_a_3_ts_is_NEWER! |   &amp;lt;NULL&amp;gt; | /data/a/file4.csv |            &amp;lt;NULL&amp;gt; |
+| -D |  3 | 2025-03-06 11:00:00.000 |                  &amp;lt;NULL&amp;gt; | item_a_3_ts_is_NEWER! |   &amp;lt;NULL&amp;gt; | /data/a/file4.csv |            &amp;lt;NULL&amp;gt; |
+| +I |  3 | 2025-03-06 11:00:00.000 | 2025-03-06 10:02:00.000 | item_a_3_ts_is_NEWER! | item_b_3 | /data/a/file4.csv | /data/b/file2.csv |
+| -D |  1 | 2025-03-06 10:00:00.000 |                  &amp;lt;NULL&amp;gt; |              item_a_1 |   &amp;lt;NULL&amp;gt; | /data/a/file1.csv |            &amp;lt;NULL&amp;gt; |
+| +I |  1 | 2025-03-06 10:00:00.000 | 2025-03-06 10:00:00.000 |              item_a_1 | item_b_1 | /data/a/file1.csv | /data/b/file1.csv |
+| -D |  2 | 2025-03-06 10:01:00.000 |                  &amp;lt;NULL&amp;gt; |              item_a_2 |   &amp;lt;NULL&amp;gt; | /data/a/file1.csv |            &amp;lt;NULL&amp;gt; |
+| +I |  2 | 2025-03-06 10:01:00.000 | 2025-03-06 12:01:30.000 |              item_a_2 | item_b_2 | /data/a/file1.csv | /data/b/file1.csv |&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Insert a newer-timestamped row for an existing &lt;code&gt;item_b&lt;/code&gt; key:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;cat&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;EOF&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &amp;gt;&amp;gt; data/b/file3.csv
+3,2025-03-06 10:06:00.000,item_b_newer!
+EOF&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Shows up in the table:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;literalblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre&gt;+----+----+-------------------------+-------------------------+-----------------------+----------------+-------------------+-------------------+
+| op | id |                    a_ts |                    b_ts |                     a |              b |        a_filepath |        b_filepath |
++----+----+-------------------------+-------------------------+-----------------------+----------------+-------------------+-------------------+
+| -D |  3 | 2025-03-06 11:00:00.000 | 2025-03-06 10:02:00.000 | item_a_3_ts_is_NEWER! |       item_b_3 | /data/a/file4.csv | /data/b/file2.csv |
+| +I |  3 | 2025-03-06 11:00:00.000 |                  &amp;lt;NULL&amp;gt; | item_a_3_ts_is_NEWER! |         &amp;lt;NULL&amp;gt; | /data/a/file4.csv |            &amp;lt;NULL&amp;gt; |
+| -D |  3 | 2025-03-06 11:00:00.000 |                  &amp;lt;NULL&amp;gt; | item_a_3_ts_is_NEWER! |         &amp;lt;NULL&amp;gt; | /data/a/file4.csv |            &amp;lt;NULL&amp;gt; |
+| +I |  3 | 2025-03-06 11:00:00.000 | 2025-03-06 10:06:00.000 | item_a_3_ts_is_NEWER! |  item_b_newer! | /data/a/file4.csv | /data/b/file3.csv |&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/03/flink-join2.gif&#34; alt=&#34;flink join2&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;hr/&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To write this as a table, wrap the query in the &lt;code&gt;CREATE TABLE … AS SELECT&lt;/code&gt; syntax.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;color: #008080&#34;&gt;`out`&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;
+    &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;print&amp;#39;&lt;/span&gt;
+&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_newest&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;
+              &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_outer&lt;/span&gt;
+              &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;MAX&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+                          &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_inner&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_inner&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_a_outer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)),&lt;/span&gt;
+  &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_b_newest&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;
+              &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b_outer&lt;/span&gt;
+              &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;MAX&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt;
+                          &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b_inner&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b_inner&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;items_b_outer&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;))&lt;/span&gt;
+  &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;COALESCE&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a_ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;ts&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b_ts&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;,&lt;/span&gt;
+        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;
+    &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_a_newest&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;
+        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;FULL&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;OUTER&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;JOIN&lt;/span&gt;
+        &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;item_b_newest&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;
+        &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;ON&lt;/span&gt; &lt;span style=&#34;background-color: #f8f8f8&#34;&gt;a&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you try and use the Filesystem connector you’ll get the error:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code&gt;Table sink &amp;#39;default_catalog.default_database.out&amp;#39; doesn&amp;#39;t support consuming update and delete changes which is produced by node Join(joinType=[FullOuterJoin], where=[(id = id0)], select=[id, a, ts, id0, b, ts0],
+leftInputSpec=[NoUniqueKey], rightInputSpec=[NoUniqueKey])&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Therefore I’m using the &lt;code&gt;print&lt;/code&gt; connector since I don’t have anything installed that will act as an updatable sink. You can look at the Flink logs to see what gets written:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ docker compose logs taskmanager |grep &lt;span style=&#34;color: #000080&#34;&gt;-E&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;[\\+\\-][DUI]\[&amp;#39;&lt;/span&gt;
+taskmanager-1  | +I[1, null, 2025-03-06T10:00, null, item_b_1]
+taskmanager-1  | +I[2, null, 2025-03-06T12:01:30, null, item_b_2]
+taskmanager-1  | +I[3, null, 2025-03-06T10:06, null, item_b_newer!]
+taskmanager-1  | &lt;span style=&#34;color: #000080&#34;&gt;-D&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;3, null, 2025-03-06T10:06, null, item_b_newer!]
+taskmanager-1  | +I[3, 2025-03-06T09:00, 2025-03-06T10:06, item_a_3_ts_is_older, item_b_newer!]
+taskmanager-1  | &lt;span style=&#34;color: #000080&#34;&gt;-D&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;3, 2025-03-06T09:00, 2025-03-06T10:06, item_a_3_ts_is_older, item_b_newer!]
+taskmanager-1  | +I[3, null, 2025-03-06T10:06, null, item_b_newer!]
+taskmanager-1  | &lt;span style=&#34;color: #000080&#34;&gt;-D&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;3, null, 2025-03-06T10:06, null, item_b_newer!]
+taskmanager-1  | +I[3, 2025-03-06T11:00, 2025-03-06T10:06, item_a_3_ts_is_NEWER!, item_b_newer!]
+taskmanager-1  | &lt;span style=&#34;color: #000080&#34;&gt;-D&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;1, null, 2025-03-06T10:00, null, item_b_1]
+taskmanager-1  | +I[1, 2025-03-06T10:00, 2025-03-06T10:00, item_a_1, item_b_1]
+taskmanager-1  | &lt;span style=&#34;color: #000080&#34;&gt;-D&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;[&lt;/span&gt;2, null, 2025-03-06T12:01:30, null, item_b_2]
+taskmanager-1  | +I[2, 2025-03-06T10:01, 2025-03-06T12:01:30, item_a_2, item_b_2]&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+Shortly before publishing this, my esteemed colleague Martijn Visser pointed me to &lt;a href=&#34;https://docs.confluent.io/cloud/current/flink/how-to-guides/combine-and-track-most-recent-records.html&#34;&gt;this doc&lt;/a&gt; that details a more elegant way of writing the query—and which highlights several key reasons why my naïve approach of a simple &lt;code&gt;JOIN&lt;/code&gt; &lt;a href=&#34;https://docs.confluent.io/cloud/current/flink/how-to-guides/combine-and-track-most-recent-records.html#why-union-all-vs-join&#34;&gt;isn’t such a good idea&lt;/a&gt;. This is something for me to dig into (I do believe learning watermarks might be on the cards 🫣), so stay tuned :)
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
     <item>
       <title>How to explode nested arrays with Flink SQL</title>
       <link>https://rmoff.net/2025/03/03/how-to-explode-nested-arrays-with-flink-sql/</link>
@@ -1883,59 +2700,6 @@ Your browser does not support the video tag.
 Your browser does not support the video tag.
 &lt;/video&gt;
 &lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>🏃🚶 The unofficial Kafka Summit London 2024  Run/Walk 🏃🚶</title>
-      <link>https://rmoff.net/2024/03/15/the-unofficial-kafka-summit-london-2024-run/walk/</link>
-      <pubDate>2024-03-15</pubDate>
-      
-      <guid>https://rmoff.net/2024/03/15/the-unofficial-kafka-summit-london-2024-run/walk/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2024/03/th_2024-03-15_14-32-45_8787.webp" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;At this year’s Kafka Summit I’m planning to continue the tradition of going for a run (or walk) with anyone who’d like to join in. This started back at Kafka Summit San Francisco in 2019 &lt;a href=&#34;https://twitter.com/rmoff/status/1179047181891883008&#34;&gt;over the Golden Gate Bridge&lt;/a&gt; and has continued since then. Whilst London’s Docklands might not offer &lt;em&gt;quite&lt;/em&gt; the same experience it’ll be fun nonetheless.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_who_what_where_when&#34;&gt;Who? What? Where? When?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;Who&lt;/em&gt;:  Anyone who would like to is very welcome :)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;What&lt;/em&gt;: A 5k (3.1 miles) run or walk&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;Where&lt;/em&gt;: Starting from the Aloft Hotel (next to the ExCeL center), heading up to Beckton Park and taking in some of the Parkrun route.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;When&lt;/em&gt;: &lt;strong&gt;Tuesday 19th March&lt;/strong&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;We’ll &lt;strong&gt;meet at 07:00 GMT&lt;/strong&gt; in the carpark in front of the hotel. That’ll give us time to congregate and take some &lt;a href=&#34;https://twitter.com/search?q=%23streamingselfie%20%23kafkasummit%20until%3A2020-03-01&amp;amp;src=typed_query&amp;amp;f=live&#34;&gt;&lt;code&gt;#streamingselfie&lt;/code&gt;&lt;/a&gt;s if you want them, before setting off at 07:10 sharp to make our way around the &lt;a href=&#34;https://www.strava.com/clubs/1039355/group_events/1146993&#34;&gt;the 5k route&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;strava-embed-placeholder&#34; data-embed-type=&#34;route&#34; data-embed-id=&#34;3203732932395497896&#34; data-full-width=&#34;true&#34; data-style=&#34;standard&#34; data-terrain=&#34;2d&#34; data-club-id=&#34;1039355&#34; data-from-embed=&#34;false&#34;&gt;&lt;/div&gt;&lt;script src=&#34;https://strava-embeds.com/embed.js&#34;&gt;&lt;/script&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Go at your own pace; this isn’t a race. You can run, or walk. Or skip, if you prefer. You can &lt;a href=&#34;https://strava.app.link/IjwMA4dI4Hb&#34;&gt;download the route&lt;/a&gt; to follow at your leisure. In fact, it’s a good idea to do so because this is not an organised event, so it’s your responsibility not to get lost :-D&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;If you Strava, feel free to join the &lt;a href=&#34;https://www.strava.com/clubs/1039355&#34;&gt;Strava Club&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_cool_where_do_i_register&#34;&gt;Cool, where do I register?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Register at &lt;code&gt;/dev/null&lt;/code&gt; ;-)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is an entirely unofficial, barely-organised, thing. Turn up and run, if you want. Don’t, if you don’t. Fully intend to but sleep in from the jetlag and miss it, that’s completely fine 😁&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
