@@ -9,6 +9,939 @@
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
     <item>
+      <title>Creating an HTTP Source connector on Confluent Cloud</title>
+      <link>https://rmoff.net/2025/03/13/creating-an-http-source-connector-on-confluent-cloud/</link>
+      <pubDate>2025-03-13</pubDate>
+      
+      <guid>https://rmoff.net/2025/03/13/creating-an-http-source-connector-on-confluent-cloud/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2025/03/t_IMG_6004.webp" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In this blog article I’ll show you how you can use the &lt;a href=&#34;https://docs.confluent.io/confluent-cli/current/overview.html&#34;&gt;&lt;code&gt;confluent&lt;/code&gt; CLI&lt;/a&gt; to set up a Kafka cluster on Confluent Cloud, the necessary API keys, and then a managed connector.
+The connector I’m setting up is the &lt;a href=&#34;https://docs.confluent.io/cloud/current/connectors/cc-http-source-v2.html&#34;&gt;HTTP Source (v2)&lt;/a&gt; connector.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;It’s part of a pipeline that I’m working on to pull in &lt;a href=&#34;https://environment.data.gov.uk/flood-monitoring/doc/reference&#34;&gt;a feed of data from the UK Environment Agency&lt;/a&gt; for processing.
+The data is spread across three endpoints, and one of the nice features of the HTTP Source (v2) connector is that one connector can pull data from more than one endpoint.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As part of learning about Confluent Cloud and its support for Kafka Connect, I wanted to understand how to configure fully-managed connectors from the CLI.
+The UI is nice, but the CLI is repeatable.
+Whilst there is &lt;a href=&#34;https://registry.terraform.io/providers/confluentinc/confluent/latest/docs/resources/confluent_connector&#34;&gt;Terraform support for resources in Confluent Cloud&lt;/a&gt;, I’ve yet to learn Terraform so this would take me off a whole different yak-shaving path that I’m going to save for another day.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_setup&#34;&gt;Setup&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To start with, login to Confluent Cloud:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent login --save&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Tip&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+To &lt;em&gt;actually&lt;/em&gt; start with, you need to go and &lt;a href=&#34;https://www.confluent.io/en-gb/get-started/&#34;&gt;sign up for Confluent Cloud&lt;/a&gt; (which you can even do from the CLI with &lt;code&gt;confluent cloud-signup&lt;/code&gt;!). Then come back here :)
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now we’ll create an environment within our organisation and set it as the active environment for the CLI:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent environment create rmoff
+
+# The above command with return an ID for the environment, which
+# is what you specify in the next command here
+$ confluent environment use env-253ngy&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What does any environment need? A Kafka cluster!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent kafka cluster create cluster00 --cloud aws --region us-west-2&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The output of this command tells us various things about the cluster, including its ID and broker.
+I’m going to store these in local environment variables to make things easier later on when we want to use them.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;+----------------------+---------------------------------------------------------+
+[…]
+| ID                   | lkc-qnygo6                                              |
+| Endpoint             | SASL_SSL://pkc-rgm37.us-west-2.aws.confluent.cloud:9092 |
+[…]
++----------------------+---------------------------------------------------------+
+
+$ export CNFL_ENV=env-253ngy
+$ export CNFL_KAFKA_CLUSTER=lkc-qnygo6
+$ export CNFL_KAFKA_BROKER=pkc-rgm37.us-west-2.aws.confluent.cloud:9092&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Having created the cluster, we’ll set it as the active one for our CLI session:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent kafka cluster use $CNFL_KAFKA_CLUSTER
+Set Kafka cluster lkc-qnygo6 as the active cluster for environment env-253ngy.&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;When we created the cluster we got a Schema Registry with it—we need to get the ID and endpoint details:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent schema-registry cluster describe
++----------------------+----------------------------------------------------+
+| Name                 | Always On Stream Governance                        |
+|                      | Package                                            |
+| Cluster              | lsrc-g70zm3                                        |
+| Endpoint URL         | https://psrc-13go8y7.us-west-2.aws.confluent.cloud |
+[…]
++----------------------+----------------------------------------------------+
+
+export CNFL_SR_HOST=psrc-13go8y7.us-west-2.aws.confluent.cloud
+export CNFL_SR_ID=lsrc-g70zm3&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_api_keys&#34;&gt;API Keys&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Tip&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+I’m &lt;em&gt;obviously&lt;/em&gt; not sharing the actual API keys generated by the commands below, and have instead put placeholders.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We need to create some API keys for the calls we’re going to be making to interact with the cluster.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;First, one for the Kafka cluster itself:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent api-key create --resource $CNFL_KAFKA_CLUSTER
+It may take a couple of minutes for the API key to be ready.
+Save the API key and secret. The secret is not retrievable later.
++------------+------------------------------------------------------------------+
+| API Key    | (XXXmy-kafka-api-keyXXX)                                         |
+| API Secret | (XXXmy-kafka-api-secretXXX)                                      |
++------------+------------------------------------------------------------------+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Then one for the cloud resources:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent api-key create --resource cloud
+It may take a couple of minutes for the API key to be ready.
+Save the API key and secret. The secret is not retrievable later.
++------------+------------------------------------------------------------------+
+| API Key    | (XXXmy-cloud-api-keyXXX)                                         |
+| API Secret | (XXXmy-cloud-api-secretXXX)                                      |
++------------+------------------------------------------------------------------+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Finally, for the Schema Registry:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent api-key create --resource $CNFL_SR_ID
+It may take a couple of minutes for the API key to be ready.
+Save the API key and secret. The secret is not retrievable later.
++------------+------------------------------------------------------------------+
+| API Key    | (XXXmy-schema-registry-api-keyXXX)                               |
+| API Secret | (XXXmy-schema-registry-api-secretXXX)                            |
++------------+------------------------------------------------------------------+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Having done this, we’ll store the API keys and secrets in local environment variables to make it easy to re-use them later on.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;export CNFL_KC_API_KEY=(XXXmy-kafka-api-keyXXX)
+export CNFL_KC_API_SECRET=(XXXmy-kafka-api-secretXXX)
+
+export CNFL_CLOUD_API_KEY=(XXXmy-cloud-api-keyXXX)
+export CNFL_CLOUD_API_SECRET=(XXXmy-cloud-api-secretXXX)
+
+export CNFL_SR_API_KEY=(XXXmy-schema-registry-api-keyXXX)
+export CNFL_SR_API_SECRET=(XXXmy-schema-registry-api-secretXXX)&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock warning&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Warning&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+Storing API details in environment variables is a risky thing to do if anyone were to get hold of your machine, your bash history, etc etc. There are much better ways to manage secrets; I’m just taking the easy (but insecure) route here.
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_confluent_cloud_api&#34;&gt;The Confluent Cloud API&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can use the &lt;a href=&#34;https://docs.confluent.io/confluent-cli/current/command-reference/connect/cluster/confluent_connect_cluster_create.html#confluent-connect-cluster-create&#34;&gt;&lt;code&gt;confluent&lt;/code&gt; CLI to create connectors&lt;/a&gt;, but I ended up using a REST call directly.
+If you do use the &lt;code&gt;confluent&lt;/code&gt; CLI note that the terminology is to create a Connect &amp;#34;Cluster&amp;#34;, rather than a connector.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;a href=&#34;https://docs.confluent.io/cloud/current/api.html&#34;&gt;Confluent Cloud API&lt;/a&gt; uses an API key for authentication.
+For working with connectors the API key should be created for access to the &lt;code&gt;cloud&lt;/code&gt; resource (see &lt;code&gt;confluent api-key create --resource cloud&lt;/code&gt; above).
+The docs show how to create an &lt;code&gt;Authorization&lt;/code&gt; header with a base64-encoded representation of the API key.
+A simpler way is to pass it as a username/password combo, separated by a colon (i.e. &lt;code&gt;API_KEY:API_SECRET&lt;/code&gt;).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In &lt;code&gt;curl&lt;/code&gt; you use &lt;code&gt;--user&lt;/code&gt; like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;curl --request GET \
+      --url https://api.confluent.cloud/org/v2/organizations \
+      --user &amp;#34;(XXXmy-cloud-api-keyXXX):(XXXmy-cloud-api-secretXXX)&amp;#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Using &lt;a href=&#34;https://httpie.io/&#34;&gt;httpie&lt;/a&gt; (my favourite tool for this kind of stuff) it’s &lt;code&gt;--auth&lt;/code&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;http GET https://api.confluent.cloud/org/v2/organizations \
+      --auth &amp;#34;(XXXmy-cloud-api-keyXXX):(XXXmy-cloud-api-secretXXX)&amp;#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_create_an_http_source_connector_for_a_single_endpoint&#34;&gt;Create an HTTP Source connector for a single endpoint&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We’ll start simple and make sure that this thing works for a single endpoint.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;http PUT \
+    &amp;#34;https://api.confluent.cloud/connect/v1/environments/$CNFL_ENV/clusters/$CNFL_KAFKA_CLUSTER/connectors/env-agency--flood-monitoring-stations/config&amp;#34; \
+    --auth &amp;#34;$CNFL_CLOUD_API_KEY:$CNFL_CLOUD_API_SECRET&amp;#34; \
+    content-type:application/json \
+    connector.class=&amp;#34;HttpSourceV2&amp;#34; \
+    name=&amp;#34;&amp;#34; \
+    http.api.base.url=&amp;#34;https://environment.data.gov.uk/flood-monitoring&amp;#34; \
+    api1.http.api.path=&amp;#34;/id/stations&amp;#34; \
+    api1.http.offset.mode=&amp;#34;SIMPLE_INCREMENTING&amp;#34; \
+    api1.http.initial.offset=&amp;#34;0&amp;#34; \
+    api1.request.interval.ms=&amp;#34;3600000&amp;#34; \
+    api1.topics=&amp;#34;flood-monitoring-stations&amp;#34; \
+    kafka.api.key=$CNFL_KC_API_KEY \
+    kafka.api.secret=$CNFL_KC_API_SECRET \
+    output.data.format=&amp;#34;AVRO&amp;#34; \
+    tasks.max=&amp;#34;1&amp;#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The documentation for the connector details all of &lt;a href=&#34;https://docs.confluent.io/cloud/current/connectors/cc-http-source-v2.html#configuration-properties&#34;&gt;the configuration options&lt;/a&gt;.
+Let’s take a look at what we’re going to configure:&lt;/p&gt;
+&lt;/div&gt;
+&lt;table class=&#34;tableblock frame-all grid-all stretch&#34;&gt;
+&lt;colgroup&gt;
+&lt;col style=&#34;width: 25%;&#34;/&gt;
+&lt;col style=&#34;width: 50%;&#34;/&gt;
+&lt;col style=&#34;width: 25%;&#34;/&gt;
+&lt;/colgroup&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th class=&#34;tableblock halign-left valign-top&#34;&gt;Property&lt;/th&gt;
+&lt;th class=&#34;tableblock halign-left valign-top&#34;&gt;Value&lt;/th&gt;
+&lt;th class=&#34;tableblock halign-left valign-top&#34;&gt;Notes&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;connector.class&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;HttpSourceV2&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;This is the connector type we’re going to use.&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;name&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;This config value isn’t used, but the element must be specified for the config to be valid. The name of the connector is taken from the URL path (see below).&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;http.api.base.url&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;&lt;code&gt;https://environment.data.gov.uk/flood-monitoring&lt;/code&gt;&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;The base URL for the API endpoint.
+This will make a lot of sense later when we define more than one endpoint.&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;api1.http.api.path&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;/id/stations&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;The path to the API endpoint (to be added to the base URL)&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;api1.http.offset.mode&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;SIMPLE_INCREMENTING&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34; rowspan=&#34;2&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;Since the endpoint provides a full set of the data each time we query it, these two settings are necessary to tell the connector to expect this and not try to page through the endpoint.&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;api1.http.initial.offset&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;0&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;api1.request.interval.ms&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;3600000&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;Poll the endpoint once an hour (60 minutes / 3600 seconds / 3600000 ms)&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;api1.topics&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;flood-monitoring-stations&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;Which topic to write the endpoint response to&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;output.data.format&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;AVRO&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;How to serialise the data when writing it&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;kafka.api.key&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;$CNFL_KC_API_KEY&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34; rowspan=&#34;2&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;Credentials that the connector will use to write to the Kafka cluster&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;kafka.api.secret&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;$CNFL_KC_API_SECRET&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;tasks.max&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;1&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;How many tasks the connector can run (less relevant for a single endpoint, but important when we add more later)&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The Confluent Cloud REST API endpoint that we’re going to send this data to is:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;https://api.confluent.cloud/connect/v1/environments/$CNFL_ENV/clusters/$CNFL_KAFKA_CLUSTER/connectors/flood-monitoring-stations/config&amp;#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The component parts are broken out like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;table class=&#34;tableblock frame-all grid-all stretch&#34;&gt;
+&lt;colgroup&gt;
+&lt;col style=&#34;width: 50%;&#34;/&gt;
+&lt;col style=&#34;width: 50%;&#34;/&gt;
+&lt;/colgroup&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th class=&#34;tableblock halign-left valign-top&#34;&gt;Value&lt;/th&gt;
+&lt;th class=&#34;tableblock halign-left valign-top&#34;&gt;URL Element&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;&lt;code&gt;https://api.confluent.cloud/connect/v1&lt;/code&gt;&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;em&gt;[fixed]&lt;/em&gt; Base URL&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;$CNFL_ENV&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;Confluent Cloud Environment ID&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;$CNFL_KAFKA_CLUSTER&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;Kafka Cluster ID&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;connectors&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;em&gt;[fixed]&lt;/em&gt; Resource Type&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;flood-monitoring-stations&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;The name that you want to use for the connector&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;code&gt;config&lt;/code&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td class=&#34;tableblock halign-left valign-top&#34;&gt;&lt;p class=&#34;tableblock&#34;&gt;&lt;em&gt;[fixed]&lt;/em&gt; The configuration endpoint&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;a href=&#34;https://docs.confluent.io/cloud/current/api.html#tag/Connectors-(connectv1)/operation/createOrUpdateConnectv1ConnectorConfig&#34;&gt;&lt;code&gt;/config&lt;/code&gt; API&lt;/a&gt; expects a &lt;code&gt;PUT&lt;/code&gt; operation, and has the advantage over the related &lt;a href=&#34;https://docs.confluent.io/cloud/current/api.html#tag/Connectors-(connectv1)/operation/createConnectv1Connector&#34;&gt;&lt;code&gt;POST&lt;/code&gt; to &lt;code&gt;/connectors&lt;/code&gt;&lt;/a&gt; in that it does an &amp;#39;upsert&amp;#39;—if the connector doesn’t exist it creates it, and if it does, it updates it. That makes the REST call idempotent (a fancy way of saying you can run it repeatedly with the same result).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;When we run the command we get back an HTTP status code which if all has gone well is this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;HTTP/1.1 200 OK&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_checking_the_status_of_a_connector&#34;&gt;Checking the status of a connector&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;a href=&#34;https://docs.confluent.io/cloud/current/api.html#tag/Status-(connectv1)/operation/readConnectv1ConnectorStatus&#34;&gt;/status&lt;/a&gt; endpoint tells us about the connector, including its health and details of the tasks within it:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;http GET &amp;#34;https://api.confluent.cloud/connect/v1/environments/$CNFL_ENV/clusters/$CNFL_KAFKA_CLUSTER/connectors/env-agency--flood-monitoring-stations/status&amp;#34; \
+    --auth &amp;#34;$CNFL_CLOUD_API_KEY:$CNFL_CLOUD_API_SECRET&amp;#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Tip&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+Use the &lt;code&gt;-b&lt;/code&gt; flag with httpie if you want to supress the response headers
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
+    &amp;#34;connector&amp;#34;: {
+        &amp;#34;state&amp;#34;: &amp;#34;RUNNING&amp;#34;,
+        &amp;#34;trace&amp;#34;: &amp;#34;&amp;#34;,
+        &amp;#34;worker_id&amp;#34;: &amp;#34;env-agency--flood-monitoring-stations&amp;#34;
+    },
+    &amp;#34;error_details&amp;#34;: null,
+    &amp;#34;errors_from_trace&amp;#34;: [],
+    &amp;#34;is_csfle_error&amp;#34;: false,
+    &amp;#34;name&amp;#34;: &amp;#34;env-agency--flood-monitoring-stations&amp;#34;,
+    &amp;#34;override_message&amp;#34;: &amp;#34;&amp;#34;,
+    &amp;#34;tasks&amp;#34;: [
+        {
+            &amp;#34;id&amp;#34;: 0,
+            &amp;#34;msg&amp;#34;: &amp;#34;&amp;#34;,
+            &amp;#34;state&amp;#34;: &amp;#34;RUNNING&amp;#34;,
+            &amp;#34;worker_id&amp;#34;: &amp;#34;env-agency--flood-monitoring-stations&amp;#34;
+        }
+    ],
+    &amp;#34;type&amp;#34;: &amp;#34;source&amp;#34;,
+    &amp;#34;validation_error_category_info&amp;#34;: null,
+    &amp;#34;validation_errors&amp;#34;: []
+}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You could use jq to simplify this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;http GET &amp;#34;https://api.confluent.cloud/connect/v1/environments/$CNFL_ENV/clusters/$CNFL_KAFKA_CLUSTER/connectors/env-agency--flood-monitoring-stations/status&amp;#34; \
+    --auth &amp;#34;$CNFL_CLOUD_API_KEY:$CNFL_CLOUD_API_SECRET&amp;#34; | \
+    jq &amp;#39;.connector.state&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&amp;#34;RUNNING&amp;#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you prefer, you can use the Confluent CLI too:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ # Get the connector ID
+$ confluent connect cluster list
+      ID     |                 Name                  | Status  |  Type  | Trace
+-------------+---------------------------------------+---------+--------+--------
+  lcc-r19wjk | env-agency--flood-monitoring-stations | RUNNING | source |
+
+$ # Get its details, including status
+$ confluent connect cluster describe lcc-r19wjk
+Connector Details
++--------+---------------------------------------+
+| ID     | lcc-r19wjk                            |
+| Name   | env-agency--flood-monitoring-stations |
+| Status | RUNNING                               |
+| Type   | source                                |
++--------+---------------------------------------+
+
+
+Task Level Details
+  Task |  State
+-------+----------
+     0 | RUNNING
+
+
+Configuration Details
+           Config          |                          Value
+---------------------------+----------------------------------------------------------
+  api1.http.api.path       | /id/stations
+  api1.http.initial.offset | 0
+  api1.request.interval.ms | 3600000
+  api1.topics              | flood-monitoring-stations
+  cloud.environment        | prod
+  cloud.provider           | aws
+  connector.class          | HttpSourceV2
+  http.api.base.url        | https://environment.data.gov.uk/flood-monitoring
+  kafka.api.key            | ****************
+  kafka.api.secret         | ****************
+  kafka.endpoint           | SASL_SSL://pkc-rgm37.us-west-2.aws.confluent.cloud:9092
+  kafka.region             | us-west-2
+  name                     | env-agency--flood-monitoring-stations
+  output.data.format       | AVRO
+  tasks.max                | 1&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For brevity, you can ask the Confluent CLI to return JSON that you then filter with jq:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;confluent connect cluster describe lcc-r19wjk --output json | jq &amp;#39;.connector.status&amp;#39;
+&amp;#34;RUNNING&amp;#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_looking_at_the_data&#34;&gt;Looking at the data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Based on the above configuration and the fact that the connector is &lt;code&gt;RUNNING&lt;/code&gt;, we should hopefully see data written to the &lt;code&gt;flood-monitoring-stations&lt;/code&gt; topic.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As above, you can use the Confluent CLI, or your own approach for this.
+I’m a big fan of &lt;code&gt;kcat&lt;/code&gt; so tend to gravitate towards it, but it’s up to you.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here’s kcat listing (&lt;code&gt;-L&lt;/code&gt;) the topics on my Confluent Cloud Kafka cluster:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ kcat -b $CNFL_KAFKA_BROKER \
+    -X security.protocol=sasl_ssl -X sasl.mechanisms=PLAIN \
+    -X sasl.username=$CNFL_KC_API_KEY -X sasl.password=$CNFL_KC_API_SECRET \
+    -L
+
+Metadata for all topics (from broker -1: sasl_ssl://pkc-rgm37.us-west-2.aws.confluent.cloud:9092/bootstrap):
+ 6 brokers:
+  broker 0 at b0-pkc-rgm37.us-west-2.aws.confluent.cloud:9092 (controller)
+  broker 1 at b1-pkc-rgm37.us-west-2.aws.confluent.cloud:9092
+  broker 2 at b2-pkc-rgm37.us-west-2.aws.confluent.cloud:9092
+  broker 3 at b3-pkc-rgm37.us-west-2.aws.confluent.cloud:9092
+  broker 4 at b4-pkc-rgm37.us-west-2.aws.confluent.cloud:9092
+  broker 5 at b5-pkc-rgm37.us-west-2.aws.confluent.cloud:9092
+ 2 topics:
+  topic &amp;#34;error-lcc-r19wjk&amp;#34; with 1 partitions:
+    partition 0, leader 4, replicas: 4,2,0, isrs: 4,2,0
+  topic &amp;#34;flood-monitoring-stations&amp;#34; with 1 partitions:
+    partition 0, leader 2, replicas: 2,4,0, isrs: 2,4,0&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Doing the same with Confluent CLI:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent kafka topic list
+              Name              | Internal | Replication Factor | Partition Count
+--------------------------------+----------+--------------------+------------------
+  error-lcc-r19wjk              | false    |                  3 |               1
+  flood-monitoring-stations     | false    |                  3 |               1&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To query the topic, bearing in mind that it’s serialised with Avro and so we need the Schema Registry too, I’m using kcat.
+Here is how to read (&lt;code&gt;-C&lt;/code&gt;) a single message (&lt;code&gt;-c1&lt;/code&gt;):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ kcat -b $CNFL_KAFKA_BROKER \
+    -X security.protocol=sasl_ssl -X sasl.mechanisms=PLAIN \
+    -X sasl.username=$CNFL_KC_API_KEY -X sasl.password=$CNFL_KC_API_SECRET \
+    -s avro -r https://$CNFL_SR_API_KEY:$CNFL_SR_API_SECRET@$CNFL_SR_HOST \
+    -C -t flood-monitoring-stations -c1&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;It turns out the payload is huge—more than will fit on a terminal to inspect.
+We can use the Linux tool &lt;code&gt;wc&lt;/code&gt; to see quite how big it is:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ kcat -q -b $CNFL_KAFKA_BROKER \
+    -X security.protocol=sasl_ssl -X sasl.mechanisms=PLAIN \
+    -X sasl.username=$CNFL_KC_API_KEY -X sasl.password=$CNFL_KC_API_SECRET \
+    -s avro -r https://$CNFL_SR_API_KEY:$CNFL_SR_API_SECRET@$CNFL_SR_HOST \
+    -C -t flood-monitoring-stations -c1 | wc --bytes
+
+5002406&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Huh—4.77 MB! We’re gonna need a bigger monitor ;)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s look at the payload structure:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ kcat -q -b $CNFL_KAFKA_BROKER \
+    -X security.protocol=sasl_ssl -X sasl.mechanisms=PLAIN \
+    -X sasl.username=$CNFL_KC_API_KEY -X sasl.password=$CNFL_KC_API_SECRET \
+    -s avro -r https://$CNFL_SR_API_KEY:$CNFL_SR_API_SECRET@$CNFL_SR_HOST \
+    -C -t flood-monitoring-stations -c1 | jq &amp;#39;keys&amp;#39;
+
+[
+  &amp;#34;_40context&amp;#34;,
+  &amp;#34;items&amp;#34;,
+  &amp;#34;meta&amp;#34;
+]&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Based on the &lt;a href=&#34;https://environment.data.gov.uk/flood-monitoring/doc/reference&#34;&gt;source API’s documentation&lt;/a&gt; we know &lt;code&gt;items&lt;/code&gt; is an array, so let’s inspect on element of it:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ kcat -q -b $CNFL_KAFKA_BROKER \
+    -X security.protocol=sasl_ssl -X sasl.mechanisms=PLAIN \
+    -X sasl.username=$CNFL_KC_API_KEY -X sasl.password=$CNFL_KC_API_SECRET \
+    -s avro -r https://$CNFL_SR_API_KEY:$CNFL_SR_API_SECRET@$CNFL_SR_HOST \
+    -C -t flood-monitoring-stations -c1 | jq &amp;#39;.items[1]&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
+  &amp;#34;_40id&amp;#34;: &amp;#34;http://environment.data.gov.uk/flood-monitoring/id/stations/E2043&amp;#34;,
+  &amp;#34;RLOIid&amp;#34;: {
+    &amp;#34;string&amp;#34;: &amp;#34;6022&amp;#34;
+  },
+  &amp;#34;catchmentName&amp;#34;: {
+    &amp;#34;string&amp;#34;: &amp;#34;Welland&amp;#34;
+  },
+  &amp;#34;dateOpened&amp;#34;: {
+    &amp;#34;int&amp;#34;: 8035
+  },
+  &amp;#34;easting&amp;#34;: {
+    &amp;#34;string&amp;#34;: &amp;#34;528000&amp;#34;
+  },
+  &amp;#34;label&amp;#34;: &amp;#34;Surfleet Sluice&amp;#34;,
+  […]&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This all looks good.
+We’re going to about adding the other two endpoints into this connector.
+But first—let’s tidy up after ourselves and remove this version of the connector.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_deleting_a_managed_connector_on_confluent_cloud&#34;&gt;Deleting a managed connector on Confluent Cloud&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;My brain likes working with well-designed APIs and the HTTP vocabulary:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;You &lt;code&gt;PUT&lt;/code&gt; a &lt;code&gt;/config&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;You &lt;code&gt;GET&lt;/code&gt; a &lt;code&gt;/status&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;To list the connectors that have been created? It’s a &lt;a href=&#34;https://docs.confluent.io/cloud/current/api.html#tag/Connectors-(connectv1)/operation/listConnectv1Connectors&#34;&gt;&lt;code&gt;GET&lt;/code&gt; against &lt;code&gt;/connectors&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ http GET &amp;#34;https://api.confluent.cloud/connect/v1/environments/$CNFL_ENV/clusters/$CNFL_KAFKA_CLUSTER/connectors&amp;#34; \
+    --auth &amp;#34;$CNFL_CLOUD_API_KEY:$CNFL_CLOUD_API_SECRET&amp;#34; -b
+
+[
+    &amp;#34;foo&amp;#34;,
+    &amp;#34;env-agency--flood-monitoring-stations&amp;#34;,
+    &amp;#34;flood-monitoring&amp;#34;,
+    &amp;#34;test&amp;#34;
+]&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So you can pretty much guess the Confluent Cloud REST API for deleting a connector—you &lt;a href=&#34;https://docs.confluent.io/cloud/current/api.html#tag/Connectors-(connectv1)/operation/deleteConnectv1Connector&#34;&gt;&lt;code&gt;DELETE&lt;/code&gt; a &lt;code&gt;$connector-name&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ http DELETE \
+    &amp;#34;https://api.confluent.cloud/connect/v1/environments/$CNFL_ENV/clusters/$CNFL_KAFKA_CLUSTER/connectors/env-agency--flood-monitoring-stations&amp;#34; \
+    --auth &amp;#34;$CNFL_CLOUD_API_KEY:$CNFL_CLOUD_API_SECRET&amp;#34;
+
+HTTP/1.1 200 OK&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+As discussed above, we could &lt;code&gt;PUT&lt;/code&gt; the new config to this connector instead of deleting and recreating it, but I want to use a new name—plus this gives me an excuse to illustrate the &lt;code&gt;DELETE&lt;/code&gt; endpoint :)
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_creating_an_http_source_connector_for_multiple_api_endpoints&#34;&gt;Creating an HTTP Source connector for multiple API endpoints&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The HTTP source (v2) connector supports ingesting data with a single connector from &lt;em&gt;multiple API endpoints&lt;/em&gt; with the same base URL.
+Our endpoints here are:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://environment.data.gov.uk/flood-monitoring/doc/reference#stations&#34;&gt;&lt;code&gt;/id/stations&lt;/code&gt;&lt;/a&gt; (as above)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://environment.data.gov.uk/flood-monitoring/doc/reference#measures&#34;&gt;&lt;code&gt;/id/measures&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://environment.data.gov.uk/flood-monitoring/doc/reference#readings&#34;&gt;&lt;code&gt;/data/readings?latest&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The core parts of configuration stay as they were, but we now add in &lt;code&gt;api2&lt;/code&gt; and &lt;code&gt;api3&lt;/code&gt; configuration.
+We also need to define &lt;code&gt;apis.num&lt;/code&gt; since it’s now greater than the default of one.
+In the example below I’ve added in additional line breaks so that you can see the relevant groupings of the configuration.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;http PUT \
+    &amp;#34;https://api.confluent.cloud/connect/v1/environments/$CNFL_ENV/clusters/$CNFL_KAFKA_CLUSTER/connectors/env-agency--flood-monitoring/config&amp;#34; \
+    --auth &amp;#34;$CNFL_CLOUD_API_KEY:$CNFL_CLOUD_API_SECRET&amp;#34; \
+    content-type:application/json \
+    connector.class=&amp;#34;HttpSourceV2&amp;#34; \
+    name=&amp;#34;&amp;#34; \
+    \
+    http.api.base.url=&amp;#34;https://environment.data.gov.uk/flood-monitoring&amp;#34; \
+    apis.num=&amp;#34;3&amp;#34; \
+    api1.http.api.path=&amp;#34;/id/stations&amp;#34; \
+    api1.http.offset.mode=&amp;#34;SIMPLE_INCREMENTING&amp;#34; \
+    api1.http.initial.offset=&amp;#34;0&amp;#34; \
+    api1.request.interval.ms=&amp;#34;3600000&amp;#34; \
+    api1.topics=&amp;#34;flood-monitoring-stations&amp;#34; \
+    \
+    api2.http.api.path=&amp;#34;/id/measures&amp;#34; \
+    api2.http.offset.mode=&amp;#34;SIMPLE_INCREMENTING&amp;#34; \
+    api2.http.initial.offset=&amp;#34;0&amp;#34; \
+    api2.request.interval.ms=&amp;#34;3600000&amp;#34; \
+    api2.topics=&amp;#34;flood-monitoring-measures&amp;#34; \
+    \
+    api3.http.api.path=&amp;#34;/data/readings?latest&amp;#34; \
+    api3.http.offset.mode=&amp;#34;SIMPLE_INCREMENTING&amp;#34; \
+    api3.http.initial.offset=&amp;#34;0&amp;#34; \
+    api3.request.interval.ms=&amp;#34;900000&amp;#34; \
+    api3.topics=&amp;#34;flood-monitoring-readings&amp;#34; \
+    \
+    kafka.api.key=$CNFL_KC_API_KEY \
+    kafka.api.secret=$CNFL_KC_API_SECRET \
+    output.data.format=&amp;#34;AVRO&amp;#34; \
+    \
+    tasks.max=&amp;#34;3&amp;#34;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;div class=&#34;title&#34;&gt;Note&lt;/div&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you want to run your connector with more than one task (&lt;code&gt;tasks.max&lt;/code&gt;), your &lt;a href=&#34;https://docs.confluent.io/cloud/current/clusters/cluster-types.html#cluster-types&#34;&gt;Confluent Cloud cluster type&lt;/a&gt; needs to be bigger than basic.
+If it’s not, you’ll get this message:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code&gt;Failed to Claim the tasks requested: Failed to claim the task requested:
+Max 1 task(s) allowed per connector with basic cluster type.
+To use more than 1 task(s), please upgrade your cluster type from basic to standard.&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s check the status:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;http GET &amp;#34;https://api.confluent.cloud/connect/v1/environments/$CNFL_ENV/clusters/$CNFL_KAFKA_CLUSTER/connectors/env-agency--flood-monitoring/status&amp;#34; \
+    --auth &amp;#34;$CNFL_CLOUD_API_KEY:$CNFL_CLOUD_API_SECRET&amp;#34; \
+    --print b | jq &amp;#39;.tasks[]&amp;#39;
+{
+  &amp;#34;id&amp;#34;: 0,
+  &amp;#34;state&amp;#34;: &amp;#34;RUNNING&amp;#34;,
+  &amp;#34;worker_id&amp;#34;: &amp;#34;env-agency--flood-monitoring&amp;#34;,
+  &amp;#34;msg&amp;#34;: &amp;#34;&amp;#34;
+}
+{
+  &amp;#34;id&amp;#34;: 1,
+  &amp;#34;state&amp;#34;: &amp;#34;RUNNING&amp;#34;,
+  &amp;#34;worker_id&amp;#34;: &amp;#34;env-agency--flood-monitoring&amp;#34;,
+  &amp;#34;msg&amp;#34;: &amp;#34;&amp;#34;
+}
+{
+  &amp;#34;id&amp;#34;: 2,
+  &amp;#34;state&amp;#34;: &amp;#34;RUNNING&amp;#34;,
+  &amp;#34;worker_id&amp;#34;: &amp;#34;env-agency--flood-monitoring&amp;#34;,
+  &amp;#34;msg&amp;#34;: &amp;#34;&amp;#34;
+}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Three tasks, all up and running :)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What about the data?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ confluent kafka topic list
+            Name            | Internal | Replication Factor | Partition Count
+----------------------------+----------+--------------------+------------------
+  error-lcc-3mpv1j          | false    |                  3 |               1
+  error-lcc-5nx9on          | false    |                  3 |               1
+  error-lcc-5nxknn          | false    |                  3 |               1
+  flood-monitoring-measures | false    |                  3 |               1
+  flood-monitoring-readings | false    |                  3 |               1
+  flood-monitoring-stations | false    |                  3 |               1&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Measures:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ kcat -q -b $CNFL_KAFKA_BROKER \
+    -X security.protocol=sasl_ssl -X sasl.mechanisms=PLAIN \
+    -X sasl.username=$CNFL_KC_API_KEY -X sasl.password=$CNFL_KC_API_SECRET \
+    -s avro -r https://$CNFL_SR_API_KEY:$CNFL_SR_API_SECRET@$CNFL_SR_HOST \
+    -C -t flood-monitoring-measures -c1 | jq &amp;#39;.items[1]&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
+  &amp;#34;_40id&amp;#34;: &amp;#34;http://environment.data.gov.uk/flood-monitoring/id/measures/1029TH-level-stage-i-15_min-mASD&amp;#34;,
+  &amp;#34;datumType&amp;#34;: {
+    &amp;#34;string&amp;#34;: &amp;#34;http://environment.data.gov.uk/flood-monitoring/def/core/datumASD&amp;#34;
+  },
+  &amp;#34;label&amp;#34;: &amp;#34;RIVER DIKLER AT BOURTON ON THE WATER - level-stage-i-15_min-mASD&amp;#34;,
+[…]&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Stations:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ kcat -q -b $CNFL_KAFKA_BROKER \
+    -X security.protocol=sasl_ssl -X sasl.mechanisms=PLAIN \
+    -X sasl.username=$CNFL_KC_API_KEY -X sasl.password=$CNFL_KC_API_SECRET \
+    -s avro -r https://$CNFL_SR_API_KEY:$CNFL_SR_API_SECRET@$CNFL_SR_HOST \
+    -C -t flood-monitoring-stations -c1 | jq &amp;#39;.items[1]&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
+  &amp;#34;_40id&amp;#34;: &amp;#34;http://environment.data.gov.uk/flood-monitoring/id/stations/E2043&amp;#34;,
+  &amp;#34;RLOIid&amp;#34;: {
+    &amp;#34;string&amp;#34;: &amp;#34;6022&amp;#34;
+  },
+  &amp;#34;catchmentName&amp;#34;: {
+    &amp;#34;string&amp;#34;: &amp;#34;Welland&amp;#34;
+  },
+  &amp;#34;dateOpened&amp;#34;: {
+    &amp;#34;int&amp;#34;: 8035
+  },
+  &amp;#34;easting&amp;#34;: {
+    &amp;#34;string&amp;#34;: &amp;#34;528000&amp;#34;
+  },
+  &amp;#34;label&amp;#34;: &amp;#34;Surfleet Sluice&amp;#34;,
+[…]&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Readings:&lt;/p&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ kcat -q -b $CNFL_KAFKA_BROKER \
+    -X security.protocol=sasl_ssl -X sasl.mechanisms=PLAIN \
+    -X sasl.username=$CNFL_KC_API_KEY -X sasl.password=$CNFL_KC_API_SECRET \
+    -s avro -r https://$CNFL_SR_API_KEY:$CNFL_SR_API_SECRET@$CNFL_SR_HOST \
+    -C -t flood-monitoring-readings -c1 | jq &amp;#39;.items[1]&amp;#39;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;highlight&#34;&gt;&lt;code class=&#34;language-javascript&#34; data-lang=&#34;javascript&#34;&gt;{
+  &amp;#34;_40id&amp;#34;: &amp;#34;http://environment.data.gov.uk/flood-monitoring/data/readings/5312TH-level-stage-i-15_min-mASD/2025-02-21T13-45-00Z&amp;#34;,
+  &amp;#34;dateTime&amp;#34;: 1740145500000,
+  &amp;#34;measure&amp;#34;: &amp;#34;http://environment.data.gov.uk/flood-monitoring/id/measures/5312TH-level-stage-i-15_min-mASD&amp;#34;,
+  &amp;#34;value&amp;#34;: 22.664999999999999
+}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</description>
+    </item>
+    <item>
       <title>Why is kcat showing the wrong topics?</title>
       <link>https://rmoff.net/2025/03/13/why-is-kcat-showing-the-wrong-topics/</link>
       <pubDate>2025-03-13</pubDate>
@@ -3513,102 +4446,6 @@ We&amp;#39;ll catch this acronymn tho: FUBAR
                     not&amp;#39;.
  15:32  suggestion  &amp;#39;FUBAR&amp;#39; has no definition.      Microsoft.Acronyms&lt;/code&gt;&lt;/pre&gt;
 &lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Current 2024 - 5k Fun Run (or Walk)</title>
-      <link>https://rmoff.net/2024/09/02/current-2024-5k-fun-run-or-walk/</link>
-      <pubDate>2024-09-02</pubDate>
-      
-      <guid>https://rmoff.net/2024/09/02/current-2024-5k-fun-run-or-walk/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2024/09/t_current24-run.webp" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;At &lt;a href=&#34;https://current.confluent.io/&#34;&gt;Current 24&lt;/a&gt; a few of us will be going for an early run (or walk) on Tuesday morning. Everyone is very welcome!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Going out to stretch our legs before the conference starts has become a bit of a tradition now, starting back with &lt;a href=&#34;https://twitter.com/rmoff/status/1179047181891883008&#34;&gt;Kafka Summit SF 2019&lt;/a&gt;, skipping a few years for 🦠, and resuming with &lt;a href=&#34;https://twitter.com/rmoff/status/1518490053152026624&#34;&gt;Kafka Summit London 2022&lt;/a&gt;, &lt;a href=&#34;https://x.com/rmoff/status/1577271642119892994&#34;&gt;Current 2022&lt;/a&gt;, and &lt;a href=&#34;https://x.com/rmoff/status/1769996561440805312&#34;&gt;Kafka Summit London 2024&lt;/a&gt; earlier this year.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;We’re going to do the same thing again at Current 2024 in Austin!&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2024/09/austin-dawn.jpg&#34; alt=&#34;Austin in the dawn light&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;hr/&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_who_what_where_when&#34;&gt;Who? What? Where? When?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;Who&lt;/em&gt;:  Anyone who would like to is very welcome :)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;What&lt;/em&gt;: A 5k (3.1 miles) run or walk around the waterfront in Austin&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;
-&lt;/p&gt;&lt;div class=&#34;strava-embed-placeholder&#34; data-embed-type=&#34;route&#34; data-embed-id=&#34;3265727282680501586&#34; data-hide-elevation=&#34;true&#34; data-style=&#34;standard&#34; data-map-hash=&#34;13.16/30.25568/-97.74019&#34; data-from-embed=&#34;true&#34;&gt;&lt;/div&gt;&lt;script src=&#34;https://strava-embeds.com/embed.js&#34;&gt;&lt;/script&gt;
-&lt;p&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;Where&lt;/em&gt;: Starting from the &lt;a href=&#34;https://www.marriott.com/en-gb/hotels/travel/ausmd-austin-marriott-downtown&#34;&gt;Austin Marriott Downtown&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;When&lt;/em&gt;: &lt;strong&gt;Tuesday 17th September&lt;/strong&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;We’ll &lt;strong&gt;meet at 06:30&lt;/strong&gt; in the foyer of the &lt;a href=&#34;https://www.marriott.com/en-gb/hotels/travel/ausmd-austin-marriott-downtown&#34;&gt;Austin Marriott Downtown&lt;/a&gt; (just near the convention center). That’ll give us time to congregate and take some &lt;a href=&#34;https://twitter.com/search?q=%23streamingselfie%20%23kafkasummit%20since%3A2022-04-20&amp;amp;src=typed_query&amp;amp;f=live&#34;&gt;&lt;code&gt;#streamingselfie&lt;/code&gt;&lt;/a&gt;s if you want them, before setting off at &lt;strong&gt;06:35 sharp&lt;/strong&gt; to make our way around the &lt;a href=&#34;https://www.strava.com/routes/3265727282680501586&#34;&gt;the 5k route&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Go at your own pace; this isn’t a race. You can run, or walk. Or skip, if you prefer. You can &lt;a href=&#34;https://www.strava.com/routes/3265727282680501586&#34;&gt;download the route&lt;/a&gt; to follow at your leisure. In fact, it’s a good idea to do so because this is not an organised event, so it’s your responsibility not to get lost :-D&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;At 6min/km it’ll take half an hour to get round the 5k route. That should give you plenty of time to then take some more &lt;a href=&#34;https://twitter.com/search?q=%23streamingselfie%20%23kafkasummit%20since%3A2022-04-20&amp;amp;src=typed_query&amp;amp;f=live&#34;&gt;&lt;code&gt;#streamingselfie&lt;/code&gt;&lt;/a&gt;s before heading back into the hotel for breakfast and ready for the &lt;strong&gt;start of the conference at 08:00&lt;/strong&gt; (&lt;a href=&#34;https://events.bizzabo.com/599116/agenda/session/1336760&#34;&gt;breakfast&lt;/a&gt; at 0800, &lt;a href=&#34;https://events.bizzabo.com/599116/agenda/session/1336742&#34;&gt;keynote&lt;/a&gt; at 0900).&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;
-&lt;iframe src=&#34;https://www.google.com/maps/d/u/0/embed?mid=1Ijdsn04Yk0nWXz0Tvp9BSQbwT7AjbRk&amp;amp;ehbc=2E312F&amp;amp;noprof=1&#34; width=&#34;640&#34; height=&#34;480&#34;&gt;&lt;/iframe&gt;
-&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_how_en_lightening&#34;&gt;How en-lightening! 🔦&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;You might consider bringing a head torch—a few bits of the route down by the river are unlit, and &lt;a href=&#34;https://www.timeanddate.com/sun/usa/austin&#34;&gt;sunrise isn’t until 07:08&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_did_someone_say_swag&#34;&gt;Did someone say swag? ✨&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Courtesy of &lt;a href=&#34;https://decodable.co&#34;&gt;Decodable&lt;/a&gt;, there’ll be some exclusive, never-to-be-repeated (until next time) Current 5k run/walk stickers for anyone who takes part.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;imageblock&#34;&gt;
-&lt;div class=&#34;content&#34;&gt;
-&lt;img src=&#34;https://rmoff.net/images/2024/09/current24-5k-sticker.webp&#34; alt=&#34;Current 2024 5k run/walk sticker&#34;/&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Swing by our booth #204 in the expo hall to collect yours :)&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_cool_where_do_i_register&#34;&gt;Cool, where do I register?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Register at &lt;code&gt;/dev/null&lt;/code&gt; ;-)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is an entirely unofficial, barely-organised, thing. Turn up and run, if you want. Don’t, if you don’t. Fully intend to but sleep in from the jetlag and miss it, that’s completely fine 😁&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
