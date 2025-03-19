@@ -5,9 +5,116 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2025-03-14</lastBuildDate>
+    <lastBuildDate>2025-03-19</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Exporting Notebooks from DuckDB UI</title>
+      <link>https://rmoff.net/2025/03/19/exporting-notebooks-from-duckdb-ui/</link>
+      <pubDate>2025-03-19</pubDate>
+      
+      <guid>https://rmoff.net/2025/03/19/exporting-notebooks-from-duckdb-ui/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2025/03/t_IMG_8368.webp" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;DuckDB added a very cool &lt;a href=&#34;https://duckdb.org/2025/03/12/duckdb-ui.html&#34;&gt;UI&lt;/a&gt; last week and &lt;a href=&#34;https://rmoff.net/2025/03/14/kicking-the-tyres-on-the-new-duckdb-ui/&#34;&gt;I’ve been using it&lt;/a&gt; as my primary interface to DuckDB since.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;One thing that bothered me was that the SQL I was writing in the notebooks wasn’t exportable.
+Since DuckDB uses DuckDB in the background for storing notebooks, getting the SQL out is easy enough.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Here’s a rough-and-readyscript that will dump it out to a series of &lt;code&gt;.sql&lt;/code&gt; files, one per notebook.
+It &lt;em&gt;only&lt;/em&gt; exports the SQL; any other data like &lt;code&gt;useDatabase&lt;/code&gt; and &lt;code&gt;isActive&lt;/code&gt; is not included.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;#!/bin/bash&lt;/span&gt;
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;#&lt;/span&gt;
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# @rmoff / 2025-03-19&lt;/span&gt;
+
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Create a temporary file for the JSON output&lt;/span&gt;
+&lt;span style=&#34;color: #008080&#34;&gt;temp_file&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$(&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;mktemp&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;)&lt;/span&gt;
+
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Run the DuckDB query and save the output to the temp file&lt;/span&gt;
+duckdb &lt;span style=&#34;color: #000080&#34;&gt;-json&lt;/span&gt; ~/.duckdb/extension_data/ui/ui.db &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        &lt;span style=&#34;color: #000080&#34;&gt;-c&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;select title,json from ui.main.notebook_versions where expires is null&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;\&lt;/span&gt;
+        | &lt;span style=&#34;color: #0086B3&#34;&gt;grep&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-v&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;^Run Time&amp;#34;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$temp_file&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Create a directory with timestamp for the output&lt;/span&gt;
+&lt;span style=&#34;color: #008080&#34;&gt;timestamp&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$(&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;date&lt;/span&gt; +&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;%Y%m%d_%H%M%S&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color: #008080&#34;&gt;output_dir&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;DuckDB_notebooks_&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;timestamp&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #0086B3&#34;&gt;mkdir&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-p&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$output_dir&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Process the JSON output&lt;/span&gt;
+jq &lt;span style=&#34;color: #000080&#34;&gt;-c&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.[]&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$temp_file&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;while &lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;read&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-r&lt;/span&gt; item&lt;span style=&#34;background-color: #f8f8f8&#34;&gt;;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;do&lt;/span&gt;
+
+    &lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Extract title&lt;/span&gt;
+    &lt;span style=&#34;color: #008080&#34;&gt;title&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$(&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$item&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; | jq &lt;span style=&#34;color: #000080&#34;&gt;-r&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.title&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;)&lt;/span&gt;
+
+    &lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Create a sanitized filename from the title&lt;/span&gt;
+    &lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Replace spaces with underscores and remove special characters&lt;/span&gt;
+    &lt;span style=&#34;color: #008080&#34;&gt;filename&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;$(&lt;/span&gt;&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$title&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; | &lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39; &amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;_&amp;#39;&lt;/span&gt; | &lt;span style=&#34;color: #0086B3&#34;&gt;tr&lt;/span&gt; &lt;span style=&#34;color: #000080&#34;&gt;-cd&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;a-zA-Z0-9_-&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;)&lt;/span&gt;.sql
+
+    &lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Extract all queries from the notebook JSON and save them to the file&lt;/span&gt;
+    &lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Credit to Hayley Jane Wakenshaw for the Duck ASCII art :)&lt;/span&gt;
+    &lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$item&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt; | jq &lt;span style=&#34;color: #000080&#34;&gt;-r&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.json&amp;#39;&lt;/span&gt; | jq &lt;span style=&#34;color: #000080&#34;&gt;-r&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#39;.cells[] | &amp;#34;\n--           _      _      _\n--         &amp;gt;(.)__ &amp;lt;(.)__ =(.)__\n--          (___/  (___/  (___/ \n-- °º¤ø,¸¸,ø¤º°`°º¤ø,¸,ø¤°º¤ø,¸¸,ø¤º°`°º¤ø,¸\n\n&amp;#34; + .query&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$output_dir&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;filename&lt;/span&gt;&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+
+    &lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;Created file: &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$filename&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;done&lt;/span&gt;
+
+&lt;span style=&#34;color: #999988;font-style: italic&#34;&gt;# Clean up the temporary file&lt;/span&gt;
+&lt;span style=&#34;color: #0086B3&#34;&gt;rm&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$temp_file&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&lt;/span&gt;
+
+&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;All notebook queries have been saved to individual files in folder &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$output_dir&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;.&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #0086B3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;To create a new gist run: gh gist create --desc &lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;DuckDB UI Notebook export &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$timestamp&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;\&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #008080&#34;&gt;$output_dir&lt;/span&gt;&lt;span style=&#34;color: #d14&#34;&gt;/*.sql&amp;#34;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In use it looks like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;Created file: Load_historical_data.sql
+Created file: Load_latest_data.sql
+Created file: Buildadd_to_main_tables.sql
+Created file: Join_and_Analyse.sql
+Created file: Untitled_Notebook.sql
+All notebook queries have been saved to individual files &lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;in &lt;/span&gt;folder DuckDB_notebooks_20250319_170611.
+
+To create a new gist run: gh gist create DuckDB_notebooks_20250319_170611/&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;.sql&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I use it to then upload the SQL to gist (the &lt;a href=&#34;https://cli.github.com/&#34;&gt;GitHub CLI tool &lt;code&gt;gh&lt;/code&gt;&lt;/a&gt; is awesome, install it if you haven’t already!) with:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;background-color: #f8f8f8&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;❯ gh gist create &lt;span style=&#34;color: #000080&#34;&gt;--desc&lt;/span&gt; &lt;span style=&#34;color: #d14&#34;&gt;&amp;#34;DuckDB UI Notebook export 20250319_170851&amp;#34;&lt;/span&gt; DuckDB_notebooks_20250319_170851/&lt;span style=&#34;color: #000000;font-weight: bold&#34;&gt;*&lt;/span&gt;.sql
+- Creating gist with multiple files
+✓ Created secret gist Buildadd_to_main_tables.sql
+https://gist.github.com/rmoff/7c681529754a74d7e8f6bff31e069d5b&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/03/duckdb-ui-gist.webp&#34; alt=&#34;DuckDB UI Notebook export to gist&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;hr/&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+For other DuckDB UI notebook export ideas, see &lt;a href=&#34;https://github.com/duckdb/duckdb-ui/issues/60&#34;&gt;here&lt;/a&gt; and &lt;a href=&#34;https://www.linkedin.com/posts/jimmy-jensen_the-new-duckdb-ui-has-been-a-blast-to-work-activity-7306638115887063040-fNuy/?rcm=ACoAACxkZnABX3mxGA-OnJm4UtaYTTOWIqL3sUw&#34;&gt;here&lt;/a&gt;
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;</description>
+    </item>
     <item>
       <title>Kicking the tyres on the new DuckDB UI</title>
       <link>https://rmoff.net/2025/03/14/kicking-the-tyres-on-the-new-duckdb-ui/</link>
@@ -4140,75 +4247,6 @@ In my example X is the same value because it’s the JOIN predicate, but Z could
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Interesting links - February 2025</title>
-      <link>https://rmoff.net/2025/02/03/interesting-links-february-2025/</link>
-      <pubDate>2025-02-03</pubDate>
-      
-      <guid>https://rmoff.net/2025/02/03/interesting-links-february-2025/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2025/02/t_IMG_7777.webp" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Here’s a bunch of interesting links and articles about data that I’ve come across recently.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Martin Kleppmanm’s seminal talk from 2015, &lt;a href=&#34;https://martin.kleppmann.com/2015/11/05/database-inside-out-at-oredev.html&#34;&gt;Turning the database inside out&lt;/a&gt; came up on my feed recently, and is still such an important work.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Going back even further, check out the &lt;a href=&#34;https://dl.acm.org/doi/pdf/10.1145/800296.811515&#34;&gt;original SQL paper, from 1974&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Not only do I love the clever title, but &lt;a href=&#34;https://www.infoq.com/articles/rethinking-medallion-architecture/&#34;&gt;The End of the Bronze Age: Rethinking the Medallion Architecture&lt;/a&gt; is also a really good explanation of how &amp;#34;shift left&amp;#34; applies in the data world. If you prefer video there’s &lt;a href=&#34;https://www.youtube.com/watch?v=FiZmyl1Npg0&#34;&gt;one of those too&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;An &lt;a href=&#34;https://www.streamingdata.tech/p/interview-with-nikhil-benesch-materialize&#34;&gt;interesting interview&lt;/a&gt; from a while back with Materialize’s CTO, Nikhil Benesch.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;A useful look at the practicalities of &lt;a href=&#34;https://www.confluent.io/en-gb/blog/implementing-streaming-data-products/&#34;&gt;Data Products, Data Contracts, and Change Data Capture&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;I recently came across an interesting project from the European Union called &lt;a href=&#34;https://big-data-test-infrastructure.ec.europa.eu/index_en&#34;&gt;Big Data Test Infrastructure&lt;/a&gt;. Despite the slightyly old-fashioned name, they’re doing some cool stuff with data and public services, such as this one looking at  &lt;a href=&#34;https://big-data-test-infrastructure.ec.europa.eu/whats-new/news/rooting-data-revolutionising-urban-tree-health-monitoring-bochum-germany-2024-11-27_en&#34;&gt;tree health in a town in Germany&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;DataDog have their own proprietary &lt;a href=&#34;https://www.datadoghq.com/blog/engineering/introducing-husky/&#34;&gt;event storage system called Husky&lt;/a&gt;. They’ve previously shared details of the &lt;a href=&#34;https://www.datadoghq.com/blog/engineering/husky-deep-dive/&#34;&gt;ingestion process&lt;/a&gt;, and have recently posted how &lt;a href=&#34;https://www.datadoghq.com/blog/engineering/husky-storage-compaction/&#34;&gt;data compaction at scale is handled&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Two Apache projects were &lt;a href=&#34;https://news.apache.org/foundation/entry/the-apache-software-foundation-announces-new-top-level-projects&#34;&gt;recently announced&lt;/a&gt; as graduating to top-level projects, including &lt;a href=&#34;https://streampark.apache.org/&#34;&gt;Apache StreamPark&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Excellent analysis from Jack Vanlightly looking at &lt;a href=&#34;https://jack-vanlightly.com/blog/2025/2/3/why-snowflake-wants-streaming&#34;&gt;Why Snowflake wants streaming&lt;/a&gt; (specifically, Redpanda, about whom acquisition rumours are swirling).&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;A new Kafka TUI called &lt;a href=&#34;https://github.com/dhth/kplay&#34;&gt;kplay&lt;/a&gt;, and GUI called &lt;a href=&#34;https://kafkio.com/features&#34;&gt;KafkIO&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;What better way to learn the low-level details of Kafka than &lt;a href=&#34;https://www.reddit.com/r/apachekafka/comments/1hnkrzi/monkafka_building_a_kafka_broker_from_scratch/&#34;&gt;writing your own broker&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Confluent recently launched &lt;a href=&#34;https://marketplace.visualstudio.com/items?itemName=confluentinc.vscode-confluent&#34;&gt;a VSCode plugin&lt;/a&gt; which now &lt;a href=&#34;https://old.reddit.com/r/apachekafka/comments/1hfr68m/the_confluent_extension_for_vs_code_now_supports/&#34;&gt;supports Kafka clusters too&lt;/a&gt; (not just Confluent Cloud).&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;A fantastic deep-dive blog on &lt;a href=&#34;https://www.warpstream.com/blog/kafka-transactions-explained-twice&#34;&gt;Kafka transactions&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;A nicely explained and illustrated guide to &lt;a href=&#34;https://www.responsive.dev/blog/windows-and-time-kafka-streams-101&#34;&gt;windowing in Kafka Streams&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Mickael Maison has now been writing the &lt;a href=&#34;https://developers.redhat.com/blog/2025/02/03/kafka-monthly-digest-january-2025&#34;&gt;Kafka Monthly Digest&lt;/a&gt; for an impressive seven years!&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/hyprstream/hyprstream&#34;&gt;Hyprstream&lt;/a&gt; is a built on Apache Arrow Flight and DuckDB for &amp;#34;real-time data ingestion, windowed aggregation, caching, and serving&amp;#34;. Read the associated paper &lt;a href=&#34;https://github.com/hyprstream/hyprstream?tab=readme-ov-file&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://renegadeotter.com/2023/11/12/your-database-skills-are-not-good-to-have.html&#34;&gt;Your Database Skills Are Not &amp;#39;Good to Have&amp;#39;&lt;/a&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Uber run 2,300 MySQL clusters— &lt;a href=&#34;https://www.uber.com/en-GB/blog/mysql-at-uber/&#34;&gt;this post&lt;/a&gt; has details of how they do it.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
 &lt;/div&gt;</description>
     </item>
     
