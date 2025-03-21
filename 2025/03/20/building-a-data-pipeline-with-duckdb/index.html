@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Building a data pipeline with DuckDB</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2025/03/20/building-a-data-pipeline-with-duckdb/">
+		
+		
+		
+		
+		
+		<meta property="og:title" content="Building a data pipeline with DuckDB" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2025/03/overview.excalidraw.svg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2025/03/20/building-a-data-pipeline-with-duckdb/" />
+		<meta property="og:site_name" content="Building a data pipeline with DuckDB" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2025/03/overview.excalidraw.svg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://data-folks.masto.host/@rmoff"><i class="fab fa-mastodon"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fab fa-twitter-square"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">Building a data pipeline with DuckDB</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2025-03-20T10:01:56Z">Mar 20, 2025</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/duckdb" class="no-underline category near-white dim">DuckDB</a>, <a href="https://rmoff.net/categories/etl" class="no-underline category near-white dim">ETL</a>, <a href="https://rmoff.net/categories/data-engineering" class="no-underline category near-white dim">Data Engineering</a>
+								<span class="display-print">at https://rmoff.net/2025/03/20/building-a-data-pipeline-with-duckdb/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<article class="center bg-white br-3 pv1 ph4 lh-copy f5 nested-links mw8">
+	<div class="paragraph">
+<p>In this blog post I’m going to explore how as a data engineer in the field today I might go about putting together a rudimentary data pipeline.
+I’ll take some operational data, and wrangle it into a form that makes it easily pliable for analytics work.</p>
+</div>
+<div class="paragraph">
+<p>After a somewhat fevered and nightmarish period during which people walked around declaring &#34;Schema on Read&#34; was the future, that &#34;Data is the new oil&#34;, and &#34;Look at the size of my big data&#34;, the path that is history in IT is somewhat coming back on itself to a more sensible approach to things.</p>
+</div>
+<div class="paragraph">
+<p>As they say:</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>What’s old is new</p>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>This is good news for me, because I am old and what I knew then is &#39;new&#39; now ;)</p>
+</div>
+<div class="sect1">
+<h2 id="_overview">Overview&nbsp;<a class="headline-hash" href="#_overview">🔗</a> </h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_the_data">The Data&nbsp;<a class="headline-hash" href="#_the_data">🔗</a> </h3>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+this uses Environment Agency flood and river level data from the <a href="https://environment.data.gov.uk/flood-monitoring/doc/reference">real-time data API</a> (Beta)
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>If you’ve been following this blog closely you’ll have seen some of my noodlings around with this data already.
+I wrote about <a href="/2025/02/28/exploring-uk-environment-agency-data-in-duckdb-and-rill/">exploring it with DuckDB and Rill</a>, using it as an excuse to <a href="/2025/03/14/kicking-the-tyres-on-the-new-duckdb-ui/">try out the new DuckDB UI</a>, as well as <a href="/2025/03/13/creating-an-http-source-connector-on-confluent-cloud-from-the-cli/">loading it into Kafka</a> and figuring out what <a href="/2025/03/10/data-wrangling-with-flink-sql/">working with it in Flink SQL</a> would look like.</p>
+</div>
+<div class="paragraph">
+<p>At the heart of the data are <strong>readings</strong>, providing information about <strong>measures</strong> such as rainfall and river levels.
+These are reported from a variety of <strong>stations</strong> around the UK.</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/data-model.excalidraw.svg" alt="data model.excalidraw"/></span></p>
+</div>
+<div class="paragraph">
+<p>The data is available on <a href="https://environment.data.gov.uk/flood-monitoring/doc/reference#availability">a public REST API</a> (try it out <a href="https://environment.data.gov.uk/flood-monitoring/id/stations/L0607">here</a> to see the current river level at one of the stations in Sheffield).</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_the_plan">The Plan&nbsp;<a class="headline-hash" href="#_the_plan">🔗</a> </h3>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/overview.excalidraw.svg" alt="overview.excalidraw"/></span></p>
+</div>
+<div class="paragraph">
+<p>I’m going to make heavy use of DuckDB for this project.
+It can read data from REST APIs, it can process data, and it can store data.
+What’s more, it can be queried with various visualisation tools including <a href="https://rilldata.com/">Rill Data</a>, <a href="https://superset.apache.org/">Superset</a>, and <a href="https://metabase.com">Metabase</a>, as we’ll see later.</p>
+</div>
+<div class="paragraph">
+<p>We’ll pull the data in using DuckDB’s <a href="https://duckdb.org/docs/stable/data/json/loading_json.html#the-read_json-function"><code>read_json</code></a> and <a href="https://duckdb.org/docs/stable/extensions/httpfs/overview"><code>httpfs</code></a> core extension.</p>
+</div>
+<div class="paragraph">
+<p>Once loaded, the dimension data will be brute-force rebuilt based on the latest values.
+For those who like this kind of thing (and who doesn’t), this is in effect Slowly-Changing Dimension (SCD) type 1.
+With SCD Type 1, no history is retained.
+This means that if a measure or station is removed, associated readings previously recorded will not have a match on the corresponding dimension table.
+If it’s updated, historical readings will be shown with the dimension data as-is now, not as-was then.</p>
+</div>
+<div class="paragraph">
+<p>The <code>readings</code> fact data we’ll collect in a fact table that will mostly be appended to with each incremental load.
+It’s not <em>entirely</em> that simple though:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Some stations may lag in reporting their data, so we might pull duplicates (i.e. the reading for the last time period when it did report)</p>
+</li>
+<li>
+<p>Some stations may batch their reporting, so we need to handle polling back over a period of time and dealing with the resulting duplicates for readings that had been reported</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>In addition, historical data is available and we want to be able to include that too.</p>
+</div>
+<div class="paragraph">
+<p>Once we’ve got our fact and dimension data sorted, we’ll join it into a denormalised table that we can build analytics against.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_the_environment">The Environment&nbsp;<a class="headline-hash" href="#_the_environment">🔗</a> </h3>
+<div class="paragraph">
+<p>I’m running this all locally on my Mac.
+The first step is to install DuckDB and a few other useful tools:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">brew <span style="color: #0086B3">install </span>duckdb httpie jq</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then fire up DuckDB with its notebook-like UI (you don’t <em>have</em> to use the UI; you can use whatever interface you want):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">duckdb env-agency.duckdb <span style="color: #000080">-ui</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_extract_with_just_a_little_bit_of_transform">Extract (with just a little bit of transform)&nbsp;<a class="headline-hash" href="#_extract_with_just_a_little_bit_of_transform">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The basic ingest looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">readings_stg</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">read_json</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;https://environment.data.gov.uk/flood-monitoring/data/readings?latest&#39;</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>DuckDB automagically determines the schema of the table.
+We’re going to do one bit of processing at this stage too.</p>
+</div>
+<div class="paragraph">
+<p>By default all the API calls return <a href="https://environment.data.gov.uk/flood-monitoring/doc/reference#api-requests">a payload made up of metadata and then an array of the actual data</a>.
+I decided to explode out the array at this point of ingest just to make things a bit easier.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+At this point I’m throwing away the <code>@context</code> and <code>meta</code> data elements; you may decide you want to keep them.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">readings_stg</span> <span style="color: #000000;font-weight: bold">AS</span>
+  <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">src</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+                <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">read_json</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;https://environment.data.gov.uk/flood-monitoring/data/readings?latest&#39;</span><span style="background-color: #f8f8f8">))</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">u</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">(</span>
+        <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">UNNEST</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">items</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">u</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">src</span><span style="background-color: #f8f8f8">);</span>
+
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">measures_stg</span> <span style="color: #000000;font-weight: bold">AS</span>
+  <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">src</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+                <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">read_json</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;https://environment.data.gov.uk/flood-monitoring/id/measures&#39;</span><span style="background-color: #f8f8f8">))</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">u</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">(</span>
+        <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">UNNEST</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">items</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">u</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">src</span><span style="background-color: #f8f8f8">);</span>
+
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">stations_stg</span> <span style="color: #000000;font-weight: bold">AS</span>
+  <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">src</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+                <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">read_json</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;https://environment.data.gov.uk/flood-monitoring/id/stations&#39;</span><span style="background-color: #f8f8f8">))</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">u</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">(</span>
+        <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">UNNEST</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">items</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">u</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">src</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s see what data we’ve pulled in:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #d14">&#39;readings_stg&#39;</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #000000;font-weight: bold">table_name</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">COUNT</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">as</span> <span style="background-color: #f8f8f8">row_ct</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">min</span><span style="background-color: #f8f8f8">(</span><span style="color: #0086B3">dateTime</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">as</span> <span style="background-color: #f8f8f8">min_dateTime</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">max</span><span style="background-color: #f8f8f8">(</span><span style="color: #0086B3">dateTime</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">as</span> <span style="background-color: #f8f8f8">max_dateTime</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_stg</span>
+<span style="color: #000000;font-weight: bold">UNION</span> <span style="color: #000000;font-weight: bold">ALL</span>
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #d14">&#39;measures_stg&#39;</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #000000;font-weight: bold">table_name</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">COUNT</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">as</span> <span style="background-color: #f8f8f8">row_ct</span><span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">NULL</span><span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">NULL</span> <span style="color: #000000;font-weight: bold">from</span> <span style="background-color: #f8f8f8">measures_stg</span>
+<span style="color: #000000;font-weight: bold">UNION</span> <span style="color: #000000;font-weight: bold">ALL</span>
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #d14">&#39;stations_stg&#39;</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #000000;font-weight: bold">table_name</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">COUNT</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">)</span> <span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">NULL</span><span style="background-color: #f8f8f8">,</span><span style="color: #000000;font-weight: bold">NULL</span> <span style="color: #000000;font-weight: bold">from</span> <span style="background-color: #f8f8f8">stations_stg</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>table_name	    row_ct	min_dateTime	    max_dateTime
+readings_stg	5272	2025-02-21 13:45:00	2025-03-20 13:25:10
+measures_stg	6638
+stations_stg	5400</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The latest <code>dateTime</code> value looks right (<em>it’s 2025-03-20 13:42:45 as I write this</em>) but why is the minimum nearly a month ago?
+This is where the DuckDB UI’s data viz comes in useful:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03//dateTime_viz.png" alt="dateTime viz"/></span></p>
+</div>
+<div class="paragraph">
+<p>What this shows us is that almost all the data <em>is</em> for the latest timestamp, with just a handful of readings for other dates.</p>
+</div>
+<div class="paragraph">
+<p>We can prove this out with a SQL query too:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #0086B3">dateTime</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">COUNT</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">reading_count</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_stg</span>
+    <span style="color: #000000;font-weight: bold">GROUP</span> <span style="color: #000000;font-weight: bold">BY</span> <span style="color: #0086B3">dateTime</span>
+    <span style="color: #000000;font-weight: bold">ORDER</span> <span style="color: #000000;font-weight: bold">BY</span> <span style="color: #009999">2</span> <span style="color: #000000;font-weight: bold">desc</span><span style="background-color: #f8f8f8">,</span> <span style="color: #009999">1</span> <span style="color: #000000;font-weight: bold">desc</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/dateTime_dist.png" alt="dateTime dist"/></span></p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_transform">Transform&nbsp;<a class="headline-hash" href="#_transform">🔗</a> </h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_keys">Keys&nbsp;<a class="headline-hash" href="#_keys">🔗</a> </h3>
+<div class="paragraph">
+<p>The staging tables have no keys defined, because YOLO right?
+Well no.
+Staging is where we bring in the source data, warts and all.
+A station <em>shouldn’t have</em> more than one instance, but who says that’s the case?</p>
+</div>
+<div class="paragraph">
+<p>Rather than failing the ingest because of a logical data error, it’s our job to work with what we’ve got.
+That means coding defensively and ensuring that whilst we’ll accept anything into the staging area, we don’t blindly propagate crap through the rest of the pipeline.</p>
+</div>
+<div class="paragraph">
+<p>One of the ways to enforce this is constraints, of which primary keys are an example.</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/relationships.excalidraw.svg" alt="relationships.excalidraw"/></span></p>
+</div>
+<div class="sect3">
+<h4 id="_readingsmeasures">Readings→Measures&nbsp;<a class="headline-hash" href="#_readingsmeasures">🔗</a> </h4>
+<div class="paragraph">
+<p>Unchanged, the data in <code>readings</code> relates to <code>measures</code> on the <code>readings.measure</code> column:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>http://environment.data.gov.uk/flood-monitoring/id/measures/5312TH-level-stage-i-15_min-mASD</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>On <code>measures</code> the <code>@id</code> column matches this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>http://environment.data.gov.uk/flood-monitoring/id/measures/5312TH-level-stage-i-15_min-mASD</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But this is duplicated in the <code>notation</code> column, minus the <code>http://environment.data.gov.uk/flood-monitoring/id/measures/</code> URL prefix:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>5312TH-level-stage-i-15_min-mASD</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We’ll pre-process the <code>readings.measure</code> column to strip this prefix to make the join easier (and simpler to debug, since you’re not wading through columns of long text).</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_measuresstations">Measures→Stations&nbsp;<a class="headline-hash" href="#_measuresstations">🔗</a> </h4>
+<div class="paragraph">
+<p>The station for which a reading was taken is found via the measure, since measures are unique to a station.</p>
+</div>
+<div class="paragraph">
+<p>On <code>measures</code> the <code>station</code> column is the foreign key:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>http://environment.data.gov.uk/flood-monitoring/id/stations/SP50_72</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Again, the URL prefix (<code>http://environment.data.gov.uk/flood-monitoring/id/stations/</code>) is repeated and we’ll strip that out.</p>
+</div>
+<div class="paragraph">
+<p>One thing that caught me out here is that the <code>station</code> (minus the URL prefix) and the <code>stationReference</code> are almost always the same.</p>
+</div>
+<div class="paragraph">
+<p><em>Almost always.</em></p>
+</div>
+<div class="paragraph">
+<p>I spent a bunch of time chasing down duplicates after the subsequent join to the fact table resulted in a fan-out, because <code>stationReference</code> <em>isn’t unique</em>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">stationReference</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">station</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">measures</span>
+    <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">station</span><span style="color: #000000;font-weight: bold">!=</span><span style="background-color: #f8f8f8">stationReference</span>
+    <span style="color: #000000;font-weight: bold">ORDER</span> <span style="color: #000000;font-weight: bold">BY</span> <span style="background-color: #f8f8f8">stationReference</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>stationReference	station
+4063TH	            4063TH-southern
+4063TH	            4063TH-thames
+E22300	            E22300-anglian
+E22300	            E22300-southern
+E22300	            E22300-southern
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>26 rows out of 6612…enough to cause plenty of trouble when I made assumptions about the data I was eyeballing and missed the 0.4% exceptions…</p>
+</div>
+<div class="paragraph">
+<p>It does state it clearly in the API doc; <code>station</code> is the foreign key, not <code>stationReference</code>.
+RTFM, always ;)</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_dimension_tables">Dimension tables&nbsp;<a class="headline-hash" href="#_dimension_tables">🔗</a> </h3>
+<div class="paragraph">
+<p>Building the dimension tables is simple, if crude, enough.
+With a <code>CREATE OR REPLACE</code> we tell DuckDB to go ahead and create the table, and if it exists already, nuke it and create a fresh version.</p>
+</div>
+<div class="paragraph">
+<p>The transformation we’ll do is pretty light.</p>
+</div>
+<div class="sect3">
+<h4 id="_measures">Measures&nbsp;<a class="headline-hash" href="#_measures">🔗</a> </h4>
+<div class="paragraph">
+<p>We’re going to drop a couple of fields:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>@id</code> we don’t need</p>
+</li>
+<li>
+<p><code>latestReading</code> holds fact data that we’re getting from elsewhere, so no point duplicating it here</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>We’ll also transform the foreign key to strip the URL prefix making it easier to work with.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">measures</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+            <span style="background-color: #f8f8f8">EXCLUDE</span> <span style="background-color: #f8f8f8">(</span><span style="color: #008080">&#34;@id&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">latestReading</span><span style="background-color: #f8f8f8">)</span>
+            <span style="color: #000000;font-weight: bold">REPLACE</span><span style="background-color: #f8f8f8">(</span>
+                <span style="background-color: #f8f8f8">REGEXP_REPLACE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">station</span><span style="background-color: #f8f8f8">,</span>
+                        <span style="color: #d14">&#39;http://environment</span><span style="color: #d14">\.</span><span style="color: #d14">data</span><span style="color: #d14">\.</span><span style="color: #d14">gov</span><span style="color: #d14">\.</span><span style="color: #d14">uk/flood-monitoring/id/stations/&#39;</span><span style="background-color: #f8f8f8">,</span>
+                        <span style="color: #d14">&#39;&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">station</span>
+            <span style="background-color: #f8f8f8">)</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">measures_stg</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is using a couple of my favourite recent discoveries in DuckDB—the <a href="https://duckdb.org/docs/stable/sql/expressions/star.html#exclude-clause"><code>EXCLUDE</code></a> and <a href="https://duckdb.org/docs/stable/sql/expressions/star.html#replace-clause"><code>REPLACE</code></a> clauses.</p>
+</div>
+<div class="paragraph">
+<p>With <code>EXCLUDE</code> we’re taking advantage of <code>SELECT *</code> to bring in all columns from the source table—which saves typing, but also means new columns added to the source will propagate automagically—but <em>with the exception of</em> ones that we don’t want.</p>
+</div>
+<div class="paragraph">
+<p>The <code>REPLACE</code> clause is a really elegant way of providing a <em>different version of the same column</em>.
+Since we want to retain the <code>station</code> column but just trim the prefix, this is a great way to do it without moving its position in the column list.
+The other option would have been to <code>EXCLUDE</code> it too, and then add it on to the column list.</p>
+</div>
+<div class="paragraph">
+<p>With the table created let’s define the primary key as discussion above:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">measures</span>
+    <span style="color: #000000;font-weight: bold">ADD</span> <span style="color: #000000;font-weight: bold">CONSTRAINT</span> <span style="background-color: #f8f8f8">measures_pk</span> <span style="color: #000000;font-weight: bold">PRIMARY</span> <span style="color: #000000;font-weight: bold">KEY</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">notation</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_stations">Stations&nbsp;<a class="headline-hash" href="#_stations">🔗</a> </h4>
+<div class="paragraph">
+<p>Very similar to the process above:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">stations</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="background-color: #f8f8f8">EXCLUDE</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">measures</span><span style="background-color: #f8f8f8">)</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">stations_stg</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">stations</span>
+    <span style="color: #000000;font-weight: bold">ADD</span> <span style="color: #000000;font-weight: bold">CONSTRAINT</span> <span style="background-color: #f8f8f8">stations_pk</span> <span style="color: #000000;font-weight: bold">PRIMARY</span> <span style="color: #000000;font-weight: bold">KEY</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">notation</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>One thing that you might also do is move the primary key (<code>notation</code>) to be the first column in the table.
+This is a habit I picked up years ago; I don’t know if it’s still common practice.
+To do it you’d <code>EXCLUDE</code> the field and manually prefix it to the <a href="https://duckdb.org/docs/stable/sql/expressions/star.html">star expression</a>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">stations</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">notation</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">*</span> <span style="background-color: #f8f8f8">EXCLUDE</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">measures</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">notation</span><span style="background-color: #f8f8f8">)</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">stations_stg</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">stations</span> <span style="color: #000000;font-weight: bold">ADD</span> <span style="color: #000000;font-weight: bold">CONSTRAINT</span> <span style="background-color: #f8f8f8">stations_pk</span> <span style="color: #000000;font-weight: bold">PRIMARY</span> <span style="color: #000000;font-weight: bold">KEY</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">notation</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>(If you do this, you’d want to logically do the same for the other tables&#39; PKs too).</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_fact_table">Fact table&nbsp;<a class="headline-hash" href="#_fact_table">🔗</a> </h3>
+<div class="paragraph">
+<p>This is where things get fun :)</p>
+</div>
+<div class="paragraph">
+<p>Because we’re going to be adding to the table with new data rather than replacing it, we can’t just <code>CREATE OR REPLACE</code> it each time.
+Therefore we’ll run the <code>CREATE</code> as a one-off:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">IF</span> <span style="color: #000000;font-weight: bold">NOT</span> <span style="color: #000000;font-weight: bold">EXISTS</span> <span style="background-color: #f8f8f8">readings</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="background-color: #f8f8f8">EXCLUDE</span> <span style="color: #008080">&#34;@id&#34;</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_stg</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="color: #000000;font-weight: bold">FALSE</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A few notes:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>IF NOT EXISTS</code> makes sure we don’t overwrite the table.
+We’d get the same effect if we just put <code>CREATE TABLE</code>, the only difference is the latter would fail if the table already exists, whilst <code>IF NOT EXISTS</code> causes it to exit silently.</p>
+</li>
+<li>
+<p>We’re going to <code>EXCLUDE</code> the <code>@id</code> column because we don’t need it</p>
+</li>
+<li>
+<p>This will only create the table using the schema projected by the <code>SELECT</code>; the <code>WHERE FALSE</code> means no rows will be selected.
+This is so that we decouple the table <em>creation</em> from its <em>population</em>.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Now we’ll add a primary key.
+The key here is the time of the reading (<code>dateTime</code>) plus the measure (<code>measure</code>).</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">readings</span>
+    <span style="color: #000000;font-weight: bold">ADD</span> <span style="color: #000000;font-weight: bold">CONSTRAINT</span> <span style="background-color: #f8f8f8">readings_pk</span> <span style="color: #000000;font-weight: bold">PRIMARY</span> <span style="color: #000000;font-weight: bold">KEY</span> <span style="background-color: #f8f8f8">(</span><span style="color: #0086B3">dateTime</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_populating_the_fact_table">Populating the fact table&nbsp;<a class="headline-hash" href="#_populating_the_fact_table">🔗</a> </h4>
+<div class="paragraph">
+<p>Our logic here is: &#34;<em>Add data if it’s new, don’t throw an error if it already exists&#34;</em>.
+Our primary key for this is the time of the reading and the measure.
+If we receive a duplicate we’re going to ignore it.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+We’re making a design choice here; in theory we could decide that a duplicate reading represents an update to the original (re-stating a fact that could have been wrong previously) and handle it as an <code>UPSERT</code> (i.e. <code>INSERT</code> if new, <code>UPDATE</code> if existing).
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>DuckDB has some very nice syntax available around the <code>INSERT INTO … SELECT FROM</code> pattern. To achieve what we want we use the self-documenting statement <a href="https://duckdb.org/docs/stable/sql/statements/insert#insert-or-ignore-into"><code>INSERT OR IGNORE</code></a>. This is a condensed version of the more verbose <code>INSERT INTO… SELECT FROM… ON CONFLICT DO NOTHING</code> syntax.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">IGNORE</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">readings</span>
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+        <span style="background-color: #f8f8f8">EXCLUDE</span> <span style="color: #008080">&#34;@id&#34;</span>
+        <span style="color: #000000;font-weight: bold">REPLACE</span><span style="background-color: #f8f8f8">(</span>
+            <span style="background-color: #f8f8f8">REGEXP_REPLACE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">,</span>
+            <span style="color: #d14">&#39;http://environment</span><span style="color: #d14">\.</span><span style="color: #d14">data</span><span style="color: #d14">\.</span><span style="color: #d14">gov</span><span style="color: #d14">\.</span><span style="color: #d14">uk/flood-monitoring/id/measures/&#39;</span><span style="background-color: #f8f8f8">,</span>
+            <span style="color: #d14">&#39;&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">)</span>
+<span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_stg</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We’re using the same <code>EXCLUDE</code> and <code>REPLACE</code> expressions as we did above; remove the <code>@id</code> column, and strip the URL prefix from the foreign key <code>measure</code>.</p>
+</div>
+<div class="paragraph">
+<p>The first time we run this we can see the number of INSERTS:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">changes</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">5272</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then we re-run it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">changes</span><span style="background-color: #f8f8f8">:</span>   <span style="color: #009999">0</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Since nothing changed in the staging table, this makes sense.
+Let’s load the staging table with the latest data again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">changes</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">4031</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_joining_the_data">Joining the data&nbsp;<a class="headline-hash" href="#_joining_the_data">🔗</a> </h3>
+<div class="paragraph">
+<p>Similar to the fact table above, we’re going to be incrementally loading this final, denormalised, table.
+I’m taking a slightly roundabout tack to do this here.</p>
+</div>
+<div class="paragraph">
+<p>First, I’ve defined a view which is the result of the join:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">VIEW</span> <span style="background-color: #f8f8f8">vw_readings_enriched</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span>  <span style="color: #008080">&#34;r_</span><span style="color: #d14">\0</span><span style="color: #008080">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">COLUMNS</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">),</span>
+            <span style="color: #008080">&#34;m_</span><span style="color: #d14">\0</span><span style="color: #008080">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">COLUMNS</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">),</span>
+            <span style="color: #008080">&#34;s_</span><span style="color: #d14">\0</span><span style="color: #008080">&#34;</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">COLUMNS</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">)</span>
+            <span style="color: #000000;font-weight: bold">FROM</span>
+            <span style="background-color: #f8f8f8">readings</span> <span style="background-color: #f8f8f8">r</span>
+            <span style="color: #000000;font-weight: bold">LEFT</span> <span style="color: #000000;font-weight: bold">JOIN</span> <span style="background-color: #f8f8f8">measures</span> <span style="background-color: #f8f8f8">m</span> <span style="color: #000000;font-weight: bold">ON</span> <span style="background-color: #f8f8f8">r</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">measure</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">notation</span>
+            <span style="color: #000000;font-weight: bold">LEFT</span> <span style="color: #000000;font-weight: bold">JOIN</span> <span style="background-color: #f8f8f8">stations</span> <span style="background-color: #f8f8f8">s</span> <span style="color: #000000;font-weight: bold">ON</span> <span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">station</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">notation</span></code></pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+See <a href="/2025/02/27/duckdb-tricks-renaming-fields-in-a-select-across-tables/">my earlier blog post</a> if you’re not familiar with the <code>COLUMNS</code> syntax
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>From the view I create the table’s schema (but don’t populate anything yet):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">IF</span> <span style="color: #000000;font-weight: bold">NOT</span> <span style="color: #000000;font-weight: bold">EXISTS</span> <span style="background-color: #f8f8f8">readings_enriched</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">vw_readings_enriched</span> <span style="color: #000000;font-weight: bold">LIMIT</span> <span style="color: #009999">0</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">readings_enriched</span>
+    <span style="color: #000000;font-weight: bold">ADD</span> <span style="color: #000000;font-weight: bold">CONSTRAINT</span> <span style="background-color: #f8f8f8">readings_enriched_pk</span> <span style="color: #000000;font-weight: bold">PRIMARY</span> <span style="color: #000000;font-weight: bold">KEY</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">r_dateTime</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">r_measure</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And now populate it in the same way as we did for the <code>readings</code> table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">IGNORE</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">readings_enriched</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">vw_readings_enriched</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_query_the_joined_data">Query the joined data&nbsp;<a class="headline-hash" href="#_query_the_joined_data">🔗</a> </h4>
+<div class="paragraph">
+<p>Now that we’ve got our joined data we can start to query and analyse it.
+Here’s the five most recent readings for all water level measurements on the River Wharfe:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">r_dateTime</span>
+		<span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">s_label</span>
+		<span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">r_value</span>
+<span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_enriched</span>
+<span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">s_rivername</span><span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;River Wharfe&#39;</span> <span style="color: #000000;font-weight: bold">and</span> <span style="background-color: #f8f8f8">m_parameterName</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">&#39;Water Level&#39;</span>
+<span style="color: #000000;font-weight: bold">ORDER</span> <span style="color: #000000;font-weight: bold">BY</span> <span style="background-color: #f8f8f8">r_dateTime</span> <span style="color: #000000;font-weight: bold">desc</span> <span style="color: #000000;font-weight: bold">LIMIT</span> <span style="color: #009999">5</span> <span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>┌─────────────────────┬──────────────────────────────────────┬─────────┐
+│     r_dateTime      │               s_label                │ r_value │
+│      timestamp      │                 json                 │ double  │
+├─────────────────────┼──────────────────────────────────────┼─────────┤
+│ 2025-03-19 15:00:00 │ &#34;Kettlewell&#34;                         │   0.171 │
+│ 2025-03-19 15:00:00 │ &#34;Cock Beck Sluices&#34;                  │   3.598 │
+│ 2025-03-19 15:00:00 │ &#34;Nun Appleton Fleet Pumping Station&#34; │   2.379 │
+│ 2025-03-19 15:00:00 │ &#34;Tadcaster&#34;                          │   0.227 │
+│ 2025-03-19 15:00:00 │ &#34;Netherside Hall&#34;                    │   0.319 │
+└─────────────────────┴──────────────────────────────────────┴─────────┘</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_historical_data">Historical data&nbsp;<a class="headline-hash" href="#_historical_data">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><a href="https://environment.data.gov.uk/flood-monitoring/doc/reference#readings">The <code>readings</code> API</a> includes the option for specifying a date range.
+However, there is a hard limit of 10000 rows, and a single time period’s readings for all stations is about 5000 rows, this doesn’t look like a viable option if we’re wanting to backfill data for all stations.</p>
+</div>
+<div class="paragraph">
+<p>Historic readings <a href="https://environment.data.gov.uk/flood-monitoring/doc/reference#historic-readings">are available</a>, although in CSV format rather than the JSON we’re used to.
+Nothing like real-world data engineering problems to keep us on our feet :)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #008080">$ </span>http https://environment.data.gov.uk/flood-monitoring/archive/readings-2025-03-18.csv |head <span style="color: #000080">-n2</span>
+dateTime,measure,value
+2025-03-18T00:00:00Z,http://environment.data.gov.uk/flood-monitoring/id/measures/531166-level-downstage-i-15_min-mAOD,49.362</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Fortunately, <a href="https://duckdb.org/docs/stable/data/csv/overview">DuckDB has us covered</a>, and handles it in its stride:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>🟡◗ SELECT * FROM &#39;https://environment.data.gov.uk/flood-monitoring/archive/readings-2025-03-18.csv&#39; LIMIT 1;
+┌─────────────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────┬─────────┐
+│      dateTime       │                                             measure                                              │  value  │
+│      timestamp      │                                             varchar                                              │ varchar │
+├─────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+│ 2025-03-18 00:00:00 │ http://environment.data.gov.uk/flood-monitoring/id/measures/531166-level-downstage-i-15_min-mAOD │ 49.362  │
+└─────────────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────┴─────────┘</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>…or <em>almost</em> in its stride—once I ran it on a full file I got this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">CSV</span> <span style="background-color: #f8f8f8">Error</span> <span style="color: #000000;font-weight: bold">on</span> <span style="background-color: #f8f8f8">Line</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">388909</span>
+<span style="background-color: #f8f8f8">Original</span> <span style="background-color: #f8f8f8">Line</span><span style="background-color: #f8f8f8">:</span>
+<span style="color: #009999">2025</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">03</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">17</span><span style="background-color: #f8f8f8">T22</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">30</span><span style="background-color: #f8f8f8">:</span><span style="color: #009999">00</span><span style="background-color: #f8f8f8">Z</span><span style="background-color: #f8f8f8">,</span><span style="background-color: #f8f8f8">http</span><span style="background-color: #f8f8f8">:</span><span style="color: #000000;font-weight: bold">//</span><span style="background-color: #f8f8f8">environment</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">data</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">gov</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">uk</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">flood</span><span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">monitoring</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">id</span><span style="color: #000000;font-weight: bold">/</span><span style="background-color: #f8f8f8">measures</span><span style="color: #000000;font-weight: bold">/</span><span style="color: #009999">690552</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #000000;font-weight: bold">level</span><span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">stage</span><span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">i</span><span style="color: #000000;font-weight: bold">-</span><span style="color: #009999">15</span><span style="background-color: #f8f8f8">_min</span><span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">m</span><span style="background-color: #f8f8f8">,</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">770</span><span style="color: #000000;font-weight: bold">|</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">688</span>
+<span style="background-color: #f8f8f8">Error</span> <span style="color: #000000;font-weight: bold">when</span> <span style="background-color: #f8f8f8">converting</span> <span style="color: #000000;font-weight: bold">column</span> <span style="color: #008080">&#34;value&#34;</span><span style="background-color: #f8f8f8">.</span> <span style="background-color: #f8f8f8">Could</span> <span style="color: #000000;font-weight: bold">not</span> <span style="color: #000000;font-weight: bold">convert</span> <span style="background-color: #f8f8f8">string</span> <span style="color: #008080">&#34;0.770|0.688&#34;</span> <span style="color: #000000;font-weight: bold">to</span> <span style="color: #d14">&#39;DOUBLE&#39;</span>
+
+<span style="color: #000000;font-weight: bold">Column</span> <span style="background-color: #f8f8f8">value</span> <span style="color: #000000;font-weight: bold">is</span> <span style="background-color: #f8f8f8">being</span> <span style="background-color: #f8f8f8">converted</span> <span style="color: #000000;font-weight: bold">as</span> <span style="color: #000000;font-weight: bold">type</span> <span style="color: #0086B3">DOUBLE</span>
+<span style="background-color: #f8f8f8">This</span> <span style="color: #000000;font-weight: bold">type</span> <span style="background-color: #f8f8f8">was</span> <span style="background-color: #f8f8f8">auto</span><span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">detected</span> <span style="color: #000000;font-weight: bold">from</span> <span style="background-color: #f8f8f8">the</span> <span style="background-color: #f8f8f8">CSV</span> <span style="background-color: #f8f8f8">file</span><span style="background-color: #f8f8f8">.</span>
+<span style="background-color: #f8f8f8">[</span><span style="color: #a61717;background-color: #e3d2d2">…</span><span style="background-color: #f8f8f8">]</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Bravo for such a verbose and useful error message.
+Not just &#34;there’s an error&#34;, or &#34;could not convert&#34;, but tells you where, shows you the line, makes it super-easy to understand the problem and what to do.</p>
+</div>
+<div class="paragraph">
+<p>What to do? Brush it under the carpet and pretend it didn’t happen!
+In other words, <code>ignore_errors=true</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">readings_historical</span> <span style="color: #000000;font-weight: bold">AS</span>
+  <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">read_csv</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;https://environment.data.gov.uk/flood-monitoring/archive/readings-2025-03-18.csv&#39;</span><span style="background-color: #f8f8f8">,</span>
+                    <span style="background-color: #f8f8f8">ignore_errors</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #000000;font-weight: bold">true</span><span style="background-color: #f8f8f8">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This loads all 476k rows of data for 18th March into a new table.
+Now we’ll add the previous days too—and head out to the shell to do it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">❯ duckdb env-agency.duckdb <span style="color: #000080">-c</span> <span style="color: #d14">&#34;INSERT INTO readings_historical SELECT * FROM read_csv(&#39;https://environment.data.gov.uk/flood-monitoring/archive/readings-2025-03-16.csv&#39;, ignore_errors=true);&#34;</span>
+100% ▕████████████████████████████████████████████████████████████▏
+Run Time <span style="color: #000000;font-weight: bold">(</span>s<span style="color: #000000;font-weight: bold">)</span>: real 16.405 user 1.090767 sys 0.516826</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Even more concise is the <code>COPY</code> option:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="background-color: #f8f8f8">duckdb</span> <span style="background-color: #f8f8f8">env</span><span style="color: #000000;font-weight: bold">-</span><span style="background-color: #f8f8f8">agency</span><span style="background-color: #f8f8f8">.</span><span style="background-color: #f8f8f8">duckdb</span> <span style="color: #000000;font-weight: bold">-</span><span style="color: #000000;font-weight: bold">c</span> <span style="color: #008080">&#34;COPY readings_historical FROM &#39;https://environment.data.gov.uk/flood-monitoring/archive/readings-2025-03-14.csv&#39; (IGNORE_ERRORS);&#34;</span>
+<span style="background-color: #f8f8f8">Run</span> <span style="color: #0086B3">Time</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8">):</span> <span style="color: #0086B3">real</span> <span style="color: #009999">3</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">275</span> <span style="color: #000000;font-weight: bold">user</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">718801</span> <span style="background-color: #f8f8f8">sys</span> <span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">247875</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Why am I doing this from the shell? So that I can then do this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #008080">start_date</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#34;2025-01-01&#34;</span>
+<span style="color: #008080">end_date</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">&#34;2025-03-13&#34;</span>
+
+<span style="color: #008080">current_date</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #008080">$start_date</span>
+<span style="color: #000000;font-weight: bold">while</span> <span style="color: #000000;font-weight: bold">[[</span> <span style="color: #d14">&#34;</span><span style="color: #008080">$current_date</span><span style="color: #d14">&#34;</span> &lt; <span style="color: #d14">&#34;</span><span style="color: #008080">$end_date</span><span style="color: #d14">&#34;</span> <span style="color: #000000;font-weight: bold">||</span> <span style="color: #d14">&#34;</span><span style="color: #008080">$current_date</span><span style="color: #d14">&#34;</span> <span style="color: #000000;font-weight: bold">==</span> <span style="color: #d14">&#34;</span><span style="color: #008080">$end_date</span><span style="color: #d14">&#34;</span> <span style="color: #000000;font-weight: bold">]]</span><span style="background-color: #f8f8f8">;</span> <span style="color: #000000;font-weight: bold">do
+    </span><span style="color: #0086B3">echo</span> <span style="color: #d14">&#34;Processing </span><span style="color: #008080">$current_date</span><span style="color: #d14">...&#34;</span>
+    duckdb env-agency.duckdb <span style="color: #000080">-c</span> <span style="color: #d14">\</span>
+        <span style="color: #d14">&#34;COPY readings_historical
+        FROM &#39;https://environment.data.gov.uk/flood-monitoring/archive/readings-</span><span style="color: #008080">$current_date</span><span style="color: #d14">.csv&#39;
+        (IGNORE_ERRORS);&#34;</span>
+    <span style="color: #008080">current_date</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">$(</span><span style="color: #0086B3">date</span> <span style="color: #000080">-d</span> <span style="color: #d14">&#34;</span><span style="color: #008080">$current_date</span><span style="color: #d14"> + 1 day&#34;</span> +%Y-%m-%d<span style="color: #d14">)</span>
+<span style="color: #000000;font-weight: bold">done</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In the <code>readings_historical</code> table is now a nice big chunk of data (<em>not Big Data, just a big chunk of normally-size data</em>):</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/historical.png" alt="historical"/></span></p>
+</div>
+<div class="paragraph">
+<p>Now to merge this into the main table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #a61717;background-color: #e3d2d2">🟡◗</span> <span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">IGNORE</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">readings</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+            <span style="color: #000000;font-weight: bold">REPLACE</span><span style="background-color: #f8f8f8">(</span>
+                <span style="background-color: #f8f8f8">REGEXP_REPLACE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">,</span>
+                <span style="color: #d14">&#39;http://environment</span><span style="color: #d14">\.</span><span style="color: #d14">data</span><span style="color: #d14">\.</span><span style="color: #d14">gov</span><span style="color: #d14">\.</span><span style="color: #d14">uk/flood-monitoring/id/measures/&#39;</span><span style="background-color: #f8f8f8">,</span>
+                <span style="color: #d14">&#39;&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">)</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_historical</span><span style="background-color: #f8f8f8">;</span>
+<span style="background-color: #f8f8f8">Run</span> <span style="color: #0086B3">Time</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8">):</span> <span style="color: #0086B3">real</span> <span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">003</span> <span style="color: #000000;font-weight: bold">user</span> <span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">002708</span> <span style="background-color: #f8f8f8">sys</span> <span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">000571</span>
+<span style="color: #000000;font-weight: bold">Conversion</span> <span style="background-color: #f8f8f8">Error</span><span style="background-color: #f8f8f8">:</span>
+<span style="background-color: #f8f8f8">Could</span> <span style="color: #000000;font-weight: bold">not</span> <span style="color: #000000;font-weight: bold">convert</span> <span style="background-color: #f8f8f8">string</span> <span style="color: #d14">&#39;0.772|0.692&#39;</span> <span style="color: #000000;font-weight: bold">to</span> <span style="color: #0086B3">DOUBLE</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Here’s the problem with taking the easy route.
+By letting DuckDB guess at the data types for the CSV data, we’ve ended up with dodgy data being ingested.
+How much dodgy data? 0.01%…</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #a61717;background-color: #e3d2d2">🟡◗</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">COUNT</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_historical</span> <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">TRY_CAST</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">value</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #0086B3">DOUBLE</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">IS</span> <span style="color: #000000;font-weight: bold">NULL</span> <span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>┌──────────────┐
+│ count_star() │
+│    int64     │
+├──────────────┤
+│     3202     │
+└──────────────┘</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It took a few minutes to load the historical data, so instead of ditching the table let’s just deal with what we’ve got.
+First up, what is the dodgy data?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #a61717;background-color: #e3d2d2">🟡◗</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">value</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_historical</span>
+    <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">TRY_CAST</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">value</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #0086B3">DOUBLE</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">IS</span> <span style="color: #000000;font-weight: bold">NULL</span>
+    <span style="color: #000000;font-weight: bold">USING</span> <span style="background-color: #f8f8f8">SAMPLE</span> <span style="color: #009999">0</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">5</span><span style="color: #000000;font-weight: bold">%</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>┌─────────────┐
+│    value    │
+│   varchar   │
+├─────────────┤
+│ 2.415|2.473 │
+│ 1.496|1.489 │
+│ 1.730|1.732 │
+│ 1.419|1.413 │
+│ 1.587|1.586 │
+│ 1.097|1.101 │
+│ 1.032|1.033 │
+│ 0.866|0.874 │
+│ 0.864|0.862 │
+│ 0.861|0.862 │
+│ 0.386|0.387 │
+│ 1.118|1.062 │
+├─────────────┤
+│   12 rows   │
+└─────────────┘</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It looks like they all follow this pattern of two valid-looking values separated by a pipe <code>|</code>.
+We can double-check this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #a61717;background-color: #e3d2d2">🟡◗</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_historical</span>
+    <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">value</span> <span style="color: #000000;font-weight: bold">NOT</span> <span style="color: #000000;font-weight: bold">LIKE</span> <span style="color: #d14">&#39;%|%&#39;</span>
+    <span style="color: #000000;font-weight: bold">AND</span> <span style="background-color: #f8f8f8">TRY_CAST</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">value</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="color: #0086B3">DOUBLE</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">IS</span> <span style="color: #000000;font-weight: bold">NULL</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>┌───────────┬─────────┬─────────┐
+│ dateTime  │ measure │  value  │
+│ timestamp │ varchar │ varchar │
+├───────────┴─────────┴─────────┤
+│            0 rows             │
+└───────────────────────────────┘</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We’ll make an executive decision to take the first value in these pairs, using <code>REPLACE</code> to override the <code>value</code> to split out the string and use the first instance.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">IGNORE</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">readings</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+            <span style="color: #000000;font-weight: bold">REPLACE</span><span style="background-color: #f8f8f8">(</span>
+                <span style="background-color: #f8f8f8">REGEXP_REPLACE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">,</span>
+                <span style="color: #d14">&#39;http://environment</span><span style="color: #d14">\.</span><span style="color: #d14">data</span><span style="color: #d14">\.</span><span style="color: #d14">gov</span><span style="color: #d14">\.</span><span style="color: #d14">uk/flood-monitoring/id/measures/&#39;</span><span style="background-color: #f8f8f8">,</span>
+                <span style="color: #d14">&#39;&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">,</span>
+                <span style="background-color: #f8f8f8">SPLIT_PART</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">,</span> <span style="color: #d14">&#39;|&#39;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #009999">1</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">value</span><span style="background-color: #f8f8f8">)</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_historical</span>
+    <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">value</span> <span style="color: #000000;font-weight: bold">LIKE</span> <span style="color: #d14">&#39;%|%&#39;</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we can load the rest of the data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #a61717;background-color: #e3d2d2">🟡◗</span> <span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">IGNORE</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">readings</span>
+        <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+                <span style="color: #000000;font-weight: bold">REPLACE</span><span style="background-color: #f8f8f8">(</span>
+                    <span style="background-color: #f8f8f8">REGEXP_REPLACE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">,</span>
+                    <span style="color: #d14">&#39;http://environment</span><span style="color: #d14">\.</span><span style="color: #d14">data</span><span style="color: #d14">\.</span><span style="color: #d14">gov</span><span style="color: #d14">\.</span><span style="color: #d14">uk/flood-monitoring/id/measures/&#39;</span><span style="background-color: #f8f8f8">,</span>
+                    <span style="color: #d14">&#39;&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">)</span>
+        <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_historical</span>
+        <span style="color: #000000;font-weight: bold">WHERE</span> <span style="background-color: #f8f8f8">value</span> <span style="color: #000000;font-weight: bold">NOT</span> <span style="color: #000000;font-weight: bold">LIKE</span> <span style="color: #d14">&#39;%|%&#39;</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #009999">100</span><span style="color: #000000;font-weight: bold">%</span> <span style="color: #a61717;background-color: #e3d2d2">▕████████████████████████████████████████████████████████████▏</span>
+<span style="background-color: #f8f8f8">Run</span> <span style="color: #0086B3">Time</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">s</span><span style="background-color: #f8f8f8">):</span> <span style="color: #0086B3">real</span> <span style="color: #009999">218</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">189</span> <span style="color: #000000;font-weight: bold">user</span> <span style="color: #009999">213</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">713807</span> <span style="background-color: #f8f8f8">sys</span> <span style="color: #009999">3</span><span style="background-color: #f8f8f8">.</span><span style="color: #009999">481680</span>
+<span style="background-color: #f8f8f8">changes</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">37031770</span>   <span style="background-color: #f8f8f8">total_changes</span><span style="background-color: #f8f8f8">:</span> <span style="color: #009999">37034972</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The data’s loaded:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #a61717;background-color: #e3d2d2">🟡◗</span> <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">COUNT</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">*</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">as</span> <span style="background-color: #f8f8f8">row_ct</span><span style="background-color: #f8f8f8">,</span>
+            <span style="color: #000000;font-weight: bold">min</span><span style="background-color: #f8f8f8">(</span><span style="color: #0086B3">dateTime</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">as</span> <span style="background-color: #f8f8f8">min_dateTime</span><span style="background-color: #f8f8f8">,</span>
+            <span style="color: #000000;font-weight: bold">max</span><span style="background-color: #f8f8f8">(</span><span style="color: #0086B3">dateTime</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">as</span> <span style="background-color: #f8f8f8">max_dateTime</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>┌──────────┬─────────────────────┬─────────────────────┐
+│  row_ct  │    min_dateTime     │    max_dateTime     │
+│  int64   │      timestamp      │      timestamp      │
+├──────────┼─────────────────────┼─────────────────────┤
+│ 37044275 │ 2025-01-01 00:00:00 │ 2025-03-20 15:25:10 │
+└──────────┴─────────────────────┴─────────────────────┘</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now to load it into the denormalised table—for this it’s the same query as when we’re just loading incremental changes:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">IGNORE</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">readings_enriched</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">vw_readings_enriched</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_lets_operationalise_it">Let’s &#34;Operationalise&#34; it&nbsp;<a class="headline-hash" href="#_lets_operationalise_it">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Let’s have a look at a <em>very</em> rough way of running the update for this pipeline automatically.</p>
+</div>
+<div class="paragraph">
+<p>We’ll create a SQL script to update the dimension data:</p>
+</div>
+<div class="listingblock">
+<div class="title">dimensions.sql</div>
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #999988;font-style: italic">-- Load the staging data from the REST API</span>
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">measures_stg</span> <span style="color: #000000;font-weight: bold">AS</span>
+  <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">src</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+                <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">read_json</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;https://environment.data.gov.uk/flood-monitoring/id/measures&#39;</span><span style="background-color: #f8f8f8">))</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">u</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">(</span>
+        <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">UNNEST</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">items</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">u</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">src</span><span style="background-color: #f8f8f8">);</span>
+
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">stations_stg</span> <span style="color: #000000;font-weight: bold">AS</span>
+  <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">src</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+                <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">read_json</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;https://environment.data.gov.uk/flood-monitoring/id/stations&#39;</span><span style="background-color: #f8f8f8">))</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">u</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">(</span>
+        <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">UNNEST</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">items</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">u</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">src</span><span style="background-color: #f8f8f8">);</span>
+
+<span style="color: #999988;font-style: italic">-- Rebuild dimension tables</span>
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">measures</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+            <span style="background-color: #f8f8f8">EXCLUDE</span> <span style="background-color: #f8f8f8">(</span><span style="color: #008080">&#34;@id&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">latestReading</span><span style="background-color: #f8f8f8">)</span>
+            <span style="color: #000000;font-weight: bold">REPLACE</span><span style="background-color: #f8f8f8">(</span>
+                <span style="background-color: #f8f8f8">REGEXP_REPLACE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">station</span><span style="background-color: #f8f8f8">,</span>
+                        <span style="color: #d14">&#39;http://environment</span><span style="color: #d14">\.</span><span style="color: #d14">data</span><span style="color: #d14">\.</span><span style="color: #d14">gov</span><span style="color: #d14">\.</span><span style="color: #d14">uk/flood-monitoring/id/stations/&#39;</span><span style="background-color: #f8f8f8">,</span>
+                        <span style="color: #d14">&#39;&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">station</span>
+            <span style="background-color: #f8f8f8">)</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">measures_stg</span><span style="background-color: #f8f8f8">;</span>
+<span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">measures</span>
+    <span style="color: #000000;font-weight: bold">ADD</span> <span style="color: #000000;font-weight: bold">CONSTRAINT</span> <span style="background-color: #f8f8f8">measures_pk</span> <span style="color: #000000;font-weight: bold">PRIMARY</span> <span style="color: #000000;font-weight: bold">KEY</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">notation</span><span style="background-color: #f8f8f8">);</span>
+
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">stations</span> <span style="color: #000000;font-weight: bold">AS</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="background-color: #f8f8f8">EXCLUDE</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">measures</span><span style="background-color: #f8f8f8">)</span>
+    <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">stations_stg</span><span style="background-color: #f8f8f8">;</span>
+
+<span style="color: #000000;font-weight: bold">ALTER</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">stations</span>
+    <span style="color: #000000;font-weight: bold">ADD</span> <span style="color: #000000;font-weight: bold">CONSTRAINT</span> <span style="background-color: #f8f8f8">stations_pk</span> <span style="color: #000000;font-weight: bold">PRIMARY</span> <span style="color: #000000;font-weight: bold">KEY</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">notation</span><span style="background-color: #f8f8f8">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and load the fact data:</p>
+</div>
+<div class="listingblock">
+<div class="title">fact.sql</div>
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="sql"><span style="color: #999988;font-style: italic">-- Load the staging data from the REST API</span>
+<span style="color: #000000;font-weight: bold">CREATE</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">REPLACE</span> <span style="color: #000000;font-weight: bold">TABLE</span> <span style="background-color: #f8f8f8">readings_stg</span> <span style="color: #000000;font-weight: bold">AS</span>
+  <span style="color: #000000;font-weight: bold">WITH</span> <span style="background-color: #f8f8f8">src</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+                <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">read_json</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">&#39;https://environment.data.gov.uk/flood-monitoring/data/readings?latest&#39;</span><span style="background-color: #f8f8f8">))</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="background-color: #f8f8f8">u</span><span style="background-color: #f8f8f8">.</span><span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">(</span>
+        <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">UNNEST</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">items</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">u</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">src</span><span style="background-color: #f8f8f8">);</span>
+
+<span style="color: #999988;font-style: italic">-- Merge into the fact table</span>
+<span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">IGNORE</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">readings</span>
+<span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span>
+        <span style="background-color: #f8f8f8">EXCLUDE</span> <span style="color: #008080">&#34;@id&#34;</span>
+        <span style="color: #000000;font-weight: bold">REPLACE</span><span style="background-color: #f8f8f8">(</span>
+            <span style="background-color: #f8f8f8">REGEXP_REPLACE</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">,</span>
+            <span style="color: #d14">&#39;http://environment</span><span style="color: #d14">\.</span><span style="color: #d14">data</span><span style="color: #d14">\.</span><span style="color: #d14">gov</span><span style="color: #d14">\.</span><span style="color: #d14">uk/flood-monitoring/id/measures/&#39;</span><span style="background-color: #f8f8f8">,</span>
+            <span style="color: #d14">&#39;&#39;</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">AS</span> <span style="background-color: #f8f8f8">measure</span><span style="background-color: #f8f8f8">)</span>
+<span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">readings_stg</span>
+
+<span style="color: #999988;font-style: italic">-- Merge into the denormalised table</span>
+<span style="color: #000000;font-weight: bold">INSERT</span> <span style="color: #000000;font-weight: bold">OR</span> <span style="color: #000000;font-weight: bold">IGNORE</span> <span style="color: #000000;font-weight: bold">INTO</span> <span style="background-color: #f8f8f8">readings_enriched</span>
+    <span style="color: #000000;font-weight: bold">SELECT</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">FROM</span> <span style="background-color: #f8f8f8">vw_readings_enriched</span><span style="background-color: #f8f8f8">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now to schedule it.
+An entire industry has been built around workflow scheduling tools;
+I’m going to stick to the humble <code>cron</code>.
+It’s simple, it’s quick, and LLMs have now learnt how to write the syntax ;)</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/crontab.png" alt="crontab"/></span></p>
+</div>
+<div class="paragraph">
+<p><em>Well, the syntax to invoke DuckDB is a bit different from what Claude thought, but the fiddly <code>*/15</code> stuff it nailed.</em></p>
+</div>
+<div class="paragraph">
+<p>Here’s the crontab I set up (<code>crontab -e</code>)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #999988;font-style: italic"># Run the pipeline every 15 minutes</span>
+<span style="color: #000000;font-weight: bold">*</span>/15 <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #000000;font-weight: bold">*</span> <span style="color: #0086B3">cd</span> ~/env-agency/ <span style="color: #000000;font-weight: bold">&amp;&amp;</span> /opt/homebrew/bin/duckdb env-agency.duckdb <span style="color: #000080">-f</span> dimensions.sql <span style="color: #000000;font-weight: bold">&amp;&amp;</span> /opt/homebrew/bin/duckdb env-agency.duckdb <span style="color: #000080">-f</span> fact.sql</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Every fifteen minutes this pulls down the latest data, rebuilds the dimension tables, and adds the new data to the fact table.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_analysing_the_data">Analysing the data&nbsp;<a class="headline-hash" href="#_analysing_the_data">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Let’s finish off by looking at how we can analyse the data.</p>
+</div>
+<div class="sect2">
+<h3 id="_metabase">Metabase&nbsp;<a class="headline-hash" href="#_metabase">🔗</a> </h3>
+<div class="paragraph">
+<p>Metabase is fairly quick to get up and running.
+The complication is that to query DuckDB you need <a href="https://github.com/motherduckdb/metabase_duckdb_driver">a driver that Motherduck have created</a> that I couldn’t get to work under Docker, hence running Metabase locally:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #999988;font-style: italic"># You need Java 21</span>
+sdk <span style="color: #0086B3">install </span>java 21.0.6-tem
+
+<span style="color: #999988;font-style: italic"># Download Metabase &amp; Metaduck</span>
+<span style="color: #0086B3">mkdir </span>metabase
+curl https://downloads.metabase.com/v0.53.7/metabase.jar <span style="color: #000080">-O</span>
+<span style="color: #0086B3">mkdir </span>plugins <span style="color: #000000;font-weight: bold">&amp;&amp;</span> <span style="color: #0086B3">pushd </span>plugins <span style="color: #000000;font-weight: bold">&amp;&amp;</span> curl https://github.com/motherduckdb/metabase_duckdb_driver/releases/download/0.2.12-b/duckdb.metabase-driver.jar <span style="color: #000080">-O</span> <span style="color: #000000;font-weight: bold">&amp;&amp;</span> <span style="color: #0086B3">popd</span>
+
+<span style="color: #999988;font-style: italic"># Run metabase</span>
+java <span style="color: #000080">--add-opens</span> java.base/java.nio<span style="color: #000000;font-weight: bold">=</span>ALL-UNNAMED <span style="color: #000080">-jar</span> metabase.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This launches Metabase on <a href="http://localhost:3000" class="bare">http://localhost:3000</a>, and after an annoying on-boarding survey, it’s remarkably quick to get something created.
+Adding the database is simple enough:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/metabase-add-db.png" alt="metabase add db"/></span></p>
+</div>
+<div class="paragraph">
+<p>Once you’ve done that Metabase automagically (<em>I’m surprised it doesn’t say &#34;AI&#34; when it does it</em>) offers a summary of the data in the table:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/metabase-wizard.png" alt="metabase wizard"/></span></p>
+</div>
+<div class="paragraph">
+<p>It’s not a bad starter for ten; the count of rows is useful from a data-completeness point of view.
+We’d need to do some work to define the <code>value</code> metric and perhaps some geographic hierarchies—but there’s definitely lots of potential.</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/metabase-db.png" alt="metabase db"/></span></p>
+</div>
+<div class="paragraph">
+<p>You can also poke around in the data itself with a tabular slice &amp; dice approach:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/metbase-table.png" alt="metbase table"/></span></p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_rill">Rill&nbsp;<a class="headline-hash" href="#_rill">🔗</a> </h3>
+<div class="paragraph">
+<p>I used <a href="https://www.rilldata.com/">Rill</a> <a href="/2025/02/28/exploring-uk-environment-agency-data-in-duckdb-and-rill/">previously</a> and liked it.</p>
+</div>
+<div class="paragraph">
+<p>Getting it up and running is easy:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash"><span style="color: #999988;font-style: italic"># Install…</span>
+curl https://rill.sh | sh
+
+<span style="color: #999988;font-style: italic"># …and go!</span>
+rill start rill-env-agency</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Rill supports DuckDB out of the box, so adding our data source is easy:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/rill-add.png" alt="rill add"/></span></p>
+</div>
+<div class="paragraph">
+<p>Who can resist a bit of AI magic?</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/rill-ai.png" alt="rill ai"/></span></p>
+</div>
+<div class="paragraph">
+<p>As with Metabase, it’s a pretty good starting point for customising into what you want to analyse.</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/rill-db.png" alt="rill db"/></span></p>
+</div>
+<div class="paragraph">
+<p>With a bit of playing around you can create a nice comparison between January and February’s readings for stations on a given river:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/rill-compare.png" alt="rill compare"/></span></p>
+</div>
+<div class="paragraph">
+<p>I couldn’t figure out how to plot a time series of values for a series of data, but as my children would say to me, that’s probably a skill issue on my part…</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_superset">Superset&nbsp;<a class="headline-hash" href="#_superset">🔗</a> </h3>
+<div class="paragraph">
+<p>This is a bit heavier to install than Metabase, and definitely more so than Rill.
+After an <a href="https://github.com/apache/superset/discussions/25963">aborted attempt</a> to install it locally I went the Docker route even though it meant a bit of fiddling to get the DuckDB dependency installed.</p>
+</div>
+<div class="paragraph">
+<p>Follow the <a href="https://superset.apache.org/docs/quickstart/">steps in the Quickstart</a> to clone the repo, and then modify the <code>command</code> for the <code>superset</code> service to install the DuckDB dependencies before launching Superset itself:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="yaml">    <span style="color: #008080">command</span><span style="background-color: #f8f8f8">:</span> <span style="background-color: #f8f8f8">[</span><span style="color: #d14">&#34;</span><span style="color: #d14">sh&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #d14">&#34;</span><span style="color: #d14">-c&#34;</span><span style="background-color: #f8f8f8">,</span> <span style="color: #d14">&#34;</span><span style="color: #d14">pip</span><span style="color: #008080"> </span><span style="color: #d14">install</span><span style="color: #008080"> </span><span style="color: #d14">duckdb</span><span style="color: #008080"> </span><span style="color: #d14">duckdb-engine</span><span style="color: #008080"> </span><span style="color: #d14">&amp;&amp;</span><span style="color: #008080"> </span><span style="color: #d14">/app/docker/docker-bootstrap.sh</span><span style="color: #008080"> </span><span style="color: #d14">app-gunicorn&#34;</span><span style="background-color: #f8f8f8">]</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now bring up Superset:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">docker compose <span style="color: #000080">-f</span> docker-compose-image-tag.yml up</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You’ll find Superset at <a href="http://localhost:8088—note" class="bare">http://localhost:8088—note</a> that it does take a few minutes to boot up, so don’t be impatient if it doesn’t seem to be working straight away.</p>
+</div>
+<div class="paragraph">
+<p>After quite a lot of fiddling around to get this far, I realised that my DuckDB file is on my host machine, not in the Docker container.
+I couldn’t just mount it as a volume as there are already volumes mounted using a syntax I wasn’t familiar with how to add to:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="yaml">    <span style="color: #008080">volumes</span><span style="background-color: #f8f8f8">:</span>
+      <span style="color: #008080">*superset-volumes</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Instead I just did a bit of a hack and copied the file onto the container:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code data-lang="bash">docker compose <span style="color: #0086B3">cp</span> ~/env-agency/env-agency.duckdb superset:/tmp/</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Finally, within Superset, I could add the database (Settings → Manage Databases).
+Somewhat confusingly, if you select &#34;DuckDB&#34; as the type, you’re asked for &#34;DuckDB Credentials&#34; and a Motherduck access token; click the small <code>Connect this database with a SQLAlchemy URI string instead</code> link (or just select &#34;Other&#34; database type in the first place).</p>
+</div>
+<div class="paragraph">
+<p>Specify the <em>local path</em> to your DuckDB file, for example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="background-color: #f8f8f8"><code>duckdb:////tmp/env-agency.duckdb</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/ss-db.png" alt="ss db"/></span></p>
+</div>
+<div class="paragraph">
+<p>Next, create a Dataset—select the database you just defined, and the <code>readings_enriched</code> table:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/ss-ds.png" alt="ss ds"/></span></p>
+</div>
+<div class="paragraph">
+<p>After all that, fortunately, Superset has a rich set of functionality particularly when it comes to charting.
+I did hit frequent time-outs when experimenting, but managed to create a nice time-series chart fairly easily:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/ss-viz1.png" alt="ss viz1"/></span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_wrapping_up">Wrapping up&nbsp;<a class="headline-hash" href="#_wrapping_up">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><span class="image"><img src="/images/2025/03/overview.excalidraw.svg" alt="overview.excalidraw"/></span></p>
+</div>
+<div class="paragraph">
+<p>We’ve <del>built</del> cobbled together a pipeline that extracts data from a set of REST APIs, applies some light cleansing and transformation, and loads it into a DuckDB table from where it can be queried and analysed.
+With <code>cron</code> we’ve automated the refresh of this data every fifteen minutes.</p>
+</div>
+<div class="paragraph">
+<p>The total bill of materials is approximately:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>1 x DuckDB</p>
+</li>
+<li>
+<p>14 SQL statements (16 if you include historical backfill)</p>
+</li>
+<li>
+<p>1 ropey cron job</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Would this pass muster in a real deployment?
+You tell me :)</p>
+</div>
+<div class="paragraph">
+<p>My guess is that I’d not want to be on the hook to support it, but it’d do the job until it didn’t.
+That is, as a prototype with sound modelling to expand on later it’s probably good enough.</p>
+</div>
+<div class="paragraph">
+<p>But I’d love to hear from folk who are building this stuff for real day in, day out.
+What did I overlook here?
+Is doing it in DuckDB daft?
+Let me know on <a href="https://bsky.app/profile/rmoff.net">Bluesky</a> or <a href="https://www.linkedin.com/in/robinmoffatt">LinkedIn</a>.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+You can find the full set of SQL files to run this <a href="https://gist.github.com/rmoff/461fd169843063fc1b9b3113759ff5b6">here</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+</article>
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+	
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	
+	</body>
+</html>
