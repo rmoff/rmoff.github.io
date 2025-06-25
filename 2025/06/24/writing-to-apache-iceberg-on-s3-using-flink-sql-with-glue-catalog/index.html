@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Writing to Apache Iceberg on S3 using Flink SQL with Glue catalog</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2025/06/24/writing-to-apache-iceberg-on-s3-using-flink-sql-with-glue-catalog/">
+		
+		<script src="/js/copy-code.js"></script>
+		
+		
+		
+		
+
+		
+		<meta property="og:title" content="Writing to Apache Iceberg on S3 using Flink SQL with Glue catalog" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2025/06/h_IMG_0420.webp" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2025/06/24/writing-to-apache-iceberg-on-s3-using-flink-sql-with-glue-catalog/" />
+		<meta property="og:site_name" content="Writing to Apache Iceberg on S3 using Flink SQL with Glue catalog" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/toc.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/retro-cards.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/custom.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+		<script src="https://rmoff.net/js/toc.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2025/06/h_IMG_0420.webp'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">
+						<span class="terminal-title">Writing to Apache Iceberg on S3 using Flink SQL with Glue catalog<span class="terminal-cursor"></span></span>
+					</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2025-06-24T17:12:50Z">Jun 24, 2025</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/flink-sql" class="no-underline category near-white dim">Flink SQL</a>, <a href="https://rmoff.net/categories/apache-iceberg" class="no-underline category near-white dim">Apache Iceberg</a>, <a href="https://rmoff.net/categories/glue-data-catalog" class="no-underline category near-white dim">Glue Data Catalog</a>
+								<span class="display-print">at https://rmoff.net/2025/06/24/writing-to-apache-iceberg-on-s3-using-flink-sql-with-glue-catalog/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<div class="container-fluid docs">
+  <div class="row">
+    <main class="docs-content" role="main">
+
+<article class="article">
+	<div class="paragraph">
+<p>In this blog post I’ll show how you can use Flink SQL to write to Iceberg on S3, storing metadata about the Iceberg tables in the <a href="https://docs.aws.amazon.com/glue/latest/dg/components-overview.html#data-catalog-intro">AWS Glue Data Catalog</a>.
+First off, I’ll walk through the dependencies and a simple smoke-test, and then put it into practice using it to write data from a Kafka topic to Iceberg.</p>
+</div>
+<div class="paragraph">
+<p><a href="https://iceberg.apache.org">Apache Iceberg</a> is a table format that provides a way of storing tabular data on object storage that can be read and written to by lots of different engines.
+When you’re using Iceberg you’ll need a <a href="https://iceberg.apache.org/terms/#catalog">metadata catalog</a> so that other users of the data can discover what tables exist and where.
+Here I’m using <a href="https://docs.aws.amazon.com/glue/latest/dg/components-overview.html#data-catalog-intro">Glue Data Catalog</a>, but other catalogs that you might use in its place include
+<a href="https://cwiki.apache.org/confluence/display/hive/design#Design-Metastore">Hive Metastore</a>,
+<a href="https://polaris.apache.org/">Apache Polaris</a>,
+<a href="https://www.unitycatalog.io/">Unity Catalog</a>,
+and so on.</p>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+You can find the Docker Compose for this article <a href="https://github.com/rmoff/examples/tree/main/iceberg/flink-kafka-aws">here</a>
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="sect1">
+<h2 id="_dependencies">Dependencies&nbsp;<a class="headline-hash" href="#_dependencies">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>I’m using Flink 1.20, since as of the time of writing (2025-06-24) the Iceberg connector doesn’t yet support Flink 2.0 (<a href="https://lists.apache.org/thread/1ozjw2wj24scj0vspx89nbjrkpz7xovv">it’s due</a> with Iceberg 1.10.0).
+The dependencies listed below are specifically for this version.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>One of the things that makes Flink SQL <em>so much fun</em> is doing the JAR dance each time.
+I’ve <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">written</a> and <a href="https://talks.rmoff.net/9GpIYA/the-joy-of-jars-and-other-flink-sql-troubleshooting-tales">spoken</a> about it <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">ad</a> <a href="https://www.decodable.co/blog/flink-sql-misconfiguration-misunderstanding-and-mishaps">nauseam</a>, so check those links out if you want more background.</p>
+</div>
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="sect2">
+<h3 id="_iceberg">Iceberg&nbsp;<a class="headline-hash" href="#_iceberg">🔗</a> </h3>
+<div class="paragraph">
+<p>We’re writing to Iceberg, so need the <a href="https://iceberg.apache.org/multi-engine-support/#apache-flink">Flink Iceberg connector</a>, which is part of the Iceberg project.
+The JAR is <a href="https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-1.20/1.9.1/iceberg-flink-runtime-1.20-1.9.1.jar"><code>iceberg-flink-runtime-1.20-1.9.1.jar</code></a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_aws_s3_and_glue">AWS S3 and Glue&nbsp;<a class="headline-hash" href="#_aws_s3_and_glue">🔗</a> </h3>
+<div class="sect3">
+<h4 id="_jars">JARs&nbsp;<a class="headline-hash" href="#_jars">🔗</a> </h4>
+<div class="paragraph">
+<p>AWS has an <a href="https://iceberg.apache.org/docs/nightly/aws/#flink">integration for Iceberg</a> which provides support for both S3 and Glue data catalog.
+The JAR is <a href="https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.9.1/iceberg-aws-bundle-1.9.1.jar"><code>iceberg-aws-bundle-1.9.1.jar</code></a></p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_s3_bucket">S3 bucket&nbsp;<a class="headline-hash" href="#_s3_bucket">🔗</a> </h4>
+<div class="paragraph">
+<p>You’ll need an S3 bucket to write your Iceberg tables.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_authentication">Authentication&nbsp;<a class="headline-hash" href="#_authentication">🔗</a> </h4>
+<div class="paragraph">
+<p>You need to give Flink a way to authenticate to AWS.
+There are <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/filesystems/s3/#configure-access-credentials">different ways</a> to do this.
+I’ve gone for the very simple—and extremely insecure—method of setting environment variables.
+Remember that Flink is a distributed system and <em>each component must have these environment variables set</em>.
+Otherwise you’ll find one thing works (e.g. some table DDL) whilst another doesn’t (e.g. writing data to the table), because different components in Flink come into play at different stages.</p>
+</div>
+<div class="paragraph">
+<p>In Docker Compose I use this syntax to pass through to the container the value of the variables, that I’ve set locally on the host machine:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="yaml">    <span style="color: #a6e22e">environment</span><span style="color: #f8f8f2;background-color: #49483e">:</span>
+      <span style="color: #f8f8f2;background-color: #49483e">-</span> <span style="color: #e6db74">AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}</span>
+      <span style="color: #f8f8f2;background-color: #49483e">-</span> <span style="color: #e6db74">AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}</span>
+      <span style="color: #f8f8f2;background-color: #49483e">-</span> <span style="color: #e6db74">AWS_REGION=${AWS_REGION:-us-east-1}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that I had to set <code>AWS_REGION</code>, even though it’s the default one (<code>us-east-1</code>).</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_random_jiggling_hadoop_jars">Random jiggling (Hadoop JARs)&nbsp;<a class="headline-hash" href="#_random_jiggling_hadoop_jars">🔗</a> </h3>
+<div class="paragraph">
+<p>Some, or all, of these are needed, because <code>$REASONS</code>.</p>
+</div>
+<div class="paragraph">
+<p>It’s a list I’ve built up by trial and error.
+You can also just get Hadoop itself (lol, remember that?) and add it to the classpath.
+If you don’t add these you’ll get various <code>java.lang.ClassNotFoundException</code> errors.
+Feel free to play whack-a-mole and eliminate the redundant ones from the list and let me know which can be scratched off :)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash">https://repo1.maven.org/maven2/org/apache/commons/commons-configuration2/2.1.1/commons-configuration2-2.1.1.jar
+https://repo1.maven.org/maven2/commons-logging/commons-logging/1.1.3/commons-logging-1.1.3.jar
+https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-auth/3.3.4/hadoop-auth-3.3.4.jar
+https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-common/3.3.4/hadoop-common-3.3.4.jar
+https://repo1.maven.org/maven2/org/apache/hadoop/thirdparty/hadoop-shaded-guava/1.1.1/hadoop-shaded-guava-1.1.1.jar
+https://repo1.maven.org/maven2/org/codehaus/woodstox/stax2-api/4.2.1/stax2-api-4.2.1.jar
+https://repo1.maven.org/maven2/com/fasterxml/woodstox/woodstox-core/5.3.0/woodstox-core-5.3.0.jar
+https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-hdfs-client/3.3.4/hadoop-hdfs-client-3.3.4.jar
+https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-mapreduce-client-core/3.3.4/hadoop-mapreduce-client-core-3.3.4.jar</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_kafka">Kafka&nbsp;<a class="headline-hash" href="#_kafka">🔗</a> </h3>
+<div class="paragraph">
+<p>Since I want to read from Kafka in the full example below, we need the <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/kafka/">Flink SQL Kafka connector</a>.
+The JAR is <a href="https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.4.0-1.20/flink-sql-connector-kafka-3.4.0-1.20.jar"><code>flink-sql-connector-kafka-3.4.0-1.20.jar</code></a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_jar_location">JAR location&nbsp;<a class="headline-hash" href="#_jar_location">🔗</a> </h3>
+<div class="paragraph">
+<p>I put JARs in subfolders under <code>./lib</code> to make it easier to organise and see what’s there:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash">lib
+├── hadoop
+│   ├── commons-configuration2-2.1.1.jar
+│   ├── commons-logging-1.1.3.jar
+│   ├── hadoop-auth-3.3.4.jar
+│   ├── hadoop-common-3.3.4.jar
+│   ├── hadoop-hdfs-client-3.3.4.jar
+│   ├── hadoop-mapreduce-client-core-3.3.4.jar
+│   ├── hadoop-shaded-guava-1.1.1.jar
+│   ├── stax2-api-4.2.1.jar
+│   └── woodstox-core-5.3.0.jar
+├── iceberg
+│   ├── iceberg-aws-bundle-1.9.1.jar
+│   └── iceberg-flink-runtime-1.20-1.9.1.jar
+├── kafka
+│   └── flink-sql-connector-kafka-3.4.0-1.20.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can also just put them straight under <code>./lib</code> if you’d rather.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_checkpointing">Checkpointing&nbsp;<a class="headline-hash" href="#_checkpointing">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>You need to configure <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/dev/datastream/fault-tolerance/checkpointing/#checkpointing">checkpointing</a> in Flink in order for it to write data files.
+If you don’t then you’ll see metadata get written, but no actual data.</p>
+</div>
+<div class="paragraph">
+<p>You can configure checkpointing within your SQL session by running:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SET</span> <span style="color: #e6db74">&#39;execution.checkpointing.interval&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;30s&#39;</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_smoke_testing_icebergs3glue">Smoke testing Iceberg/S3/Glue&nbsp;<a class="headline-hash" href="#_smoke_testing_icebergs3glue">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Before we get data from Kafka into Iceberg, let’s just make sure the Iceberg/S3/Glue component is working.</p>
+</div>
+<div class="paragraph">
+<p>This will launch a Flink SQL client if you’re using the Docker Compose that <a href="https://github.com/rmoff/examples/tree/main/iceberg/flink-kafka-aws">I’ve shared</a>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash">docker compose <span style="color: #f8f8f2">exec</span> <span style="color: #f92672">-it</span> jobmanager bash <span style="color: #f92672">-c</span> <span style="color: #e6db74">&#34;./bin/sql-client.sh&#34;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>There are two ways to write an Iceberg table:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Explicitly, using the Iceberg connector in the table DDL</p>
+</li>
+<li>
+<p>Implicitly, by declaring an Iceberg catalog in Flink and creating a table within it</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Let’s check both.</p>
+</div>
+<div class="sect2">
+<h3 id="_creating_an_iceberg_table_in_flink_sql_using_the_iceberg_connector">Creating an Iceberg table in Flink SQL using the Iceberg connector&nbsp;<a class="headline-hash" href="#_creating_an_iceberg_table_in_flink_sql_using_the_iceberg_connector">🔗</a> </h3>
+<div class="paragraph">
+<p>This will create a table called <code>test01</code> in the Glue database <code>my_glue_db</code>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">test01</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">col1</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+    <span style="color: #66d9ef;font-weight: bold">WITH</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+        <span style="color: #e6db74">&#39;connector&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;iceberg&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#39;catalog-name&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;foo&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#39;catalog-database&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;my_glue_db&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#39;warehouse&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;s3://rmoff-lakehouse/00/&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#39;catalog-impl&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;org.apache.iceberg.aws.glue.GlueCatalog&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#39;ioImpl&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;org.apache.iceberg.aws.s3.S3FileIO&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+<code>catalog-name</code> is a mandatory configuration but as far as I can tell doesn’t have any impact on the written table, and is only used within Flink as part of the operator name.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>Now write a row of data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">test01</span> <span style="color: #66d9ef;font-weight: bold">VALUES</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">INFO</span><span style="color: #f8f8f2;background-color: #49483e">]</span> <span style="color: #f8f8f2;background-color: #49483e">Submitting</span> <span style="color: #66d9ef;font-weight: bold">SQL</span> <span style="color: #66d9ef;font-weight: bold">update</span> <span style="color: #66d9ef;font-weight: bold">statement</span> <span style="color: #66d9ef;font-weight: bold">to</span> <span style="color: #f8f8f2;background-color: #49483e">the</span> <span style="color: #66d9ef;font-weight: bold">cluster</span><span style="color: #f8f8f2;background-color: #49483e">...</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">INFO</span><span style="color: #f8f8f2;background-color: #49483e">]</span> <span style="color: #66d9ef;font-weight: bold">SQL</span> <span style="color: #66d9ef;font-weight: bold">update</span> <span style="color: #66d9ef;font-weight: bold">statement</span> <span style="color: #f8f8f2;background-color: #49483e">has</span> <span style="color: #f8f8f2;background-color: #49483e">been</span> <span style="color: #f8f8f2;background-color: #49483e">successfully</span> <span style="color: #f8f8f2;background-color: #49483e">submitted</span> <span style="color: #66d9ef;font-weight: bold">to</span> <span style="color: #f8f8f2;background-color: #49483e">the</span> <span style="color: #66d9ef;font-weight: bold">cluster</span><span style="color: #f8f8f2;background-color: #49483e">:</span>
+<span style="color: #f8f8f2;background-color: #49483e">Job</span> <span style="color: #f8f8f2;background-color: #49483e">ID</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">6742</span><span style="color: #f8f8f2;background-color: #49483e">c18db85384825217b75fdb12b784</span></code></pre>
+</div>
+</div>
+<div class="admonitionblock warning">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-warning" title="Warning"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>At this point, all that’s happened is <em>the job to write the data has been <strong>submitted</strong>.</em></p>
+</div>
+<div class="paragraph">
+<p>Don’t assume that because it was successfully <strong>submitted</strong> it’s been successfully <strong>executed</strong>!</p>
+</div>
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>Check that the data has been written to the table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">test01</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+-------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">op</span> <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #f8f8f2;background-color: #49483e">col1</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+-------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f92672;font-weight: bold">+</span><span style="color: #f8f8f2;background-color: #49483e">I</span> <span style="color: #f92672;font-weight: bold">|</span>          <span style="color: #ae81ff">42</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+-------------+</span>
+<span style="color: #f8f8f2;background-color: #49483e">Received</span> <span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #f8f8f2;background-color: #49483e">total</span> <span style="color: #66d9ef;font-weight: bold">of</span> <span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">77</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Inspect the object storage:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash"><span style="color: #f8f8f2">$ </span>aws s3 <span style="color: #f92672">--recursive</span> <span style="color: #f8f8f2">ls </span>s3://rmoff-lakehouse/00
+2025-06-24 16:44:34        423 00/my_glue_db.db/test01/data/00000-0-a2de3a7d-6075-4d80-a440-fb0e702ec4b8-00001.parquet
+2025-06-24 16:44:28        874 00/my_glue_db.db/test01/metadata/00000-9808fb50-5694-4331-afb7-ee02fa7fa8ee.metadata.json
+2025-06-24 16:44:36       1995 00/my_glue_db.db/test01/metadata/00001-a74b52b7-7fda-4e35-a044-17c2cae96aef.metadata.json
+2025-06-24 16:44:35       6964 00/my_glue_db.db/test01/metadata/79f37e16-6b9d-491f-b96b-d4795b66bac1-m0.avro
+2025-06-24 16:44:35       4455 00/my_glue_db.db/test01/metadata/snap-5270520003556673576-1-79f37e16-6b9d-491f-b96b-d4795b66bac1.avro</code></pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>If you only see <code>.metadata.json</code> files, it could be that Flink hasn’t checkpointed yet—see above.</p>
+</div>
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>You’ll see the table in the Glue data catalog:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2025/06/2025-06-24T16-03-21-626Z.webp" alt="2025 06 24T16 03 21 626Z"/>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_creating_a_table_in_flink_sql_within_an_iceberg_catalog">Creating a table in Flink SQL within an Iceberg catalog&nbsp;<a class="headline-hash" href="#_creating_a_table_in_flink_sql_within_an_iceberg_catalog">🔗</a> </h3>
+<div class="paragraph">
+<p>The other route to creating an Iceberg table is to create a Flink SQL Catalog that is of an Iceberg type, pointing to the Glue data catalog.</p>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>&#34;a Flink SQL Catalog that is of an Iceberg type, pointing to the Glue data catalog&#34;</p>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>😖 <em>Whuuuhh what does this even mean?</em>
+<em>Find out more in this article that I wrote previously: <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-a-primer">Catalogs in Flink SQL—A Primer</a></em></p>
+</div>
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>First create a catalog:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">CATALOG</span> <span style="color: #f8f8f2;background-color: #49483e">my_iceberg_catalog</span> <span style="color: #66d9ef;font-weight: bold">WITH</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+    <span style="color: #e6db74">&#39;type&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;iceberg&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#39;warehouse&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;s3://rmoff-lakehouse/00/&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#39;catalog-impl&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;org.apache.iceberg.aws.glue.GlueCatalog&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#39;io-impl&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;org.apache.iceberg.aws.s3.S3FileIO&#39;</span>
+    <span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Set the catalog as the active one:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">USE</span> <span style="color: #66d9ef;font-weight: bold">CATALOG</span> <span style="color: #f8f8f2;background-color: #49483e">my_iceberg_catalog</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can now see what Glue databases exist:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SHOW</span> <span style="color: #f8f8f2;background-color: #49483e">DATABASES</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>    <span style="color: #66d9ef;font-weight: bold">database</span> <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>       <span style="color: #f8f8f2;background-color: #49483e">my_glue_db</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>         <span style="color: #f8f8f2;background-color: #49483e">rmoff_db</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>              <span style="color: #f8f8f2;background-color: #49483e">tmp</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------------+</span>
+<span style="color: #ae81ff">3</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you want, you can create a new database in Glue data catalog:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">DATABASE</span> <span style="color: #f8f8f2;background-color: #49483e">new_glue_db</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now set the database (existing, or new) as the active one:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">USE</span> <span style="color: #f8f8f2;background-color: #49483e">my_iceberg_catalog</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">new_glue_db</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Finally, create and populate the new table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">test02</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">col1</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+<span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">test02</span> <span style="color: #66d9ef;font-weight: bold">VALUES</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The end result is the same as above - a table registered in the Glue data catalog, with Iceberg data stored in S3:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">test02</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+-------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">op</span> <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #f8f8f2;background-color: #49483e">col1</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+-------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f92672;font-weight: bold">+</span><span style="color: #f8f8f2;background-color: #49483e">I</span> <span style="color: #f92672;font-weight: bold">|</span>          <span style="color: #ae81ff">42</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+-------------+</span>
+<span style="color: #f8f8f2;background-color: #49483e">Received</span> <span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #f8f8f2;background-color: #49483e">total</span> <span style="color: #66d9ef;font-weight: bold">of</span> <span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">5</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">65</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash"><span style="color: #f8f8f2">$ </span>aws glue get-tables <span style="color: #f92672">--region</span> us-east-1 <span style="color: #ae81ff">\</span>
+    <span style="color: #f92672">--database-name</span> new_glue_db <span style="color: #ae81ff">\</span>
+    <span style="color: #f92672">--query</span> <span style="color: #e6db74">&#39;TableList[].Name&#39;</span> <span style="color: #ae81ff">\</span>
+    <span style="color: #f92672">--output</span> table
+
++----------+
+| GetTables|
++----------+
+|  test02  |
++----------+</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash"><span style="color: #f8f8f2">$ </span>aws s3 <span style="color: #f92672">--recursive</span> <span style="color: #f8f8f2">ls </span>s3://rmoff-lakehouse/00
+<span style="color: #f92672;font-weight: bold">[</span>…]
+2025-06-24 17:32:51        423 00/new_glue_db.db/test02/data/00000-0-0c2f7b3e-6b84-44eb-add7-79ff16f7854d-00001.parquet
+2025-06-24 17:32:42        679 00/new_glue_db.db/test02/metadata/00000-202c2e5e-db26-42cc-85df-a6e3c8b61b83.metadata.json
+2025-06-24 17:32:53       1800 00/new_glue_db.db/test02/metadata/00001-2b15df7b-c93a-4cc8-a755-43e10afbeb44.metadata.json
+2025-06-24 17:32:53       6963 00/new_glue_db.db/test02/metadata/6ef46eac-d442-40c8-bfaa-644cb84e5f0e-m0.avro
+2025-06-24 17:32:53       4455 00/new_glue_db.db/test02/metadata/snap-4874299872284941836-1-6ef46eac-d442-40c8-bfaa-644cb84e5f0e.avro</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_kafka_iceberg_s3glue">Kafka → Iceberg (S3/Glue)&nbsp;<a class="headline-hash" href="#_kafka_iceberg_s3glue">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Now we can put this into practice, and use it to stream data from Kafka to Iceberg on S3, with Glue data catalog.</p>
+</div>
+<div class="sect2">
+<h3 id="_define_the_kafka_source">Define the Kafka source&nbsp;<a class="headline-hash" href="#_define_the_kafka_source">🔗</a> </h3>
+<div class="paragraph">
+<p>Here’s a table that stores its data in Kafka.
+I’m creating it outside of the Glue/Iceberg catalog because within it it always writes it as Iceberg.
+Note that if you actually use the <code>generic_in_memory</code> catalog you’ll need to define your tables in every Flink session.
+See <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-a-primer">Catalogs in Flink SQL—A Primer</a> for more details.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">CATALOG</span> <span style="color: #f8f8f2;background-color: #49483e">src</span> <span style="color: #66d9ef;font-weight: bold">WITH</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;type&#39;</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #e6db74">&#39;generic_in_memory&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+
+<span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">DATABASE</span> <span style="color: #f8f8f2;background-color: #49483e">src</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">kafka</span> <span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">src</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">kafka</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">kafka_transactions</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+    <span style="color: #f8f8f2;background-color: #49483e">transaction_id</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2;background-color: #49483e">user_id</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2;background-color: #49483e">amount</span> <span style="color: #f8f8f2">DECIMAL</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">10</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">currency</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2;background-color: #49483e">merchant</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2;background-color: #49483e">transaction_time</span> <span style="color: #f8f8f2">TIMESTAMP</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">WITH</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+    <span style="color: #e6db74">&#39;connector&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;kafka&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#39;properties.bootstrap.servers&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;broker:9092&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#39;format&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;json&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#39;scan.startup.mode&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;earliest-offset&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#39;topic&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;transactions&#39;</span>
+<span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we’ll write some data to it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">src</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">kafka</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">kafka_transactions</span> <span style="color: #66d9ef;font-weight: bold">VALUES</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;TXN_001&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USER_123&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">45</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">99</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;GBP&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Amazon&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">TIMESTAMP</span> <span style="color: #e6db74">&#39;2025-06-23 10:30:00&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;TXN_002&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USER_456&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">50</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;GBP&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Starbucks&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">TIMESTAMP</span> <span style="color: #e6db74">&#39;2025-06-23 10:35:00&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;TXN_003&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USER_789&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">89</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">99</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USD&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Shell&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">TIMESTAMP</span> <span style="color: #e6db74">&#39;2025-06-23 10:40:00&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;TXN_004&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USER_123&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">156</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">75</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;EUR&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Tesco&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">TIMESTAMP</span> <span style="color: #e6db74">&#39;2025-06-23 10:45:00&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;TXN_005&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USER_321&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">8</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">99</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;GBP&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;McDonald</span><span style="color: #ae81ff">&#39;&#39;</span><span style="color: #e6db74">s&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">TIMESTAMP</span> <span style="color: #e6db74">&#39;2025-06-23 10:50:00&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Check the data’s there on the Kafka topic:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash"><span style="color: #f8f8f2">$ </span>docker compose <span style="color: #f8f8f2">exec</span> <span style="color: #f92672">-it</span> kcat kcat <span style="color: #f92672">-b</span> broker:9092 <span style="color: #f92672">-C</span> <span style="color: #f92672">-t</span> transactions <span style="color: #f92672">-c5</span>
+<span style="color: #f92672;font-weight: bold">{</span><span style="color: #e6db74">&#34;transaction_id&#34;</span>:<span style="color: #e6db74">&#34;TXN_001&#34;</span>,<span style="color: #e6db74">&#34;user_id&#34;</span>:<span style="color: #e6db74">&#34;USER_123&#34;</span>,<span style="color: #e6db74">&#34;amount&#34;</span>:45.99,<span style="color: #e6db74">&#34;currency&#34;</span>:<span style="color: #e6db74">&#34;GBP&#34;</span>,<span style="color: #e6db74">&#34;merchant&#34;</span>:<span style="color: #e6db74">&#34;Amazon&#34;</span>,<span style="color: #e6db74">&#34;transaction_time&#34;</span>:<span style="color: #e6db74">&#34;2025-06-23 10:30:00&#34;</span><span style="color: #f92672;font-weight: bold">}</span>
+<span style="color: #f92672;font-weight: bold">{</span><span style="color: #e6db74">&#34;transaction_id&#34;</span>:<span style="color: #e6db74">&#34;TXN_002&#34;</span>,<span style="color: #e6db74">&#34;user_id&#34;</span>:<span style="color: #e6db74">&#34;USER_456&#34;</span>,<span style="color: #e6db74">&#34;amount&#34;</span>:12.5,<span style="color: #e6db74">&#34;currency&#34;</span>:<span style="color: #e6db74">&#34;GBP&#34;</span>,<span style="color: #e6db74">&#34;merchant&#34;</span>:<span style="color: #e6db74">&#34;Starbucks&#34;</span>,<span style="color: #e6db74">&#34;transaction_time&#34;</span>:<span style="color: #e6db74">&#34;2025-06-23 10:35:00&#34;</span><span style="color: #f92672;font-weight: bold">}</span>
+<span style="color: #f92672;font-weight: bold">{</span><span style="color: #e6db74">&#34;transaction_id&#34;</span>:<span style="color: #e6db74">&#34;TXN_003&#34;</span>,<span style="color: #e6db74">&#34;user_id&#34;</span>:<span style="color: #e6db74">&#34;USER_789&#34;</span>,<span style="color: #e6db74">&#34;amount&#34;</span>:89.99,<span style="color: #e6db74">&#34;currency&#34;</span>:<span style="color: #e6db74">&#34;USD&#34;</span>,<span style="color: #e6db74">&#34;merchant&#34;</span>:<span style="color: #e6db74">&#34;Shell&#34;</span>,<span style="color: #e6db74">&#34;transaction_time&#34;</span>:<span style="color: #e6db74">&#34;2025-06-23 10:40:00&#34;</span><span style="color: #f92672;font-weight: bold">}</span>
+<span style="color: #f92672;font-weight: bold">{</span><span style="color: #e6db74">&#34;transaction_id&#34;</span>:<span style="color: #e6db74">&#34;TXN_004&#34;</span>,<span style="color: #e6db74">&#34;user_id&#34;</span>:<span style="color: #e6db74">&#34;USER_123&#34;</span>,<span style="color: #e6db74">&#34;amount&#34;</span>:156.75,<span style="color: #e6db74">&#34;currency&#34;</span>:<span style="color: #e6db74">&#34;EUR&#34;</span>,<span style="color: #e6db74">&#34;merchant&#34;</span>:<span style="color: #e6db74">&#34;Tesco&#34;</span>,<span style="color: #e6db74">&#34;transaction_time&#34;</span>:<span style="color: #e6db74">&#34;2025-06-23 10:45:00&#34;</span><span style="color: #f92672;font-weight: bold">}</span>
+<span style="color: #f92672;font-weight: bold">{</span><span style="color: #e6db74">&#34;transaction_id&#34;</span>:<span style="color: #e6db74">&#34;TXN_005&#34;</span>,<span style="color: #e6db74">&#34;user_id&#34;</span>:<span style="color: #e6db74">&#34;USER_321&#34;</span>,<span style="color: #e6db74">&#34;amount&#34;</span>:8.99,<span style="color: #e6db74">&#34;currency&#34;</span>:<span style="color: #e6db74">&#34;GBP&#34;</span>,<span style="color: #e6db74">&#34;merchant&#34;</span>:<span style="color: #e6db74">&#34;McDonald&#39;s&#34;</span>,<span style="color: #e6db74">&#34;transaction_time&#34;</span>:<span style="color: #e6db74">&#34;2025-06-23 10:50:00&#34;</span><span style="color: #f92672;font-weight: bold">}</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_send_kafka_data_to_iceberg_using_this_one_simple_trick">💡 Send Kafka data to Iceberg using this one simple trick 😉&nbsp;<a class="headline-hash" href="#_send_kafka_data_to_iceberg_using_this_one_simple_trick">🔗</a> </h3>
+<div class="paragraph">
+<p>Now we create an Iceberg table, populated by what’s in the Kafka topic.
+It’s just a single SQL statement:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">my_iceberg_catalog</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">my_glue_db</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">transactions</span> <span style="color: #66d9ef;font-weight: bold">AS</span>
+    <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">src</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">kafka</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">kafka_transactions</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Flink then reads from the Kafka topic, and writes it to the Iceberg table.
+We can see the Iceberg table has been created in Glue data catalog:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash"><span style="color: #f8f8f2">$ </span>aws glue get-tables <span style="color: #f92672">--region</span> us-east-1 <span style="color: #ae81ff">\</span>
+    <span style="color: #f92672">--database-name</span> my_glue_db <span style="color: #ae81ff">\</span>
+    <span style="color: #f92672">--query</span> <span style="color: #e6db74">&#39;TableList[].Name&#39;</span> <span style="color: #ae81ff">\</span>
+    <span style="color: #f92672">--output</span> table
+<span style="color: #f92672">------------------</span>
+|    GetTables   |
++----------------+
+|  test01        |
+|  transactions  |
++----------------+</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and it’s been populated:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2025/06/2025-06-24T17-05-34-439Z.webp" alt="2025 06 24T17 05 34 439Z"/>
+</div>
+</div>
+<div class="paragraph">
+<p>A Flink SQL <code>CREATE TABLE…AS SELECT</code> (known as <code>CTAS</code>) is a continuous query—a job that will run forever until you cancel it, executing the <code>SELECT</code> query and writing the results to the target table.</p>
+</div>
+<div class="paragraph">
+<p>That means that if we add more rows to the source Kafka table (which is just a Kafka topic, and can be populated by any Kafka producer):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">src</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">kafka</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">kafka_transactions</span> <span style="color: #66d9ef;font-weight: bold">VALUES</span>
+<span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;TXN_006&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USER_456&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">23</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">45</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;GBP&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Wayne Enterprises&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">TIMESTAMP</span> <span style="color: #e6db74">&#39;2025-06-23 10:55:00&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+<span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;TXN_007&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USER_789&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">67</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">80</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USD&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Stark Industries&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">TIMESTAMP</span> <span style="color: #e6db74">&#39;2025-06-23 11:00:00&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+<span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;TXN_008&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;USER_654&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">15</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">99</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;EUR&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Daily Planet&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">TIMESTAMP</span> <span style="color: #e6db74">&#39;2025-06-23 11:05:00&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>we’ll shortly see the same data appear on the Iceberg table:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2025/06/2025-06-24T17-10-32-925Z.webp" alt="2025 06 24T17 10 32 925Z"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_insert_overwrite">INSERT OVERWRITE&nbsp;<a class="headline-hash" href="#_insert_overwrite">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Iceberg tables can be written to using:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://iceberg.apache.org/docs/nightly/flink-writes/#insert-into"><code>INSERT INTO</code></a></p>
+</li>
+<li>
+<p><a href="https://iceberg.apache.org/docs/nightly/flink-writes/#insert-overwrite"><code>INSERT OVERWRITE</code></a></p>
+</li>
+<li>
+<p><a href="https://iceberg.apache.org/docs/nightly/flink-writes/#upsert"><code>UPSERT</code></a></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>In the examples above we’ve used <code>INSERT INTO</code>, either explicitly to populate an existing table, or implicitly with the <code>CREATE TABLE…AS SELECT</code> statement.</p>
+</div>
+<div class="paragraph">
+<p>You can use <code>INSERT OVERWRITE</code> to overwrite the existing tables contents.
+This sounds useful for things like refreshing dimension tables if you don’t want to retain history (a.k.a Slowly Changing Dimension Type 0).</p>
+</div>
+<div class="paragraph">
+<p>Here’s the intial state of the table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">USE</span> <span style="color: #f8f8f2;background-color: #49483e">my_iceberg_catalog</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">new_glue_db</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">dim01</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">id</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+<span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">dim01</span> <span style="color: #66d9ef;font-weight: bold">VALUES</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;foo&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">43</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;bar&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">dim01</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+-------------+--------------------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">op</span> <span style="color: #f92672;font-weight: bold">|</span>          <span style="color: #f8f8f2;background-color: #49483e">id</span> <span style="color: #f92672;font-weight: bold">|</span>                           <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+-------------+--------------------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f92672;font-weight: bold">+</span><span style="color: #f8f8f2;background-color: #49483e">I</span> <span style="color: #f92672;font-weight: bold">|</span>          <span style="color: #ae81ff">42</span> <span style="color: #f92672;font-weight: bold">|</span>                            <span style="color: #f8f8f2;background-color: #49483e">foo</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f92672;font-weight: bold">+</span><span style="color: #f8f8f2;background-color: #49483e">I</span> <span style="color: #f92672;font-weight: bold">|</span>          <span style="color: #ae81ff">43</span> <span style="color: #f92672;font-weight: bold">|</span>                            <span style="color: #f8f8f2;background-color: #49483e">bar</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+-------------+--------------------------------+</span>
+<span style="color: #f8f8f2;background-color: #49483e">Received</span> <span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #f8f8f2;background-color: #49483e">total</span> <span style="color: #66d9ef;font-weight: bold">of</span> <span style="color: #ae81ff">2</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">7</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">19</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now to overwrite it.
+<code>INSERT OVERWRITE</code> is only available in a batch Flink job, so we set that first:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SET</span> <span style="color: #e6db74">&#39;execution.runtime-mode&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;batch&#39;</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then overwrite the data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #f8f8f2;background-color: #49483e">OVERWRITE</span> <span style="color: #f8f8f2;background-color: #49483e">dim01</span> <span style="color: #66d9ef;font-weight: bold">VALUES</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;wibble&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">dim01</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+--------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">id</span> <span style="color: #f92672;font-weight: bold">|</span>   <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+--------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">1</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">wibble</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+--------+</span>
+<span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">5</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">80</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I wonder if this could also be useful when working with fact data that’s partitioned by date, and you want to refresh an entire partition—perhaps with data that was late and you now have a complete picture of the day.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #75715e;font-style: italic">-- Create a partitioned table</span>
+<span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">orders</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+    <span style="color: #f8f8f2;background-color: #49483e">id</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2;background-color: #49483e">amount</span> <span style="color: #f8f8f2">DECIMAL</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">10</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">order_date</span> <span style="color: #f8f8f2">DATE</span>
+<span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #f8f8f2;background-color: #49483e">PARTITIONED</span> <span style="color: #66d9ef;font-weight: bold">BY</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+    <span style="color: #f8f8f2;background-color: #49483e">order_date</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+
+<span style="color: #75715e;font-style: italic">-- Populate it</span>
+<span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">orders</span> <span style="color: #66d9ef;font-weight: bold">VALUES</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">100</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">50</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">DATE</span> <span style="color: #e6db74">&#39;2024-06-24&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">200</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">75</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">DATE</span> <span style="color: #e6db74">&#39;2024-06-24&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">150</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">25</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">DATE</span> <span style="color: #e6db74">&#39;2024-06-25&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With the table populated you’ll see the data is physically partitioned on disk, with the data files under a folder path that includes the partition value (e.g. <code>/order_date=2024-06-24/</code>)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash"><span style="color: #f8f8f2">$ </span>aws s3 <span style="color: #f92672">--recursive</span> <span style="color: #f8f8f2">ls </span>s3://rmoff-lakehouse/00/my_glue_db.db/orders/
+2025-06-25 11:07:24       1020 00/my_glue_db.db/orders/data/order_date<span style="color: #f92672;font-weight: bold">=</span>2024-06-24/00000-0-9a3c536e-cf26-43ad-940f-dde15931e3c1-00001.parquet
+2025-06-25 11:07:24        985 00/my_glue_db.db/orders/data/order_date<span style="color: #f92672;font-weight: bold">=</span>2024-06-25/00000-0-9a3c536e-cf26-43ad-940f-dde15931e3c1-00002.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Query the table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">orders</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+--------+------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">id</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">amount</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">order_date</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+--------+------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">1</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">100</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">50</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2024</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">24</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">2</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">200</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">75</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2024</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">24</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">3</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">150</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">25</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2024</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">25</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+--------+------------+</span>
+<span style="color: #ae81ff">3</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">7</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">76</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now let’s replace the data for <code>2024-06-24</code>, leaving <code>2024-06-25</code> untouched:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #f8f8f2;background-color: #49483e">OVERWRITE</span> <span style="color: #f8f8f2;background-color: #49483e">orders</span> <span style="color: #66d9ef;font-weight: bold">PARTITION</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">order_date</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #e6db74">&#39;2024-06-24&#39;</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+    <span style="color: #66d9ef;font-weight: bold">VALUES</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">100</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">50</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">200</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">75</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">5</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">00</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">7</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">43</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">21</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">orders</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+--------+------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">id</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">amount</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">order_date</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+--------+------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">3</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">150</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">25</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2024</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">25</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">1</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">100</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">50</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2024</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">24</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">2</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">200</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">75</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2024</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">24</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">5</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">00</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2024</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">24</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">7</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">43</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">21</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2024</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">24</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----+--------+------------+</span>
+<span style="color: #ae81ff">5</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">7</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">79</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that Flink enforces something to stop you being stupid; you can’t specify the partition value in the <code>INSERT</code> values because you’d risk ending up with inconsistent data.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #f8f8f2;background-color: #49483e">OVERWRITE</span> <span style="color: #f8f8f2;background-color: #49483e">orders</span> <span style="color: #66d9ef;font-weight: bold">PARTITION</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">order_date</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #e6db74">&#39;2024-06-24&#39;</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #66d9ef;font-weight: bold">VALUES</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">100</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">50</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">DATE</span> <span style="color: #e6db74">&#39;2024-06-23&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">200</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">75</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">DATE</span> <span style="color: #e6db74">&#39;2024-06-24&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">5</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">00</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">DATE</span> <span style="color: #e6db74">&#39;2024-06-27&#39;</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">7</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">43</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">21</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2">DATE</span> <span style="color: #e6db74">&#39;2024-06-24&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">ERROR</span><span style="color: #f8f8f2;background-color: #49483e">]</span> <span style="color: #f8f8f2;background-color: #49483e">Could</span> <span style="color: #66d9ef;font-weight: bold">not</span> <span style="color: #66d9ef;font-weight: bold">execute</span> <span style="color: #66d9ef;font-weight: bold">SQL</span> <span style="color: #66d9ef;font-weight: bold">statement</span><span style="color: #f8f8f2;background-color: #49483e">.</span> <span style="color: #f8f8f2;background-color: #49483e">Reason</span><span style="color: #f8f8f2;background-color: #49483e">:</span>
+<span style="color: #f8f8f2;background-color: #49483e">org</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">apache</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">flink</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #66d9ef;font-weight: bold">table</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">api</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">ValidationException</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">Column</span> <span style="color: #f8f8f2;background-color: #49483e">types</span> <span style="color: #66d9ef;font-weight: bold">of</span> <span style="color: #f8f8f2;background-color: #49483e">query</span> <span style="color: #66d9ef;font-weight: bold">result</span> <span style="color: #66d9ef;font-weight: bold">and</span> <span style="color: #f8f8f2;background-color: #49483e">sink</span> <span style="color: #66d9ef;font-weight: bold">for</span> <span style="color: #e6db74">&#39;my_iceberg_catalog.my_glue_db.orders&#39;</span> <span style="color: #66d9ef;font-weight: bold">do</span> <span style="color: #66d9ef;font-weight: bold">not</span> <span style="color: #66d9ef;font-weight: bold">match</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+<span style="color: #f8f8f2;background-color: #49483e">Cause</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">Different</span> <span style="color: #f8f8f2;background-color: #49483e">number</span> <span style="color: #66d9ef;font-weight: bold">of</span> <span style="color: #f8f8f2;background-color: #49483e">columns</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Query</span> <span style="color: #66d9ef;font-weight: bold">schema</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">EXPR</span><span style="color: #960050;background-color: #1e0010">$</span><span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">INT</span> <span style="color: #66d9ef;font-weight: bold">NOT</span> <span style="color: #66d9ef;font-weight: bold">NULL</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">EXPR</span><span style="color: #960050;background-color: #1e0010">$</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">DECIMAL</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">5</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">NOT</span> <span style="color: #66d9ef;font-weight: bold">NULL</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">EXPR</span><span style="color: #960050;background-color: #1e0010">$</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">DATE</span> <span style="color: #66d9ef;font-weight: bold">NOT</span> <span style="color: #66d9ef;font-weight: bold">NULL</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">EXPR</span><span style="color: #960050;background-color: #1e0010">$</span><span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">DATE</span> <span style="color: #66d9ef;font-weight: bold">NOT</span> <span style="color: #66d9ef;font-weight: bold">NULL</span><span style="color: #f8f8f2;background-color: #49483e">]</span>
+<span style="color: #f8f8f2;background-color: #49483e">Sink</span> <span style="color: #66d9ef;font-weight: bold">schema</span><span style="color: #f8f8f2;background-color: #49483e">:</span>  <span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">id</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">amount</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">DECIMAL</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">10</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">order_date</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">DATE</span><span style="color: #f8f8f2;background-color: #49483e">]</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_upsert">UPSERT&nbsp;<a class="headline-hash" href="#_upsert">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Whereas <code>INSERT OVERWRITE</code> says &#34;<em>write this data over whatever may be there already</em>&#34;, an <code>UPSERT</code> is a more courteous operation, telling Flink to &#34;<em>write this data, and if the key exists already update it, and if not, insert it</em>&#34;.</p>
+</div>
+<div class="paragraph">
+<p>Let’s see it in action.
+To start with, you need a key on your table—since the whole point of an <code>UPSERT</code> is that it’ll match on the key to determine whether it’s an <code>UPDATE</code> (the key exists already) or an <code>INSERT</code> (it doesn’t).</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">inventory</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+    <span style="color: #f8f8f2;background-color: #49483e">product_id</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2;background-color: #49483e">product_name</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2;background-color: #49483e">quantity</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #66d9ef;font-weight: bold">PRIMARY</span> <span style="color: #66d9ef;font-weight: bold">KEY</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">product_id</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">NOT</span> <span style="color: #f8f8f2;background-color: #49483e">ENFORCED</span>
+<span style="color: #f8f8f2;background-color: #49483e">);</span>
+
+<span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">inventory</span> <span style="color: #66d9ef;font-weight: bold">VALUES</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">101</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Running shoes&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">50</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">102</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;GPS watch&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">103</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Gels&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">30</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">inventory</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------+---------------+----------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">product_id</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #f8f8f2;background-color: #49483e">product_name</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">quantity</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------+---------------+----------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">102</span> <span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f8f8f2;background-color: #49483e">GPS</span> <span style="color: #f8f8f2;background-color: #49483e">watch</span> <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">1</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">103</span> <span style="color: #f92672;font-weight: bold">|</span>          <span style="color: #f8f8f2;background-color: #49483e">Gels</span> <span style="color: #f92672;font-weight: bold">|</span>       <span style="color: #ae81ff">30</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">101</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">Running</span> <span style="color: #f8f8f2;background-color: #49483e">shoes</span> <span style="color: #f92672;font-weight: bold">|</span>       <span style="color: #ae81ff">50</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------+---------------+----------+</span>
+<span style="color: #ae81ff">3</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">5</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">50</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To use <code>UPSERT</code> it’s the same <code>INSERT INTO</code> syntax, but <code>UPSERT</code> is set as a <a href="https://iceberg.apache.org/docs/latest/flink-configuration/#write-options">configuration</a>.</p>
+</div>
+<div class="paragraph">
+<p>This can be at the query level, using a query hint:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">inventory</span>
+    <span style="color: #75715e;font-style: italic">/*+ OPTIONS(&#39;upsert-enabled&#39;=&#39;true&#39;) */</span> <i class="conum" data-value="1"></i><b>(1)</b>
+    <span style="color: #66d9ef;font-weight: bold">VALUES</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">102</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;GPS watch ⌚&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">5</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tbody><tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Upsert query hint</td>
+</tr>
+</tbody></table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">inventory</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------+---------------+----------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">product_id</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #f8f8f2;background-color: #49483e">product_name</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">quantity</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------+---------------+----------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">102</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #f8f8f2;background-color: #49483e">GPS</span> <span style="color: #f8f8f2;background-color: #49483e">watch</span> <span style="color: #960050;background-color: #1e0010">⌚</span> <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">5</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">103</span> <span style="color: #f92672;font-weight: bold">|</span>          <span style="color: #f8f8f2;background-color: #49483e">Gels</span> <span style="color: #f92672;font-weight: bold">|</span>       <span style="color: #ae81ff">30</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">101</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">Running</span> <span style="color: #f8f8f2;background-color: #49483e">shoes</span> <span style="color: #f92672;font-weight: bold">|</span>       <span style="color: #ae81ff">50</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------+---------------+----------+</span>
+<span style="color: #ae81ff">3</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">10</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">40</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can also configure a table to use <code>UPSERT</code> always:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">ALTER</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">inventory</span> <span style="color: #66d9ef;font-weight: bold">SET</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;write.upsert.enabled&#39;</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #e6db74">&#39;true&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">inventory</span> <span style="color: #66d9ef;font-weight: bold">VALUES</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">103</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Gels 🍫&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">28</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">inventory</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------+---------------+----------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">product_id</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #f8f8f2;background-color: #49483e">product_name</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">quantity</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------+---------------+----------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">103</span> <span style="color: #f92672;font-weight: bold">|</span>      <span style="color: #f8f8f2;background-color: #49483e">Gels</span> <span style="color: #960050;background-color: #1e0010">🍫</span>  <span style="color: #f92672;font-weight: bold">|</span>       <span style="color: #ae81ff">28</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">102</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #f8f8f2;background-color: #49483e">GPS</span> <span style="color: #f8f8f2;background-color: #49483e">watch</span> <span style="color: #960050;background-color: #1e0010">⌚</span> <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">5</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">101</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">Running</span> <span style="color: #f8f8f2;background-color: #49483e">shoes</span> <span style="color: #f92672;font-weight: bold">|</span>       <span style="color: #ae81ff">50</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">------------+---------------+----------+</span>
+<span style="color: #ae81ff">3</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">11</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">61</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_examining_iceberg_metadata">Examining Iceberg metadata&nbsp;<a class="headline-hash" href="#_examining_iceberg_metadata">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <a href="https://iceberg.apache.org/docs/latest/flink/">Iceberg docs for Flink</a> are pretty comprehensive.
+Something else that caught my eye when perusing them was the metadata tables.</p>
+</div>
+<div class="paragraph">
+<p>Each Iceberg table has a bunch of metadata associated with it, covering things like physical data file locations, snapshots, manifests, and so on.
+For my RDBMS readers, you can think of these as the equivalent of <code>V$</code> tables in Oracle, <code>pg_*</code> tables in Postgres, etc.</p>
+</div>
+<div class="paragraph">
+<p>You can find details of the tables in <a href="https://iceberg.apache.org/docs/latest/flink-queries/#inspecting-tables">the Iceberg docs</a>.
+The tables themselves are a suffix that you append to your actual table name.
+So if you want to see the list of files for a table called <code>foo</code>, you’d query table <code>foo$files</code>.</p>
+</div>
+<div class="paragraph">
+<p>Here’s a list of the tables/suffixes:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>$history</code></p>
+</li>
+<li>
+<p><code>$metadata_log_entries</code></p>
+</li>
+<li>
+<p><code>$snapshots</code></p>
+</li>
+<li>
+<p><code>$files</code></p>
+</li>
+<li>
+<p><code>$manifests</code></p>
+</li>
+<li>
+<p><code>$partitions</code></p>
+</li>
+<li>
+<p><code>$all_data_files</code></p>
+</li>
+<li>
+<p><code>$all_manifests</code></p>
+</li>
+<li>
+<p><code>$refs</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>For example, to look at the snapshots associated with the <code>dim01</code> table above:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">DESCRIBE</span> <span style="color: #f8f8f2;background-color: #49483e">dim01</span><span style="color: #960050;background-color: #1e0010">$</span><span style="color: #f8f8f2;background-color: #49483e">snapshots</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">---------------+---------------------------------------+-------+-----+--------+-----------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>          <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f92672;font-weight: bold">|</span>                                  <span style="color: #66d9ef;font-weight: bold">type</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #66d9ef;font-weight: bold">null</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">key</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">extras</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">watermark</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">---------------+---------------------------------------+-------+-----+--------+-----------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #f8f8f2;background-color: #49483e">committed_at</span> <span style="color: #f92672;font-weight: bold">|</span>                      <span style="color: #f8f8f2;background-color: #49483e">TIMESTAMP_LTZ</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">FALSE</span> <span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #f92672;font-weight: bold">|</span>           <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>   <span style="color: #f8f8f2;background-color: #49483e">snapshot_id</span> <span style="color: #f92672;font-weight: bold">|</span>                                <span style="color: #f8f8f2">BIGINT</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">FALSE</span> <span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #f92672;font-weight: bold">|</span>           <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f8f8f2;background-color: #49483e">parent_id</span> <span style="color: #f92672;font-weight: bold">|</span>                                <span style="color: #f8f8f2">BIGINT</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #66d9ef;font-weight: bold">TRUE</span> <span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #f92672;font-weight: bold">|</span>           <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #66d9ef;font-weight: bold">operation</span> <span style="color: #f92672;font-weight: bold">|</span>                                <span style="color: #f8f8f2;background-color: #49483e">STRING</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #66d9ef;font-weight: bold">TRUE</span> <span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #f92672;font-weight: bold">|</span>           <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">manifest_list</span> <span style="color: #f92672;font-weight: bold">|</span>                                <span style="color: #f8f8f2;background-color: #49483e">STRING</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #66d9ef;font-weight: bold">TRUE</span> <span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #f92672;font-weight: bold">|</span>           <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span>       <span style="color: #f8f8f2;background-color: #49483e">summary</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">MAP</span><span style="color: #f92672;font-weight: bold">&lt;</span><span style="color: #f8f8f2;background-color: #49483e">STRING</span> <span style="color: #66d9ef;font-weight: bold">NOT</span> <span style="color: #66d9ef;font-weight: bold">NULL</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span> <span style="color: #66d9ef;font-weight: bold">NOT</span> <span style="color: #66d9ef;font-weight: bold">NULL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #66d9ef;font-weight: bold">TRUE</span> <span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #f92672;font-weight: bold">|</span>           <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">---------------+---------------------------------------+-------+-----+--------+-----------+</span>
+<span style="color: #ae81ff">6</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f8f8f2;background-color: #49483e">committed_at</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">snapshot_id</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">operation</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">summary</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">dim01</span><span style="color: #960050;background-color: #1e0010">$</span><span style="color: #f8f8f2;background-color: #49483e">snapshots</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----------------------------+---------------------+-----------+--------------------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>               <span style="color: #f8f8f2;background-color: #49483e">committed_at</span> <span style="color: #f92672;font-weight: bold">|</span>         <span style="color: #f8f8f2;background-color: #49483e">snapshot_id</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">operation</span> <span style="color: #f92672;font-weight: bold">|</span>                        <span style="color: #f8f8f2;background-color: #49483e">summary</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----------------------------+---------------------+-----------+--------------------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">25</span> <span style="color: #ae81ff">09</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">45</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">55</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">390000</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">1088585618716047739</span> <span style="color: #f92672;font-weight: bold">|</span>    <span style="color: #f8f8f2;background-color: #49483e">append</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">{</span><span style="color: #f8f8f2;background-color: #49483e">flink</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #66d9ef;font-weight: bold">operator</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">id</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">90</span><span style="color: #f8f8f2;background-color: #49483e">bea66d</span><span style="color: #f8f8f2;background-color: #49483e">...</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">25</span> <span style="color: #ae81ff">09</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">49</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">844000</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">8184558532161473513</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">overwrite</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">{</span><span style="color: #f8f8f2;background-color: #49483e">flink</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #66d9ef;font-weight: bold">operator</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">id</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">90</span><span style="color: #f8f8f2;background-color: #49483e">bea66d</span><span style="color: #f8f8f2;background-color: #49483e">...</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----------------------------+---------------------+-----------+--------------------------------+</span>
+<span style="color: #ae81ff">2</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">75</span> <span style="color: #f8f8f2;background-color: #49483e">seconds</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_appendix_troubleshooting">Appendix: Troubleshooting&nbsp;<a class="headline-hash" href="#_appendix_troubleshooting">🔗</a> </h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_a_managed_table_factory_that_implements_org_apache_flink_table_factories_managedtablefactory_is_not_in_the_classpath">A managed table factory that implements org.apache.flink.table.factories.ManagedTableFactory is not in the classpath.&nbsp;<a class="headline-hash" href="#_a_managed_table_factory_that_implements_org_apache_flink_table_factories_managedtablefactory_is_not_in_the_classpath">🔗</a> </h3>
+<div class="paragraph">
+<p>Can you spot the error here?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">CATALOG</span> <span style="color: #f8f8f2;background-color: #49483e">my_iceberg_catalog</span> <span style="color: #66d9ef;font-weight: bold">WITH</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #e6db74">&#39;type&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;iceberg&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #e6db74">&#39;warehouse&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;s3://rmoff-lakehouse/00/&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #e6db74">&#39;catalog-impl&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;org.apache.iceberg.aws.glue.GlueCatalog&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #e6db74">&#39;io-impl&#39;</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;org.apache.iceberg.aws.s3.S3FileIO&#39;</span>
+<span style="color: #f92672;font-weight: bold">&gt;</span>     <span style="color: #f8f8f2;background-color: #49483e">);</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">INFO</span><span style="color: #f8f8f2;background-color: #49483e">]</span> <span style="color: #66d9ef;font-weight: bold">Execute</span> <span style="color: #66d9ef;font-weight: bold">statement</span> <span style="color: #f8f8f2;background-color: #49483e">succeeded</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">dim01</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">id</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">ERROR</span><span style="color: #f8f8f2;background-color: #49483e">]</span> <span style="color: #f8f8f2;background-color: #49483e">Could</span> <span style="color: #66d9ef;font-weight: bold">not</span> <span style="color: #66d9ef;font-weight: bold">execute</span> <span style="color: #66d9ef;font-weight: bold">SQL</span> <span style="color: #66d9ef;font-weight: bold">statement</span><span style="color: #f8f8f2;background-color: #49483e">.</span> <span style="color: #f8f8f2;background-color: #49483e">Reason</span><span style="color: #f8f8f2;background-color: #49483e">:</span>
+<span style="color: #f8f8f2;background-color: #49483e">org</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">apache</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">flink</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #66d9ef;font-weight: bold">table</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">api</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">ValidationException</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">Table</span> <span style="color: #66d9ef;font-weight: bold">options</span> <span style="color: #66d9ef;font-weight: bold">do</span> <span style="color: #66d9ef;font-weight: bold">not</span> <span style="color: #f8f8f2;background-color: #49483e">contain</span> <span style="color: #f8f8f2;background-color: #49483e">an</span> <span style="color: #66d9ef;font-weight: bold">option</span> <span style="color: #66d9ef;font-weight: bold">key</span> <span style="color: #e6db74">&#39;connector&#39;</span> <span style="color: #66d9ef;font-weight: bold">for</span> <span style="color: #f8f8f2;background-color: #49483e">discovering</span> <span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #f8f8f2;background-color: #49483e">connector</span><span style="color: #f8f8f2;background-color: #49483e">.</span> <span style="color: #f8f8f2;background-color: #49483e">Therefore</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #f8f8f2;background-color: #49483e">assumes</span> <span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #f8f8f2;background-color: #49483e">managed</span> <span style="color: #66d9ef;font-weight: bold">table</span><span style="color: #f8f8f2;background-color: #49483e">.</span> <span style="color: #f8f8f2;background-color: #49483e">However</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #f8f8f2;background-color: #49483e">managed</span> <span style="color: #66d9ef;font-weight: bold">table</span> <span style="color: #f8f8f2;background-color: #49483e">factory</span> <span style="color: #f8f8f2;background-color: #49483e">that</span> <span style="color: #f8f8f2;background-color: #49483e">implements</span> <span style="color: #f8f8f2;background-color: #49483e">org</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">apache</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">flink</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #66d9ef;font-weight: bold">table</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">factories</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">ManagedTableFactory</span> <span style="color: #66d9ef;font-weight: bold">is</span> <span style="color: #66d9ef;font-weight: bold">not</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #f8f8f2;background-color: #49483e">the</span> <span style="color: #f8f8f2;background-color: #49483e">classpath</span><span style="color: #f8f8f2;background-color: #49483e">.</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I’ve created the Iceberg catalog, and then the table within it.
+Except I didn’t!</p>
+</div>
+<div class="paragraph">
+<p>I created the Iceberg catalog, and then created a table in the <em>current catalog and database</em>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SHOW</span> <span style="color: #66d9ef;font-weight: bold">CURRENT</span> <span style="color: #66d9ef;font-weight: bold">CATALOG</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">current</span> <span style="color: #66d9ef;font-weight: bold">catalog</span> <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>      <span style="color: #f8f8f2;background-color: #49483e">default_catalog</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">----------------------+</span>
+<span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span>
+
+
+<span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SHOW</span> <span style="color: #66d9ef;font-weight: bold">CURRENT</span> <span style="color: #66d9ef;font-weight: bold">DATABASE</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">-----------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">current</span> <span style="color: #66d9ef;font-weight: bold">database</span> <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">-----------------------+</span>
+<span style="color: #f92672;font-weight: bold">|</span>      <span style="color: #f8f8f2;background-color: #49483e">default_database</span> <span style="color: #f92672;font-weight: bold">|</span>
+<span style="color: #f92672;font-weight: bold">+</span><span style="color: #75715e;font-style: italic">-----------------------+</span>
+<span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #66d9ef;font-weight: bold">set</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Before creating the table I need to either fully qualify the table name:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">my_iceberg_catalog</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">my_glue_db</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">dim01</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">id</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">INFO</span><span style="color: #f8f8f2;background-color: #49483e">]</span> <span style="color: #66d9ef;font-weight: bold">Execute</span> <span style="color: #66d9ef;font-weight: bold">statement</span> <span style="color: #f8f8f2;background-color: #49483e">succeeded</span><span style="color: #f8f8f2;background-color: #49483e">.</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><em>or</em> change the current catalog and database for the session first:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #f8f8f2;background-color: #49483e">USE</span> <span style="color: #f8f8f2;background-color: #49483e">my_iceberg_catalog</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">my_glue_db</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">INFO</span><span style="color: #f8f8f2;background-color: #49483e">]</span> <span style="color: #66d9ef;font-weight: bold">Execute</span> <span style="color: #66d9ef;font-weight: bold">statement</span> <span style="color: #f8f8f2;background-color: #49483e">succeeded</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Flink</span> <span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">dim02</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">id</span> <span style="color: #f8f8f2">INT</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">name</span> <span style="color: #f8f8f2;background-color: #49483e">STRING</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">INFO</span><span style="color: #f8f8f2;background-color: #49483e">]</span> <span style="color: #66d9ef;font-weight: bold">Execute</span> <span style="color: #66d9ef;font-weight: bold">statement</span> <span style="color: #f8f8f2;background-color: #49483e">succeeded</span><span style="color: #f8f8f2;background-color: #49483e">.</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">Contents</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_dependencies">Dependencies</a>
+      <ul>
+        <li><a href="#_iceberg">Iceberg</a></li>
+        <li><a href="#_aws_s3_and_glue">AWS S3 and Glue</a></li>
+        <li><a href="#_random_jiggling_hadoop_jars">Random jiggling (Hadoop JARs)</a></li>
+        <li><a href="#_kafka">Kafka</a></li>
+        <li><a href="#_jar_location">JAR location</a></li>
+      </ul>
+    </li>
+    <li><a href="#_checkpointing">Checkpointing</a></li>
+    <li><a href="#_smoke_testing_icebergs3glue">Smoke testing Iceberg/S3/Glue</a>
+      <ul>
+        <li><a href="#_creating_an_iceberg_table_in_flink_sql_using_the_iceberg_connector">Creating an Iceberg table in Flink SQL using the Iceberg connector</a></li>
+        <li><a href="#_creating_a_table_in_flink_sql_within_an_iceberg_catalog">Creating a table in Flink SQL within an Iceberg catalog</a></li>
+      </ul>
+    </li>
+    <li><a href="#_kafka_iceberg_s3glue">Kafka → Iceberg (S3/Glue)</a>
+      <ul>
+        <li><a href="#_define_the_kafka_source">Define the Kafka source</a></li>
+        <li><a href="#_send_kafka_data_to_iceberg_using_this_one_simple_trick">💡 Send Kafka data to Iceberg using this one simple trick 😉</a></li>
+      </ul>
+    </li>
+    <li><a href="#_insert_overwrite">INSERT OVERWRITE</a></li>
+    <li><a href="#_upsert">UPSERT</a></li>
+    <li><a href="#_examining_iceberg_metadata">Examining Iceberg metadata</a></li>
+    <li><a href="#_appendix_troubleshooting">Appendix: Troubleshooting</a>
+      <ul>
+        <li><a href="#_a_managed_table_factory_that_implements_org_apache_flink_table_factories_managedtablefactory_is_not_in_the_classpath">A managed table factory that implements org.apache.flink.table.factories.ManagedTableFactory is not in the classpath.</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav>
+      </div>
+      
+      <div class="toc-mobile-label">TABLE OF CONTENTS</div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	</body>
+</html>
