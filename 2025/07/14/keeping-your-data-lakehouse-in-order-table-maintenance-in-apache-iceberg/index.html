@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Keeping your Data Lakehouse in Order: Table Maintenance in Apache Iceberg</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2025/07/14/keeping-your-data-lakehouse-in-order-table-maintenance-in-apache-iceberg/">
+		
+		<script src="/js/copy-code.js"></script>
+		
+		
+		
+		
+
+		
+		<meta property="og:title" content="Keeping your Data Lakehouse in Order: Table Maintenance in Apache Iceberg" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2025/07/h_IMG_0987.webp" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2025/07/14/keeping-your-data-lakehouse-in-order-table-maintenance-in-apache-iceberg/" />
+		<meta property="og:site_name" content="Keeping your Data Lakehouse in Order: Table Maintenance in Apache Iceberg" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/toc.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/retro-cards.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/custom.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+		<script src="https://rmoff.net/js/toc.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2025/07/h_IMG_0987.webp'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<img src="https://rmoff.net/img/logo.jpg" class="w2 h2 br-100" alt="rmoff&#39;s random ramblings" />
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">
+						<span class="terminal-title">Keeping your Data Lakehouse in Order: Table Maintenance in Apache Iceberg<span class="terminal-cursor"></span></span>
+					</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2025-07-14T14:43:04Z">Jul 14, 2025</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/apache-iceberg" class="no-underline category near-white dim">Apache Iceberg</a>, <a href="https://rmoff.net/categories/apache-spark" class="no-underline category near-white dim">Apache Spark</a>, <a href="https://rmoff.net/categories/trino" class="no-underline category near-white dim">Trino</a>, <a href="https://rmoff.net/categories/minio" class="no-underline category near-white dim">MinIO</a>
+								<span class="display-print">at https://rmoff.net/2025/07/14/keeping-your-data-lakehouse-in-order-table-maintenance-in-apache-iceberg/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<div class="container-fluid docs">
+  <div class="row">
+    <main class="docs-content" role="main">
+
+<article class="article">
+	<div class="paragraph">
+<p>Iceberg nicely decouples storage from ingest and query (yay!).
+When we say &#34;decouples&#34; it’s a fancy way of saying &#34;doesn’t do&#34;.
+Which, in the case of ingest and query, is really powerful.
+It means that we can store data in an open format, populated by one or more tools, and queried by the same, or other tools.
+Iceberg gets to be very opinionated and optimised around what it was built for (storing tabular data in a flexible way that can be efficiently queried).
+This is amazing!</p>
+</div>
+<div class="paragraph">
+<p>But, what Iceberg doesn’t do is any housekeeping on its data and metadata.
+This means that getting data in and out of Apache Iceberg isn’t where the story stops.
+You can provision your object storage, choose a metadata catalog, and chuck an engine on it all (like Flink, Trino, or Spark).
+But you still need to think about the files that Iceberg is writing.
+Because under the covers of your Iceberg table is this:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2025/07/iceberg-metadata.webp" alt="iceberg metadata" width="500"/>
+</div>
+<div class="title">Figure 1. Credit: <a href="https://iceberg.apache.org/spec/#overview">Apache Iceberg docs</a>.</div>
+</div>
+<div class="paragraph">
+<p>Let’s take a step back and look at what happens when you write some data to Iceberg.</p>
+</div>
+<div class="sect1">
+<h2 id="_what_happens_when_you_write_data_to_iceberg">What happens when you write data to Iceberg?&nbsp;<a class="headline-hash" href="#_what_happens_when_you_write_data_to_iceberg">🔗</a> </h2>
+<div class="sectionbody">
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+Alex Merced has a <a href="https://www.dremio.com/blog/the-life-of-a-write-query-for-apache-iceberg-tables/">good article about this</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>When you first create a table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span>
+  <span style="color: #f8f8f2;background-color: #49483e">IF</span> <span style="color: #66d9ef;font-weight: bold">NOT</span> <span style="color: #66d9ef;font-weight: bold">EXISTS</span> <span style="color: #f8f8f2;background-color: #49483e">customers</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+    <span style="color: #f8f8f2;background-color: #49483e">customer_id</span> <span style="color: #f8f8f2">BIGINT</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2;background-color: #49483e">first_name</span> <span style="color: #f8f8f2">VARCHAR</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">255</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">last_name</span> <span style="color: #f8f8f2">VARCHAR</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">255</span><span style="color: #f8f8f2;background-color: #49483e">),</span>
+    <span style="color: #f8f8f2;background-color: #49483e">email</span> <span style="color: #f8f8f2">VARCHAR</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">255</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+  <span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Iceberg writes a single <strong>metadata file</strong> holding details including the table’s location and its schema:</p>
+</div>
+<details>
+<summary class="title"><code>metadata/00000-69666f0f-2902-49ae-a717-0d8eb81c4825.metadata.json</code> <em>(click to expand)</em></summary>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="javascript"><span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">format-version</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">table-uuid</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">ee794fd1-2144-42ce-a9f3-e3807ec4c054</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">location</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">s3://warehouse/rmoff/customers</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">last-sequence-number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">last-updated-ms</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1752247098598</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">last-column-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">current-schema-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">schemas</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+        <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">type</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">struct</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">schema-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">fields</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">name</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">customer_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">required</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">type</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">long</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">name</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">first_name</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">required</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">type</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">string</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">name</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">last_name</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">required</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">type</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">string</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">name</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">email</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">required</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">type</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">string</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">}</span>
+            <span style="color: #f8f8f2;background-color: #49483e">]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">}</span>
+    <span style="color: #f8f8f2;background-color: #49483e">],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">default-spec-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partition-specs</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+        <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">spec-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">fields</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">}</span>
+    <span style="color: #f8f8f2;background-color: #49483e">],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">last-partition-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">999</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">default-sort-order-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">sort-orders</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+        <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">order-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">fields</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">}</span>
+    <span style="color: #f8f8f2;background-color: #49483e">],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">properties</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">owner</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">root</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">created-at</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">2025-07-11T15:18:18.570926252Z</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">write.parquet.compression-codec</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">zstd</span><span style="color: #e6db74">&#34;</span>
+    <span style="color: #f8f8f2;background-color: #49483e">},</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">current-snapshot-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">refs</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{},</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshots</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">statistics</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partition-statistics</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshot-log</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">metadata-log</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[]</span>
+<span style="color: #f8f8f2;background-color: #49483e">}</span></code></pre>
+</div>
+</div>
+</div>
+</details>
+<div class="paragraph">
+<p>Other than that, there’s nothing else written at this point.
+Now let’s write one row of data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">INTO</span> <span style="color: #f8f8f2;background-color: #49483e">customers</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">customer_id</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">first_name</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">last_name</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">email</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #66d9ef;font-weight: bold">VALUES</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Rey&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;Skywalker&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;rey@rebelscum.org&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This causes several more files to be written by Iceberg, both <code>/data</code> and <code>/metadata</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>$ mc ls -r minio/warehouse/rmoff/customers/
+[…] data/00000-0-e3b7a202-2481-4d9f-9b7c-9830908a425a-0-00001.parquet <i class="conum" data-value="1"></i><b>(1)</b>
+[…] metadata/00000-69666f0f-2902-49ae-a717-0d8eb81c4825.metadata.json <i class="conum" data-value="2"></i><b>(2)</b>
+[…] metadata/00001-d35fd98b-8761-4998-bd74-9677c9929e63.metadata.json <i class="conum" data-value="3"></i><b>(3)</b>
+[…] metadata/ab613eb0-2f90-4273-869e-ee6d1425ab9a-m0.avro <i class="conum" data-value="4"></i><b>(4)</b>
+[…] metadata/snap-653583197990088094-1-ab613eb0-2f90-4273-869e-ee6d1425ab9a.avro <i class="conum" data-value="5"></i><b>(5)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tbody><tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>The row of data that I just wrote</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Metadata (v00000, original, as shown above)</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Metadata (v00001, new)</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="4"></i><b>4</b></td>
+<td>Manifest list</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="5"></i><b>5</b></td>
+<td>Manifest file</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>The v00001 <strong>metadata file</strong> is similar to the first, except that it now includes snapshot details:</p>
+</div>
+<details>
+<summary class="title">Extract from <code>metadata/00001-d35fd98b-8761-4998-bd74-9677c9929e63.metadata.json</code></summary>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="javascript"><span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #960050;background-color: #1e0010">…</span><span style="color: #f8f8f2;background-color: #49483e">]</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">current-snapshot-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">653583197990088094</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">refs</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">main</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshot-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">653583197990088094</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">type</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">branch</span><span style="color: #e6db74">&#34;</span>
+        <span style="color: #f8f8f2;background-color: #49483e">}</span>
+    <span style="color: #f8f8f2;background-color: #49483e">},</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshots</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+        <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">sequence-number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshot-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">653583197990088094</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">timestamp-ms</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1752247268656</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">summary</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">operation</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">append</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">spark.app.id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">local-1752247081867</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added-data-files</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">1</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added-records</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">1</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added-files-size</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">1367</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">changed-partition-count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">1</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">total-records</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">1</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">total-files-size</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">1367</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">total-data-files</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">1</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">total-delete-files</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">0</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">total-position-deletes</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">0</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">total-equality-deletes</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">0</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">engine-version</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">3.5.5</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">app-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">local-1752247081867</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">engine-name</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">spark</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">iceberg-version</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">Apache Iceberg 1.8.1 (commit 9ce0fcf0af7becf25ad9fc996c3bad2afdcfd33d)</span><span style="color: #e6db74">&#34;</span>
+            <span style="color: #f8f8f2;background-color: #49483e">},</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">manifest-list</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">s3://warehouse/rmoff/customers/metadata/snap-653583197990088094-1-ab613eb0-2f90-4273-869e-ee6d1425ab9a.avro</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">schema-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span>
+        <span style="color: #f8f8f2;background-color: #49483e">}</span>
+    <span style="color: #f8f8f2;background-color: #49483e">],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">statistics</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partition-statistics</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshot-log</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+        <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">timestamp-ms</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1752247268656</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshot-id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">653583197990088094</span>
+        <span style="color: #f8f8f2;background-color: #49483e">}</span>
+    <span style="color: #f8f8f2;background-color: #49483e">],</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">metadata-log</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+        <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">timestamp-ms</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1752247098598</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">metadata-file</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">s3://warehouse/rmoff/customers/metadata/00000-69666f0f-2902-49ae-a717-0d8eb81c4825.metadata.json</span><span style="color: #e6db74">&#34;</span>
+        <span style="color: #f8f8f2;background-color: #49483e">}</span>
+    <span style="color: #f8f8f2;background-color: #49483e">]</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #960050;background-color: #1e0010">…</span><span style="color: #f8f8f2;background-color: #49483e">]</span></code></pre>
+</div>
+</div>
+</div>
+</details>
+<div class="paragraph">
+<p>In the snapshot data is referenced a <strong>manifest list</strong>:</p>
+</div>
+<details>
+<summary class="title"><code>metadata/snap-653583197990088094-1-ab613eb0-2f90-4273-869e-ee6d1425ab9a.avro</code> (<em>converted to JSON</em>)</summary>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="javascript"><span style="color: #f8f8f2;background-color: #49483e">{</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">manifest_path</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">s3://warehouse/rmoff/customers/metadata/ab613eb0-2f90-4273-869e-ee6d1425ab9a-m0.avro</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">manifest_length</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">7192</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partition_spec_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">content</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">min_sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added_snapshot_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">653583197990088094</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added_files_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">existing_files_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">deleted_files_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added_rows_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">existing_rows_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">deleted_rows_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partitions</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[]</span>
+  <span style="color: #f8f8f2;background-color: #49483e">},</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key_metadata</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span>
+<span style="color: #f8f8f2;background-color: #49483e">}</span></code></pre>
+</div>
+</div>
+</div>
+</details>
+<div class="paragraph">
+<p>This in turn references a <strong>Manifest file</strong>:</p>
+</div>
+<details>
+<summary class="title"><code>metadata/ab613eb0-2f90-4273-869e-ee6d1425ab9a-m0.avro</code></summary>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="javascript"><span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">status</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshot_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">long</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">653583197990088094</span>
+    <span style="color: #f8f8f2;background-color: #49483e">},</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">file_sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">data_file</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">content</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">file_path</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">s3://warehouse/rmoff/customers/data/00000-0-e3b7a202-2481-4d9f-9b7c-9830908a425a-0-00001.parquet</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">file_format</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">PARQUET</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partition</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{},</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">record_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">file_size_in_bytes</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1367</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">column_sizes</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">43</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">42</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">48</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">56</span>
+                <span style="color: #f8f8f2;background-color: #49483e">}</span>
+            <span style="color: #f8f8f2;background-color: #49483e">]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">},</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value_counts</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span>
+                <span style="color: #f8f8f2;background-color: #49483e">}</span>
+            <span style="color: #f8f8f2;background-color: #49483e">]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">},</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">null_value_counts</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span>
+                <span style="color: #f8f8f2;background-color: #49483e">}</span>
+            <span style="color: #f8f8f2;background-color: #49483e">]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">},</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">nan_value_counts</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">},</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">lower_bounds</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0001</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">Rey</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">Skywalker</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">rey@rebelscum.or</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">}</span>
+            <span style="color: #f8f8f2;background-color: #49483e">]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">},</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">upper_bounds</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0001</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #ae81ff">\</span><span style="color: #e6db74">u0000</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">Rey</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">Skywalker</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">},</span>
+                <span style="color: #f8f8f2;background-color: #49483e">{</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+                    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">value</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">rey@rebelscum.os</span><span style="color: #e6db74">&#34;</span>
+                <span style="color: #f8f8f2;background-color: #49483e">}</span>
+            <span style="color: #f8f8f2;background-color: #49483e">]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">},</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key_metadata</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">split_offsets</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[</span>
+                <span style="color: #ae81ff">4</span>
+            <span style="color: #f8f8f2;background-color: #49483e">]</span>
+        <span style="color: #f8f8f2;background-color: #49483e">},</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">equality_ids</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">sort_order_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+            <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">int</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span>
+        <span style="color: #f8f8f2;background-color: #49483e">},</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">referenced_data_file</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span>
+    <span style="color: #f8f8f2;background-color: #49483e">}</span>
+<span style="color: #f8f8f2;background-color: #49483e">}</span></code></pre>
+</div>
+</div>
+</div>
+</details>
+<div class="paragraph">
+<p>As you can see from the Manifest file, this points to the data file that was written, and holds some basic statistics about the data such as upper and lower bound values of each column.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_data_about_the_metadata">Data about the metadata&nbsp;<a class="headline-hash" href="#_data_about_the_metadata">🔗</a> </h2>
+<div class="sectionbody">
+<div class="imageblock">
+<div class="content">
+<img src="/images/2025/07/metadata.webp" alt="yo dawg" width="i heard you like metadata - so I got you some data about the metadata"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Instead of poking around in object store buckets, we can get a good view of what’s happening beneath the surface of an Iceberg table using the system tables that expose this metadata.</p>
+</div>
+<div class="paragraph">
+<p>How you access these tables depends on your query engine for Iceberg.
+<a href="https://trino.io/docs/current/connector/iceberg.html#metadata-tables">Trino uses a <code>$</code> separator</a> (<code>mytable$snapshots</code>) whilst <a href="https://iceberg.apache.org/docs/nightly/spark-queries/#inspecting-tables">Spark uses qualifier suffix</a> (<code>catalog.db.table.snapshots</code>).</p>
+</div>
+<div class="paragraph">
+<p>Here is the above metadata, seen through the <a href="https://iceberg.apache.org/docs/nightly/spark-queries/#inspecting-tables">tables in Spark</a>:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>metadata_log_entries</code>:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">polaris</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">customers</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">metadata_log_entries</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;"/>
+<col style="width: 20%;"/>
+<col style="width: 20%;"/>
+<col style="width: 20%;"/>
+<col style="width: 20%;"/>
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">timestamp</th>
+<th class="tableblock halign-left valign-top">file</th>
+<th class="tableblock halign-left valign-top">latest_snapshot_id</th>
+<th class="tableblock halign-left valign-top">latest_schema_id</th>
+<th class="tableblock halign-left valign-top">latest_sequence_number</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2025-07-11 15:18:18.598000</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">s3://warehouse/rmoff/customers/metadata/00000-69666f0f-2902-49ae-a717-0d8eb81c4825.metadata.json</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">None</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">None</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">None</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2025-07-11 15:21:08.656000</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">s3://warehouse/rmoff/customers/metadata/00001-d35fd98b-8761-4998-bd74-9677c9929e63.metadata.json</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">653583197990088094</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p><code>manifests</code>:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">polaris</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">customers</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">manifests</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3333%;"/>
+<col style="width: 8.3337%;"/>
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">content</th>
+<th class="tableblock halign-left valign-top">path</th>
+<th class="tableblock halign-left valign-top">length</th>
+<th class="tableblock halign-left valign-top">partition_spec_id</th>
+<th class="tableblock halign-left valign-top">added_snapshot_id</th>
+<th class="tableblock halign-left valign-top">added_data_files_count</th>
+<th class="tableblock halign-left valign-top">existing_data_files_count</th>
+<th class="tableblock halign-left valign-top">deleted_data_files_count</th>
+<th class="tableblock halign-left valign-top">added_delete_files_count</th>
+<th class="tableblock halign-left valign-top">existing_delete_files_count</th>
+<th class="tableblock halign-left valign-top">deleted_delete_files_count</th>
+<th class="tableblock halign-left valign-top">partition_summaries</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">s3://warehouse/rmoff/customers/metadata/ab613eb0-2f90-4273-869e-ee6d1425ab9a-m0.avro</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">7192</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">653583197990088094</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">[]</p></td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p><code>snapshots</code></p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">polaris</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">customers</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">snapshots</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 16.6666%;"/>
+<col style="width: 16.6666%;"/>
+<col style="width: 16.6666%;"/>
+<col style="width: 16.6666%;"/>
+<col style="width: 16.6666%;"/>
+<col style="width: 16.667%;"/>
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">committed_at</th>
+<th class="tableblock halign-left valign-top">snapshot_id</th>
+<th class="tableblock halign-left valign-top">parent_id</th>
+<th class="tableblock halign-left valign-top">operation</th>
+<th class="tableblock halign-left valign-top">manifest_list</th>
+<th class="tableblock halign-left valign-top">summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2025-07-11 15:21:08.656000</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">653583197990088094</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">None</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">append</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">s3://warehouse/rmoff/customers/metadata/snap-653583197990088094-1-ab613eb0-2f90-4273-869e-ee6d1425ab9a.avro</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">\{&#39;engine-version&#39;: &#39;3.5.5&#39;, &#39;added-data-files&#39;: &#39;1&#39;,
+&#39;total-equality-deletes&#39;: &#39;0&#39;, &#39;app-id&#39;: &#39;local-1752247081867&#39;,
+&#39;added-records&#39;: &#39;1&#39;, &#39;total-records&#39;: &#39;1&#39;, &#39;spark.app.id&#39;:
+&#39;local-1752247081867&#39;, &#39;changed-partition-count&#39;: &#39;1&#39;, &#39;engine-name&#39;:
+&#39;spark&#39;, &#39;total-position-deletes&#39;: &#39;0&#39;, &#39;added-files-size&#39;: &#39;1367&#39;,
+&#39;total-delete-files&#39;: &#39;0&#39;, &#39;iceberg-version&#39;: &#39;Apache Iceberg 1.8.1
+(commit 9ce0fcf0af7becf25ad9fc996c3bad2afdcfd33d)&#39;, &#39;total-files-size&#39;:
+&#39;1367&#39;, &#39;total-data-files&#39;: &#39;1&#39;}</p></td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p>Plus the data file itself for a table, in <code>files</code>:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SELECT</span>
+  <span style="color: #f8f8f2;background-color: #49483e">file_path</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">record_count</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">file_size_in_bytes</span>
+<span style="color: #66d9ef;font-weight: bold">FROM</span>
+  <span style="color: #f8f8f2;background-color: #49483e">polaris</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">customers</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">files</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;"/>
+<col style="width: 33.3333%;"/>
+<col style="width: 33.3334%;"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">file_path</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">record_count</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">file_size_in_bytes</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">s3://warehouse/rmoff/customers/data/00000-0-e3b7a202-2481-4d9f-9b7c-9830908a425a-0-00001.parquet</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1367</p></td>
+</tr>
+</tbody>
+</table>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_why_all_these_files">Why all these files?&nbsp;<a class="headline-hash" href="#_why_all_these_files">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>After a few more changes to the data on the table, what started off as five files in the bucket is now ten times that:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="bash"><span style="color: #f8f8f2">$ </span>docker compose <span style="color: #f8f8f2">exec </span>minio-client mc <span style="color: #f8f8f2">ls</span> <span style="color: #f92672">-r</span> minio/warehouse/rmoff/customers
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-0-e3b7a202-2481-4d9f-9b7c-9830908a425a-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-10-e314c682-0973-4851-a1d3-02ec2ff474d3-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-11-9cc47f12-f4f9-4db0-a942-2dd67cd3b1ba-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-12-1d30b129-68e1-4860-a4f5-f996916125d4-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-13-fa0ef50e-e976-41dc-8335-dd67568ed81e-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-14-3b349ccd-1cb1-467b-b0cd-68d98d081c62-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-22-613312a3-36fa-4714-8088-217bfce711b5-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-24-e0fd0048-a3c1-4acc-bac5-cbe1df00d5a0-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-8-b2dad931-1680-499f-894f-2d853aa523f9-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] data/00000-9-8527fa9b-5d74-4edc-8620-d9a4cf73f6f4-0-00001.parquet
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00000-69666f0f-2902-49ae-a717-0d8eb81c4825.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00001-d35fd98b-8761-4998-bd74-9677c9929e63.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00002-9b2338d4-020e-4a9f-83cc-214c567a04e4.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00003-4dab419f-a92a-448c-b594-4c41a150c16a.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00004-dc4755fc-aecd-468c-bc1a-5475ad56b376.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00005-2e94a329-5463-44b0-bfc5-d7a70932ca54.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00006-743f8acd-b533-4f15-868a-8c8cb6531e98.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00007-f4e31526-9a63-4709-833c-2aeee0b070a3.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00008-5e69c6e7-afd0-4c76-86ef-502b6e684d5f.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00009-475e53be-14d1-4692-ba63-b736ee3289e7.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00010-99acda0d-dd1d-429e-b1a1-2d61f9ad5e0d.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00011-99c4c0cc-3454-433f-a5a2-7c3ae496e7d5.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/00012-1a421573-e57e-4d12-b112-b4b226cdc939.metadata.json
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/228ccff5-47ff-4253-94e9-eca15e40fac3-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/44a08557-5c09-45af-979c-a3f6bd20f73f-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/4a03f20d-a439-4f31-a903-7f3c6460918c-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/7d48f2bc-3284-406d-ade6-a4acb3a449bf-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/822c7500-d614-4362-9771-5a4d85fc8637-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/ab613eb0-2f90-4273-869e-ee6d1425ab9a-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/adaa1024-c57f-4d40-a77c-f90ae7657691-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/adaa1024-c57f-4d40-a77c-f90ae7657691-m1.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/adaa1024-c57f-4d40-a77c-f90ae7657691-m2.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/adaa1024-c57f-4d40-a77c-f90ae7657691-m3.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/adaa1024-c57f-4d40-a77c-f90ae7657691-m4.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/adaa1024-c57f-4d40-a77c-f90ae7657691-m5.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/adaa1024-c57f-4d40-a77c-f90ae7657691-m6.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/adaa1024-c57f-4d40-a77c-f90ae7657691-m7.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/bed8d569-0d51-49b8-ab45-90506fa8e225-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/c7835d36-f795-4972-b596-47207e01c4b3-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/d4c87db9-87f4-4a0c-86be-22b280415213-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/e06e486c-1679-4b8c-807e-f97771d2098e-m0.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-3955300550128988035-1-adaa1024-c57f-4d40-a77c-f90ae7657691.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-4323972595265181943-1-d4c87db9-87f4-4a0c-86be-22b280415213.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-6183377644092012057-1-c7835d36-f795-4972-b596-47207e01c4b3.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-653583197990088094-1-ab613eb0-2f90-4273-869e-ee6d1425ab9a.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-6908561599456501560-1-4a03f20d-a439-4f31-a903-7f3c6460918c.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-707189909035517389-1-e06e486c-1679-4b8c-807e-f97771d2098e.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-7224052145290180020-1-228ccff5-47ff-4253-94e9-eca15e40fac3.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-7609541883410176846-1-44a08557-5c09-45af-979c-a3f6bd20f73f.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-8234548320069527226-1-bed8d569-0d51-49b8-ab45-90506fa8e225.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-8447691896096706468-1-822c7500-d614-4362-9771-5a4d85fc8637.avro
+<span style="color: #f92672;font-weight: bold">[</span>…] metadata/snap-8687338518067749463-1-7d48f2bc-3284-406d-ade6-a4acb3a449bf.avro</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is a by-product of how Iceberg provides its rich functionality.
+Iceberg has been designed and built so that it supports features such as <a href="https://iceberg.apache.org/docs/nightly/branching/">branching</a>, <a href="https://iceberg.apache.org/docs/nightly/evolution/">schema evolution</a>, <a href="https://iceberg.apache.org/docs/nightly/partitioning/#icebergs-hidden-partitioning">partitioning</a>, and <a href="https://trino.io/docs/current/connector/iceberg.html#time-travel-queries">time travel</a>.</p>
+</div>
+<div class="sect2">
+<h3 id="_time_travel_in_iceberg">Time travel in Iceberg&nbsp;<a class="headline-hash" href="#_time_travel_in_iceberg">🔗</a> </h3>
+<div class="paragraph">
+<p>For example, I can query the table’s state as it was half an hour ago.
+In this case, Iceberg uses these files to reconstruct the data and schema of a table at a given time.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">customers</span> <span style="color: #f8f8f2">TIMESTAMP</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #66d9ef;font-weight: bold">OF</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">NOW</span><span style="color: #f8f8f2;background-color: #49483e">()</span> <span style="color: #f92672;font-weight: bold">-</span> <span style="color: #f8f8f2;background-color: #49483e">INTERVAL</span> <span style="color: #ae81ff">30</span> <span style="color: #f8f8f2;background-color: #49483e">MINUTES</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;"/>
+<col style="width: 25%;"/>
+<col style="width: 25%;"/>
+<col style="width: 25%;"/>
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">customer_id</th>
+<th class="tableblock halign-left valign-top">first_name</th>
+<th class="tableblock halign-left valign-top">last_name</th>
+<th class="tableblock halign-left valign-top">email</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Hermione</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Granger</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="mailto:leviosaaaaa@hogwarts.edu">leviosaaaaa@hogwarts.edu</a></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Rey</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Skywalker</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="mailto:rey@rebelscum.org">rey@rebelscum.org</a></p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Time travel in Iceberg is based around the concept of snapshots.
+We can look up the snapshot that was current at the point in time we’re querying (30 minutes ago, in this example):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f8f8f2;background-color: #49483e">manifest_list</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">snapshot_id</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">polaris</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">customers</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">snapshots</span>
+    <span style="color: #66d9ef;font-weight: bold">WHERE</span> <span style="color: #f8f8f2;background-color: #49483e">committed_at</span> <span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #f8f8f2;background-color: #49483e">NOW</span><span style="color: #f8f8f2;background-color: #49483e">()</span> <span style="color: #f92672;font-weight: bold">-</span> <span style="color: #f8f8f2;background-color: #49483e">INTERVAL</span> <span style="color: #ae81ff">30</span> <span style="color: #f8f8f2;background-color: #49483e">MINUTES</span>
+    <span style="color: #66d9ef;font-weight: bold">ORDER</span> <span style="color: #66d9ef;font-weight: bold">BY</span> <span style="color: #f8f8f2;background-color: #49483e">committed_at</span> <span style="color: #66d9ef;font-weight: bold">ASC</span> <span style="color: #66d9ef;font-weight: bold">LIMIT</span> <span style="color: #ae81ff">1</span></code></pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 50%;"/>
+<col style="width: 50%;"/>
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">manifest_list</th>
+<th class="tableblock halign-left valign-top">snapshot_id</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">s3://warehouse/rmoff/customers/metadata/snap-707189909035517389-1-e06e486c-1679-4b8c-807e-f97771d2098e.avro</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">707189909035517389</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The <strong>manifest list</strong> for this snapshot holds the following:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="javascript"><span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">manifest_path</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">s3://warehouse/rmoff/customers/metadata/e06e486c-1679-4b8c-807e-f97771d2098e-m0.avro</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">manifest_length</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">7194</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partition_spec_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">content</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">min_sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added_snapshot_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">707189909035517389</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added_files_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">existing_files_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">deleted_files_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added_rows_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">existing_rows_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">deleted_rows_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partitions</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[]</span>
+    <span style="color: #f8f8f2;background-color: #49483e">},</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key_metadata</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span>
+<span style="color: #f8f8f2;background-color: #49483e">}</span>
+<span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">manifest_path</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">s3://warehouse/rmoff/customers/metadata/ab613eb0-2f90-4273-869e-ee6d1425ab9a-m0.avro</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">manifest_length</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">7192</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partition_spec_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">content</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">min_sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added_snapshot_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">653583197990088094</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added_files_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">existing_files_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">deleted_files_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">added_rows_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">existing_rows_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">deleted_rows_count</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">partitions</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+        <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">array</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">[]</span>
+    <span style="color: #f8f8f2;background-color: #49483e">},</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">key_metadata</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span>
+<span style="color: #f8f8f2;background-color: #49483e">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The two referenced manifest files contain pointers to the data files:</p>
+</div>
+<div class="listingblock">
+<div class="title"><code>e06e486c-1679-4b8c-807e-f97771d2098e-m0.avro</code></div>
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="javascript"><span style="color: #f8f8f2;background-color: #49483e">{</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">status</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshot_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">long</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">707189909035517389</span>
+  <span style="color: #f8f8f2;background-color: #49483e">},</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">file_sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">data_file</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">content</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">file_path</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">s3://warehouse/rmoff/customers/data/00000-8-b2dad931-1680-499f-894f-2d853aa523f9-0-00001.parquet</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #960050;background-color: #1e0010">…</span><span style="color: #f8f8f2;background-color: #49483e">]</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="title"><code>ab613eb0-2f90-4273-869e-ee6d1425ab9a-m0.avro</code></div>
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="javascript"><span style="color: #f8f8f2;background-color: #49483e">{</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">status</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">snapshot_id</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">long</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">653583197990088094</span>
+  <span style="color: #f8f8f2;background-color: #49483e">},</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">file_sequence_number</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">null</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+  <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">data_file</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">content</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">file_path</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">&#34;</span><span style="color: #e6db74">s3://warehouse/rmoff/customers/data/00000-0-e3b7a202-2481-4d9f-9b7c-9830908a425a-0-00001.parquet</span><span style="color: #e6db74">&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then the data files:</p>
+</div>
+<div class="listingblock">
+<div class="title"><code>00000-0-e3b7a202-2481-4d9f-9b7c-9830908a425a-0-00001.parquet</code></div>
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>┌─────────────┬────────────┬───────────┬───────────────────┐
+│ customer_id │ first_name │ last_name │       email       │
+│    int64    │  varchar   │  varchar  │      varchar      │
+├─────────────┼────────────┼───────────┼───────────────────┤
+│      1      │ Rey        │ Skywalker │ rey@rebelscum.org │
+└─────────────┴────────────┴───────────┴───────────────────┘</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="title"><code>00000-8-b2dad931-1680-499f-894f-2d853aa523f9-0-00001.parquet</code></div>
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>┌─────────────┬────────────┬───────────┬──────────────────────────┐
+│ customer_id │ first_name │ last_name │          email           │
+│    int64    │  varchar   │  varchar  │         varchar          │
+├─────────────┼────────────┼───────────┼──────────────────────────┤
+│      2      │ Hermione   │ Granger   │ leviosaaaaa@hogwarts.edu │
+└─────────────┴────────────┴───────────┴──────────────────────────┘</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>These two rows of data match what is shown in the <code>TIMESTAMP AS OF</code> time travel query above.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_ctrl_z_for_your_data_lakehouse">Ctrl-Z for your data lakehouse&nbsp;<a class="headline-hash" href="#_ctrl_z_for_your_data_lakehouse">🔗</a> </h3>
+<div class="paragraph">
+<p>Since Iceberg builds these layers of data and metadata for a table over time, it means that you can also rollback the table to one of its former states.
+To do this Iceberg simply changes the pointer of the current snapshot to a previous one.</p>
+</div>
+<div class="paragraph">
+<p>Both <a href="https://iceberg.apache.org/docs/nightly/spark-procedures/#rollback_to_snapshot">Spark</a> and <a href="https://trino.io/docs/current/connector/iceberg.html#rolling-back-to-a-previous-snapshot">Trino</a> provide <code>rollback_to_snapshot</code>.
+The joy of open standards is that even if you’re using an engine for your Iceberg work that has not implemented this feature, you can just use one that has for this operation alone, and then go back to your other one as normal.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #75715e;font-style: italic">-- uh oh, someone forgot a predicate</span>
+<span style="color: #66d9ef;font-weight: bold">DELETE</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">customers</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CALL</span> <span style="color: #f8f8f2;background-color: #49483e">polaris</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #66d9ef;font-weight: bold">system</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">rollback_to_snapshot</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;rmoff.customers&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">707189909035517389</span><span style="color: #f8f8f2;background-color: #49483e">);</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">customers</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code> customer_id | first_name | last_name |          email           | phone
+-------------+------------+-----------+--------------------------+-------
+           1 | Rey        | Skywalker | rey@rebelscum.org        | NULL
+           2 | Hermione   | Granger   | leviosaaaaa@hogwarts.edu | NULL</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_sodoesnt_this_get_messy">So…doesn’t this get messy?&nbsp;<a class="headline-hash" href="#_sodoesnt_this_get_messy">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Well, yes.
+Particularly if you think that typically for every commit to Iceberg, a new data file is written.
+That data file could be thousands of records; it could also be one.
+If the source of your data coming into Iceberg is a streaming platform then it’s more likely you could end up with smaller files if the volume of ingest is much lower than the rate.
+That is to say, if you want to be able to read the data sooner, you’ll set the commit period shorter; but unless you have large volumes of data coming in during that period then the size of the data file may well be smaller than you’d ideally want.</p>
+</div>
+<div class="paragraph">
+<p>We can look at the files metadata and compare the number of data files to the <code>record_count</code> across them all:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">trino</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #66d9ef;font-weight: bold">COUNT</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">data_file_ct</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">SUM</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">record_count</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">record_ct</span>
+                <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2">&#34;customers$files&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+ <span style="color: #f8f8f2;background-color: #49483e">data_file_ct</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">record_ct</span>
+<span style="color: #75715e;font-style: italic">--------------+-----------</span>
+           <span style="color: #ae81ff">1</span>  <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">3</span>
+<span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This means that the table has one data file, holding three records.</p>
+</div>
+<div class="paragraph">
+<p>If I run five separate <code>INSERT</code> s, each of one row, we’ll find we end up adding five data files, for just five records</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">trino</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #66d9ef;font-weight: bold">COUNT</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">data_file_ct</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">SUM</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">record_count</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">record_ct</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2">&#34;customers$files&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+ <span style="color: #f8f8f2;background-color: #49483e">data_file_ct</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">record_ct</span>
+<span style="color: #75715e;font-style: italic">--------------+-----------</span>
+           <span style="color: #ae81ff">6</span>  <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">8</span>
+<span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>These small files can cause challenges in several aspects, including:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Performance overhead of metadata management</p>
+</li>
+<li>
+<p>Object store access request costs (more files == more requests)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>To address these problems Iceberg has several housekeeping functions.
+As with the rollback procedure above, not all engines provide them.
+In Iceberg, Spark usually has the <a href="https://iceberg.apache.org/docs/nightly/spark-procedures/">best support</a>, and that’s the case here.
+Trino provides <a href="https://trino.io/docs/current/connector/iceberg.html#optimize">capabilities</a> in this area too.
+Flink has a <a href="https://iceberg.apache.org/docs/nightly/flink-actions/#rewrite-files-action"><code>RewriteDataFilesAction</code></a> but this isn’t exposed in Flink SQL.</p>
+</div>
+<div class="sect2">
+<h3 id="_combining_data_files_into_fewer_data_files">Combining data files into fewer data files&nbsp;<a class="headline-hash" href="#_combining_data_files_into_fewer_data_files">🔗</a> </h3>
+<div class="paragraph">
+<p>Trino provides <a href="https://trino.io/docs/current/connector/iceberg.html#optimize"><code>ALTER TABLE…EXECUTE optimize</code></a>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">trino</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">ALTER</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">customers</span> <span style="color: #66d9ef;font-weight: bold">EXECUTE</span> <span style="color: #f8f8f2;background-color: #49483e">optimize</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">trino</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #66d9ef;font-weight: bold">COUNT</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">data_file_ct</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">SUM</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">record_count</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">record_ct</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2">&#34;customers$files&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+ <span style="color: #f8f8f2;background-color: #49483e">data_file_ct</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">record_ct</span>
+<span style="color: #75715e;font-style: italic">--------------+-----------</span>
+            <span style="color: #ae81ff">1</span> <span style="color: #f92672;font-weight: bold">|</span>         <span style="color: #ae81ff">8</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that the data file count is now one, whilst the record count is still eight.</p>
+</div>
+<div class="paragraph">
+<p>I’ll add a few more small files:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">trino</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #66d9ef;font-weight: bold">COUNT</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">data_file_ct</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">SUM</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">record_count</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">record_ct</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2">&#34;customers$files&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+ <span style="color: #f8f8f2;background-color: #49483e">data_file_ct</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">record_ct</span>
+<span style="color: #75715e;font-style: italic">--------------+-----------</span>
+            <span style="color: #ae81ff">6</span> <span style="color: #f92672;font-weight: bold">|</span>        <span style="color: #ae81ff">13</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then use Spark’s <a href="https://iceberg.apache.org/docs/nightly/spark-procedures/#rewrite_data_files"><code>rewrite_data_files</code></a>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">CALL</span> <span style="color: #f8f8f2;background-color: #49483e">polaris</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #66d9ef;font-weight: bold">system</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">rewrite_data_files</span>
+    <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">table</span> <span style="color: #f92672;font-weight: bold">=&gt;</span> <span style="color: #e6db74">&#39;rmoff.customers&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+      <span style="color: #66d9ef;font-weight: bold">options</span> <span style="color: #f92672;font-weight: bold">=&gt;</span> <span style="color: #66d9ef;font-weight: bold">map</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;rewrite-all&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #e6db74">&#39;true&#39;</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+    <span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;"/>
+<col style="width: 25%;"/>
+<col style="width: 25%;"/>
+<col style="width: 25%;"/>
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">rewritten_data_files_count</th>
+<th class="tableblock halign-left valign-top">added_data_files_count</th>
+<th class="tableblock halign-left valign-top">rewritten_bytes_count</th>
+<th class="tableblock halign-left valign-top">failed_data_files_count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">6</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">7757</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+</tr>
+</tbody>
+</table>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #66d9ef;font-weight: bold">COUNT</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">data_file_ct</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">SUM</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">record_count</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">record_ct</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">polaris</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">customers</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">files</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 50%;"/>
+<col style="width: 50%;"/>
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">data_file_ct</th>
+<th class="tableblock halign-left valign-top">record_ct</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">13</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_expiring_snapshots">Expiring snapshots&nbsp;<a class="headline-hash" href="#_expiring_snapshots">🔗</a> </h3>
+<div class="paragraph">
+<p>Being able to rollback a table’s state, or query it at a particular point in time, is rather useful—but do you need <em>all</em> of those snapshots?
+A snapshot is created for each change to the table meaning that you can end up with rather a lot of them.</p>
+</div>
+<div class="paragraph">
+<p>To clean snapshots up you can use <a href="https://iceberg.apache.org/docs/nightly/spark-procedures/#expire_snapshots"><code>expire_snapshots</code></a> (Spark) or <a href="https://trino.io/docs/current/connector/iceberg.html#expire-snapshots"><code>ALTER TABLE … EXECUTE expire_snapshots</code></a> (Trino):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">trino</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2">&#34;customers$snapshots&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+        <span style="color: #f8f8f2;background-color: #49483e">committed_at</span>         <span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f8f8f2;background-color: #49483e">snapshot_id</span>     <span style="color: #f92672;font-weight: bold">|</span>      <span style="color: #f8f8f2;background-color: #49483e">parent_id</span>      <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">operation</span>
+<span style="color: #75715e;font-style: italic">-----------------------------+---------------------+---------------------+-----------</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">37</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">31</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">531</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2403840741999442414</span> <span style="color: #f92672;font-weight: bold">|</span>                <span style="color: #66d9ef;font-weight: bold">NULL</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">37</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">38</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">926</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">3830932525036690208</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2403840741999442414</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">37</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">39</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">916</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">6409867327989167022</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">3830932525036690208</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">37</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">40</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">921</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">325546929694535411</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">6409867327989167022</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">37</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">41</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">808</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">269825382665437490</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">325546929694535411</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">37</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">757</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">129306070246549703</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">269825382665437490</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">40</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">11</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">290</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">8861050211953882166</span> <span style="color: #f92672;font-weight: bold">|</span>  <span style="color: #ae81ff">129306070246549703</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">replace</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">07</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">828</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2371922233042001406</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">8861050211953882166</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">08</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">031</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">5882833294520864762</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2371922233042001406</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">08</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">230</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2961764211154500616</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">5882833294520864762</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">08</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">407</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">6373025590410861521</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2961764211154500616</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">08</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">600</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2039216781855207414</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">6373025590410861521</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">append</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">44</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">232</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">4056286565502898119</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2039216781855207414</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">replace</span>
+<span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">13</span> <span style="color: #66d9ef;font-weight: bold">rows</span><span style="color: #f8f8f2;background-color: #49483e">)</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">trino</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SET</span> <span style="color: #66d9ef;font-weight: bold">SESSION</span> <span style="color: #f8f8f2;background-color: #49483e">iceberg</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">expire_snapshots_min_retention</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;30s&#39;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">trino</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">ALTER</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">customers</span> <span style="color: #66d9ef;font-weight: bold">EXECUTE</span> <span style="color: #f8f8f2;background-color: #49483e">expire_snapshots</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">retention_threshold</span> <span style="color: #f92672;font-weight: bold">=&gt;</span> <span style="color: #e6db74">&#39;60 s&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">trino</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2;background-color: #49483e">rmoff</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2">&#34;customers$snapshots&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+        <span style="color: #f8f8f2;background-color: #49483e">committed_at</span>         <span style="color: #f92672;font-weight: bold">|</span>     <span style="color: #f8f8f2;background-color: #49483e">snapshot_id</span>     <span style="color: #f92672;font-weight: bold">|</span>      <span style="color: #f8f8f2;background-color: #49483e">parent_id</span>      <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">operation</span>
+<span style="color: #75715e;font-style: italic">-----------------------------+---------------------+---------------------+-----------</span>
+ <span style="color: #ae81ff">2025</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">07</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">14</span> <span style="color: #ae81ff">14</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">44</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">232</span> <span style="color: #f8f8f2;background-color: #49483e">UTC</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">4056286565502898119</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">2039216781855207414</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #66d9ef;font-weight: bold">replace</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_further_reading">Further reading&nbsp;<a class="headline-hash" href="#_further_reading">🔗</a> </h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://www.tabular.io/apache-iceberg-cookbook/data-operations-compaction/">File compaction - Tabular</a></p>
+</li>
+<li>
+<p><a href="https://dev.to/thedanicafine/the-apache-iceberg-small-file-problem-1k2m">The Apache Iceberg™ Small File Problem - Danica Fine</a></p>
+</li>
+<li>
+<p><a href="https://www.dremio.com/blog/compaction-in-apache-iceberg-fine-tuning-your-iceberg-tables-data-files/">Compaction in Apache Iceberg: Fine-Tuning Your Iceberg Table’s Data Files - Alex Merced</a></p>
+</li>
+<li>
+<p><a href="https://medium.com/ancestry-product-and-technology/solving-the-small-file-problem-in-iceberg-tables-6c31a295f724">Solving the Small File Problem in Iceberg Tables - Thomas Cardenas</a></p>
+</li>
+<li>
+<p><a href="https://www.oreilly.com/library/view/apache-iceberg-the/9781098148614/ch04.html">Apache Iceberg: The Definitive Guide - Chapter 4. Optimizing the Performance of Iceberg Tables</a></p>
+</li>
+<li>
+<p><a href="https://www.starburst.io/blog/apache-iceberg-files/">The file explosion problem in Apache Iceberg and what to do when it happens to you - Daniel Abadi</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_other_table_maintenance_options">Other table maintenance options&nbsp;<a class="headline-hash" href="#_other_table_maintenance_options">🔗</a> </h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://amoro.apache.org/">Apache Amoro</a> is a new project that offers an Iceberg catalog with <a href="https://amoro.apache.org//quick-start/#check-self-optimizing">built-in optimisation</a>.</p>
+</li>
+<li>
+<p><a href="https://github.com/nimtable/">Nimtable</a> is also a new project, providing table compaction.</p>
+</li>
+<li>
+<p><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables.html">S3 Tables</a> supports <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-maintenance.html">built-in table maintenance</a>.</p>
+</li>
+<li>
+<p><a href="https://docs.aws.amazon.com/glue/latest/dg/populate-otf.html">AWS Glue Data Catalog</a> provides <a href="https://docs.aws.amazon.com/glue/latest/dg/enable-compaction.html">compaction</a>.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_try_it_out_yourself">Try it out yourself&nbsp;<a class="headline-hash" href="#_try_it_out_yourself">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Use <a href="https://github.com/rmoff/examples/tree/main/iceberg/trino-polaris-minio">this Docker Compose</a> to bring up a local stack of:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Polaris (catalog)</p>
+</li>
+<li>
+<p>MinIO (object store)</p>
+</li>
+<li>
+<p>Trino (engine)</p>
+</li>
+<li>
+<p>Spark (engine) and Jupyter (notebook)</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">Contents</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_what_happens_when_you_write_data_to_iceberg">What happens when you write data to Iceberg?</a></li>
+    <li><a href="#_data_about_the_metadata">Data about the metadata</a></li>
+    <li><a href="#_why_all_these_files">Why all these files?</a>
+      <ul>
+        <li><a href="#_time_travel_in_iceberg">Time travel in Iceberg</a></li>
+        <li><a href="#_ctrl_z_for_your_data_lakehouse">Ctrl-Z for your data lakehouse</a></li>
+      </ul>
+    </li>
+    <li><a href="#_sodoesnt_this_get_messy">So…doesn’t this get messy?</a>
+      <ul>
+        <li><a href="#_combining_data_files_into_fewer_data_files">Combining data files into fewer data files</a></li>
+        <li><a href="#_expiring_snapshots">Expiring snapshots</a></li>
+      </ul>
+    </li>
+    <li><a href="#_further_reading">Further reading</a></li>
+    <li><a href="#_other_table_maintenance_options">Other table maintenance options</a></li>
+    <li><a href="#_try_it_out_yourself">Try it out yourself</a></li>
+  </ul>
+</nav>
+      </div>
+      
+      <div class="toc-mobile-label">TABLE OF CONTENTS</div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+		</main>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-75492960-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+	</body>
+</html>
