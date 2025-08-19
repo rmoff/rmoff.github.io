@@ -5,9 +5,782 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2025-07-22</lastBuildDate>
+    <lastBuildDate>2025-08-18</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Kafka to Iceberg - Exploring the Options</title>
+      <link>https://rmoff.net/2025/08/18/kafka-to-iceberg-exploring-the-options/</link>
+      <pubDate>2025-08-18</pubDate>
+      
+      <guid>https://rmoff.net/2025/08/18/kafka-to-iceberg-exploring-the-options/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2025/08/t_IMG_1923.webp" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You’ve got data in &lt;a href=&#34;https://www.youtube.com/watch?v=9CrlA0Wasvk&#34;&gt;Apache Kafka&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You want to get that data into &lt;a href=&#34;https://www.youtube.com/watch?v=TsmhRZElPvM&#34;&gt;Apache Iceberg&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What’s the best way to do it?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/08/kafka-to-iceberg.png&#34; alt=&#34;kafka to iceberg&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Perhaps invariably, the answer is: &lt;strong&gt;IT DEPENDS&lt;/strong&gt;.
+But fear not: here is a guide to help you navigate your way to choosing the best solution &lt;em&gt;for you&lt;/em&gt; 🫵.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_candidates&#34;&gt;The Candidates&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’m considering three technologies in this blog post:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/sql/gettingstarted/#hello-world&#34;&gt;Apache Flink SQL&lt;/a&gt; (open source)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://kafka.apache.org/documentation.html#connect&#34;&gt;Kafka Connect&lt;/a&gt; (open source)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.confluent.io/product/tableflow/&#34;&gt;Confluent Tableflow&lt;/a&gt; ($)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There are others, and I’ll mention those &lt;a href=&#34;#_but_what_about_this_other_tool&#34;&gt;at the end&lt;/a&gt;.
+The one that I’ve really not looked at, and is perhaps conspicuous by its absence, is Apache Spark.
+If you’re interested in Spark, check out &lt;a href=&#34;https://www.youtube.com/watch?v=5pXfznKniGg&#34;&gt;this video from Danica Fine&lt;/a&gt; in which she covers it.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock note&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-note&#34; title=&#34;Note&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+&lt;em&gt;Disclaimer: I work for Confluent, but will do my best to remain impartial in this article.&lt;/em&gt; 😀
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_approach&#34;&gt;The Approach&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’ve framed this blog post around the key areas that you can use as the basis for making your decision.
+Some of these will be show-stoppers and rule a particular option out, whilst others are simply gentle nudges that one tool might be preferred over another.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’m going to break the areas of consideration down into two (and a bit) areas:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Your data&lt;/strong&gt;: including where it’s from, what you’re doing with it, how it’s structured, and how many topics&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Living with it&lt;/strong&gt;: important factors such as what’s your existing deployment (if any), preference for self-managed vs SaaS, and table maintenance&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Other&lt;/strong&gt;: licensing, support for other formats, other bits and pieces&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_tool_overview&#34;&gt;Tool overview&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Before we get into it, let’s take a quick look at what the three tools are and how they integrate with Iceberg.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_apache_flink_sql&#34;&gt;Apache Flink SQL&lt;/h3&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+Read more: &lt;a href=&#34;https://rmoff.net/2025/06/24/writing-to-apache-iceberg-on-s3-using-flink-sql-with-glue-catalog/&#34;&gt;Writing to Apache Iceberg using Flink SQL&lt;/a&gt;
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Flink SQL jobs run on a Flink cluster.
+They do not require Kafka (unless you are specifically reading or writing to it—such as in this article).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Source and targets are defined as tables using DDL, with the integration (such as Kafka or Iceberg) specified as a connector type.
+Target tables are loaded as a stream using either &lt;code&gt;CREATE TABLE … AS SELECT&lt;/code&gt; or a standalone &lt;code&gt;INSERT INTO&lt;/code&gt; after defining the target table first.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There are some &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/overview/#supported-connectors&#34;&gt;connectors available within Flink&lt;/a&gt;, along with notable standalone connectors including &lt;a href=&#34;https://nightlies.apache.org/flink/flink-cdc-docs-master/docs/connectors/flink-sources/overview/&#34;&gt;Flink CDC&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_kafka_connect&#34;&gt;Kafka Connect&lt;/h3&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+Read more: &lt;a href=&#34;https://rmoff.net/2025/07/04/writing-to-apache-iceberg-on-s3-using-kafka-connect-with-glue-catalog/&#34;&gt;Writing to Apache Iceberg using Kafka Connect&lt;/a&gt;
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Kafka Connect runs on a Kafka Connect worker cluster.
+It is a pluggable ecosystem, providing an integration runtime that handles common tasks whilst individual connectors handle the technology-specific requirements.
+It uses a Kafka broker to track configuration and processing status.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You define &lt;em&gt;connector&lt;/em&gt; jobs using JSON configuration, submitted using a REST API.
+There are &lt;a href=&#34;https://hub.confluent.io&#34;&gt;hundreds of connectors&lt;/a&gt; available for Kafka Connect.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_tableflow&#34;&gt;Tableflow&lt;/h3&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+Read more: &lt;a href=&#34;https://www.confluent.io/blog/building-streaming-data-pipelines-part-1/#exposing-apache-kafka-topics-as-apache-icebergtm%EF%B8%8F-tables-with-tableflow&#34;&gt;Exposing Kafka Topics as Iceberg Tables With Tableflow&lt;/a&gt;
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Tableflow is a managed service as part of Confluent Cloud for streaming data from Apache Kafka topics into Apache Iceberg tables.
+You can use it with any topic in Confluent Cloud that has a schema.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Confluent Cloud also provides &lt;a href=&#34;https://docs.confluent.io/cloud/current/connectors/overview.html&#34;&gt;managed connectors&lt;/a&gt; (giving you access to a &lt;a href=&#34;https://hub.confluent.io&#34;&gt;huge ecosystem of source connectors&lt;/a&gt;) and &lt;a href=&#34;https://docs.confluent.io/cloud/current/flink/overview.html&#34;&gt;managed Flink SQL&lt;/a&gt; (for doing any processing on the data before sending it to Iceberg).&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_your_data&#34;&gt;Your Data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;Let’s start off the comparison by thinking about the data that we’ve got in Kafka and want to get into Iceberg.&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_where_is_the_data_coming_from&#34;&gt;Where is the data coming from?&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This article is focussed on data &lt;strong&gt;in&lt;/strong&gt; Kafka, but that data came from somewhere.
+Perhaps it’s applications writing directly to it, in which case it has no bearing on your technology of choice.
+However, if your data is coming into Kafka from other systems, you’ll find that &lt;strong&gt;Kafka Connect&lt;/strong&gt; and Confluent Cloud (for &lt;strong&gt;Tableflow&lt;/strong&gt;) have a richer set of connectors than &lt;strong&gt;Flink&lt;/strong&gt;.
+Flink does have several, including Flink CDC (which is built on Debezium).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Under this consideration also think about whether you want the data in Kafka for other purposes.
+Flink can take data directly from a source (e.g. RDBMS) directly into Iceberg and not write it in Kafka.
+This might simplify your pipeline, but it also means the same source data isn’t then available for use by other integrations or applications.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_how_many_topics_do_you_have&#34;&gt;How many topics do you have?&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There are two variants of this.
+The first is where you have multiple topics for &lt;em&gt;different entities&lt;/em&gt;.
+For example, you’ve got &lt;code&gt;orders&lt;/code&gt;, &lt;code&gt;customers&lt;/code&gt;, &lt;code&gt;products&lt;/code&gt;, &lt;code&gt;inventory&lt;/code&gt;…they’re all different, and they’re all going to their own respective Iceberg table.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/08/different-topics.excalidraw.png&#34; alt=&#34;different topics.excalidraw&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The second is where it’s multiple instances of &lt;em&gt;the same entity&lt;/em&gt;.
+This is very common in multi-tenant architectures.
+Maybe each customer has their own &lt;code&gt;transactions&lt;/code&gt; topic, and you’re wanting to populate a single consolidated Iceberg table from them.
+Another example of this would be where topics are geographically isolated (perhaps across Kafka different clusters, and then replicated into a central one), from where they’re all to be written to a single Iceberg table.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/08/same-topics.excalidraw.png&#34; alt=&#34;same topics.excalidraw&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So, if either of these scenarios apply to your data, how does it impact your tool choice?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In &lt;strong&gt;Flink SQL&lt;/strong&gt; every unique source schema must be explicitly defined.
+There’s no automagic population from a schema registry.
+This means that if you have four different topics you need to declare ten Flink SQL tables.
+Bear in mind with Flink SQL it’s not only the table name but its schema too that needs specifying.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;orders&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;orderID&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;customerID&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;product&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;quantity&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;orderTS&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #ae81ff&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;kafka&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;topic&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;orders&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;]);&lt;/span&gt;
+
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;customers&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;customerID&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;firstName&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;lastName&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;email&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;createdTS&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #ae81ff&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;kafka&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;topic&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;customers&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;]);&lt;/span&gt;
+
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;products&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;productID&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;sku&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;name&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;unitPrice&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;DECIMAL&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #ae81ff&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color: #ae81ff&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;),&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;updatedTS&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #ae81ff&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;kafka&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;topic&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;products&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;]);&lt;/span&gt;
+
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;inventory&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;productID&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;locationID&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;onHand&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;reserved&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;INT&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;invTS&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #ae81ff&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;kafka&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;topic&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;inventory&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;]);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now if you want to write these to Iceberg tables, you need to declare an Iceberg table for each:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;dest&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;orders&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;iceberg&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;])&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;orders&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;dest&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;customers&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;iceberg&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;])&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;customers&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;dest&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;products&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;iceberg&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;])&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;products&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;dest&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;inventory&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;iceberg&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;])&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;inventory&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;However, if you’ve got multiple topics &lt;em&gt;with the same schema&lt;/em&gt; then things are a bit easier since &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/kafka/#connector-options&#34;&gt;the Kafka connector in Flink SQL&lt;/a&gt; does support wildcards (&lt;code&gt;topic-pattern&lt;/code&gt;) or a list of topics (&lt;code&gt;topic&lt;/code&gt; with semi-colon separated topics).
+You can also add &lt;code&gt;topic&lt;/code&gt; as a &lt;em&gt;metadata&lt;/em&gt; column to your source table so that it is exposed for writing to Iceberg—important if you want to retain the lineage information of your data.
+Here’s an example of fan-in (N:1) in Flink SQL.
+First, create the source table reading from multiple topics:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;kafka_transactions_all&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;
+    &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;transaction_id&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;user_id&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;amount&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;DECIMAL&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #ae81ff&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #ae81ff&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;),&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;currency&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;merchant&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;transaction_time&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2&#34;&gt;TIMESTAMP&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #ae81ff&#34;&gt;3&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;),&lt;/span&gt;
+    &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src_topic&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;STRING&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;METADATA&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;topic&amp;#39;&lt;/span&gt; &lt;i class=&#34;conum&#34; data-value=&#34;1&#34;&gt;&lt;/i&gt;&lt;b&gt;(1)&lt;/b&gt;
+&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WITH&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;(&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;connector&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;kafka&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;properties.bootstrap.servers&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;broker:9092&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;format&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;json&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;scan.startup.mode&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;earliest-offset&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;topic-pattern&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;transactions&lt;/span&gt;&lt;span style=&#34;color: #ae81ff&#34;&gt;\.&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;.*&amp;#39;&lt;/span&gt; &lt;i class=&#34;conum&#34; data-value=&#34;2&#34;&gt;&lt;/i&gt;&lt;b&gt;(2)&lt;/b&gt;
+&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;colist arabic&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td&gt;&lt;i class=&#34;conum&#34; data-value=&#34;1&#34;&gt;&lt;/i&gt;&lt;b&gt;1&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;Topic metadata column included in the table definition&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;i class=&#34;conum&#34; data-value=&#34;2&#34;&gt;&lt;/i&gt;&lt;b&gt;2&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;Wildcard pattern for source Kafka topics&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Now let’s write that to a single Iceberg table:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;my_iceberg_catalog&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;my_glue_db&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;transactions_all&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;AS&lt;/span&gt;
+    &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;kafka_transactions_all&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can also do fan-in (N:1) in Flink SQL using the &lt;code&gt;UNION ALL&lt;/code&gt; operator.
+For example, if the above Kafka topics were defined as individual Flink SQL tables (perhaps with slightly different schemas that need unifying), you could do something like this to write them all to a single Iceberg table:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;TABLE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;my_iceberg_catalog&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;my_glue_db&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;transactions_all&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;AS&lt;/span&gt;
+    &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;SELECT&lt;/span&gt;  &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;uk&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;as&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src_topic&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;transaction_id&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;user_id&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;amount&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;currency&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;merchant&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;transaction_time&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;kafka_transactions_uk&lt;/span&gt;
+    &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;UNION&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;ALL&lt;/span&gt;
+    &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;SELECT&lt;/span&gt;  &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;eu&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;as&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src_topic&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;transaction_id&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;user_id&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;amount&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;currency&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;merchant&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;transaction_time&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;src&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;kafka_transactions_eu&lt;/span&gt;
+    &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Further more to Flink SQL’s flexibility is the &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/sql/insert/#insert-into-multiple-tables&#34;&gt;&lt;em&gt;statement sets&lt;/em&gt;&lt;/a&gt; feature, which you can use for fan-out (1:N)—routing data from the same source table to different target tables.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Moving onto &lt;strong&gt;Kafka Connect&lt;/strong&gt;, it supports wildcards and can do &lt;a href=&#34;https://rmoff.net/2025/07/04/writing-to-apache-iceberg-on-s3-using-kafka-connect-with-glue-catalog/#_n1_fan_in_writing_many_topics_to_one_table&#34;&gt;fan-in (N:1)&lt;/a&gt; using the &lt;code&gt;topics.regex&lt;/code&gt; parameter:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;topics.regex&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;src.*&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;It can also do fan-out (1:N) using the &lt;code&gt;iceberg.tables.route-field&lt;/code&gt; parameter for the Iceberg sink connector, described &lt;a href=&#34;https://rmoff.net/2025/07/04/writing-to-apache-iceberg-on-s3-using-kafka-connect-with-glue-catalog/#_1n_fan_out_writing_one_topic_to_many_tables&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; has a 1:1 relationship between Kafka topics and Iceberg tables.
+It can be enabled for multiple topics easily either through the UI, or from the CLI:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #75715e;font-style: italic&#34;&gt;# Write topics `my_topic[1-5]` to an Iceberg table&lt;/span&gt;
+&lt;span style=&#34;color: #f8f8f2&#34;&gt;$ &lt;/span&gt;confluent tableflow topic create my_topic1
+&lt;span style=&#34;color: #f8f8f2&#34;&gt;$ &lt;/span&gt;confluent tableflow topic create my_topic2
+&lt;span style=&#34;color: #f8f8f2&#34;&gt;$ &lt;/span&gt;confluent tableflow topic create my_topic3
+&lt;span style=&#34;color: #f8f8f2&#34;&gt;$ &lt;/span&gt;confluent tableflow topic create my_topic4
+&lt;span style=&#34;color: #f8f8f2&#34;&gt;$ &lt;/span&gt;confluent tableflow topic create my_topic5&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can achieve fan-in either by using Kafka Connect on Confluent Cloud to ingest to a single topic from multiple sources&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/08/kc-tf-flink-fan-in.excalidraw.png&#34; alt=&#34;kc tf flink fan in.excalidraw&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;or using Confluent Cloud for Apache Flink to &lt;code&gt;UNION&lt;/code&gt; multiple topics into one.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/08/tf-flink-fan-in.excalidraw.png&#34; alt=&#34;tf flink fan in.excalidraw&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Similarly, fan-out can be done using Flink to route the source topics into multiple destination ones, each of which is then enabled for Tableflow.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/08/tf-flink-fan-out.excalidraw.png&#34; alt=&#34;tf flink fan out.excalidraw&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_whither_schema&#34;&gt;Whither Schema?&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Sure, your data has a schema.
+But does it have a &lt;em&gt;schema&lt;/em&gt;?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If your data is just a lump of JSON like this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;click_ts&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;2023-02-01T14:30:25Z&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;ad_cost&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;1.50&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;is_conversion&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;user_id&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;001234567890&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;What should the target Iceberg table look like?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;One option is that you manually created it first.
+Doing this you can at least make sure that the data types are set correctly.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you’re &lt;a href=&#34;https://rmoff.net/2025/06/24/writing-to-apache-iceberg-on-s3-using-flink-sql-with-glue-catalog/#_define_the_kafka_source&#34;&gt;using &lt;strong&gt;Flink SQL&lt;/strong&gt; to write to Iceberg&lt;/a&gt; you have to declare the datatypes as part of the source Flink table DDL.
+For &lt;strong&gt;every. single. table&lt;/strong&gt;.
+But at least they’ll be correct (so long as you didn’t make a mistake in typing out all that DDL!).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2025/07/04/writing-to-apache-iceberg-on-s3-using-kafka-connect-with-glue-catalog/#_schemas&#34;&gt;&lt;strong&gt;Kafka Connect&lt;/strong&gt;&lt;/a&gt; will give you the option to play fast-and-loose with your schema if you want, and YOLO it by guessing.
+It might work, but you might also get this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code&gt;+----------------+----------+
+|      Name      |  Type    |
++----------------+----------+
+|  click_ts      |  string  | &lt;i class=&#34;conum&#34; data-value=&#34;3&#34;&gt;&lt;/i&gt;&lt;b&gt;(3)&lt;/b&gt;
+|  ad_cost       |  string  | &lt;i class=&#34;conum&#34; data-value=&#34;2&#34;&gt;&lt;/i&gt;&lt;b&gt;(2)&lt;/b&gt;
+|  user_id       |  string  |
+|  is_conversion |  string  | &lt;i class=&#34;conum&#34; data-value=&#34;1&#34;&gt;&lt;/i&gt;&lt;b&gt;(1)&lt;/b&gt;
++----------------+----------+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;colist arabic&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td&gt;&lt;i class=&#34;conum&#34; data-value=&#34;1&#34;&gt;&lt;/i&gt;&lt;b&gt;1&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;Storing a boolean as a string? not ideal.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;i class=&#34;conum&#34; data-value=&#34;2&#34;&gt;&lt;/i&gt;&lt;b&gt;2&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;Storing a currency as a string? not good.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;i class=&#34;conum&#34; data-value=&#34;3&#34;&gt;&lt;/i&gt;&lt;b&gt;3&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;Storing a timestamp as a string? gross.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;A better way all round to do this if you’re using &lt;strong&gt;Kafka Connect&lt;/strong&gt; or &lt;strong&gt;Tableflow&lt;/strong&gt; is to have your topics&amp;#39; schemas in the &lt;a href=&#34;https://docs.confluent.io/platform/current/schema-registry/index.html&#34;&gt;Schema Registry&lt;/a&gt;.
+This way the target Iceberg table can be defined correctly based on the actual schema of the data—not a guess at it:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code&gt;+----------------+-----------------+
+|      Name      |  Type           |
++----------------+-----------------+
+|  click_ts      |  timestamp      |
+|  ad_cost       |  decimal(38,2)  |
+|  user_id       |  string         |
+|  is_conversion |  boolean        |
++----------------+-----------------+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_schema_evolution&#34;&gt;Schema Evolution&lt;/h3&gt;
+&lt;div class=&#34;quoteblock&#34;&gt;
+&lt;blockquote&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Nothing is stable, even what is close to us in time&lt;/p&gt;
+&lt;/div&gt;
+&lt;/blockquote&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Another consideration to bear in mind is what happens when your schema changes.
+And at some point, your schema &lt;strong&gt;will&lt;/strong&gt; change.
+So how do you make sure that the target Iceberg reflects those changes?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In &lt;strong&gt;Flink SQL&lt;/strong&gt; there is no way to do this without duplicating records.
+You’d need to make sure that you’re using &lt;code&gt;scan.startup.mode=group-offsets&lt;/code&gt; and have set &lt;code&gt;properties.group.id&lt;/code&gt; in your original DDL, then cancel the job, amend the table DDL to reflect the new schema, and then restart the job (with an &lt;code&gt;INSERT INTO&lt;/code&gt; if you were using a &lt;code&gt;CREATE TABLE…AS SELECT&lt;/code&gt; originally).
+Even then, you’re going to duplicate the records that were written before Flink checkpointed and saved the Kafka topic offset that it had got to.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The &lt;strong&gt;Kafka Connect&lt;/strong&gt; Iceberg sink supports &lt;a href=&#34;https://rmoff.net/2025/07/04/writing-to-apache-iceberg-on-s3-using-kafka-connect-with-glue-catalog/#_schema_evolution&#34;&gt;schema evolution&lt;/a&gt;, just make sure you’ve set &lt;code&gt;iceberg.tables.evolve-schema-enabled=true&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;a href=&#34;https://docs.confluent.io/cloud/current/topics/tableflow/overview.html#schematization-and-schema-evolution&#34;&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; supports schema evolution&lt;/a&gt; out of the box.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_do_you_want_some_processing_to_go_with_that&#34;&gt;Do you want some processing to go with that?&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Perhaps you’re just wanting a big &amp;#39;ole dumb pipe through which to dump your data into Iceberg.
+Perhaps, however, you’ve decided that it would be useful to mask a few columns or filter some rows.
+Maybe, even, you’ve decided to &lt;a href=&#34;https://www.youtube.com/watch?v=FiZmyl1Npg0&#34;&gt;shift left&lt;/a&gt; and move a bunch of your batch workload out of the datalake and closer to the point at which the data’s created (per &lt;a href=&#34;https://ssbipolar.com/2021/05/31/roches-maxim/&#34;&gt;Roche’s maxim&lt;/a&gt;)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;This can contribute a significant amount of weighting to your tool choice.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;An added dimension to consider is &lt;em&gt;what kind of processing&lt;/em&gt; you’re doing (or plausibly would want to do in the future without needing to change your architecture).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;Stateless&lt;/em&gt; means literally what it says; there is no state.
+If you can process each record as it arrives without needing to build up state (like a counter, for example, or a lookup table), it’s stateless.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;em&gt;Stateful&lt;/em&gt;, on the other hand, is where you &lt;em&gt;do&lt;/em&gt; use state.
+Common examples would be an aggregation (&lt;code&gt;COUNT&lt;/code&gt;, &lt;code&gt;SUM&lt;/code&gt;, etc), a join to enrich the data, and so on.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If integration is Kafka Connect’s &lt;em&gt;raison d’être&lt;/em&gt;, processing is Flink’s.
+It’s where &lt;strong&gt;Flink SQL&lt;/strong&gt; really comes into its own, particularly for state&lt;em&gt;ful&lt;/em&gt; transformations.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you can express it in SQL, you can probably do it in Flink.
+Joining to other data (whether in Kafka, or other systems), time-based aggregations (orders per hour, for example), sessionising and pattern matching—all of this is Flink’s bread and butter.
+Flink SQL can also do stateless processing (filtering, schema projection, etc) too, and compared to Kafka Connect’s Single Message Transforms (see below) definitely easier to configure (it’s just SQL) and also richer in functionality.
+You’ll sometimes find with Single Message Transforms that there’s a particular transformation that you need and it just doesn’t exist yet.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Kafka Connect&lt;/strong&gt; can do &lt;em&gt;stateless&lt;/em&gt; processing using Single Message Transforms.
+These are configured through bits of JSON configuration, and whilst not the most intuitive way to express a transformation, they are remarkably powerful.
+For example, to drop named fields from the source table so that they aren’t included in the Iceberg table schema, you’d add this to your connector configuration:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;connector.class&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;org.apache.iceberg.connect.IcebergSinkConnector&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #960050;background-color: #1e0010&#34;&gt;…&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;]&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;transforms&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;                 &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;dropCC&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;transforms.dropCC.type&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;     &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;org.apache.kafka.connect.transforms.ReplaceField$Value&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;transforms.dropCC.exclude&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;  &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;col1, col4&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There are lots of other transformations available, many part of Apache Kafka itself, others provided by the community.
+I wrote a blog series about these previously: &lt;a href=&#34;https://rmoff.net/categories/twelvedaysofsmt/&#34;&gt;Twelve Days of SMT&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; is part of Confluent Cloud which means you already have access to Confluent Cloud for Apache Flink for your processing—the best of both worlds!&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/08/tf-flink.excalidraw.png&#34; alt=&#34;tf flink.excalidraw&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If your Kafka data is coming from Kafka Connect upstream using a managed connector in Confluent Cloud you can also use Single Message Transforms at ingest.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_insert_overwrite_and_upsert&#34;&gt;&lt;code&gt;INSERT OVERWRITE&lt;/code&gt; and &lt;code&gt;UPSERT&lt;/code&gt;&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Just as schemas may change, so may the data itself.
+This could be an aggregate (such as a &lt;code&gt;COUNT&lt;/code&gt;) for which more records have been received and so needs updating, or late-arriving data or data that’s been restated and needs to replace what’s there.
+For whatever reason, you’ll need to plan how you’re going to handle this in your Iceberg table.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;One option is using &lt;code&gt;UPSERT&lt;/code&gt; or &lt;code&gt;INSERT OVERWRITE&lt;/code&gt; semantics:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;UPSERT&lt;/code&gt; is a portmanteau of the operation that it describes: attempt to &lt;strong&gt;&lt;code&gt;UP&lt;/code&gt;&lt;/strong&gt;&lt;code&gt;DATE&lt;/code&gt; a key’s value, and if the key doesn’t exist then &lt;code&gt;IN&lt;/code&gt;&lt;strong&gt;&lt;code&gt;SERT&lt;/code&gt;&lt;/strong&gt; it instead.
+This is a common pattern used in data engineering when loading data.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;INSERT OVERWRITE&lt;/code&gt; takes a more extreme approach, and does what it says on the tin: insert values, and overwrite what’s there currently.
+This would more likely be used for data housekeeping (e.g. replacing the contents of a day’s partition with a restatement of the data once late data has arrived), or dimension table repopulation (replace the entire contents of the table with the latest version of the dimension).&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Flink SQL&lt;/strong&gt; supports both &lt;a href=&#34;https://rmoff.net/2025/06/24/writing-to-apache-iceberg-on-s3-using-flink-sql-with-glue-catalog/#_upsert&#34;&gt;&lt;code&gt;UPSERT&lt;/code&gt;&lt;/a&gt; and &lt;a href=&#34;https://rmoff.net/2025/06/24/writing-to-apache-iceberg-on-s3-using-flink-sql-with-glue-catalog/#_insert_overwrite&#34;&gt;&lt;code&gt;INSERT OVERWRITE&lt;/code&gt;&lt;/a&gt; (the latter in batch mode only, understandably).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Kafka Connect&lt;/strong&gt; does not support either of these operations.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; will support &lt;code&gt;UPSERT&lt;/code&gt; soon.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_delivery_semantics&#34;&gt;Delivery Semantics&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Flink SQL&lt;/strong&gt; reading from Kafka and writing to Iceberg will have exactly-once semantics so long as you enable checkpointing:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;SET&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;execution.checkpointing.interval&amp;#39;&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;30s&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;a href=&#34;https://iceberg.apache.org/docs/nightly/kafka-connect/#requirements&#34;&gt;&lt;strong&gt;Kafka Connect&lt;/strong&gt;&lt;/a&gt; and &lt;strong&gt;Tableflow&lt;/strong&gt; both have out-of-the-box support for exactly-once semantics for writing to Iceberg.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_living_with_it&#34;&gt;Living with it&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;So far I’ve looked at the areas to think about with regards to the data that you’re sending to Iceberg.
+That’s only part of the puzzle though.
+It might be a fun science experiment to put together random technologies based on their feature-support alone, but in the real world we have to live with the design choices we make too.
+Let’s look at some more factors to include in our weighing up of options.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_existing_ecosystem&#34;&gt;Existing Ecosystem&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you already run &lt;strong&gt;Apache Flink&lt;/strong&gt; or &lt;strong&gt;Kafka Connect&lt;/strong&gt; (or are already a &lt;strong&gt;Confluent Cloud&lt;/strong&gt; user) then that should be your assumed default.
+From that default position you can then weigh in the other factors described in this article and decide if any warrant deploying new technology.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_iceberg_housekeeping&#34;&gt;Iceberg Housekeeping&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Iceberg does some things—but not all.
+One of the things that it doesn’t do out of the box is its own housekeeping.
+Particularly with streaming ingest into Iceberg, you can very quickly end up with lots of small data and metadata files, which will become a problem over time for performance.
+I wrote more about this &lt;a href=&#34;https://rmoff.net/2025/07/14/keeping-your-data-lakehouse-in-order-table-maintenance-in-apache-iceberg/#_combining_data_files_into_fewer_data_files&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you’re using &lt;strong&gt;Apache Flink&lt;/strong&gt; or &lt;strong&gt;Kafka Connect&lt;/strong&gt; to get your data into Iceberg, you’ll need to do the housekeeping yourself.
+This could be a custom job using something like Trino or Apache Spark, or a tool such as &lt;a href=&#34;https://amoro.apache.org/quick-start/#check-self-optimizing&#34;&gt;Apache Amoro&lt;/a&gt; or &lt;a href=&#34;https://github.com/nimtable/nimtable&#34;&gt;Nimtable&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; includes &lt;a href=&#34;https://docs.confluent.io/cloud/current/topics/tableflow/overview.html#table-maintenance-and-optimizations&#34;&gt;built-in table maintenance&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_ease_of_use&#34;&gt;Ease of Use&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There’s a reason I gave a conference talk called &lt;a href=&#34;https://talks.rmoff.net/9GpIYA/the-joy-of-jars-and-other-flink-sql-troubleshooting-tales&#34;&gt;&lt;em&gt;The Joy of JARs&lt;/em&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/08/my-god-it-is-full-of-java.webp&#34; alt=&#34;My God&#34; width=&#34;It&amp;#39;s full of Java&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Flink SQL&lt;/strong&gt; is SQL on the surface, but &lt;a href=&#34;https://rmoff.net/2025/06/24/writing-to-apache-iceberg-on-s3-using-flink-sql-with-glue-catalog/#_random_jiggling_hadoop_jars&#34;&gt;a morass of Java underneath&lt;/a&gt;, which matters for users and operators alike.
+If you’re already using Flink SQL then you’ll know what I’m talking about.
+If you’re not and you’re looking for a warm fuzzy SQL-embrace, forget it.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Kafka Connect&lt;/strong&gt; is built on Java too, but generally isolates the user from it.
+You can use &lt;a href=&#34;https://hub.confluent.io&#34;&gt;Confluent Hub&lt;/a&gt; to install the Iceberg connector (or build it yourself, if that’s what you like doing).
+Configuration isn’t &lt;em&gt;pretty&lt;/em&gt;, but it is &amp;#34;just&amp;#34; JSON.
+Use &lt;a href=&#34;https://github.com/kcctl/kcctl&#34;&gt;kcctl&lt;/a&gt; to make your life easier.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; is ridiculously simple to use.
+Click &amp;#34;Enable Tableflow&amp;#34;, and that’s it.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/08/tableflow.webp&#34; alt=&#34;tableflow&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can use the Confluent CLI instead if you’d rather:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color: #f8f8f2&#34;&gt;$ &lt;/span&gt;confluent tableflow topic create my_topic1&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect2&#34;&gt;
+&lt;h3 id=&#34;_self_managed_vs_fully_managed&#34;&gt;Self-Managed vs Fully-Managed&lt;/h3&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; is available on Confluent Cloud, which is a fully-managed option and includes Kafka brokers and Flink SQL (plus Kafka Connect if you want it for ingest).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If you want to self-manage then both &lt;strong&gt;Flink SQL&lt;/strong&gt; and &lt;strong&gt;Kafka Connect&lt;/strong&gt; (plus the necessary Apache Kafka) can be hosted yourself either on-premises or on a cloud provider.
+Plenty of people do this so you’ll not have a shortage of content online to help you set this up and keep it running.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_cost&#34;&gt;Cost&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Apache Flink&lt;/strong&gt;, Apache Kafka (of which &lt;strong&gt;Kafka Connect&lt;/strong&gt; is part), and the Apache Iceberg connector for Kafka Connect are all Apache 2.0 open source, owned by the Apache Software Foundation.
+You’re free to run them and modify them as you want (and you’re also then reliant on the community for any support requirements).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; is a proprietary component of Confluent Cloud and usage of it is &lt;a href=&#34;https://docs.confluent.io/cloud/current/topics/tableflow/concepts/tableflow-billing.html&#34;&gt;billed&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_i_used_to_be_indecisivenow_im_not_so_sure&#34;&gt;I used to be indecisive…now I’m not so sure…&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Can’t decide between Apache Iceberg and &lt;a href=&#34;https://delta.io/&#34;&gt;Delta Lake&lt;/a&gt; as your open table format of choice?
+Want to leave options open for the future, or other teams in your organisation?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Flink SQL&lt;/strong&gt; has a &lt;a href=&#34;https://github.com/delta-io/delta/tree/master/connectors/flink/&#34;&gt;Delta Lake connector&lt;/a&gt; (open source).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;There is a &lt;a href=&#34;https://docs.confluent.io/kafka-connectors/databricks-delta-lake-sink/current/overview.html&#34;&gt;Delta Lake connector for &lt;strong&gt;Kafka Connect&lt;/strong&gt;&lt;/a&gt; but it is not open source and requires a paid Confluent subscription.
+The &lt;a href=&#34;https://github.com/delta-io/kafka-delta-ingest&#34;&gt;&lt;code&gt;kafka-delta-ingest&lt;/code&gt;&lt;/a&gt; project is part of the Delta project and open source, but does not use the Kafka Connect framework.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; &lt;a href=&#34;https://docs.confluent.io/cloud/current/topics/tableflow/overview.html#tableflow-and-delta-lake-tables&#34;&gt;has support&lt;/a&gt; for both Apache Iceberg and Delta Lake.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_but_what_about_this_other_tool&#34;&gt;bUt wHaT aBoUt tHiS oThEr tOoL?&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The aim of this blog post is not to give a comprehensive listing of all the ways of getting data into Iceberg from Kafka, but to look in more detail at the most common options that I see in use.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As well as Flink SQL, Kafka Connect, and Tableflow, other options include:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://iceberg.apache.org/docs/nightly/spark-getting-started/&#34;&gt;Apache Spark&lt;/a&gt; (Danica Fine covers this in her video &lt;a href=&#34;https://www.youtube.com/watch?v=5pXfznKniGg&#34;&gt;here&lt;/a&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Flink CDC added a &lt;a href=&#34;https://nightlies.apache.org/flink/flink-cdc-docs-master/docs/connectors/pipeline-connectors/iceberg/&#34;&gt;pipeline connector for Iceberg&lt;/a&gt; in the 3.5 release.
+There’s no source connector for Kafka, but if your data is coming from &lt;a href=&#34;https://nightlies.apache.org/flink/flink-cdc-docs-master/docs/connectors/pipeline-connectors/postgres/&#34;&gt;Postgres&lt;/a&gt; or &lt;a href=&#34;https://nightlies.apache.org/flink/flink-cdc-docs-master/docs/connectors/pipeline-connectors/mysql/&#34;&gt;MySQL&lt;/a&gt; this might be an interesting option to look into.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The &lt;a href=&#34;https://memiiso.github.io/debezium-server-iceberg/&#34;&gt;Debezium Iceberg Consumer&lt;/a&gt; is a community project that integrates with Debezium Server as a sink to Iceberg.
+Similar to Flink CDC Pipelines, you’d not use it for reading from Kafka but if you’ve got a Debezium-supported RDBMS as source and you’re not already running Kafka, this could be worth a look.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Aiven recently published &lt;a href=&#34;https://github.com/Aiven-Open/tiered-storage-for-apache-kafka/blob/main/iceberg_whitepaper.md#upcoming-work&#34;&gt;a whitepaper&lt;/a&gt; describing &lt;code&gt;Iceberg Topics for Apache Kafka&lt;/code&gt;.
+It’s very early days and it has yet to be proven in production, and has significant gaps including lack of schema evolution.
+It’ll be interesting to see how the project develops and the traction that it’ll get.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_tldr&#34;&gt;tl;dr&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Flink SQL&lt;/strong&gt; is fantastic if you want to process data before sending it to Iceberg, typically as part of an analytics pipeline.
+If you just need a &amp;#34;dumb pipe&amp;#34; it’s less easy to justify.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Kafka Connect&lt;/strong&gt; excels as a &amp;#34;dumb pipe&amp;#34;, and also has support for stateless transformations.
+If you want to do stateful processing you’ll want to pair it with a stream processor (hey, such as Flink SQL!).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Tableflow&lt;/strong&gt; is a fully-managed tool for getting data from Kafka into Iceberg.
+It’s part of Confluent Cloud so you also have access to Flink SQL through Confluent Cloud for Apache Flink if you want to pre-process any of the data before sending it to Iceberg.
+Tableflow includes table maintenance, which you’d have to do yourself if using Flink SQL or Kafka Connect to send the data to Iceberg.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_references&#34;&gt;References&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2025/07/14/keeping-your-data-lakehouse-in-order-table-maintenance-in-apache-iceberg/&#34;&gt;Keeping your Data Lakehouse in Order: Table Maintenance in Apache Iceberg&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2025/06/24/writing-to-apache-iceberg-on-s3-using-flink-sql-with-glue-catalog/&#34;&gt;Writing to Apache Iceberg on S3 using Flink SQL with Glue catalog&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href=&#34;https://rmoff.net/2025/07/04/writing-to-apache-iceberg-on-s3-using-kafka-connect-with-glue-catalog/&#34;&gt;Writing to Apache Iceberg on S3 using Kafka Connect with Glue catalog&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;🎥 &lt;a href=&#34;https://current.confluent.io/post-conference-videos-2025/tableflow-not-just-another-kafka-to-iceberg-connector-lnd25&#34;&gt;Tableflow: Not Just Another Kafka-to-Iceberg Connector!&lt;/a&gt; (Alex Sorokoumov)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;📑 &lt;a href=&#34;https://microsites.databricks.com/sites/default/files/dais/2025/D25B3065_v2-Adi_Polak_DAIS_2025_kafka2iceberg.pdf&#34;&gt;No More Fragile Pipelines: Kafka and Iceberg the Declarative Way - Adi Polak&lt;/a&gt; (&lt;a href=&#34;https://www.youtube.com/watch?v=zDVaYolMoJg&#34;&gt;🎥 Video&lt;/a&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;🎥 &lt;a href=&#34;https://www.youtube.com/watch?v=5pXfznKniGg&#34;&gt;Iced Kaf-fee: Chilling Kafka Data into Iceberg Tables by Danica Fine&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
     <item>
       <title>Connecting Apache Flink SQL to Confluent Cloud Kafka broker</title>
       <link>https://rmoff.net/2025/07/22/connecting-apache-flink-sql-to-confluent-cloud-kafka-broker/</link>
@@ -9004,74 +9777,6 @@ Flink then outputs the state as it exists as defined by the window size.&lt;/p&g
 &lt;p&gt;&lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-release-2.0/docs/dev/table/concepts/versioned_tables/&#34;&gt;Versioned Tables&lt;/a&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>🏃🚶 The unofficial Current London 2025 Run/Walk 🏃🚶</title>
-      <link>https://rmoff.net/2025/05/02/the-unofficial-current-london-2025-run/walk/</link>
-      <pubDate>2025-05-02</pubDate>
-      
-      <guid>https://rmoff.net/2025/05/02/the-unofficial-current-london-2025-run/walk/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2025/05/t_IMG_4313.webp" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;strong&gt;Another year, another Current—another 5k run/walk for anyone who’d like to join!&lt;/strong&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is a tradition that started back at Kafka Summit San Francisco in 2019 &lt;a href=&#34;https://twitter.com/rmoff/status/1179047181891883008&#34;&gt;over the Golden Gate Bridge&lt;/a&gt; and has continued since then.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;admonitionblock tip&#34;&gt;
-&lt;table&gt;
-&lt;tbody&gt;&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-London’s Docklands offer up what would charitably be described as not the most…picturesque of routes—but with a group of similar minded people, what could be a better way to start day 1 of Current 2025 London than a 5k run or walk :) Plus, it’s flat! 🙌
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;&lt;/table&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_who_what_where_when&#34;&gt;Who? What? Where? When?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;Who&lt;/em&gt;:  Anyone who would like to is very welcome :)&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;What&lt;/em&gt;: A 5k (3.1 miles) run or walk&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;Where&lt;/em&gt;: Starting from the Aloft Hotel (next to the ExCeL centre), heading clockwise around the quayside at ExCeL, and taking in some of the Parkrun route.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;em&gt;When&lt;/em&gt;: &lt;strong&gt;Tuesday 20th May at 07:00 BST&lt;/strong&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;We’ll &lt;strong&gt;meet at 07:00&lt;/strong&gt; in the carpark in front of the hotel. That’ll give us time to congregate and take some &lt;a href=&#34;https://twitter.com/search?q=%23streamingselfie%20%23kafkasummit%20until%3A2020-03-01&amp;amp;src=typed_query&amp;amp;f=live&#34;&gt;&lt;code&gt;#streamingselfie&lt;/code&gt;&lt;/a&gt;s if you want them, before setting off at 07:05 sharp to make our way around the &lt;a href=&#34;https://www.strava.com/clubs/1039355/group_events/2028172&#34;&gt;the 5k route&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;strava-embed-placeholder&#34; data-embed-type=&#34;route&#34; data-embed-id=&#34;3353393981409439428&#34; data-full-width=&#34;true&#34; data-style=&#34;standard&#34; data-terrain=&#34;2d&#34; data-map-hash=&#34;13.68/51.50617/0.02838&#34; data-club-id=&#34;1039355&#34; data-from-embed=&#34;true&#34;&gt;&lt;/div&gt;&lt;script src=&#34;https://strava-embeds.com/embed.js&#34;&gt;&lt;/script&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Go at your own pace; this isn’t a race. You can run, or walk. Or skip, if you prefer. You can &lt;a href=&#34;https://rmoff.net/files/current-london-2025-5k.gpx&#34;&gt;download the route&lt;/a&gt; to follow at your leisure. In fact, it’s a good idea to do so because this is not an organised event, so it’s your responsibility not to get lost :-D&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;If you Strava, feel free to join the &lt;a href=&#34;https://www.strava.com/clubs/1039355&#34;&gt;Strava Club&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_cool_where_do_i_register&#34;&gt;Cool, where do I register?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Register at &lt;code&gt;/dev/null&lt;/code&gt; ;-)&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is an entirely unofficial, barely-organised, thing. Turn up and run, if you want. Don’t, if you don’t. Fully intend to but sleep in from the jetlag and miss it, that’s completely fine 😁&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
