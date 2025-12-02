@@ -5,9 +5,287 @@
     <description>Recent content on rmoff&#39;s random ramblings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>2025-11-26</lastBuildDate>
+    <lastBuildDate>2025-12-01</lastBuildDate>
     
         <atom:link href="https://rmoff.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Using Graph Analysis with Neo4j to Spot Astroturfing on Reddit</title>
+      <link>https://rmoff.net/2025/12/01/using-graph-analysis-with-neo4j-to-spot-astroturfing-on-reddit/</link>
+      <pubDate>2025-12-01</pubDate>
+      
+      <guid>https://rmoff.net/2025/12/01/using-graph-analysis-with-neo4j-to-spot-astroturfing-on-reddit/</guid>
+      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2025/12/2025-12-01T172627.webp" medium="image" type="image/jpg" width="100" height="100" />
+      <description>&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Reddit is one of the longer-standing platforms on the internet, bringing together folk to discuss, rant, grumble, and troll others on all sorts of topics, from &lt;a href=&#34;https://old.reddit.com/r/apachekafka/&#34;&gt;Kafka&lt;/a&gt; to &lt;a href=&#34;https://old.reddit.com/r/dataengineering/&#34;&gt;data engineering&lt;/a&gt; to &lt;a href=&#34;https://old.reddit.com/r/flashlight/&#34;&gt;nerding out over really bright torches&lt;/a&gt; to &lt;a href=&#34;https://old.reddit.com/r/britishproblems/&#34;&gt;grumbling about the state of the country&lt;/a&gt;—and a whole lot more.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;As a social network it’s a prime candidate for using graph analysis to examine how people interact—and in today’s post, hunt down some sneaky shills ;-)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’ve loaded data for several subs into Neo4j, a graph database.
+Whilst RDBMS is great for digging into specific users or posts, aggregate queries, and so on, graph excels at complex pattern matching and recursive relationships.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;It’s a case of best tool for the job; you &lt;em&gt;can&lt;/em&gt; do recursive SQL instead of graph, it’s just a lot more complicated.
+Plus the graphical tools I’ll show below are designed to be used with Neo4j or other property graph databases.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_the_data&#34;&gt;The Data&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;In Neo4j the &lt;em&gt;nodes&lt;/em&gt; (or &lt;em&gt;vertices&lt;/em&gt;) are user, subreddit, comment, and post.
+The &lt;em&gt;edges&lt;/em&gt; (or &lt;em&gt;relationships&lt;/em&gt;) are how these interact.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;For example:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;a &lt;em&gt;user&lt;/em&gt; [node] &lt;strong&gt;authored&lt;/strong&gt; [edge] a &lt;em&gt;post&lt;/em&gt; [node]&lt;/p&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-11-28T17-35-44-401Z.webp&#34; alt=&#34;2025 11 28T17 35 44 401Z&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;a &lt;em&gt;user&lt;/em&gt; [node] &lt;strong&gt;posted in&lt;/strong&gt; [edge] a &lt;em&gt;subreddit&lt;/em&gt; [node]&lt;/p&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-11-28T17-41-23-510Z.webp&#34; alt=&#34;2025 11 28T17 41 23 510Z&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;These relationships can be analysed independently, or combined:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-11-28T17-42-28-090Z.webp&#34; alt=&#34;2025 11 28T17 42 28 090Z&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;admonitionblock tip&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td class=&#34;icon&#34;&gt;
+&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
+&lt;/td&gt;
+&lt;td class=&#34;content&#34;&gt;
+You’ll see here another relationship that’s exposed: A &lt;em&gt;post&lt;/em&gt; [node] &lt;strong&gt;in subreddit&lt;/strong&gt; [edge] &lt;em&gt;subreddit&lt;/em&gt; [node]
+&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_poking_around_the_graph&#34;&gt;Poking around the Graph&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s familiarise ourselves with graph visualisations and queries.
+In RDBMS we use SQL to describe the data that we want to return in a query.
+Neo4j uses &lt;em&gt;Cypher&lt;/em&gt;, which looks a bit like SQL but describes graph relationships.
+Here’s a query to show the user &lt;em&gt;nodes&lt;/em&gt;:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;cypher&#34;&gt;&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;MATCH&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;n:&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;User&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;RETURN&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;n&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Neo4j includes a visualisation tool, which shows the returned nodes:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-12-01T10-29-38-358Z.webp&#34; alt=&#34;2025 12 01T10 29 38 358Z&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;We can add predicates, such as matching on a particular node &lt;em&gt;property&lt;/em&gt; (&lt;code&gt;username&lt;/code&gt;, in this example):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;cypher&#34;&gt;&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;MATCH&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;n:&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;User&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;username:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;rmoff&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;})&lt;/span&gt;
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;RETURN&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;n&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-12-01T10-17-30-867Z.webp&#34; alt=&#34;2025 12 01T10 17 30 867Z&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can also look at the raw data:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;javascript&#34;&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;identity&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #ae81ff&#34;&gt;1447&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+  &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;labels&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;[&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;User&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;
+  &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;],&lt;/span&gt;
+  &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;properties&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;is_gold&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;is_mod&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;first_seen&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;2025-11-28T17:02:07.371980000Z&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;last_seen&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;2025-11-28T17:02:07.371980000Z&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;verified&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;total_karma&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #ae81ff&#34;&gt;4795&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;comment_karma&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #ae81ff&#34;&gt;455&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;id&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;bvkm0&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;created_utc&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #ae81ff&#34;&gt;1370008515.0&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;link_karma&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #ae81ff&#34;&gt;4340&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;,&lt;/span&gt;
+    &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;username&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;rmoff&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;
+  &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;},&lt;/span&gt;
+  &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;elementId&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;1447&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;If we zoom in a bit to the previous query results we’ll see that it’s also showing the &lt;em&gt;edges&lt;/em&gt; that have been defined indicating a relationship (&lt;code&gt;REPLIED_TO&lt;/code&gt;) between some of the nodes:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-12-01T10-33-01-076Z.webp&#34; alt=&#34;2025 12 01T10 33 01 076Z&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Let’s build on the above predicate query to find my username (&lt;code&gt;rmoff&lt;/code&gt;) and any users that I’ve interacted with:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;listingblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;pre class=&#34;rouge highlight&#34; style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;&lt;code data-lang=&#34;cypher&#34;&gt;&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;MATCH&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;target:&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;User&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;username:&lt;/span&gt; &lt;span style=&#34;color: #e6db74&#34;&gt;&amp;#39;rmoff&amp;#39;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;})&lt;/span&gt; &lt;i class=&#34;conum&#34; data-value=&#34;1&#34;&gt;&lt;/i&gt;&lt;b&gt;(1)&lt;/b&gt;
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;MATCH&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;n:&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;User&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;WHERE&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;n&lt;/span&gt; &lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;target&lt;/span&gt;                        &lt;i class=&#34;conum&#34; data-value=&#34;2&#34;&gt;&lt;/i&gt;&lt;b&gt;(2)&lt;/b&gt;
+   &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;OR&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;n&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;&amp;lt;-&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #a6e22e;font-weight: bold&#34;&gt;:REPLIED_TO&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;target&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;)&lt;/span&gt;       &lt;i class=&#34;conum&#34; data-value=&#34;3&#34;&gt;&lt;/i&gt;&lt;b&gt;(3)&lt;/b&gt;
+   &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;OR&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;n&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color: #a6e22e;font-weight: bold&#34;&gt;:REPLIED_TO&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color: #f92672;font-weight: bold&#34;&gt;-&amp;gt;&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;target&lt;/span&gt;&lt;span style=&#34;color: #e6db74&#34;&gt;)&lt;/span&gt;       &lt;i class=&#34;conum&#34; data-value=&#34;3&#34;&gt;&lt;/i&gt;&lt;b&gt;(3)&lt;/b&gt;
+&lt;span style=&#34;color: #66d9ef;font-weight: bold&#34;&gt;RETURN&lt;/span&gt; &lt;span style=&#34;color: #f8f8f2;background-color: #49483e&#34;&gt;n&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;colist arabic&#34;&gt;
+&lt;table&gt;
+&lt;tbody&gt;&lt;tr&gt;
+&lt;td&gt;&lt;i class=&#34;conum&#34; data-value=&#34;1&#34;&gt;&lt;/i&gt;&lt;b&gt;1&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;Predicate in the &lt;code&gt;MATCH&lt;/code&gt; clause, using curly-braces&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;i class=&#34;conum&#34; data-value=&#34;2&#34;&gt;&lt;/i&gt;&lt;b&gt;2&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;Predicates in the &lt;code&gt;WHERE&lt;/code&gt; clause&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;i class=&#34;conum&#34; data-value=&#34;3&#34;&gt;&lt;/i&gt;&lt;b&gt;3&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;Match nodes based on either direction of the &lt;code&gt;REPLIED_TO&lt;/code&gt; relationship&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-12-01T10-38-57-949Z.webp&#34; alt=&#34;2025 12 01T10 38 57 949Z&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;I’m going to head over to a different tool for visualising the data since the built-in capabilities in the free version of Neo4j are too limited for where we’re going with it.
+&lt;a href=&#34;https://www.yworks.com/products/data-explorer-for-neo4j&#34;&gt;Data Explorer for Neo4j&lt;/a&gt; is a really nice tool from &lt;a href=&#34;https://www.yworks.com/&#34;&gt;yWorks&lt;/a&gt;.
+It connects directly to Neo4j and can either use Cypher queries to pull in data, or directly search nodes.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The first reason I like using it is the flexibility it gives for laying out the data.
+Here is the same set of data as above, but shown in different ways:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-12-01T113937.webp&#34; alt=&#34;2025 12 01T113937&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;sect1&#34;&gt;
+&lt;h2 id=&#34;_astroturfing&#34;&gt;Astroturfing&lt;/h2&gt;
+&lt;div class=&#34;sectionbody&#34;&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;One of the cool things that graph analysis does for us is visualise patterns that are not obvious through regular relational analysis.
+One of these is a form of astroturfing.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Since the LLMs (GPT, Claude, etc) are trained on data that includes Reddit, it’s not uncommon now to see companies trying to play the game (just like they did with keyword-stuffing with white text on white background for Google in the old days) and &amp;#39;seed&amp;#39; Reddit with positive content about their product.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;For example, genuine user A asks &amp;#34;&lt;em&gt;what’s the best tool for embedding this nail into a piece of wood&lt;/em&gt;&amp;#34;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Genuine user B suggests &amp;#34;&lt;em&gt;well, a hammer, DUUUHHH&lt;/em&gt;&amp;#34; (this is Reddit, after all).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The Astroturfer comes along and says &amp;#34;&lt;em&gt;What a great question! I’ve been really happy with ACME Corp’s Screwdriver! If you hold it by the blade you’ll find the handle makes a perfect tool for hitting nails.&lt;/em&gt;&amp;#34;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Astroturfing also includes &amp;#34;asked and answered&amp;#34; (although not usually from the same account; that would be &lt;em&gt;too&lt;/em&gt; obvious):&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;ulist&#34;&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Astroturfer A: &amp;#34;Hey guys! I’m building a house and looking for recommendations for the best value toolkit out there. Thanks!&amp;#34;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Astroturfer B: &amp;#34;Gosh, well I really love my ACME Corp’s Toolbelt 2000, it is really good, and I’ve been very happy with it. Such good value too!&amp;#34;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;One of the cornerstones of Reddit is the account handle—whilst you can choose to identify yourself (as I do - &lt;a href=&#34;https://old.reddit.com/user/rmoff/&#34;&gt;&lt;code&gt;rmoff&lt;/code&gt;&lt;/a&gt;), you can also stay anonymous and be known to the world as something like  &lt;a href=&#34;https://old.reddit.com/user/Future_Tangerine_42&#34;&gt;&lt;code&gt;Future_Tangerine_42&lt;/code&gt;&lt;/a&gt;.
+This means that what one might do on LinkedIn (click on the person’s name, figure out their company affiliation) often isn’t an option.
+This is where graph analysis comes in, because it’s great at both identifying and visualising patterns in behaviour that are not so easy to spot otherwise.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Poking around one of the subreddits using &lt;a href=&#34;https://docs.yworks.com/yfiles-html/dguide/analysis/analysis-centrality.html#_node_edge_betweenness_centrality&#34;&gt;betweenness analysis&lt;/a&gt; I spotted this set of three users highlighted:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-12-01T172627.webp&#34; alt=&#34;2025 12 01T172627&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;The accounts picked up here are key to the particular activity on the sub; but that in itself isn’t suprising.
+You often get key members of a community who post the bulk of the content.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;But, digging into these particular accounts I saw this significant pattern.
+The three users are shown as orange boxes; posts are blue and comments are green:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-12-01T163952.webp&#34; alt=&#34;2025 12 01T163952&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;It’s a nice little network of one user posting with another commenting—how helpful!
+To share the work they each take turns writing new posts and replying to others.
+Each post generally has one and only one comment, usually from one of the others in the group.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;You can compare this to a sub in which there is much more organic interaction.
+&lt;code&gt;r/apacheflink&lt;/code&gt; is a good example of this:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&#34;imageblock&#34;&gt;
+&lt;div class=&#34;content&#34;&gt;
+&lt;img src=&#34;https://rmoff.net/images/2025/12/2025-12-01T164600.webp&#34; alt=&#34;2025 12 01T164600&#34;/&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class=&#34;paragraph&#34;&gt;
+&lt;p&gt;Most users tend to just post replies, some only contribute new posts, and so on.
+Definitely not the nicely-balanced to-and-fro on the unnamed sub above ;)&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;</description>
+    </item>
     <item>
       <title>Interesting links - November 2025</title>
       <link>https://rmoff.net/2025/11/26/interesting-links-november-2025/</link>
@@ -3476,127 +3754,6 @@ Read the gory details &lt;a href=&#34;https://www.pagerduty.com/eng/august-28-ka
 &lt;/td&gt;
 &lt;/tr&gt;
 &lt;/tbody&gt;&lt;/table&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;</description>
-    </item>
-    <item>
-      <title>Stumbling into AI: Part 4—Terminology Tidy-up (and a little rant)</title>
-      <link>https://rmoff.net/2025/09/16/stumbling-into-ai-part-4terminology-tidy-up-and-a-little-rant/</link>
-      <pubDate>2025-09-16</pubDate>
-      
-      <guid>https://rmoff.net/2025/09/16/stumbling-into-ai-part-4terminology-tidy-up-and-a-little-rant/</guid>
-      <media:content xmlns:media="http://search.yahoo.com/mrss/" url="https://rmoff.net/images/2025/09/t_IMG_2251.webp" medium="image" type="image/jpg" width="100" height="100" />
-      <description>&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Having looked at &lt;a href=&#34;https://rmoff.net/2025/09/04/stumbling-into-ai-part-1mcp/&#34;&gt;MCP&lt;/a&gt;, &lt;a href=&#34;https://rmoff.net/2025/09/08/stumbling-into-ai-part-2models/&#34;&gt;Models&lt;/a&gt;, and &lt;a href=&#34;https://rmoff.net/2025/09/12/stumbling-into-ai-part-3rag/&#34;&gt;RAG&lt;/a&gt;, I realised that I’ve been mentally skirting around something that I don’t really understand, so I’m going to expose myself to some ridicule here and try to understand better: what’s the difference between AI and ML? Aren’t they just the same?&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_whats_the_difference_between_ai_and_ml&#34;&gt;What’s the difference between AI and ML?&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;quoteblock&#34;&gt;
-&lt;blockquote&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;OK we’re doing this are we?&lt;/em&gt;
-&lt;em&gt;I thought AI was just ✨magic✨?&lt;/em&gt;
-&lt;em&gt;And ML was the thing that got data scientists mad stacks ten years ago before everyone realised you couldn’t do shit without good data and processes?&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/blockquote&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;To me, a layperson in this space, watching it from the sidelines, AI and ML have been interchangeable.
-In fact, you’d get conferences and conference tracks titled &amp;#34;AI/ML&amp;#34;—because &lt;em&gt;it’s all kind of the same thing anyway, right?&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;This is, of course, factually incorrect and presumably infuriating to anyone actually working in the field.
-The whole purpose of this blog series has been for me to at least reduce the number of &lt;a href=&#34;https://en.wikipedia.org/wiki/There_are_unknown_unknowns&#34;&gt;&lt;em&gt;unknown unknowns&lt;/em&gt;&lt;/a&gt; in my knowledge in this space—to build up a mental map of the different areas and terms so that I at least I know where to go and look when encountering something that I know I don’t know.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;With that framing in mind, this is roughly how I understand the terms &lt;code&gt;AI&lt;/code&gt; and &lt;code&gt;ML&lt;/code&gt;:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;ulist&#34;&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;Artificial Intelligence (AI) in its vernacular understanding in 2025 basically refers to using models (such as LLMs) that generate new output, often coupled with &lt;a href=&#34;https://rmoff.net/2025/09/12/stumbling-into-ai-part-3rag/&#34;&gt;RAG&lt;/a&gt; and/or &lt;a href=&#34;https://rmoff.net/2025/09/04/stumbling-into-ai-part-1mcp/&#34;&gt;MCP&lt;/a&gt;, giving the semblance of &amp;#34;intelligence&amp;#34;.
-So far as I’m concerned, &lt;strong&gt;this is the wrong definition to associate with AI&lt;/strong&gt;, but it’s driven by something new that companies can use as a marketing angle.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;strong&gt;AI is a lot more than this&lt;/strong&gt;—this is why the term &amp;#34;GenAI&amp;#34; or &amp;#34;Generative AI&amp;#34; is used; to differentiate AI as has been done for many years from that enabled by foundational models such as LLMs.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;A lot of AI &lt;em&gt;isn’t&lt;/em&gt; generative.
-Some AI is deterministic, some of it isn’t.
-AI includes spam filtering, image recognition, recommendation engines (how &lt;em&gt;does&lt;/em&gt; YouTube always know to show &lt;em&gt;that&lt;/em&gt; video?), traffic-aware GPS navigation, and lots more.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;AI is not new; it goes back decades.
-Sometimes AI is simply a list of &lt;code&gt;IF … ELSEIF … ELSEIF …&lt;/code&gt; statements to give the semblance of autonomous intelligence when actually a human had hard-coded the rules
-(the posh name for this is &lt;a href=&#34;https://en.wikipedia.org/wiki/Expert_system&#34;&gt;&lt;em&gt;Expert Systems&lt;/em&gt;&lt;/a&gt;).&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;Machine Learning (ML) is the discipline of training (and I use this as a broad term, to also include fine-tuning, reinforcement learning, etc) models using data.
-The models are what are then used in AI, through a process called &lt;em&gt;inference&lt;/em&gt;.&lt;/p&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;These ML models include foundational ones like LLMs used for generating text, but this is just one subset of them.
-Other uses of different model types include clustering, classification, anomaly detection, sentiment analysis, and prediction.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;ML includes terms like &lt;em&gt;supervised learning&lt;/em&gt;, &lt;em&gt;unsupervised learning&lt;/em&gt;, and &lt;em&gt;reinforcement learning&lt;/em&gt;.
-It is also where the cool stuff like neural networks and deep learning fits too (&lt;em&gt;I am aware how casually I am inserting a whole swathe of academic research here; this is just my mental bracketing exercise, feel free to flame me in the comments below&lt;/em&gt;).&lt;/p&gt;
-&lt;/div&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect1&#34;&gt;
-&lt;h2 id=&#34;_my_godits_full_of_marketing_bs_but_that_doesnt_make_it_untrue&#34;&gt;My God…it’s full of marketing BS (but that doesn’t make it untrue)&lt;/h2&gt;
-&lt;div class=&#34;sectionbody&#34;&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Just like Cloud and Blockchain were previously, AI has become a lightning rod for every manner of ridiculous marketing claim and overinflated startup valuation.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Just like Cloud, at the heart of AI is a fundamentally &lt;em&gt;new and important&lt;/em&gt; technological paradigm (JFC did I just write that un-ironically?), but at which it’s hard to get for the clamour of snake-oil salesmen around it promising the moon on a stick.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;strong&gt;Just like Cloud, it’s a fool who dismisses AI as a fad.&lt;/strong&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Just like Cloud, it’s a reasonable person who wants to take a step back and understand what the all the fuss is &lt;em&gt;actually&lt;/em&gt; about.
-And that’s what I’m trying my best to do in &lt;a href=&#34;https://rmoff.net/categories/stumbling-into-ai/&#34;&gt;this series of blog posts&lt;/a&gt;.&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;admonitionblock tip&#34;&gt;
-&lt;table&gt;
-&lt;tbody&gt;&lt;tr&gt;
-&lt;td class=&#34;icon&#34;&gt;
-&lt;i class=&#34;fa icon-tip&#34; title=&#34;Tip&#34;&gt;&lt;/i&gt;
-&lt;/td&gt;
-&lt;td class=&#34;content&#34;&gt;
-If you spotted the omission of Blockchain in the subsequent statements above, that is not an error 😉
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;&lt;/table&gt;
-&lt;/div&gt;
-&lt;div class=&#34;sect2&#34;&gt;
-&lt;h3 id=&#34;_dont_just_take_my_word_for_it&#34;&gt;Don’t just take my word for it&lt;/h3&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Sam Newman &lt;a href=&#34;https://www.linkedin.com/posts/samnewman_to-those-of-you-who-are-deeply-pessimistic-activity-7373683325925900288-gFqC/&#34;&gt;posted an excellent note&lt;/a&gt; on LinkedIn, which begins:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;quoteblock&#34;&gt;
-&lt;blockquote&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;To those of you who are deeply pessimistic around the use of AI in software delivery, the old quote from John Maynard Keynes comes to mind:&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;&lt;em&gt;&lt;strong&gt;&amp;#34;The market can remain irrational longer than you can remain solvent&amp;#34;.&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
-&lt;/div&gt;
-&lt;/blockquote&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;Go read the rest of the post (it’s not long).&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&#34;paragraph&#34;&gt;
-&lt;p&gt;In addition, Scott Werner’s article 🔥 &lt;a href=&#34;https://worksonmymachine.ai/p/the-only-skill-that-matters-now&#34;&gt;The Only Skill That Matters Now&lt;/a&gt; puts it even more clearly into focus, with a nice analogy about how &amp;#34;skating to the puck&amp;#34; is no longer a viable strategy (tl;dr the rate of change in AI means you have no idea where the puck will even be).&lt;/p&gt;
-&lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;/div&gt;</description>
