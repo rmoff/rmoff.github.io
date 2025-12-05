@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Adventures with Apache Flink and Delta Lake</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2024/08/27/adventures-with-apache-flink-and-delta-lake/">
+		
+		
+		
+		
+
+		
+		<meta property="og:title" content="Adventures with Apache Flink and Delta Lake" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2024/08/flink-delta-lake0_sm.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2024/08/27/adventures-with-apache-flink-and-delta-lake/" />
+		<meta property="og:site_name" content="Adventures with Apache Flink and Delta Lake" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/toc.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/retro-cards.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/custom.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+		<script src="https://rmoff.net/js/toc.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2024/08/flink-delta-lake0_sm.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<link rel="preload" as="image" href="https://rmoff.net/img/repton.gif">
+						<img
+							src="https://rmoff.net/img/logo.jpg"
+							class="w2 h2 br-100"
+							alt="rmoff&#39;s random ramblings"
+							onmouseover="this.src='https:\/\/rmoff.net\/img\/repton.gif';"
+							onmouseout="this.src='https:\/\/rmoff.net\/img\/logo.jpg';"
+						/>
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fa-brands fa-x-twitter"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">
+						<span class="terminal-title">Adventures with Apache Flink and Delta Lake<span class="terminal-cursor"></span></span>
+					</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2024-08-27T00:00:00Z">Aug 27, 2024</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/apache-flink" class="no-underline category near-white dim">Apache Flink</a>
+								<span class="display-print">at https://rmoff.net/2024/08/27/adventures-with-apache-flink-and-delta-lake/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<div class="container-fluid docs">
+  <div class="row">
+    <main class="docs-content" role="main">
+
+<article class="article">
+	<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.decodable.co/blog/adventures-with-apache-flink-and-delta-lake">Decodable blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p><a href="https://delta.io/">Delta Lake</a>  (or Delta, as it’s often shortened to) is an open-source project from the Linux Foundation that’s primarily backed by Databricks.
+It’s an open table format (OTF) similar in concept to Apache Iceberg and Apache Hudi.
+Having  <a href="https://www.decodable.co/blog-author/robin-moffatt">previously</a>  dug into using Iceberg with both  <a href="https://www.decodable.co/blog/kafka-to-iceberg-with-flink">Apache Flink</a>  and  <a href="https://www.decodable.co/blog/kafka-to-iceberg-with-decodable">Decodable</a> , I wanted to see what it was like to use Delta with Flink—and specifically, Flink SQL.</p>
+</div>
+<div class="paragraph">
+<p>The Delta Lake project provides  <a href="https://github.com/delta-io/delta/tree/master/connectors/flink">a connector for Flink</a> .
+In the link from  <a href="https://github.com/delta-io/delta">the GitHub repository</a>  the connector is marked as <code>(Preview)</code>.
+This compounds the general sense that Apache Spark is, by far, the sole first-class citizen in this ecosystem when it comes to compute engines for processing.
+Which given that Delta is backed by Databricks (whose whole platform stems from Spark) is not unsurprising.
+<a href="https://docs.delta.io/latest/integrations.html#other-integrations">Other integrations</a>  for query engines such as Trino do exist with apparently better support.</p>
+</div>
+<div class="paragraph">
+<p>Just a tip before we begin: regardless of table format, if you’re using Flink you need to understand catalogs and catalog metastores before going any further.
+The good news for you is that I’ve written both a  <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-a-primer">primer</a>  and detailed  <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">hands-on guide</a> .
+Once you’ve understood catalogs, you’ll also want to have an appreciation of  <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">JAR management in Flink</a> .</p>
+</div>
+<div class="paragraph">
+<p>This blog post follows on from the one that prompted it,  <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">Understanding Flink and S3 configuration</a> , since as you’ll see later this is the very nub of the challenge that I had getting Delta to work with Flink SQL.
+To begin with, I’ll give you the conclusion, and then work backwards from there.</p>
+</div>
+<div class="sect2">
+<h3 id="_tldr_getting_flink_to_write_to_delta_lake_on_s3">tl;dr: Getting Flink to write to Delta Lake on S3&nbsp;<a class="headline-hash" href="#_tldr_getting_flink_to_write_to_delta_lake_on_s3">🔗</a> </h3>
+<div class="paragraph">
+<p>1.
+In <code>conf/flink-conf.yaml</code> configure your S3 authentication with <strong>both</strong> sets of prefixes:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">flink.hadoop.fs.s3a.access.key: admin
+flink.hadoop.fs.s3a.secret.key: password
+flink.hadoop.fs.s3a.endpoint: http://localhost:9000
+flink.hadoop.fs.s3a.path.style.access: true
+
+fs.s3a.access.key: admin
+fs.s3a.secret.key: password
+fs.s3a.endpoint: http://localhost:9000
+fs.s3a.path.style.access: true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><em>Note that I’m using MinIO, which is S3-compatible.</em>
+<em>If you’re using real S3 then you oughtn’t and need the</em>`endpoint`<em>and</em>`path.style.access`<em>configuration.</em></p>
+</div>
+<div class="paragraph">
+<p>2.
+Install the Flink S3 filesystem plugin:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">mkdir ./plugins/s3-fs-hadoop &amp;&amp; \
+cp ./opt/flink-s3-fs-hadoop-1.18.1.jar ./plugins/s3-fs-hadoop/</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>3.
+Add the following JARs to Flink’s <code>./lib</code> folder:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">ls -l ./lib/delta
+total 766016
+-rw-r--r--  1 rmoff  staff  369799698  9 Jul 17:07 aws-java-sdk-bundle-1.12.648.jar
+-rw-r--r--  1 rmoff  staff     213077  9 Jul 16:22 delta-flink-3.2.0.jar
+-rw-r--r--  1 rmoff  staff   11151167  9 Jul 16:21 delta-standalone_2.12-3.2.0.jar
+-rw-r--r--  1 rmoff  staff      24946  9 Jul 16:54 delta-storage-3.2.0.jar
+-rw-r--r--  1 rmoff  staff    6740707  9 Jul 17:35 flink-sql-parquet-1.18.1.jar
+-rw-r--r--  1 rmoff  staff     962685  9 Jul 16:59 hadoop-aws-3.3.4.jar
+-rw-r--r--  1 rmoff  staff    3274833  9 Jul 17:31 shapeless_2.12-2.3.4.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>4.
+Set the environment variable <code>HADOOP_CLASSPATH</code> to a full Hadoop installation:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">export HADOOP_CLASSPATH=$(~/hadoop/hadoop-3.3.4/bin/hadoop classpath)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>-OR-</strong></p>
+</div>
+<div class="paragraph">
+<p>Add the followings JARs to Flink’s <code>./lib</code> folder:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">ls -l ./lib/hadoop
+total 41840
+-rw-r--r--  1 rmoff  staff   616888 10 Jul 16:13 commons-configuration2-2.1.1.jar
+-rw-r--r--  1 rmoff  staff    62050 10 Jul 16:12 commons-logging-1.1.3.jar
+-rw-r--r--  1 rmoff  staff  2747878 10 Jul 16:10 guava-27.0-jre.jar
+-rw-r--r--  1 rmoff  staff   104441 10 Jul 16:14 hadoop-auth-3.3.4.jar
+-rw-r--r--  1 rmoff  staff  4470571 10 Jul 16:00 hadoop-common-3.3.4.jar
+-rw-r--r--  1 rmoff  staff  5501412 10 Jul 16:30 hadoop-hdfs-client-3.3.4.jar
+-rw-r--r--  1 rmoff  staff  1636329 10 Jul 16:32 hadoop-mapreduce-client-core-3.3.4.jar
+-rw-r--r--  1 rmoff  staff  3362359 10 Jul 16:10 hadoop-shaded-guava-1.1.1.jar
+-rw-r--r--  1 rmoff  staff    75705 10 Jul 16:17 jackson-annotations-2.12.7.jar
+-rw-r--r--  1 rmoff  staff   581860 10 Jul 16:05 jackson-core-2.17.1.jar
+-rw-r--r--  1 rmoff  staff  1517276 10 Jul 16:17 jackson-databind-2.12.7.jar
+-rw-r--r--  1 rmoff  staff   195909 10 Jul 16:02 stax2-api-4.2.1.jar
+-rw-r--r--  1 rmoff  staff   522360 10 Jul 16:02 woodstox-core-5.3.0.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>5.
+Now in the SQL client, create a Delta catalog and database within it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_delta
+    WITH (&#39;type&#39;         = &#39;delta-catalog&#39;,
+          &#39;catalog-type&#39; = &#39;in-memory&#39;);
+
+CREATE DATABASE c_delta.db_new;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>then a table, and insert a row of data into it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE c_delta.db_new.t_foo (c1 VARCHAR,
+                                   c2 INT)
+    WITH (&#39;connector&#39;  = &#39;delta&#39;,
+          &#39;table-path&#39; = &#39;s3a://warehouse/&#39;);
+
+INSERT INTO c_delta.db_new.t_foo
+    VALUES (&#39;a&#39;,42);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Done!
+Delta on Flink SQL.
+Read on below to find out the gorey details of how I got here, and how you can troubleshoot errors that you might encounter on the way.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_running_it_with_docker_compose">Running it with Docker Compose&nbsp;<a class="headline-hash" href="#_running_it_with_docker_compose">🔗</a> </h3>
+<div class="paragraph">
+<p>I’ve built out a self-contained stack so that you can experiment with running Flink SQL and Delta Lake together.
+It’s on the  <a href="https://github.com/decodableco/examples/">Decodable examples repository</a> .</p>
+</div>
+<div class="paragraph">
+<p>Clone this repository, and then bring up the stack and run the smoke-test SQL automagically to create and populate a Delta Lake table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">cd flink-delta-lake
+
+docker compose down --remove-orphans  &amp;&amp; \
+docker volume prune -f                &amp;&amp; \
+docker network prune -f               &amp;&amp; \
+docker compose build                  &amp;&amp; \
+docker compose up -d                  &amp;&amp; \
+while ! nc -z localhost 8081; do sleep 1; done &amp;&amp; \
+docker compose exec -it jobmanager bash -c &#34;./bin/sql-client.sh -f /data/delta-flink.sql&#34;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This should result in a <code>t_foo</code> table written on S3 (MinIO), which you can verify with MinIO’s <code>mc</code> command:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ docker exec mc bash -c &#34;mc ls --recursive minio&#34;
+[2024-07-10 19:11:29 UTC]   776B STANDARD warehouse/t_foo/_delta_log/00000000000000000000.json
+[2024-07-10 19:11:40 UTC]   652B STANDARD warehouse/t_foo/_delta_log/00000000000000000001.json
+[2024-07-10 19:11:39 UTC]   428B STANDARD warehouse/t_foo/part-9ac74dad-4111-42d5-a287-915f1a0d3dc8-0.snappy.parquet</code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_reading_the_delta_lake_table_with_duckdb">Reading the Delta Lake table with DuckDB&nbsp;<a class="headline-hash" href="#_reading_the_delta_lake_table_with_duckdb">🔗</a> </h4>
+<div class="paragraph">
+<p><em>Unfortunately DuckDB Delta</em> <a href="https://github.com/duckdb/duckdb_delta/issues/14">doesn’t seem to yet support MinIO</a> <em>, but if I re-run the test against a real S3 bucket we can query the Delta Lake data successfully</em>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">🟡◗ CREATE SECRET secret_rmoff (
+          TYPE S3,
+          KEY_ID &#39;xxxxx&#39;,
+          SECRET &#39;yyyyyy&#39;,
+          REGION &#39;us-west-2&#39;,
+          SCOPE &#39;s3://rmoff&#39;);
+
+🟡◗ SELECT * FROM DELTA_SCAN(&#39;s3://rmoff/delta/t_foo&#39;);
+100% ▕████████████████████████████████████████████████████████████▏
+┌─────────┬───────┐
+|   c1    |  c2   |
+| varchar | int32 |
+├─────────┼───────┤
+| Never   |    42 |
+| Gonna   |    42 |
+| Give    |    42 |
+| You     |    42 |
+| Up      |    42 |
+└─────────┴───────┘
+Run Time (s): real 7.059 user 0.354942 sys 1.599596</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_getting_from_hereto_there_a_flinkdelta_lake_troubleshooting_detective_story">Getting from here…to there: a Flink/Delta Lake troubleshooting detective story 🔍&nbsp;<a class="headline-hash" href="#_getting_from_hereto_there_a_flinkdelta_lake_troubleshooting_detective_story">🔗</a> </h3>
+<div class="paragraph">
+<p>Above is what works, since that’s usually what people find most useful.
+But what can also be useful is understanding how I got there, since it can throw up some useful pointers for others experiencing the same problems, as well as a general lesson in methodical troubleshooting.</p>
+</div>
+<div class="paragraph">
+<p>I started from a vanilla Flink 1.18.1 environment running on my local machine (no Docker Compose, yet) with just the Flink S3 filesystem plugin installed:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">mkdir ./plugins/s3-fs-hadoop &amp;&amp; \
+cp ./opt/flink-s3-fs-hadoop-1.18.1.jar ./plugins/s3-fs-hadoop/</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Configuration for the S3 plugin was added to the end of the <code>./conf/flink-conf.yaml</code> file.
+Since I’m using MinIO (an S3-compatible object store) the additional <code>endpoint</code> and <code>path.style.access</code> configuration is needed.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">fs.s3a.access.key: admin
+fs.s3a.secret.key: password
+fs.s3a.endpoint: http://localhost:9000
+fs.s3a.path.style.access: true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>S3 storage was provided by MinIO in a standalone Docker container:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">docker run --rm --detach \
+           --name minio \
+           -p 9001:9001 -p 9000:9000 \
+           -e &#34;MINIO_ROOT_USER=admin&#34; \
+           -e &#34;MINIO_ROOT_PASSWORD=password&#34; \
+           minio/minio \
+           server /data --console-address &#34;:9001&#34;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I created a bucket called warehouse:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">docker exec -it minio bash -c &#34;mc config host add minio http://localhost:9000 admin password&#34;
+docker exec -it minio bash -c &#34;mc mb minio/warehouse&#34;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then I wrote a set of very simple SQL to create and populate a Delta Lake table based on the  <a href="https://github.com/delta-io/delta/tree/master/connectors/flink">provided documentation</a> :</p>
+</div>
+<div class="paragraph">
+<p><strong>delta-flink.sql</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_delta
+    WITH (&#39;type&#39;         = &#39;delta-catalog&#39;,
+          &#39;catalog-type&#39; = &#39;in-memory&#39;);
+
+CREATE DATABASE c_delta.db_new;
+
+CREATE TABLE c_delta.db_new.t_foo (c1 VARCHAR,
+                                   c2 INT)
+    WITH (&#39;connector&#39;  = &#39;delta&#39;,
+          &#39;table-path&#39; = &#39;s3a://warehouse/&#39;);
+
+INSERT INTO c_delta.db_new.t_foo
+    VALUES (&#39;a&#39;,42);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then I ran the following for each test, which bounced the Flink cluster and cleared the log files each time, and then submitted the above SQL as a set of statements to run:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">rm log/*.* &amp;&amp; ./bin/start-cluster.sh                                     &amp;&amp; \
+    ./bin/sql-client.sh -f delta-flink.sql                               &amp;&amp; \
+    ./bin/stop-cluster.sh                                                &amp;&amp; \
+    ps -ef|grep java|grep flink|awk &#39;{print $2}&#39;|xargs -Ifoo kill -9 foo &amp;&amp; \
+    jps</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_step_1_add_delta_jars">Step 1: Add Delta JARs&nbsp;<a class="headline-hash" href="#_step_1_add_delta_jars">🔗</a> </h3>
+<div class="paragraph">
+<p>Based loosely on the  <a href="https://github.com/delta-io/delta/tree/master/connectors/flink#sql-support">Delta Lake connector doc</a>  I started by adding Delta JARs to my Flink <code>./lib</code> folder:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">delta-flink-3.2.0.jar
+delta-standalone_2.12-3.2.0.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I also set detailed logging for several components including Delta by adding this to Flink’s <code>log4j.properties</code> and <code>log4j-cli.properties</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">logger.fs.name = org.apache.hadoop.fs
+logger.fs.level = TRACE
+logger.fs2.name = org.apache.flink.fs
+logger.fs2.level = TRACE
+logger.aws.name = com.amazonaws
+logger.aws.level = TRACE
+logger.delta.name = io.delta
+logger.delta.level = TRACE</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_trying_it_out_for_the_first_time">Trying it out for the first time…🤞&nbsp;<a class="headline-hash" href="#_trying_it_out_for_the_first_time">🔗</a> </h3>
+<div class="paragraph">
+<p>The very first statement failed:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">CREATE CATALOG c_delta WITH ( &#39;type&#39; = &#39;delta-catalog&#39;, &#39;catalog-type&#39; = &#39;in-memory&#39;);
+
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: org.apache.hadoop.conf.Configuration</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This highlighted the need to set my Hadoop classpath for dependencies:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">export HADOOP_CLASSPATH=$(~/hadoop/hadoop-3.3.4/bin/hadoop classpath)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Bounce the stack, try again—and now creating the catalog worked, so create a database within it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE DATABASE c_delta.db_new;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Create a table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE TABLE c_delta.db_new.t_foo (c1 varchar, c2 int) WITH (&#39;connector&#39; = &#39;delta&#39;,  &#39;table-path&#39; = &#39;s3a://warehouse/&#39;);
+
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: io.delta.storage.LogStore</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This class is part of <code>delta-storage</code>, so let’s add <code>delta-storage-3.2.0.jar</code> to the <code>./lib</code> folder and try again.</p>
+</div>
+<div class="paragraph">
+<p>(At this point I’m not going to repeat &#39;<em>and then I bounced the stack</em>&#39;; take it as a given that after each thing I changed, I bounced the stack and reran the test, using the bash code I showed above.)</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_when_is_s3afilesystem_not_s3afilesystem">When is S3AFileSystem not S3AFileSystem?&nbsp;<a class="headline-hash" href="#_when_is_s3afilesystem_not_s3afilesystem">🔗</a> </h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE TABLE c_delta.db_new.t_foo (c1 varchar, c2 int)
+WITH (&#39;connector&#39; = &#39;delta&#39;,  &#39;table-path&#39; = &#39;s3a://warehouse/&#39;);
+
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: Class org.apache.hadoop.fs.s3a.S3AFileSystem not found</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Time to dig into the logs.
+For the above failure we find an entry in the <code>sql-client</code> log file, I guess because the DDL (<code>CREATE TABLE</code>) runs directly from the SQL client, whilst DML (such as <code>INSERT</code>) will run on the job manager .</p>
+</div>
+<div class="paragraph">
+<p>So for the above <code>CREATE TABLE</code> failure we get this log (with plenty of detail, because I increased logging to <code>TRACE</code> for the key components):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">WARN  io.delta.flink.internal.table.HadoopUtils                    [] - Could not find Hadoop configuration via any of the supported methods (Flink configuration, environment variables).
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - Starting: Acquiring creator semaphore for s3a://warehouse/_delta_log
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - Acquiring creator semaphore for s3a://warehouse/_delta_log: duration 0:00.000s
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - Starting: Creating FS s3a://warehouse/_delta_log
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - Loading filesystems
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - file:// = class org.apache.hadoop.fs.LocalFileSystem from /Users/rmoff/hadoop/hadoop-3.3.4/share/hadoop/common/hadoop-common-3.3.4.jar
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - viewfs:// = class org.apache.hadoop.fs.viewfs.ViewFileSystem from /Users/rmoff/hadoop/hadoop-3.3.4/share/hadoop/common/hadoop-common-3.3.4.jar
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - har:// = class org.apache.hadoop.fs.HarFileSystem from /Users/rmoff/hadoop/hadoop-3.3.4/share/hadoop/common/hadoop-common-3.3.4.jar
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - http:// = class org.apache.hadoop.fs.http.HttpFileSystem from /Users/rmoff/hadoop/hadoop-3.3.4/share/hadoop/common/hadoop-common-3.3.4.jar
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - https:// = class org.apache.hadoop.fs.http.HttpsFileSystem from /Users/rmoff/hadoop/hadoop-3.3.4/share/hadoop/common/hadoop-common-3.3.4.jar
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - hdfs:// = class org.apache.hadoop.hdfs.DistributedFileSystem from /Users/rmoff/hadoop/hadoop-3.3.4/share/hadoop/hdfs/hadoop-hdfs-client-3.3.4.jar
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - webhdfs:// = class org.apache.hadoop.hdfs.web.WebHdfsFileSystem from /Users/rmoff/hadoop/hadoop-3.3.4/share/hadoop/hdfs/hadoop-hdfs-client-3.3.4.jar
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - swebhdfs:// = class org.apache.hadoop.hdfs.web.SWebHdfsFileSystem from /Users/rmoff/hadoop/hadoop-3.3.4/share/hadoop/hdfs/hadoop-hdfs-client-3.3.4.jar
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - Looking for FS supporting s3a
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - looking for configuration option fs.s3a.impl
+DEBUG org.apache.hadoop.fs.FileSystem                              [] - Creating FS s3a://warehouse/_delta_log: duration 0:00.040s
+ERROR org.apache.flink.table.gateway.service.operation.OperationManager [] - Failed to execute the operation 65c46b2b-a85e-4a12-90f1-c624e8eac65c.
+org.apache.flink.table.api.TableException: Could not execute CreateTable in path `c_delta`.`db_new`.`t_foo`
+    at org.apache.flink.table.catalog.CatalogManager.execute(CatalogManager.java:1296) ~[flink-table-api-java-uber-1.18.1.jar:1.18.1]
+[…]
+Caused by: java.lang.RuntimeException: java.lang.ClassNotFoundException: Class org.apache.hadoop.fs.s3a.S3AFileSystem not found
+    at org.apache.hadoop.conf.Configuration.getClass(Configuration.java:2688) ~[hadoop-common-3.3.4.jar:?]
+    at org.apache.hadoop.fs.FileSystem.getFileSystemClass(FileSystem.java:3431) ~[hadoop-common-3.3.4.jar:?]
+    at org.apache.hadoop.fs.FileSystem.createFileSystem(FileSystem.java:3466) ~[hadoop-common-3.3.4.jar:?]
+    at org.apache.hadoop.fs.FileSystem.access$300(FileSystem.java:174) ~[hadoop-common-3.3.4.jar:?]
+    at org.apache.hadoop.fs.FileSystem$Cache.getInternal(FileSystem.java:3574) ~[hadoop-common-3.3.4.jar:?]
+    at org.apache.hadoop.fs.FileSystem$Cache.get(FileSystem.java:3521) ~[hadoop-common-3.3.4.jar:?]
+    at org.apache.hadoop.fs.FileSystem.get(FileSystem.java:540) ~[hadoop-common-3.3.4.jar:?]
+    at org.apache.hadoop.fs.Path.getFileSystem(Path.java:365) ~[hadoop-common-3.3.4.jar:?]
+    at io.delta.standalone.internal.DeltaLogImpl$.apply(DeltaLogImpl.scala:260) ~[delta-standalone_2.12-3.2.0.jar:3.2.0]
+    at io.delta.standalone.internal.DeltaLogImpl$.forTable(DeltaLogImpl.scala:241) ~[delta-standalone_2.12-3.2.0.jar:3.2.0]
+    at io.delta.standalone.internal.DeltaLogImpl.forTable(DeltaLogImpl.scala) ~[delta-standalone_2.12-3.2.0.jar:3.2.0]
+    at io.delta.standalone.DeltaLog.forTable(DeltaLog.java:164) ~[delta-standalone_2.12-3.2.0.jar:3.2.0]
+    at io.delta.flink.internal.table.DeltaCatalog$1.load(DeltaCatalog.java:107) ~[delta-flink-3.2.0.jar:3.2.0]
+    at io.delta.flink.internal.table.DeltaCatalog$1.load(DeltaCatalog.java:103) ~[delta-flink-3.2.0.jar:3.2.0]
+    at com.google.common.cache.LocalCache$LoadingValueReference.loadFuture(LocalCache.java:3528) ~[guava-27.0-jre.jar:?]
+    at com.google.common.cache.LocalCache$Segment.loadSync(LocalCache.java:2277) ~[guava-27.0-jre.jar:?]
+    at com.google.common.cache.LocalCache$Segment.lockedGetOrLoad(LocalCache.java:2154) ~[guava-27.0-jre.jar:?]
+    at com.google.common.cache.LocalCache$Segment.get(LocalCache.java:2044) ~[guava-27.0-jre.jar:?]
+    at com.google.common.cache.LocalCache.get(LocalCache.java:3952) ~[guava-27.0-jre.jar:?]
+    at com.google.common.cache.LocalCache.getOrLoad(LocalCache.java:3974) ~[guava-27.0-jre.jar:?]
+    at com.google.common.cache.LocalCache$LocalLoadingCache.get(LocalCache.java:4958) ~[guava-27.0-jre.jar:?]
+    at com.google.common.cache.LocalCache$LocalLoadingCache.getUnchecked(LocalCache.java:4964) ~[guava-27.0-jre.jar:?]
+    at io.delta.flink.internal.table.DeltaCatalog.getDeltaLogFromCache(DeltaCatalog.java:390) ~[delta-flink-3.2.0.jar:3.2.0]
+    at io.delta.flink.internal.table.DeltaCatalog.createTable(DeltaCatalog.java:178) ~[delta-flink-3.2.0.jar:3.2.0]
+    at io.delta.flink.internal.table.CatalogProxy.createTable(CatalogProxy.java:69) ~[delta-flink-3.2.0.jar:3.2.0]
+    at org.apache.flink.table.catalog.CatalogManager.lambda$createTable$18(CatalogManager.java:957) ~[flink-table-api-java-uber-1.18.1.jar:1.18.1]
+    at org.apache.flink.table.catalog.CatalogManager.execute(CatalogManager.java:1290) ~[flink-table-api-java-uber-1.18.1.jar:1.18.1]
+    ... 16 more</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What’s really puzzling me here is that <code>S3AFileSystem</code> was found just fine on exactly the same deployment when I used it to write my  <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">previous article</a>  about S3 troubleshooting.
+All that’s changed is setting the Hadoop classpath, and adding the Delta JARs:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">delta-flink-3.2.0.jar
+delta-standalone_2.12-3.2.0.jar
+delta-storage-3.2.0.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s just try a write to S3 again—but not using Delta—just to make sure it still works:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE TABLE t_foo_fs (c1 varchar, c2 int)
+           WITH (
+            &#39;connector&#39; = &#39;filesystem&#39;,
+            &#39;path&#39; = &#39;s3a://warehouse/t_foo_fs/&#39;,
+            &#39;format&#39; = &#39;json&#39;
+           );
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; INSERT INTO t_foo_fs VALUES (&#39;a&#39;,42);
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: c19b4decafb1adc68e17c25741908a70
+
+Flink SQL&gt; SHOW JOBS;
++----------------------------------+-------------------------------------------------------+----------+-------------------------+
+|                           job id |                                              job name |   status |              start time |
++----------------------------------+-------------------------------------------------------+----------+-------------------------+
+| c19b4decafb1adc68e17c25741908a70 | insert-into_default_catalog.default_database.t_foo_fs | FINISHED | 2024-07-09T15:56:54.647 |
++----------------------------------+-------------------------------------------------------+----------+-------------------------+
+1 row in set</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So nothing wrong with our S3 configuration or dependencies there.</p>
+</div>
+<div class="paragraph">
+<p>Back to Delta Lake, looking at the  <a href="https://docs.delta.io/latest/delta-storage.html#configuration-s3-single-cluster">Delta Storage docs</a>  they say:</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>Delta Lake needs the <code>org.apache.hadoop.fs.s3a.S3AFileSystem</code> class from the <code>hadoop-aws</code> package
+However, this class <em>is</em> in the existing <code>flink-s3-fs-hadoop-1.18.1.jar</code>:</p>
+</div>
+</blockquote>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ jar tf flink-s3-fs-hadoop-1.18.1.jar|grep S3AFileSystem.class
+org/apache/hadoop/fs/s3a/S3AFileSystem.class</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But for whatever reason isn’t being used.
+Let’s add <code>hadoop-aws</code> because the docs say so, and see if it helps:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ ls -l lib/delta
+total 24152
+-rw-r--r--  1 rmoff  staff    213077  9 Jul 16:22 delta-flink-3.2.0.jar
+-rw-r--r--  1 rmoff  staff  11151167  9 Jul 16:21 delta-standalone_2.12-3.2.0.jar
+-rw-r--r--  1 rmoff  staff     24946  9 Jul 16:54 delta-storage-3.2.0.jar
+-rw-r--r--  1 rmoff  staff    962685  9 Jul 16:59 hadoop-aws-3.3.4.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It seems to help but we’ve now got another JAR missing:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE TABLE c_delta.db_new.t_foo (c1 varchar, c2 int) WITH (&#39;connector&#39; = &#39;delta&#39;,  &#39;table-path&#39; = &#39;s3a://warehouse/&#39;);
+
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: com.amazonaws.AmazonClientException</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>From past, bitter, experience I know that I need <code>aws-java-sdk-bundle</code> JAR here, so add <code>aws-java-sdk-bundle-1.12.648.jar</code> to the <code>./lib</code> folder too.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_s3_authentication_from_flink_with_delta_lake">S3 Authentication from Flink with Delta Lake&nbsp;<a class="headline-hash" href="#_s3_authentication_from_flink_with_delta_lake">🔗</a> </h3>
+<div class="paragraph">
+<p>Things now move on past JAR files and onto other problems:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE TABLE c_delta.db_new.t_foo (c1 varchar, c2 int)
+WITH (&#39;connector&#39; = &#39;delta&#39;,  &#39;table-path&#39; = &#39;s3a://warehouse/&#39;);
+
+[ERROR] Could not execute SQL statement. Reason:
+com.amazonaws.SdkClientException: Unable to load AWS credentials from
+environment variables (AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY) and
+AWS_SECRET_KEY (or AWS_SECRET_ACCESS_KEY))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Remember, in this <em>same environment</em> I have S3 working <strong>just fine</strong>.
+Credentials, end points, it’s all good.
+But switch to writing to S3 via the Delta connector and everything goes screwy.</p>
+</div>
+<div class="paragraph">
+<p>Heading to the <code>sql-client</code> log file we can see that our existing <code>flink-conf.yaml</code> configuration for S3 just isn’t being used, as evidenced by the lack of a custom S3 endpoint being recognised (see my  <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">previous post</a>  for more detail):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Creating endpoint configuration for &#34;&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Using default endpoint -no need to generate a configuration</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is despite the configuration being logged as present earlier in the log:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">INFO  org.apache.flink.configuration.GlobalConfiguration           [] - Loading configuration property: fs.s3a.path.style.access, true
+INFO  org.apache.flink.configuration.GlobalConfiguration           [] - Loading configuration property: fs.s3a.access.key, admin
+INFO  org.apache.flink.configuration.GlobalConfiguration           [] - Loading configuration property: fs.s3a.secret.key, ******
+INFO  org.apache.flink.configuration.GlobalConfiguration           [] - Loading configuration property: fs.s3a.endpoint, http://localhost:9000</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And thus, the <code>SimpleAWSCredentialsProvider</code> reports <code>No AWS credentials in the Hadoop configuration…</code></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - No credentials from SimpleAWSCredentialsProvider: org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException: SimpleAWSCredentialsProvider: No AWS credentials in the Hadoop configuration</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>…leaving authentication to failback to the <code>EnvironmentVariableCredentialsProvider</code> (which also doesn’t work because I’ve not set any credentials in the environment variables):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - No credentials provided by EnvironmentVariableCredentialsProvider: com.amazonaws.SdkClientException: Unable to load AWS credentials from environment variables (AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY) and AWS_SECRET_KEY (or AWS_SECRET_ACCESS_KEY))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>There is a <code>WARN</code> log entry which might be relevant:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">WARN  io.delta.flink.internal.table.HadoopUtils                    [] - Could not find Hadoop configuration via any of the supported methods (Flink configuration, environment variables).</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This also then ties with the <code>No AWS credentials in the Hadoop configuration</code> message from <code>SimpleAWSCredentialsProvider</code>.</p>
+</div>
+<div class="paragraph">
+<p>Looking at <code>io.delta.flink.internal.table.HadoopUtils</code> shows an  <a href="https://github.com/delta-io/delta/blob/70bfe82e40db6ba1fd0fe591d635bef5e177411f/connectors/flink/src/main/java/io/delta/flink/internal/table/HadoopUtils.java#L31-L32">interesting message</a> :</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>This class was backported from Flink’s flink-hadoop-fs module, and it contains a subset of methods comparing to the original class.
+We kept only needed methods.
+What’s more, it includes this:</p>
+</div>
+</blockquote>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">FLINK_CONFIG_PREFIXES = {&#34;flink.hadoop.&#34;};</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I talked about <code>FLINK_CONFIG_PREFIXES</code> in my previous  <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">Flink S3 troubleshooting post</a> .
+Taking a bit of a punt, let’s change our <code>flink-conf.yaml</code> and add this <code>flink.hadoop.</code> prefix:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">flink.hadoop.fs.s3a.access.key: admin
+flink.hadoop.fs.s3a.secret.key: password
+flink.hadoop.fs.s3a.endpoint: http://localhost:9000
+flink.hadoop.fs.s3a.path.style.access: true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After this, a different error!</p>
+</div>
+<div class="paragraph">
+<p>But before we get to that, let’s just record for posterity what we’re now seeing in the log file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">INFO  org.apache.flink.configuration.GlobalConfiguration           [] - Loading configuration property: flink.hadoop.fs.s3a.access.key, admin
+INFO  org.apache.flink.configuration.GlobalConfiguration           [] - Loading configuration property: flink.hadoop.fs.s3a.secret.key, ******
+INFO  org.apache.flink.configuration.GlobalConfiguration           [] - Loading configuration property: flink.hadoop.fs.s3a.endpoint, http://localhost:9000
+INFO  org.apache.flink.configuration.GlobalConfiguration           [] - Loading configuration property: flink.hadoop.fs.s3a.path.style.access, true
+[…]
+DEBUG io.delta.flink.internal.table.HadoopUtils                    [] - Adding Flink config entry for flink.hadoop.fs.s3a.secret.key as fs.s3a.secret.key=password to Hadoop config
+DEBUG io.delta.flink.internal.table.HadoopUtils                    [] - Adding Flink config entry for flink.hadoop.fs.s3a.access.key as fs.s3a.access.key=admin to Hadoop config
+DEBUG io.delta.flink.internal.table.HadoopUtils                    [] - Adding Flink config entry for flink.hadoop.fs.s3a.path.style.access as fs.s3a.path.style.access=true to Hadoop config
+DEBUG io.delta.flink.internal.table.HadoopUtils                    [] - Adding Flink config entry for flink.hadoop.fs.s3a.endpoint as fs.s3a.endpoint=http://localhost:9000 to Hadoop config
+[…]
+DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - Using credentials from SimpleAWSCredentialsProvider</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So similar to the previous (but different 😡) S3 configuration handling, what’s needed in the Flink configuration file isn’t what the <code>S3AFileSystem</code> module is using (or logging), which is all <code>fs.s3a.</code> prefixed.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_more_jars_please">More JARs Please&nbsp;<a class="headline-hash" href="#_more_jars_please">🔗</a> </h3>
+<div class="paragraph">
+<p>Anyway, back to our next error:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE TABLE c_delta.db_new.t_foo (c1 varchar, c2 int) WITH (&#39;connector&#39; = &#39;delta&#39;,  &#39;table-path&#39; = &#39;s3a://warehouse/&#39;);
+
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: shapeless.Generic</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Google wasn’t much help on this one, but I eventually found  <a href="https://github.com/delta-io/delta/blob/70bfe82e40db6ba1fd0fe591d635bef5e177411f/build.sbt#L1020">this line</a>  in the Delta build script which references <code>com.chuusai</code> which pointed me to  <a href="https://repo1.maven.org/maven2/com/chuusai/shapeless_2.12/2.3.4/shapeless_2.12-2.3.4.jar">shapeless_2.12-2.3.4.jar</a>  on Maven._
+_Adding this to <code>./lib</code> did the trick!</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_success_almost">Success! (almost)&nbsp;<a class="headline-hash" href="#_success_almost">🔗</a> </h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE TABLE c_delta.db_new.t_foo (c1 varchar, c2 int)
+WITH (&#39;connector&#39; = &#39;delta&#39;,  &#39;table-path&#39; = &#39;s3a://warehouse/&#39;);
+
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>On MinIO there’s a Delta log file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ mc ls --recursive minio
+[2024-07-09 16:32:16 UTC]   776B STANDARD warehouse/_delta_log/00000000000000000000.json
+
+$ mc cat minio/warehouse/_delta_log/00000000000000000000.json</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The contents of this looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-json" data-lang="json">{
+    &#34;commitInfo&#34;: {
+        &#34;timestamp&#34;: 1720542736002,
+        &#34;operation&#34;: &#34;CREATE TABLE&#34;,
+        &#34;operationParameters&#34;: {
+            &#34;partitionBy&#34;: &#34;[]&#34;,
+            &#34;description&#34;: null,
+            &#34;properties&#34;: &#34;{}&#34;,
+            &#34;isManaged&#34;: false
+        },
+        &#34;isolationLevel&#34;: &#34;SnapshotIsolation&#34;,
+        &#34;isBlindAppend&#34;: true,
+        &#34;operationMetrics&#34;: {},
+        &#34;engineInfo&#34;: &#34;flink-engine/1.16.1-flink-delta-connector/3.2.0Delta-Standalone/3.2.0&#34;
+    }
+}
+{
+    &#34;protocol&#34;: {
+        &#34;minReaderVersion&#34;: 1,
+        &#34;minWriterVersion&#34;: 2
+    }
+}
+{
+    &#34;metaData&#34;: {
+        &#34;id&#34;: &#34;e2f4dcb8-d4c7-4456-b758-c140a58bc190&#34;,
+        &#34;name&#34;: &#34;t_foo&#34;,
+        &#34;format&#34;: {
+            &#34;provider&#34;: &#34;parquet&#34;,
+            &#34;options&#34;: {}
+        },
+        &#34;schemaString&#34;: &#34;{\&#34;type\&#34;:\&#34;struct\&#34;,\&#34;fields\&#34;:[{\&#34;name\&#34;:\&#34;c1\&#34;,\&#34;type\&#34;:\&#34;string\&#34;,\&#34;nullable\&#34;:true,\&#34;metadata\&#34;:{}},{\&#34;name\&#34;:\&#34;c2\&#34;,\&#34;type\&#34;:\&#34;integer\&#34;,\&#34;nullable\&#34;:true,\&#34;metadata\&#34;:{}}]}&#34;,
+        &#34;partitionColumns&#34;: [],
+        &#34;configuration&#34;: {},
+        &#34;createdTime&#34;: 1720542735715
+    }
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_even_more_jars_please">Even More JARs Please&nbsp;<a class="headline-hash" href="#_even_more_jars_please">🔗</a> </h3>
+<div class="paragraph">
+<p>Now can we write data to our new Delta Lake table?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; INSERT INTO c_delta.db_new.t_foo VALUES (&#39;a&#39;,42);
+
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: org.apache.flink.formats.parquet.row.ParquetRowDataBuilder</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Nope.
+At least, not yet.
+Let’s chuck the <code>flink-sql-parquet</code> JAR into <code>./lib</code> and see if that helps.</p>
+</div>
+<div class="paragraph">
+<p>It does help!
+It’s been submitted!</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: 1dbe63859fa78caf50bc93ed75861907</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>…and it’s failed:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; SHOW JOBS;
++----------------------------------+----------------------------------+--------+-------------------------+
+|                           job id |                         job name | status |              start time |
++----------------------------------+----------------------------------+--------+-------------------------+
+| 1dbe63859fa78caf50bc93ed75861907 | insert-into_c_delta.db_new.t_foo | FAILED | 2024-07-09T16:36:07.096 |
++----------------------------------+----------------------------------+--------+-------------------------+
+1 row in set</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_s3_authentication_again">S3 Authentication (again!)&nbsp;<a class="headline-hash" href="#_s3_authentication_again">🔗</a> </h3>
+<div class="paragraph">
+<p>Looking at the <code>taskexecutor</code> log file from the Flink job manager we can see a very familiar error:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">org.apache.flink.runtime.taskmanager.Task                    [] - t_foo[2]: Writer -&gt; t_foo[2]: Committer (1/1)#0
+(bd4e4c0cb7f1772d6bdfdf702755dc6f_20ba6b65f97481d5570070de90e4e791_0_0) switched from RUNNING to FAILED with failure cause:
+java.nio.file.AccessDeniedException: part-d2ef12d1-300c-4d3b-b5ce-72fdcc359bb7-0.snappy.parquet:
+org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException:
+No AWS Credentials provided by DynamicTemporaryAWSCredentialsProvider TemporaryAWSCredentialsProvider SimpleAWSCredentialsProvider EnvironmentVariableCredentialsProvider IAMInstanceCredentialsProvider :
+com.amazonaws.SdkClientException: Unable to load AWS credentials from environment variables (AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY) and AWS_SECRET_KEY (or AWS_SECRET_ACCESS_KEY))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now this is weird, because we <strong>have</strong> successfully written to S3 (MinIO) when we created the table, in the very same session.
+It’s there, in black and white (or whatever l33t colour schema you have your terminal set to):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ mc ls --recursive minio
+[2024-07-09 16:32:16 UTC]   776B STANDARD warehouse/_delta_log/00000000000000000000.json</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Looking through the taskexecutor log file in more detail I can also see successful interaction between the S3 client and MinIO requesting:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><code>s3a://warehouse/_delta_log/_last_checkpoint</code> (which doesn’t exist, since we’ve only just created the table)</p>
+</li>
+<li>
+<p><code>s3a://warehouse/_delta_log</code> (which doesn’t exist; it’s a &#39;folder&#39;, not an object)</p>
+</li>
+<li>
+<p><code>s3a://warehouse</code> (which exists with an object below it <code>_delta_log/00000000000000000000.json</code>)</p>
+</li>
+<li>
+<p>etc.</p>
+</li>
+</ol>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Getting path status for s3a://warehouse/_delta_log/_last_checkpoint  (_delta_log/_last_checkpoint); needEmptyDirectory=false
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - S3GetFileStatus s3a://warehouse/_delta_log/_last_checkpoint
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - HEAD _delta_log/_last_checkpoint with change tracker null
+DEBUG com.amazonaws.request                                        [] - Sending Request: HEAD http://localhost:9000 /warehouse/_delta_log/_last_checkpoint
+DEBUG com.amazonaws.request                                        [] - Received error response: com.amazonaws.services.s3.model.AmazonS3Exception: Not Found (Service: Amazon S3; Status Code: 404; Error Code: 404 Not Found; Request ID: 17E0D513A0355CEF; S3 Extended Request ID: dd9025
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Not Found: s3a://warehouse/_delta_log/_last_checkpoint
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Getting path status for s3a://warehouse/_delta_log  (_delta_log); needEmptyDirectory=false
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - S3GetFileStatus s3a://warehouse/_delta_log
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - HEAD _delta_log with change tracker null
+DEBUG com.amazonaws.request                                        [] - Sending Request: HEAD http://localhost:9000 /warehouse/_delta_log
+DEBUG com.amazonaws.request                                        [] - Received error response: com.amazonaws.services.s3.model.AmazonS3Exception: Not Found (Service: Amazon S3; Status Code: 404; Error Code: 404 Not Found; Request ID: 17E0D513A1419BC2; S3 Extended Request ID: dd9025
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - LIST List warehouse:/_delta_log/ delimiter=/ keys=2 requester pays=false
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Starting: LIST
+DEBUG com.amazonaws.request                                        [] - Sending Request: GET http://localhost:9000 /warehouse/
+DEBUG com.amazonaws.request                                        [] - Received successful response: 200, AWS Request ID: 17E0D513A1C2EDE8
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - LIST: duration 0:00.081s
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Found path as directory (with /)
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Prefix count = 0; object count=1
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Summary: _delta_log/00000000000000000000.json 776
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - List status for path: s3a://warehouse/_delta_log
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - listStatus: doing listObjects for directory _delta_log/
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - LIST List warehouse:/_delta_log/ delimiter=/ keys=5000 requester pays=false
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Starting: LIST
+DEBUG com.amazonaws.request                                        [] - Sending Request: GET http://localhost:9000 /warehouse/
+DEBUG com.amazonaws.request                                        [] - Received successful response: 200, AWS Request ID: 17E0D513A706C033
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - LIST: duration 0:00.008s
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - s3a://warehouse/_delta_log/00000000000000000000.json: _delta_log/00000000000000000000.json size=776
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Adding: S3AFileStatus{path=s3a://warehouse/_delta_log/00000000000000000000.json; isDirectory=false; length=776; replication=1; blocksize=33554432; modification_time=1720542736275; access_time=0; owner=rmoff; grou
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Added 1 entries; ignored 0; hasNext=true; hasMoreObjects=false</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So S3 client and MinIO are clearly co-operating.
+But writing the actual data file (<code>part-d2ef12d1-300c-4d3b-b5ce-72fdcc359bb7-0.snappy.parquet</code>) fails.
+Searching in the log for the file name shows that the upload appears before the S3 interactions in the log that I’ve noted above:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">INFO  org.apache.flink.runtime.taskmanager.Task                    [] - t_foo[2]: Writer -&gt; t_foo[2]: Committer (1/1)#0 (bd4e4c0cb7f1772d6bdfdf702755dc6f_20ba6b65f97481d5570070de90e4e791_0_0) switched from INITIALIZING to RUNNING.
+DEBUG io.delta.flink.sink.internal.writer.DeltaWriterBucket        [] - Opening new part file for bucket id= due to element org.apache.flink.table.data.binary.BinaryRowData@acbf1a5e.
+DEBUG io.delta.flink.sink.internal.writer.DeltaWriterBucket        [] - Opening new part file &#34;part-d2ef12d1-300c-4d3b-b5ce-72fdcc359bb7-0.snappy.parquet&#34; for bucket id=.
+DEBUG org.apache.hadoop.fs.s3a.WriteOperationHelper                [] - Initiating Multipart upload to part-d2ef12d1-300c-4d3b-b5ce-72fdcc359bb7-0.snappy.parquet
+DEBUG org.apache.hadoop.fs.s3a.Invoker                             [] - Starting: initiate MultiPartUpload
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Initiate multipart upload to part-d2ef12d1-300c-4d3b-b5ce-72fdcc359bb7-0.snappy.parquet</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Just underneath this bit is a log message which is concerning, knowing what I know now about successful S3 log messages: <code>SimpleAWSCredentialsProvider: No AWS credentials in the Hadoop configuration</code></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - No credentials from SimpleAWSCredentialsProvider: org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException: SimpleAWSCredentialsProvider: No AWS credentials in the Hadoop configuration</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>BUT</strong> just a few milliseconds later:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - Using credentials from SimpleAWSCredentialsProvider</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Something is playing silly buggers here 🤔.
+Looking in the log further I can see similar conflicting messages, here about the endpoint configuration:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Creating endpoint configuration for &#34;&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Using default endpoint -no need to generate a configuration
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - fs.s3a.endpoint.region=&#34;us-east-1&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Using default endpoint; setting region to us-east-1
+
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Creating endpoint configuration for &#34;http://localhost:9000&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Endpoint URI = http://localhost:9000
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Endpoint http://localhost:9000 is not the default; parsing
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Region for endpoint http://localhost:9000, URI http://localhost:9000 is determined as null</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It seems we have a Jekyll and Hyde scenario 😇 👿, with one playing nicely and using the config, and one doing its damndest to ignore it 🤪.</p>
+</div>
+<div class="paragraph">
+<p>Let’s try something random.
+Let’s add the original format of S3 config back into <code>flink-conf.yaml</code>, so it’s duplicated:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">flink.hadoop.fs.s3a.access.key: admin
+flink.hadoop.fs.s3a.secret.key: password
+flink.hadoop.fs.s3a.endpoint: http://localhost:9000
+flink.hadoop.fs.s3a.path.style.access: true
+
+fs.s3a.access.key: admin
+fs.s3a.secret.key: password
+fs.s3a.endpoint: http://localhost:9000
+fs.s3a.path.style.access: true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Reader, it worked.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE CATALOG c_delta WITH ( &#39;type&#39; = &#39;delta-catalog&#39;, &#39;catalog-type&#39; = &#39;in-memory&#39;);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; CREATE DATABASE c_delta.db_new;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; INSERT INTO c_delta.db_new.t_foo VALUES (&#39;a&#39;,42);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; SHOW JOBS;
++----------------------------------+----------------------------------+----------+-------------------------+
+|                           job id |                         job name |   status |              start time |
++----------------------------------+----------------------------------+----------+-------------------------+
+| 8333654c32374acff55c5bfa800738f7 | insert-into_c_delta.db_new.t_foo | FINISHED | 2024-07-10T11:58:49.687 |
++----------------------------------+----------------------------------+----------+-------------------------+
+1 row in set
+
+Flink SQL&gt; SELECT * FROM c_delta.db_new.t_foo;
++----+--------------------------------+-------------+
+| op |                             c1 |          c2 |
++----+--------------------------------+-------------+
+| +I |                              a |          42 |
++----+--------------------------------+-------------+
+Received a total of 1 rows</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_troubleshooting_will_the_real_s3afilesystem_please_stand_up">Troubleshooting: Will the real S3AFileSystem please stand up?&nbsp;<a class="headline-hash" href="#_troubleshooting_will_the_real_s3afilesystem_please_stand_up">🔗</a> </h3>
+<div class="paragraph">
+<p>Since we’re into the realms of trying random shit, let’s think about the <code>S3AFileSystem</code> dependency.
+If we’re just writing vanilla JSON (for example) from Flink, we add the <code>flink-s3-fs-hadoop</code> JAR.
+But as we saw above, that wasn’t enough for Delta Lake, and we had to add <code>hadoop-aws</code>.
+In our working environment we therefore have <strong>both</strong> present.
+Perhaps one is doing some of the metadata work, whilst the other is handling the data writes themselves.</p>
+</div>
+<div class="paragraph">
+<p>On that basis, let’s get rid of <code>flink-s3-fs-hadoop</code> temporarily, and test this hypothesis.
+Since the <code>CREATE TABLE</code> above failed without <code>hadoop-aws</code>, the hypothesis is that <code>flink-s3-fs-hadoop</code> is used for writing the data.
+If we remove it, the <code>CREATE TABLE</code> should work, and the <code>INSERT INTO</code> fail.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ rm -r plugins/s3-fs-hadoop</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we restart the Flink cluster, and try our test SQL statements again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE CATALOG c_delta WITH ( &#39;type&#39; = &#39;delta-catalog&#39;, &#39;catalog-type&#39; = &#39;in-memory&#39;)
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; CREATE TABLE c_delta.db_new.t_foo (c1 varchar, c2 int)  WITH (  &#39;connector&#39; = &#39;delta&#39;,  &#39;table-path&#39; = &#39;s3a://warehouse/&#39;)
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; INSERT INTO c_delta.db_new.t_foo VALUES (&#39;a&#39;,42)
+[ERROR] Could not execute SQL statement. Reason:
+org.apache.flink.core.fs.UnsupportedFileSystemSchemeException: Could not find a file system implementation for scheme &#39;s3a&#39;. The scheme is directly supported by Flink through the following plugin(s): flink-s3-fs-hadoop. Please ensure that each plugin resides within its own subfolder within the plugins directory. See https://nightlies.apache.org/flink/flink-docs-stable/docs/deployment/filesystems/plugins/ for more information. If you want to use a Hadoop file system for that scheme, please add the scheme to the configuration fs.allowed-fallback-filesystems. For a full list of supported file systems, please see https://nightlies.apache.org/flink/flink-docs-stable/ops/filesystems/.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>There we go—it’s a double act show, with <code>hadoop-aws</code> <strong>and</strong> <code>flink-s3-fs-hadoop</code> being responsible for writing to S3, but using <em>different</em> configuration parameters.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/08/66c750d03cca8ff9b7831958_66c750ac8642e0d040372c90_delicate_ecosystem.webp" alt="66c750d03cca8ff9b7831958 66c750ac8642e0d040372c90 delicate ecosystem"/>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_finding_the_smoking_gun">Finding the smoking gun&nbsp;<a class="headline-hash" href="#_finding_the_smoking_gun">🔗</a> </h3>
+<div class="paragraph">
+<p>Having a bit of an itch to scratch here I wanted to find out more about the conflicting log messages.
+After a perusal of the  <a href="https://logging.apache.org/log4j/2.x/manual/layouts.html#PatternLayout">log4j PatternLayout codes</a>  I amended the log4j.properties to use:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">appender.main.layout.pattern = %d{yyyy-MM-dd HH:mm:ss,SSS} %-5p %-60c %x tid:%tid [%-60threadName] - %m %n</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Which then turned up the following—note the different <code>tid</code> values:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] tid:79 [t_foo[2]: Writer -&gt; t_foo[2]: Committer (1/1)#0             ] - Creating endpoint configuration for &#34;&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] tid:79 [t_foo[2]: Writer -&gt; t_foo[2]: Committer (1/1)#0             ] - Using default endpoint -no need to generate a configuration
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] tid:79 [t_foo[2]: Writer -&gt; t_foo[2]: Committer (1/1)#0             ] - fs.s3a.endpoint.region=&#34;us-east-1&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] tid:79 [t_foo[2]: Writer -&gt; t_foo[2]: Committer (1/1)#0             ] - Using default endpoint; setting region to us-east-1
+
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] tid:80 [t_foo[2]: Global Committer (1/1)#0                          ] - Creating endpoint configuration for &#34;http://localhost:9000&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] tid:80 [t_foo[2]: Global Committer (1/1)#0                          ] - Endpoint URI = http://localhost:9000
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] tid:80 [t_foo[2]: Global Committer (1/1)#0                          ] - Endpoint http://localhost:9000 is not the default; parsing
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] tid:80 [t_foo[2]: Global Committer (1/1)#0                          ] - Region for endpoint http://localhost:9000, URI http://localhost:9000 is determined as null
+
+DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] tid:79 [t_foo[2]: Writer -&gt; t_foo[2]: Committer (1/1)#0             ] - No credentials from SimpleAWSCredentialsProvider: org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException: SimpleAWSCredentialsProvider: No AWS credentials in the Hadoop configuration
+
+DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] tid:80 [t_foo[2]: Global Committer (1/1)#0                          ] - Using credentials from SimpleAWSCredentialsProvider</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So there are two threads: a <code>Global Committer</code> and a <code>Writer</code> (for table <code>t_foo</code>).
+As we saw above, writes to the table (<code>Writer</code> thread) seem to be done using <code>S3AFileSystem</code> from <code>flink-s3-fs-hadoop</code>, whilst those for the metadata (<code>Global Committer</code>) using <code>S3AFileSystem</code> from <code>hadoop-aws</code>.</p>
+</div>
+</div>
+	<hr>
+	<div style="background-color: rgba(204, 234, 255, 0.25); margin-bottom:50px;margin-top:50px;padding: 20px; border-width: 2px; border-style: solid; border-color: darkorange;">
+	
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+		
+	</div>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">Contents</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_tldr_getting_flink_to_write_to_delta_lake_on_s3">tl;dr: Getting Flink to write to Delta Lake on S3</a></li>
+    <li><a href="#_running_it_with_docker_compose">Running it with Docker Compose</a></li>
+    <li><a href="#_getting_from_hereto_there_a_flinkdelta_lake_troubleshooting_detective_story">Getting from here…to there: a Flink/Delta Lake troubleshooting detective story 🔍</a></li>
+    <li><a href="#_step_1_add_delta_jars">Step 1: Add Delta JARs</a></li>
+    <li><a href="#_trying_it_out_for_the_first_time">Trying it out for the first time…🤞</a></li>
+    <li><a href="#_when_is_s3afilesystem_not_s3afilesystem">When is S3AFileSystem not S3AFileSystem?</a></li>
+    <li><a href="#_s3_authentication_from_flink_with_delta_lake">S3 Authentication from Flink with Delta Lake</a></li>
+    <li><a href="#_more_jars_please">More JARs Please</a></li>
+    <li><a href="#_success_almost">Success! (almost)</a></li>
+    <li><a href="#_even_more_jars_please">Even More JARs Please</a></li>
+    <li><a href="#_s3_authentication_again">S3 Authentication (again!)</a></li>
+    <li><a href="#_troubleshooting_will_the_real_s3afilesystem_please_stand_up">Troubleshooting: Will the real S3AFileSystem please stand up?</a></li>
+    <li><a href="#_finding_the_smoking_gun">Finding the smoking gun</a></li>
+  </ul>
+</nav>
+      </div>
+      
+      <div class="toc-mobile-label">TABLE OF CONTENTS</div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+		</main>
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+	</body>
+</html>

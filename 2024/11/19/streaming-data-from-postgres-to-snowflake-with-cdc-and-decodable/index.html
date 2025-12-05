@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Streaming Data from Postgres to Snowflake with CDC and Decodable</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2024/11/19/streaming-data-from-postgres-to-snowflake-with-cdc-and-decodable/">
+		
+		
+		
+		
+
+		
+		<meta property="og:title" content="Streaming Data from Postgres to Snowflake with CDC and Decodable" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2024/11/GdAQ-cXWoAA00tP.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2024/11/19/streaming-data-from-postgres-to-snowflake-with-cdc-and-decodable/" />
+		<meta property="og:site_name" content="Streaming Data from Postgres to Snowflake with CDC and Decodable" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/toc.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/retro-cards.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/custom.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+		<script src="https://rmoff.net/js/toc.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2024/11/GdAQ-cXWoAA00tP.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<link rel="preload" as="image" href="https://rmoff.net/img/repton.gif">
+						<img
+							src="https://rmoff.net/img/logo.jpg"
+							class="w2 h2 br-100"
+							alt="rmoff&#39;s random ramblings"
+							onmouseover="this.src='https:\/\/rmoff.net\/img\/repton.gif';"
+							onmouseout="this.src='https:\/\/rmoff.net\/img\/logo.jpg';"
+						/>
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fa-brands fa-x-twitter"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">
+						<span class="terminal-title">Streaming Data from Postgres to Snowflake with CDC and Decodable<span class="terminal-cursor"></span></span>
+					</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2024-11-19T00:00:00Z">Nov 19, 2024</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/apache-flink" class="no-underline category near-white dim">Apache Flink</a>
+								<span class="display-print">at https://rmoff.net/2024/11/19/streaming-data-from-postgres-to-snowflake-with-cdc-and-decodable/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<div class="container-fluid docs">
+  <div class="row">
+    <main class="docs-content" role="main">
+
+<article class="article">
+	<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.decodable.co/blog/streaming-data-from-postgres-to-snowflake">Decodable blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>In my  <a href="https://www.decodable.co/blog/why-do-i-need-cdc">last blog post</a>  I looked at why you might need CDC.
+In this post I’m going to put it into practice with probably the most common use case—extracting data from an operational transactional database to store somewhere else for analytics.
+I’m going to show Postgres to Snowflake, but the pattern is the same for pretty much any combination, such as MySQL to BigQuery, SQL Server to Redshift, and so on.</p>
+</div>
+<div class="paragraph">
+<p>The data is a set of tables that take inspiration from Gunnar’s recent article about  <a href="https://www.decodable.co/blog/revisiting-the-outbox-pattern">the Outbox pattern</a> .
+We’re developing systems for a pet-grooming company, Oh-My-Dawg.
+But in this version of the cat-cleaning, guinea pig-grooming universe, we went with a monolithic application with all the data held on a single Postgres instance.</p>
+</div>
+<div class="paragraph">
+<p>We’ve got a set of transaction tables in Postgres:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd1d2d3bd0a469d2e95_673a22218903e38734c9bf0e_673a2177d2a51e0bd0d10fb2_AD_4nXcMR0iT0XyLI9f3nyh65Fi8i1AOGLVvLArKzppq2Uox4rK9iP9yNCJgTkxRdzZ6Hh8M1Myd2dsB0RDDUtzsMvi9G9Z8I5mznnsXf-lX-H2yHa-6eFsBYJOv0848vu-TEUbRZyxJNg.png" alt="673a2cd1d2d3bd0a469d2e95 673a22218903e38734c9bf0e 673a2177d2a51e0bd0d10fb2 AD 4nXcMR0iT0XyLI9f3nyh65Fi8i1AOGLVvLArKzppq2Uox4rK9iP9yNCJgTkxRdzZ6Hh8M1Myd2dsB0RDDUtzsMvi9G9Z8I5mznnsXf lX H2yHa 6eFsBYJOv0848vu TEUbRZyxJNg"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Customers have pets, pets need grooming and so they have appointments, and finally appointments are for pets and their owners.
+A straightforward data model, perfect for a transactional system.
+But for analytics, we don’t want to query it in place.
+Not only is querying the production database a bit of a no-no (for reasons including security of access and performance), it turns out that Oh-My-Dawg is a subsidiary of a larger pet care company which means analytics are done centrally on the Snowflake data warehouse platform.</p>
+</div>
+<div class="paragraph">
+<p>So how do we get the data out of Postgres and over to Snowflake?
+We want it to be:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Easy—we’ve got better things to do than mess about with complex tools and pipelines (<em>however much fun they might be</em>)</p>
+</li>
+<li>
+<p>Low impact on the source</p>
+</li>
+<li>
+<p>Low latency</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>This is where Decodable comes in.
+The  <a href="https://docs.decodable.co/connect/source/postgres-cdc.html">Postgres CDC source connector</a>  (built on the industry-standard  <a href="https://debezium.io">Debezium</a> ) captures changes to the source tables as they happen and writes them to Snowflake using the (guess what)  <a href="https://docs.decodable.co/connect/sink/snowflake.html">Snowflake sink connector</a> .</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd1d2d3bd0a469d2e9b_673a22218903e38734c9bf0b_673a21779b5a83352932e14f_AD_4nXcQZqM8D-vIAfUQtNKNsdDXstEBN_YUCZEHr4wnxOnQT7z9gPbJJJFMTvq0cTPE_Bb7sepGGv7kiczjpQlygnBjN_zfFpUv6GTa2UlXr0rARUgXgZpIqahlapGcuOIOWWqjOOFt.png" alt="673a2cd1d2d3bd0a469d2e9b 673a22218903e38734c9bf0b 673a21779b5a83352932e14f AD 4nXcQZqM8D vIAfUQtNKNsdDXstEBN YUCZEHr4wnxOnQT7z9gPbJJJFMTvq0cTPE Bb7sepGGv7kiczjpQlygnBjN zfFpUv6GTa2UlXr0rARUgXgZpIqahlapGcuOIOWWqjOOFt"/>
+</div>
+</div>
+<div class="paragraph">
+<p>My Postgres database exists already, as does my Snowflake one.
+All we need to do in Decodable is connect them together.
+I want to show you two different ways you can do this, with the same end result.
+The first is point &amp; click in the web interface, and the second is using our YAML-based declarative interface.
+As I said, the end result is the same, but you get to choose your own adventure.</p>
+</div>
+<div class="paragraph">
+<p>Let’s start off with the visual approach since this also gives you a clear idea of what components we’re building with.
+In this post I’m going to give you an overview of what’s involved in building the pipelines.
+For a hands-on guide,  <a href="https://app.decodable.co/-/accounts/create">sign up today</a>  and try out  <a href="https://docs.decodable.co/get-started/quickstart.html">the quickstart</a> .</p>
+</div>
+<div class="sect2">
+<h3 id="_getting_data_out_of_postgres_with_cdc">Getting data out of Postgres with CDC&nbsp;<a class="headline-hash" href="#_getting_data_out_of_postgres_with_cdc">🔗</a> </h3>
+<div class="paragraph">
+<p>For CDC to work, the Postgres tables need to have  <a href="https://www.postgresql.org/docs/current/logical-replication-publication.html">replica identity</a>  set to <code>FULL</code>.
+This is so that the complete (i.e., the <code>FULL</code>) contents of the row are captured for each change.</p>
+</div>
+<div class="paragraph">
+<p>Let’s go ahead and do this from the Postgres SQL prompt:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">ALTER TABLE customers REPLICA IDENTITY FULL;
+ALTER TABLE pets REPLICA IDENTITY FULL;
+ALTER TABLE appointments REPLICA IDENTITY FULL;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We’ll check it worked too—<code>relreplident</code> should be <code>f</code> (i.e., “full”):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">SELECT oid::regclass, relreplident FROM pg_class
+ WHERE oid in ( &#39;customers&#39;::regclass, &#39;pets&#39;::regclass, &#39;appointments&#39;::regclass);</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">     oid      | relreplident
+--------------+--------------
+ customers    | f
+ pets         | f
+ appointments | f
+(3 rows)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now to connect Decodable to Postgres.
+In order for Decodable to authenticate to Postgres, it’ll need the user’s password.
+Decodable treats authentication credentials as first-class resources called  <a href="https://docs.decodable.co/administer/manage-secrets.html">secrets</a> , so let’s add a secret that holds the Postgres user’s password:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd1d2d3bd0a469d2e98_673a22228903e38734c9bf30_673a217869dd74f37e77906f_AD_4nXeF5uvNo6C1Ul3h5syJqGZo76l6JutpbE_aBPf98NGBZTmNPikElUhigzcik7JuarxsaFDxo5ODh3jjpGpyuF6ABAVkPdlca7K2XHU6rnVMONfME0l4jGnrWsexmM879jK6x_Rikg.png" alt="673a2cd1d2d3bd0a469d2e98 673a22228903e38734c9bf30 673a217869dd74f37e77906f AD 4nXeF5uvNo6C1Ul3h5syJqGZo76l6JutpbE aBPf98NGBZTmNPikElUhigzcik7JuarxsaFDxo5ODh3jjpGpyuF6ABAVkPdlca7K2XHU6rnVMONfME0l4jGnrWsexmM879jK6x Rikg"/>
+</div>
+</div>
+<div class="paragraph">
+<p>All set!
+Now we can go ahead and create our connection to Postgres.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd2d2d3bd0a469d2edd_673a22228903e38734c9bf4f_673a2178f1c9484e315d1dbd_AD_4nXcUeCEZUX7kwRv1FKbNr4PGYpbY7WlgvUQUeVmxpPDmXh4BGTfWRLHGdoBJnOAteA-zSEc4Bvpph-Zvdakz6Xr1bIEMTBRzJo1GG83hTVSPkDEyICi9265tX8pSWD5XJ0lEFT8Y6Q.png" alt="673a2cd2d2d3bd0a469d2edd 673a22228903e38734c9bf4f 673a2178f1c9484e315d1dbd AD 4nXcUeCEZUX7kwRv1FKbNr4PGYpbY7WlgvUQUeVmxpPDmXh4BGTfWRLHGdoBJnOAteA zSEc4Bvpph Zvdakz6Xr1bIEMTBRzJo1GG83hTVSPkDEyICi9265tX8pSWD5XJ0lEFT8Y6Q"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Once Decodable has connected to Postgres, it gives us a list of the available tables.
+There are quite a lot of tables in the database, and for our purpose we only want the Oh-My-Dawg (omd) ones, so let’s search for those and select them:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd2d2d3bd0a469d2eff_673a22228903e38734c9bf52_673a217811d8940ac3373a54_AD_4nXcNsBCIBd7920FvONPjQ1WDZyLCUyLuFzExDdEbSHnYM83zizq34d5aAa8rfuiVsHcD9GMNtVK1CoP2FBkxWdGdu4hTS4yYdnLshHwrbFJP2eYzav4-u-sbGh-YKZtlxzrXMbIroA.png" alt="673a2cd2d2d3bd0a469d2eff 673a22228903e38734c9bf52 673a217811d8940ac3373a54 AD 4nXcNsBCIBd7920FvONPjQ1WDZyLCUyLuFzExDdEbSHnYM83zizq34d5aAa8rfuiVsHcD9GMNtVK1CoP2FBkxWdGdu4hTS4yYdnLshHwrbFJP2eYzav4 u sbGh YKZtlxzrXMbIroA"/>
+</div>
+</div>
+<div class="paragraph">
+<p>With that done we can create the connection, start it, and see in the Decodable console a nice visual representation of the three streams that are populated from the Postgres data that we selected.
+A  <a href="https://docs.decodable.co/streams.html">stream in Decodable</a>  is a series of records similar in concept to a Kafka topic or Kinesis stream, and used to connect connectors and pipelines together:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673b7ecb8ac1c227adf9c5c9_673b7e70c96f3733e99d7547_CleanShot%202024-11-08%20at%2012.42.11.gif" alt="673b7ecb8ac1c227adf9c5c9 673b7e70c96f3733e99d7547 CleanShot 2024 11 08 at 12.42.11"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Clicking on one of these streams we can see the full snapshot of the data is in the stream, along with the changes as they happen.
+Here’s a happy pooch who was first booked in for an appointment (<code>Scheduled</code>), and then attended the appointment (<code>Completed</code>):</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd1d2d3bd0a469d2e9f_673a22218903e38734c9bf11_673a2177f1c9484e315d1da9_AD_4nXczvlOL0b5NQDezh6fJl0WpqoqW3BF7B3n2krLOSkWyOiAvnFznc7vUPTrYMFi5JpprOhMJbWoEFiYO8lYVdRzNqxHn1VTu7yKyI2JfilVRxUFQdzWUHLhx8rcmSL4ugWEsKMxw5Q.png" alt="673a2cd1d2d3bd0a469d2e9f 673a22218903e38734c9bf11 673a2177f1c9484e315d1da9 AD 4nXczvlOL0b5NQDezh6fJl0WpqoqW3BF7B3n2krLOSkWyOiAvnFznc7vUPTrYMFi5JpprOhMJbWoEFiYO8lYVdRzNqxHn1VTu7yKyI2JfilVRxUFQdzWUHLhx8rcmSL4ugWEsKMxw5Q"/>
+</div>
+</div>
+<div class="paragraph">
+<p>OK, so that’s the data coming from Postgres.
+Let’s now see about sending it over to Snowflake.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_loading_data_into_snowflake">Loading data into Snowflake&nbsp;<a class="headline-hash" href="#_loading_data_into_snowflake">🔗</a> </h3>
+<div class="sect3">
+<h4 id="_configuring_authentication">Configuring authentication&nbsp;<a class="headline-hash" href="#_configuring_authentication">🔗</a> </h4>
+<div class="paragraph">
+<p>Similar to when we set up the Postgres connector, we need to store the authentication credentials for Snowflake as a Decodable secret before setting up the connector itself.</p>
+</div>
+<div class="paragraph">
+<p>The  <a href="https://docs.decodable.co/connect/sink/snowflake.html#generate-key-pair">documentation</a>  is comprehensive, so I’ll not cover all the details here.
+In short, we need to generate a new key pair so that Decodable can authenticate as our Snowflake user.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">openssl genrsa 2048 | \
+openssl pkcs8 -topk8 -v2 des3 -inform PEM -nocrypt -out rsa_key.p8 &amp;&amp; \
+openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This writes two files:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>rsa_key.p8</code> - the private key. This is the bit that we need to keep secure as it confirms us as being us. We’ll store that as a secret in Decodable.</p>
+</li>
+<li>
+<p><code>rsa_key.pub</code> - the public key. This is not sensitive and we can give to anyone—in this case, it’s what we attach to the Snowflake user.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>To attach the public key to the Snowflake user, you need to extract the raw key itself, without the header and footer:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd1d2d3bd0a469d2ea5_673a22218903e38734c9bf14_673a2177c1d3616750fee30f_AD_4nXex_RC3as2kvjgHQC-S6OR0G4UQ_iSyyWJRV30Wt91y8aULxz83E1p_o0SOq9g2XQjBWinjiXNFL63Z5AX5R009ZOdpIQebqnvr75PQ4vEhcklWCXiRBmAdj4rTEMJHx7vXl9MteA.png" alt="673a2cd1d2d3bd0a469d2ea5 673a22218903e38734c9bf14 673a2177c1d3616750fee30f AD 4nXex RC3as2kvjgHQC S6OR0G4UQ iSyyWJRV30Wt91y8aULxz83E1p o0SOq9g2XQjBWinjiXNFL63Z5AX5R009ZOdpIQebqnvr75PQ4vEhcklWCXiRBmAdj4rTEMJHx7vXl9MteA"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Then in Snowflake run an <code>ALTER USER</code> like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">USE ROLE securityadmin;
+ALTER USER &#34;DECODABLE&#34; SET RSA_PUBLIC_KEY=&#39;
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr8HM6We/I8TfvsozVagm
+mmaF6tpNwCGFpBXKC+i3XtdNIeUxbOMbTa1TOyq9XUOjKumDJ6TLtmPsXtcVogcr
+DRnkZ911tSV3c4J9oVPs3Tam3v/BHptrE9xL/tMpvY5s2QFRRfzhC1I5AbOIj4qR
+/gSULZg1K8UeFSwoDg9lC25TPSwDmzHQYDLkQ5FlwsHQc6hx/E7PtyM95ArHu+dV
+ngHXM13euOhWKfCdK3XOPtdAofdB2a2m/ENEsNGrRiiaTvxiUN4BU0Us1RcdRc0N
+LCIwxxh/dNCo6zLYvl93WLtcTA1sd6v2x1G6jCwwniAeG/f7GtIcVq5S5jQlrRlU
+jwIDAQAB
+&#39;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>DECODABLE</code> user has just an arbitrary name; you can use an existing user if that suits your organization’s standards, or  <a href="https://docs.decodable.co/connect/sink/snowflake.html#generate-key-pair">create a new one</a>  dedicated for this sink.
+Check the rest of the  <a href="https://docs.decodable.co/connect/sink/snowflake.html">connector documentation</a>  for the additional authorisations that need configuring in Snowflake.</p>
+</div>
+<div class="paragraph">
+<p>Now let’s add the private key to Decodable as a secret.
+The process is the same as when we set up the Postgres password above.
+As before, make sure you are only using the key itself and not the header or footer:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd2d2d3bd0a469d2ed7_673a22228903e38734c9bf26_673a2177d746e88bae899f03_AD_4nXc2bdENhptIqDxFpXSyNeqkPCpMa4rMM2Ue4ah3W_hCaISin_dceaKfIaiqiVxZrlftt-84YaX6IIcVU5VYjdGT6llhpiYIemx5cCyF7Ss0XgqEunLLIwZxPsQjvQ-1WvDkXsK_UQ.png" alt="673a2cd2d2d3bd0a469d2ed7 673a22228903e38734c9bf26 673a2177d746e88bae899f03 AD 4nXc2bdENhptIqDxFpXSyNeqkPCpMa4rMM2Ue4ah3W hCaISin dceaKfIaiqiVxZrlftt 84YaX6IIcVU5VYjdGT6llhpiYIemx5cCyF7Ss0XgqEunLLIwZxPsQjvQ 1WvDkXsK UQ"/>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_creating_the_snowflake_connector">Creating the Snowflake connector&nbsp;<a class="headline-hash" href="#_creating_the_snowflake_connector">🔗</a> </h4>
+<div class="paragraph">
+<p>Now all that remains is to create the sink connector to send the data we’re ingesting from Postgres to Snowflake.
+First off we define the connection details, including the name of the secret that we created to hold the private key:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd2d2d3bd0a469d2ed4_673a22228903e38734c9bf55_673a21776d29e80b7406fcb8_AD_4nXcKnreRXKr5r6GcX_AfLFXB8il-KIFM7KB-_jzwsmTQBQ89ZShBGKvwekclC87D86tMae7K-W5o75UnBef-9fWGj5wl0_lwuOW8AIyYlAL-nCk6YYULKKn0r7UWFvOaorDr0eHc.png" alt="673a2cd2d2d3bd0a469d2ed4 673a22228903e38734c9bf55 673a21776d29e80b7406fcb8 AD 4nXcKnreRXKr5r6GcX AfLFXB8il KIFM7KB  jzwsmTQBQ89ZShBGKvwekclC87D86tMae7K W5o75UnBef 9fWGj5wl0 lwuOW8AIyYlAL nCk6YYULKKn0r7UWFvOaorDr0eHc"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Then we select which streams we want to send to Snowflake—as before, there’s a search box to help us narrow it down so we can select just the ones that we want.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd2d2d3bd0a469d2ed1_673a22238903e38734c9bf6d_673a21788cb024738cbb2b53_AD_4nXdQtiLJDgaBNdBaN9ZpGV8Y6vbkXtttlbDQLV2ZGlGJ31c4jGMBLGrjir7cDGglHorEO5J4rIL2BRCTPPaGC_xmjx-XOhoeTs1FI6dAQP_yQhZVq5CzrzZ1n_yXmuSB2JMyY7X5pg.png" alt="673a2cd2d2d3bd0a469d2ed1 673a22238903e38734c9bf6d 673a21788cb024738cbb2b53 AD 4nXdQtiLJDgaBNdBaN9ZpGV8Y6vbkXtttlbDQLV2ZGlGJ31c4jGMBLGrjir7cDGglHorEO5J4rIL2BRCTPPaGC xmjx XOhoeTs1FI6dAQP yQhZVq5CzrzZ1n yXmuSB2JMyY7X5pg"/>
+</div>
+</div>
+<div class="paragraph">
+<p>One thing you can change if you want is the name of the target table; since there’s a bunch of Postgres namespace stuff in there, I’m going to tidy it up a bit:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd2d2d3bd0a469d2eda_673a22228903e38734c9bf2a_673a2177fe8fdf240c4f6fe1_AD_4nXeFJ3qGOaBmDDDuXn9W7xvMzQ85_MVZQbUhjqMwHViU-8_H-dIfv9aGaRgGGX6G9e9cWYzSCUveWPsUFZHEhoP0qOzSxtINxcpQ_LhRk22mtOLrGRylo_WguesTIQIJ6CZdGDBCEA.png" alt="673a2cd2d2d3bd0a469d2eda 673a22228903e38734c9bf2a 673a2177fe8fdf240c4f6fe1 AD 4nXeFJ3qGOaBmDDDuXn9W7xvMzQ85 MVZQbUhjqMwHViU 8 H dIfv9aGaRgGGX6G9e9cWYzSCUveWPsUFZHEhoP0qOzSxtINxcpQ LhRk22mtOLrGRylo WguesTIQIJ6CZdGDBCEA"/>
+</div>
+</div>
+<div class="paragraph">
+<p>The connector will create the table for me in Snowflake since they don’t exist already.
+Now we start the connection, and off it goes!</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673b7ecb8ac1c227adf9c5cc_673b7e86c3e3d6f240a60711_CleanShot%202024-11-08%20at%2016.11.50.gif" alt="673b7ecb8ac1c227adf9c5cc 673b7e86c3e3d6f240a60711 CleanShot 2024 11 08 at 16.11.50"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Heading over to Snowflake we can see we’ve got data:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd2d2d3bd0a469d2ef4_673a22228903e38734c9bf58_673a2178b54fd220860e73ed_AD_4nXd1V7uelVzzjKOxjswSXN5NtYw0erY57s6LVEd22FEgDPa6mrh9MWlO-JhN2PK8jRJdob28C6owexLU0fx_uvRjeIPq0MI4rxhG7VydlPw9VfVD_nZqGHEgxGlukMBSYzLzlueb.png" alt="673a2cd2d2d3bd0a469d2ef4 673a22228903e38734c9bf58 673a2178b54fd220860e73ed AD 4nXd1V7uelVzzjKOxjswSXN5NtYw0erY57s6LVEd22FEgDPa6mrh9MWlO JhN2PK8jRJdob28C6owexLU0fx uvRjeIPq0MI4rxhG7VydlPw9VfVD nZqGHEgxGlukMBSYzLzlueb"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Referring to the data model at the top of the post, we can construct a query to start to denormalise the data:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd1d2d3bd0a469d2eb0_673a22218903e38734c9bf17_673a2178d1826ad972c792f6_AD_4nXedH0R3zhGqjRx2dwz72WuDMuGvWauQO2jV6ZwZ2plGBTZK6gNluoKEEbbxUhYrtSc7Br55wN_v4YDaFgvHNkWolVbbKOmu0eD0Kby7cM4_UotvjZIgTxwPED2Hd4_KCexpYbIlZw.png" alt="673a2cd1d2d3bd0a469d2eb0 673a22218903e38734c9bf17 673a2178d1826ad972c792f6 AD 4nXedH0R3zhGqjRx2dwz72WuDMuGvWauQO2jV6ZwZ2plGBTZK6gNluoKEEbbxUhYrtSc7Br55wN v4YDaFgvHNkWolVbbKOmu0eD0Kby7cM4 UotvjZIgTxwPED2Hd4 KCexpYbIlZw"/>
+</div>
+</div>
+<div class="paragraph">
+<p>and build analytical queries on it, such as looking at the proportion of appointments that get canceled:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd1d2d3bd0a469d2ead_673a22228903e38734c9bf2d_673a2177e7df6842870d167d_AD_4nXeHJncCSPVt3WLQvPOB5MeomLnq_Gp8s0xvf85zvk7EP9Al5_ZuFxB4BASFAsn6G_oF_4uZn6qBNFNyCVfJC1N4iY28UK2D5MBfdq8bwRPcsCfz3ExbEWYDE2cUFAsZ8queWWAaBw.png" alt="673a2cd1d2d3bd0a469d2ead 673a22228903e38734c9bf2d 673a2177e7df6842870d167d AD 4nXeHJncCSPVt3WLQvPOB5MeomLnq Gp8s0xvf85zvk7EP9Al5 ZuFxB4BASFAsn6G oF 4uZn6qBNFNyCVfJC1N4iY28UK2D5MBfdq8bwRPcsCfz3ExbEWYDE2cUFAsZ8queWWAaBw"/>
+</div>
+</div>
+<div class="paragraph">
+<p>or which customer has canceled appointments the most:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd1d2d3bd0a469d2eb3_673a22228903e38734c9bf33_673a2178d1826ad972c792f9_AD_4nXctzuddtsUr4XtBu18iOZ4uC74dC2Fb50SdwaAu0ksHfaQnLyLhhMyZO4039LNCIyyiwnJavmzyB625L2mhR1rGsOzgLcLA3YHuBYMXMwa4V2BVFWtDY-9Kqj3EN5d2yRKr3KnUrQ.png" alt="673a2cd1d2d3bd0a469d2eb3 673a22228903e38734c9bf33 673a2178d1826ad972c792f9 AD 4nXctzuddtsUr4XtBu18iOZ4uC74dC2Fb50SdwaAu0ksHfaQnLyLhhMyZO4039LNCIyyiwnJavmzyB625L2mhR1rGsOzgLcLA3YHuBYMXMwa4V2BVFWtDY 9Kqj3EN5d2yRKr3KnUrQ"/>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_lets_do_the_same_thing_but_declaratively">Let’s do the same thing, but declaratively&nbsp;<a class="headline-hash" href="#_lets_do_the_same_thing_but_declaratively">🔗</a> </h3>
+<div class="paragraph">
+<p>If the mouse, or trackpad, is your thing, look away now.
+If, on the other hand, nothing gets you more excited than the idea of a keyboard, a CLI, and a git repository, then this section is for YOU.</p>
+</div>
+<div class="paragraph">
+<p><a href="https://docs.decodable.co/declarative/overview.html">Declarative resource management</a>  in Decodable will be familiar to anyone who has worked with tools such as Terraform.
+Instead of giving a set of imperative instructions (“Do this!”, “Create this!”, “Change this!”) you <em>declare</em> how things should look, and the declarative process then makes it so.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2178216f7b6ceb386cb5_AD_4nXfQ0fGRVxxeDSDL3E-heaxcC1esLwQQxCP5lC5wWHrDfXWYBAWKTYHNBdf8gG2X9BdWMjxKGDvk5UWLy4EC0_zq7DqoV_-7iOubHgIkzmei7crdxCRQhTMychVctX3J1lP5kEeM.gif" alt="673a2178216f7b6ceb386cb5 AD 4nXfQ0fGRVxxeDSDL3E heaxcC1esLwQQxCP5lC5wWHrDfXWYBAWKTYHNBdf8gG2X9BdWMjxKGDvk5UWLy4EC0 zq7DqoV  7iOubHgIkzmei7crdxCRQhTMychVctX3J1lP5kEeM"/>
+</div>
+</div>
+<div class="paragraph">
+<p>What this means in the context of Decodable is that we can build a set of YAML documents that describe the resources that we created above (two secrets, two connectors, three streams), and then run a command to make sure that our Decodable account reflects this.
+If it doesn’t, it’s updated by the declarative process until it is.
+This is perfect for things like putting your data pipelines into source control, as well as  <a href="https://docs.decodable.co/cli/integrate-with-github-actions.html">automating deployments</a> .</p>
+</div>
+<div class="paragraph">
+<p>To start off, we’ll create YAML documents that describe the secrets.
+Whether you create one YAML file for everything, one per resource, or somewhere in between (e.g.
+one per set of secrets, or per pipeline) is entirely up to you.
+Here I’ll create one per resource just to make it clear.
+Note that embedding secret values like this in plain text is not a great idea—better is to  <a href="https://docs.decodable.co/declarative/definitions.html#secret">provide the value</a>  as a file (which could be populated from your organization’s secrets manager) or an environment variable.</p>
+</div>
+<div class="paragraph">
+<p>The Postgres secret looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">---
+kind: secret
+metadata:
+  name: omd-postgres
+spec_version: v1
+spec:
+  value_literal: Welcome123</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Whilst the Snowflake one is a bit more complex because of the private key (don’t bother trying to hack into my Snowflake account, this is not my actual key 😉):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">---
+kind: secret
+metadata:
+  name: omd-snowflake
+spec_version: v1
+spec:
+  value_literal: |
+    MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQChdeAhINX2/Q+0
+    YkF+45es8sootZHq+nPUNL/9IXaEDasFwAi/w0sjGbjzJE9a2qTIzSoqyRQPob0H
+    ufu7RZUrF5zV0ga0dZSXn+QGSm7jZDy21tzGCn8it7xstDB3ROjThOPxwjP8TqWa
+    ytvO0XcSFwn6pVK+MUUqHtPp5E0b8OXb4FHVvCQGihpobM13KiVgjmN/jgw6loMD
+    […]
+    5io5kmFVae7r25YO5XoU7EBp1q1zIT+UScbySCLcAdX3o7j8FmFZBs5hsBLb0voB
+    McOx/+kPJYb2Hzqs5ycjTQ==</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Declarative resource management in Decodable is provided by commands under the  <a href="https://docs.decodable.co/cli.html">Decodable CLI</a>  - primarily <code>decodable apply</code> and <code>decodable query</code>.
+Let’s use the first of these to make sure the secrets we’ve defined are present and up to date.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ ls -l *.yaml
+-rw-r--r--@ 1 rmoff  staff    92  8 Nov 17:32 pg-secret.yaml
+-rw-r--r--@ 1 rmoff  staff  1846  8 Nov 15:44 sf-secret.yaml
+
+$ decodable apply *-secret.yaml
+---
+kind: secret
+name: omd-pg
+id: ee94bd72
+result: created
+---
+kind: secret
+name: omd-snowflake
+id: ce086296
+result: created
+• Wrote plaintext values for secret IDs: [ce086296 ee94bd72]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we can create the YAML  <a href="https://docs.decodable.co/declarative/definitions.html">resource definitions</a>  for the Postgres and Snowflake connections.
+We <em>could</em> write the YAML by hand.
+But who has time for that?
+Wouldn’t it be nice if we could find out the data that’s available and generate the resource definition from that instead?
+That’s where <code>decodable connection scan</code> comes in.
+We pass it the details of the connection that we want to create (name, type, host, etc.), as well as information about which tables we want (<code>--include-pattern</code>), and finally what the target should be called (<code>--output-resource-name-template</code>).
+The <code>-02</code> suffix is just to show things here and keep it separate from the web-based approach earlier.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ decodable connection scan \
+          --name oh-my-dawg-pg-02 \
+          --connector postgres-cdc \
+          --type source \
+          --prop hostname=my.postgres.host.com \
+          --prop port=5432 \
+          --prop database-name=postgres \
+          --prop username=postgres \
+          --prop password=$(decodable query --name omd-postgres --kind secret --keep-ids | yq &#39;.metadata.id&#39;) \
+          --include-pattern schema-name=public \
+          --output-resource-name-template stream-name=&#34;{table-name}-02&#34; \
+          &gt; omd-pg.yaml</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Notice how the <code>password</code> property is passed by reference to the <code>omd-postgres</code> secret that was created above using command substitution.
+You don’t have to do this—you could also specify it directly.</p>
+</div>
+<div class="paragraph">
+<p>Out of this scan command comes a nice set of YAML, describing the connection and its schemas:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">---
+kind: connection
+metadata:
+    name: oh-my-dawg-pg-02
+spec_version: v1
+spec:
+    connector: postgres-cdc
+    properties:
+        database-name: postgres
+        hostname: my.postgres.host.com
+    stream_mappings:
+        - stream_name: omd_appointments-02
+          external_resource_specifier:
+            table-name: omd_appointments
+        - stream_name: omd_customers-02
+          external_resource_specifier:
+            table-name: omd_customers
+        - stream_name: omd_pets-02
+          external_resource_specifier:
+            table-name: omd_pets
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We could make changes here to tweak things if needed, but let’s go ahead and apply this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ decodable apply omd-pg.yaml
+
+---
+kind: connection
+name: oh-my-dawg-pg-02
+id: fd98e89d
+result: created
+---
+kind: stream
+name: omd_appointments-02
+id: b62f1f50
+result: created
+---
+kind: stream
+name: omd_customers-02
+id: 2b365c13
+result: created
+---
+kind: stream
+name: omd_pets-02
+id: 5dd20920
+result: created</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we’ve created the connection.
+But what if we realize we missed something, such as including a description for the connection?
+This is what the relevant section of the YAML looks like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">---
+kind: connection
+metadata:
+    name: oh-my-dawg-pg-02
+    description: &#34;&#34;
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To make the change to the connection all we need to do is update the YAML file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">---
+kind: connection
+metadata:
+    name: declarative-oh-my-dawg-pg
+    description: &#34;An example of using declarative resource management to build data pipelines&#34;
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then apply it again.
+Declarative resource management compares the file to the current state and makes the needed changes.
+This is a <em>lot</em> nicer than the regular drop/create route that you’d need to go if you were doing things imperatively.</p>
+</div>
+<div class="paragraph">
+<p>Note here how only the connection has <code>result: updated</code> — the resources that didn’t change (the streams) are <code>result: unchanged</code>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ decodable apply omd-pg.yaml
+
+---
+kind: connection
+name: oh-my-dawg-pg-02
+id: fd98e89d
+result: updated
+---
+kind: stream
+name: omd_appointments-02
+id: b62f1f50
+result: unchanged
+---
+kind: stream
+name: omd_customers-02
+id: 2b365c13
+result: unchanged
+---
+kind: stream
+name: omd_pets-02
+id: 5dd20920
+result: unchanged</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s check that the description of the connection is now as expected:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ decodable query --name oh-my-dawg-pg-02 --metadata-only
+
+---
+kind: connection
+metadata:
+    name: oh-my-dawg-pg-02
+    description: An example of using declarative resource management to build data pipelines</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Having created the connection, we need to activate it.
+It’s actually possible to  <a href="https://docs.decodable.co/declarative/definitions.html#connection_v2">specify in the YAML that the connection should be active</a> , but certainly whilst we’re finding our way, decoupling the creation from activation is useful._
+_To activate it, we run:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ decodable query --name oh-my-dawg-pg-02 \
+                  --operation activate \
+                  --stabilize
+
+---
+kind: connection
+name: oh-my-dawg-pg-02
+id: fd98e89d
+result: activated
+
+🔘️ STARTING   • connection fd98e89d oh-my-dawg-pg-02
+........................................
+✅️ RUNNING    • connection fd98e89d oh-my-dawg-pg-02
+🏁 ••• All queried resources stable ••• 🏁</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now let’s create the Snowflake connection.
+As before, we’re going to have Decodable generate the YAML for us, with all we need to do being to specify the connection details.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ decodable connection scan \
+          --name oh-my-dawg-snowflake-02 \
+          --connector snowflake \
+          --type sink \
+          --prop snowflake.database=omd          \
+          --prop snowflake.schema=omd          \
+          --prop snowflake.user=decodable          \
+          --prop snowflake.private-key=$(decodable query --name omd-snowflake --kind secret --keep-ids | yq &#39;.metadata.id&#39;)          \
+          --prop snowflake.role=load_data          \
+          --prop snowflake.account-name=MYORG-MYACCOUNTNAME          \
+          --prop snowflake.warehouse=stg          \
+          --prop snowflake.merge-interval=&#34;1 minute&#34; \
+          --include-pattern stream-name=&#39;^omd\_.*-02$&#39; \
+          | decodable apply -</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This time we’re not going to write it to an intermediate YAML file to then run through decodable apply, but just pipe it directly in.
+It’s up to you if you want to do this.
+For scratching around in development I find it’s quicker (and you can always get the YAML at a later date with <code>decodable query</code>).
+You may prefer to write it to a file for visibility of what’s being run and any troubleshooting.</p>
+</div>
+<div class="paragraph">
+<p>With the above run, we get a connection writing to three Snowflake tables created:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">---
+kind: connection
+name: oh-my-dawg-snowflake-02
+id: 957714a0
+result: created
+---
+specifier:
+    snowflake.table: omd_appointments-02
+result: SUCCESS
+---
+specifier:
+    snowflake.table: omd_customers-02
+result: SUCCESS
+---
+specifier:
+    snowflake.table: omd_pets-02
+result: SUCCESS</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So let’s activate the connection:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ decodable query --name oh-my-dawg-snowflake-02 -X activate --stabilize
+
+---
+kind: connection
+name: oh-my-dawg-snowflake-02
+id: 957714a0
+result: activated
+
+🔘️ STARTING   • connection 957714a0 oh-my-dawg-snowflake-02
+........................................
+✅️ RUNNING    • connection 957714a0 oh-my-dawg-snowflake-02
+🏁 ••• All queried resources stable ••• 🏁</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And now we have data in Snowflake!</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ snow sql -q &#34;select count(*) from \&#34;OMD_APPOINTMENTS-02\&#34;&#34; \
+        -x --account $SNOWFLAKE_ACCOUNT --user rmoff --password $SNOWFLAKE_PW \
+        --database omd --schema omd
+
+WARNING! Using --password via the CLI is insecure. Use environment variables instead.
+select count(*) from &#34;OMD_APPOINTMENTS-02&#34;
++----------+
+| COUNT(*) |
+|----------|
+| 9256     |
++----------+</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_should_you_use_a_web_interface_or_the_declarative_approach">Should you use a web interface or the declarative approach?&nbsp;<a class="headline-hash" href="#_should_you_use_a_web_interface_or_the_declarative_approach">🔗</a> </h3>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2178dcb347ef4bd005b0_AD_4nXdMNKDl8BebMmyRy3360IO4YfWhz8EOfF65uvxvHEsTYpT_nxIU4gWwPXoxzTr0r95wYkhPbfTPcQ6YS8UflhfkrnATYerF_hGlX0ptvF0nwJA7VjheeREGiDCsIfUeD_cQwBIo3g.gif" alt="673a2178dcb347ef4bd005b0 AD 4nXdMNKDl8BebMmyRy3360IO4YfWhz8EOfF65uvxvHEsTYpT nxIU4gWwPXoxzTr0r95wYkhPbfTPcQ6YS8UflhfkrnATYerF hGlX0ptvF0nwJA7VjheeREGiDCsIfUeD cQwBIo3g"/>
+</div>
+</div>
+<div class="paragraph">
+<p>A pattern that we see users commonly adopting is that they’ll prototype and build pipelines in the web interface.
+Once they’ve tested them and ironed out any wrinkles, they then export these to YAML (using <code>decodable query</code>) and use them declaratively from there on, through staging environments and on into production.
+Decodable supports  <a href="https://docs.decodable.co/cli/integrate-with-github-actions.html">workflows in GitHub</a>  for exactly this approach.
+You can take it a step further and consider generating YAML resource files from a template driven with a tool like  <a href="https://jsonnet.org/">Jsonnet</a> .</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_summary">Summary&nbsp;<a class="headline-hash" href="#_summary">🔗</a> </h3>
+<div class="paragraph">
+<p>Getting data from Postgres into Snowflake needs not be hard work 😀.
+With Decodable and its  <a href="https://docs.decodable.co/connections.html">comprehensive library of connectors</a>  you can get data from one system to another in a scalable, low-latency way.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/11/673a2cd1d2d3bd0a469d2e9b_673a22218903e38734c9bf0b_673a21779b5a83352932e14f_AD_4nXcQZqM8D-vIAfUQtNKNsdDXstEBN_YUCZEHr4wnxOnQT7z9gPbJJJFMTvq0cTPE_Bb7sepGGv7kiczjpQlygnBjN_zfFpUv6GTa2UlXr0rARUgXgZpIqahlapGcuOIOWWqjOOFt.png" alt="673a2cd1d2d3bd0a469d2e9b 673a22218903e38734c9bf0b 673a21779b5a83352932e14f AD 4nXcQZqM8D vIAfUQtNKNsdDXstEBN YUCZEHr4wnxOnQT7z9gPbJJJFMTvq0cTPE Bb7sepGGv7kiczjpQlygnBjN zfFpUv6GTa2UlXr0rARUgXgZpIqahlapGcuOIOWWqjOOFt"/>
+</div>
+</div>
+<div class="paragraph">
+<p>In this post I showed two ways of creating this pipeline; using the web interface and using a YAML-based declarative approach.
+Both achieve the same result of a CDC connection to Postgres sending an initial full snapshot of the data followed by all subsequent changes to the data to Snowflake.
+With the data in Snowflake, we can perform whatever analytics on it that we want.</p>
+</div>
+<div class="paragraph">
+<p>But Decodable is not just connectors, it also offers a powerful processing layer built on Flink SQL.
+With this, you could take the streams of data from Postgres and apply transformations before they’re written to Snowflake.
+For example, performing the denormalisation across the three source tables to then write One Big Table (OBT) to Snowflake, thus avoiding any need for subsequent pre-processing before analytical queries can be run.</p>
+</div>
+<div class="paragraph">
+<p>Sign up for a  <a href="https://app.decodable.co/-/accounts/create">free trial today</a>  and give Decodable a try.</p>
+</div>
+<div class="paragraph">
+<p><em>You can find the source code used for the Postgres example, and sample YAML resource definitions,</em> <a href="https://github.com/decodableco/examples/tree/main/postgres-to-snowflake-with-cdc">on GitHub</a> <em>.</em></p>
+</div>
+</div>
+	<hr>
+	<div style="background-color: rgba(204, 234, 255, 0.25); margin-bottom:50px;margin-top:50px;padding: 20px; border-width: 2px; border-style: solid; border-color: darkorange;">
+	
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+		
+	</div>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">Contents</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_getting_data_out_of_postgres_with_cdc">Getting data out of Postgres with CDC</a></li>
+    <li><a href="#_loading_data_into_snowflake">Loading data into Snowflake</a></li>
+    <li><a href="#_lets_do_the_same_thing_but_declaratively">Let’s do the same thing, but declaratively</a></li>
+    <li><a href="#_should_you_use_a_web_interface_or_the_declarative_approach">Should you use a web interface or the declarative approach?</a></li>
+    <li><a href="#_summary">Summary</a></li>
+  </ul>
+</nav>
+      </div>
+      
+      <div class="toc-mobile-label">TABLE OF CONTENTS</div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+		</main>
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+	</body>
+</html>

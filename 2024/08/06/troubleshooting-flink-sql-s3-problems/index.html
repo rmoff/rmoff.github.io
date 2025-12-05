@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Troubleshooting Flink SQL S3 problems</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2024/08/06/troubleshooting-flink-sql-s3-problems/">
+		
+		
+		
+		
+
+		
+		<meta property="og:title" content="Troubleshooting Flink SQL S3 problems" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2024/08/flinksql-s3.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2024/08/06/troubleshooting-flink-sql-s3-problems/" />
+		<meta property="og:site_name" content="Troubleshooting Flink SQL S3 problems" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/toc.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/retro-cards.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/custom.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+		<script src="https://rmoff.net/js/toc.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2024/08/flinksql-s3.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<link rel="preload" as="image" href="https://rmoff.net/img/repton.gif">
+						<img
+							src="https://rmoff.net/img/logo.jpg"
+							class="w2 h2 br-100"
+							alt="rmoff&#39;s random ramblings"
+							onmouseover="this.src='https:\/\/rmoff.net\/img\/repton.gif';"
+							onmouseout="this.src='https:\/\/rmoff.net\/img\/logo.jpg';"
+						/>
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fa-brands fa-x-twitter"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">
+						<span class="terminal-title">Troubleshooting Flink SQL S3 problems<span class="terminal-cursor"></span></span>
+					</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2024-08-06T00:00:00Z">Aug 6, 2024</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/apache-flink" class="no-underline category near-white dim">Apache Flink</a>
+								<span class="display-print">at https://rmoff.net/2024/08/06/troubleshooting-flink-sql-s3-problems/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<div class="container-fluid docs">
+  <div class="row">
+    <main class="docs-content" role="main">
+
+<article class="article">
+	<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">Decodable blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>You’d think once was enough.
+Having  <a href="https://www.decodable.co/blog/flink-sql-misconfiguration-misunderstanding-and-mishaps">already written</a>  about the trouble that I had getting Flink SQL to write to S3 (including on MinIO) this should now be a moot issue for me.
+Right?
+RIGHT?!</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/08/66aabfa7e81909a15d284954_AD_4nXdtJWckCxLMlmZKB9S85ciylYJTvAfq9iGlDu9efH-lJs4oauf4GkxkGUTIlHFQKgDCvL7iZPuRyIbFTYpZD0X_ch8C8QlxZU3I9LifU2Sk8YWxdiYTxUHdwD9JD5Rb8_LIkl9EqehmCVmB8TDO0_0xiTNm.gif" alt="giphy"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Well perhaps it is.
+I’m not yet sure.
+But what’s led me down this path again is trying to get the Delta Lake connector to work in Flink SQL, and butting up against S3 problems.
+In troubleshooting those I ended up back at trying to understand in more detail what a functioning S3 configuration looks like so that I could rule out issues other than the Delta Lake connector.</p>
+</div>
+<div class="paragraph">
+<p><em>For Delta Lake and Flink itself you’ll need to stay tuned to the blog, as I write about that in a separate article.</em>
+<em>Today we’re just looking at some troubleshooting tips for S3 access in Flink SQL in general.</em></p>
+</div>
+<div class="paragraph">
+<p>So what we’ve got here is a methodical explanation of how I understand the S3 configuration and libraries to work, keeping things as vanilla as possible to start with.
+Filesystem connector, JSON format.</p>
+</div>
+<div class="paragraph">
+<p><em>Huge caveat: I am just a humble end-user of this stuff.</em>
+<em>I don’t code Java.</em>
+<em>I don’t actually know what I’m doing half the time 😉.</em></p>
+</div>
+<div class="sect2">
+<h3 id="_test_rig">Test rig&nbsp;<a class="headline-hash" href="#_test_rig">🔗</a> </h3>
+<div class="paragraph">
+<p>I’m using Flink 1.18.1, with MinIO providing S3-compatible storage, running locally in a Docker container and available on port 9000.</p>
+</div>
+<div class="paragraph">
+<p>This is my test statement:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE t_foo_fs (c1 varchar, c2 int)
+     WITH (
+      &#39;connector&#39; = &#39;filesystem&#39;,
+      &#39;path&#39; = &#39;s3a://warehouse/t_foo_fs/&#39;,
+      &#39;format&#39; = &#39;json&#39;
+     );
+
+INSERT INTO t_foo_fs VALUES (&#39;a&#39;,42);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><em>I’m using json format not because it’s a good idea, but because it doesn’t need any further dependencies installed, and I want to keep this as small and easily-reproduced as possible.</em></p>
+</div>
+<div class="paragraph">
+<p>I’m using the default ephemeral in-memory catalog, so each time I restart my session I have to define the table again.</p>
+</div>
+<div class="paragraph">
+<p>Once the table is created I run the <code>INSERT</code>, which the SQL Client passes as a job to the Job Manager to run (<code>Submitting SQL update statement to the cluster…</code>).
+This means that the SQL Client will say <code>successfully</code> in the message after running the <code>INSERT</code> but if you look carefully it’s just saying it’s <em>submitted</em> successfully:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: 34f3b66a1a6f89bea83145af8289aca5</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Thus, you have to then go and check if the job itself actually worked.</p>
+</div>
+<div class="paragraph">
+<p>To make this reproducible I ran the following:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">rm log/*.* &amp;&amp;
+  ./bin/start-cluster.sh &amp;&amp;
+  ./bin/sql-client.sh &amp;&amp;
+  ./bin/stop-cluster.sh &amp;&amp;
+  ps -ef|grep java|grep flink|awk &#39;{print $2}&#39;|xargs -Ifoo kill -9 foo &amp;&amp;
+  jps</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This clears out the log directory, starts Flink and the SQL Client, and then waits for the client to exit.
+Here I run the <code>CREATE TABLE</code> and <code>INSERT</code>, and then exit the client.
+This then causes the remainder of the statements to run, which shuts down the Flink cluster, kills any hanging processes, and runs <code>jps</code> to confirm this.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_logging">Logging&nbsp;<a class="headline-hash" href="#_logging">🔗</a> </h3>
+<div class="paragraph">
+<p>Getting an insight into what’s going is a two-fold process:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>What is running where (across SQL Client, Job Manager, and other components such as catalog metastores)</p>
+</li>
+<li>
+<p>Logs!</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>To enable logging on Flink when running it as a local binary started with <code>./start-cluster.sh</code> with SQL Client change the two files:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><code>./conf/log4j.properties</code></p>
+</li>
+<li>
+<p><code>./conf/log4j-cli.properties</code></p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>To both of these I added: ( <a href="https://logging.apache.org/log4j/2.x/manual/configuration.html">Ref</a> )</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">logger.fs.name = org.apache.hadoop.fs
+logger.fs.level = TRACE
+logger.fs2.name = org.apache.flink.fs
+logger.fs2.level = TRACE
+logger.aws.name = software.amazon
+logger.aws.level = TRACE</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_dependency_hadoop_s3_plugin">Dependency: Hadoop S3 plugin&nbsp;<a class="headline-hash" href="#_dependency_hadoop_s3_plugin">🔗</a> </h3>
+<div class="paragraph">
+<p>If you don’t include this and try to write to an <code>s3://</code> path you’ll get this error:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">org.apache.flink.core.fs.UnsupportedFileSystemSchemeException: Could not find a file system implementation for scheme &#39;s3&#39;.
+The scheme is directly supported by Flink through the following plugin(s): flink-s3-fs-hadoop, flink-s3-fs-presto.
+Please ensure that each plugin resides within its own subfolder within the plugins directory. See https://nightlies.apache.org/flink/flink-docs-stable/docs/deployment/filesystems/plugins/ for more information.
+If you want to use a Hadoop file system for that scheme, please add the scheme to the configuration fs.allowed-fallback-filesystems.
+For a full list of supported file systems, please see https://nightlies.apache.org/flink/flink-docs-stable/ops/filesystems/.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For an <code>s3a://</code> path you’ll get basically the same:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">org.apache.flink.core.fs.UnsupportedFileSystemSchemeException: Could not find a file system implementation for scheme &#39;s3a&#39;.
+The scheme is directly supported by Flink through the following plugin(s): flink-s3-fs-hadoop.
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So per  <a href="https://nightlies.apache.org/flink/flink-docs-stable/docs/deployment/filesystems/plugins/">the docs</a> , you need the Hadoop S3 plugin, which ships with Flink but isn’t in place by default.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">mkdir ./plugins/s3-fs-hadoop &amp;&amp; \
+cp ./opt/flink-s3-fs-hadoop-1.18.1.jar ./plugins/s3-fs-hadoop/</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_log_file_diving">Log File Diving&nbsp;<a class="headline-hash" href="#_log_file_diving">🔗</a> </h3>
+<div class="paragraph">
+<p>With the log levels set to <code>TRACE</code>, let’s go and have a look at what we get.
+Here’s the output from the <code>taskexecutor</code> log (in the Flink <code>./log</code> folder).</p>
+</div>
+<div class="paragraph">
+<p>The first entry we have is the S3 filesystem libraries starting.
+<code>org.apache.flink.fs.s3</code> handles the s3 schema and hands this off to <code>org.apache.hadoop.fs.s3a.S3AFileSystem</code> which does most of the rest of the work.</p>
+</div>
+<div class="paragraph">
+<p>The Hadoop <code>S3AFileSystem</code> is shown as <code>Initializing</code> for <code>warehouse</code>, where <code>warehouse</code> is the name of the bucket that’s been specified for writing the table data to (<code>&#39;path&#39; = &#39;s3a://warehouse/t_foo_fs/&#39;</code>).</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.flink.fs.s3.common.AbstractS3FileSystemFactory    [] - Creating S3 file system backed by Hadoop s3a file system
+DEBUG org.apache.flink.fs.s3.common.AbstractS3FileSystemFactory    [] - Loading Hadoop configuration for Hadoop s3a file system
+DEBUG org.apache.flink.fs.s3hadoop.S3FileSystemFactory             [] - Using scheme s3a://warehouse/t_foo_fs for s3a file system backing the S3 File System
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Initializing S3AFileSystem for warehouse</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Next up is a bunch of entries covering config values etc.
+One point to note is <code>Propagating entries under</code> which ties into the idea of  <a href="https://hadoop.apache.org/docs/stable/hadoop-aws/tools/hadoop-aws/index.html#Configuring_different_S3_buckets_with_Per-Bucket_Configuration">per-bucket configuration</a> .</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Propagating entries under fs.s3a.bucket.warehouse.
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Data is unencrypted
+DEBUG org.apache.hadoop.fs.s3a.S3ARetryPolicy                      [] - Retrying on recoverable AWS failures 7 times with an initial interval of 500ms
+INFO  org.apache.hadoop.metrics2.impl.MetricsConfig                [] - Loaded properties from hadoop-metrics2.properties
+INFO  org.apache.hadoop.metrics2.impl.MetricsSystemImpl            [] - Scheduled Metric snapshot period at 10 second(s).
+INFO  org.apache.hadoop.metrics2.impl.MetricsSystemImpl            [] - s3a-file-system metrics system started
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Client Side Encryption enabled: false
+WARN  org.apache.hadoop.util.NativeCodeLoader                      [] - Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+DEBUG org.apache.hadoop.fs.s3a.S3ARetryPolicy                      [] - Retrying on recoverable AWS failures 7 times with an initial interval of 500ms
+DEBUG org.apache.hadoop.fs.s3a.S3GuardExistsRetryPolicy            [] - Retrying on recoverable S3Guard table/S3 inconsistencies 7 times with an initial interval of 2000ms
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Value of fs.s3a.paging.maximum is 5000
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Value of fs.s3a.block.size is 33554432
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Value of fs.s3a.readahead.range is 65536
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Value of fs.s3a.max.total.tasks is 32
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Value of fs.s3a.threads.keepalivetime is 60
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Value of fs.s3a.executor.capacity is 16
+DEBUG org.apache.hadoop.fs.s3a.auth.SignerManager                  [] - No custom signers specified
+DEBUG org.apache.hadoop.fs.s3a.audit.AuditIntegration              [] - auditing is disabled
+DEBUG org.apache.hadoop.fs.s3a.audit.AuditIntegration              [] - Started Audit Manager Service NoopAuditManagerS3A in state NoopAuditManagerS3A: STARTED
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Value of fs.s3a.internal.upload.part.count.limit is 10000
+DEBUG org.apache.hadoop.fs.s3a.S3ARetryPolicy                      [] - Retrying on recoverable AWS failures 7 times with an initial interval of 500ms
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Credential provider class is org.apache.flink.fs.s3.common.token.DynamicTemporaryAWSCredentialsProvider
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Credential provider class is org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Credential provider class is org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Credential provider class is com.amazonaws.auth.EnvironmentVariableCredentialsProvider
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Credential provider class is org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - For URI s3a://warehouse/t_foo_fs, using credentials AWSCredentialProviderList[refcount= 1: [org.apache.flink.fs.s3.common.token.DynamicTemporaryAWSCredentialsProvider@1376bee, TemporaryAWSCredentialsProvider, SimpleAWSCredentialsProvider, EnvironmentVariableCredentialsProvider, org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider@4f2b477b]
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Using credential provider AWSCredentialProviderList[refcount= 1: [org.apache.flink.fs.s3.common.token.DynamicTemporaryAWSCredentialsProvider@1376bee, TemporaryAWSCredentialsProvider, SimpleAWSCredentialsProvider, EnvironmentVariableCredentialsProvider, org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider@4f2b477b]
+DEBUG org.apache.hadoop.fs.s3a.S3AUtils                            [] - Value of fs.s3a.connection.maximum is 96</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Next is another <code>DEBUG</code> entry but with something that looks like an error:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.impl.NetworkBinding                 [] - Unable to create class org.apache.hadoop.fs.s3a.impl.ConfigureShadedAWSSocketFactory, value of fs.s3a.ssl.channel.mode will be ignored
+java.lang.NoClassDefFoundError: com/amazonaws/thirdparty/apache/http/conn/socket/ConnectionSocketFactory
+    at java.lang.Class.forName0(Native Method) ~[?:?]
+    at java.lang.Class.forName(Class.java:315) ~[?:?]
+    at org.apache.hadoop.fs.s3a.impl.NetworkBinding.bindSSLChannelMode(NetworkBinding.java:89) ~[flink-s3-fs-hadoop-1.18.1.jar:1.18.1]
+    at org.apache.hadoop.fs.s3a.S3AUtils.initProtocolSettings(S3AUtils.java:1347) ~[flink-s3-fs-hadoop-1.18.1.jar:1.18.1]
+[…]
+Caused by: java.lang.ClassNotFoundException: com.amazonaws.thirdparty.apache.http.conn.socket.ConnectionSocketFactory
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I guess this is actually just some internal stuff, since it’s not raised as an error, so we’ll ignore it for now.</p>
+</div>
+<div class="paragraph">
+<p>Then some more config values, and then an interesting one (since we’re using MinIO)—the endpoint configuration.
+Since we’ve not yet set it, it’s unsurprising to see that it’s using the default (<code>Using default endpoint</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Creating endpoint configuration for &#34;&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Using default endpoint -no need to generate a configuration
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - fs.s3a.endpoint.region=&#34;us-east-1&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Using default endpoint; setting region to us-east-1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I’ll skip over a bit more of the same kind of background <code>DEBUG</code> stuff, and highlight this bit where we start to see the file paths mentioned.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.WriteOperationHelper                [] - Initiating Multipart upload to t_foo_fs/part-5d498f53-ec06-4ee4-9fe2-5c7763755200-0-0
+DEBUG org.apache.hadoop.fs.s3a.Invoker                             [] - Starting: initiate MultiPartUpload
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Initiate multipart upload to t_foo_fs/part-5d498f53-ec06-4ee4-9fe2-5c7763755200-0-0
+DEBUG org.apache.hadoop.fs.statistics.impl.IOStatisticsStoreImpl   [] - Incrementing counter object_multipart_initiated by 1 with final value 1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Remembering the value of <code>path (&#39;path&#39; = &#39;s3a://warehouse/t_foo_fs/&#39;)</code> we can see the bucket has been stripped away to give us just the &#39;folder&#39; (which isn’t, on S3) of <code>t_foo_fs</code>, and then the actual data for Flink to upload (<code>part-5d498f53-ec06-4ee4-9fe2-5c7763755200-0-0</code>).</p>
+</div>
+<div class="paragraph">
+<p>So we’re now at the part of the S3 process where it wants to write the data.
+We kinda know it’s going to fail anyway because we didn’t configure the endpoint; but we also didn’t configure any credentials and it’s going to be that which trips things up first:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - No credentials from org.apache.flink.fs.s3.common.token.DynamicTemporaryAWSCredentialsProvider@1376bee: org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException: Dynamic session credentials for Flink: No AWS Credentials
+DEBUG org.apache.hadoop.fs.s3a.Invoker                             [] - Starting: create credentials
+DEBUG org.apache.hadoop.fs.s3a.Invoker                             [] - create credentials: duration 0:00.001s
+DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - No credentials from TemporaryAWSCredentialsProvider: org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException: Session credentials in Hadoop configuration: No AWS Credentials
+DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - No credentials from SimpleAWSCredentialsProvider: org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException: SimpleAWSCredentialsProvider: No AWS credentials in the Hadoop configuration
+DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - No credentials provided by EnvironmentVariableCredentialsProvider: com.amazonaws.SdkClientException: Unable to load AWS credentials from environment variables (AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY) and AWS_SECRET_KEY (or AWS_SECRET_ACCESS_KEY))
+com.amazonaws.SdkClientException: Unable to load AWS credentials from environment variables (AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY) and AWS_SECRET_KEY (or AWS_SECRET_ACCESS_KEY))
+    at com.amazonaws.auth.EnvironmentVariableCredentialsProvider.getCredentials(EnvironmentVariableCredentialsProvider.java:49) ~[?:?]
+[…]
+DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - No credentials from org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider@4f2b477b: org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException: IAMInstanceCredentialsProvider: Failed to connect to service endpoint:</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What’s useful here is you can see the code go through the different credential source options, including environment variables (<code>EnvironmentVariableCredentialsProvider</code>) and config file (<code>SimpleAWSCredentialsProvider</code>).</p>
+</div>
+<div class="paragraph">
+<p>With the credentials unavailable, the Flink job then fails:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">WARN  org.apache.flink.runtime.taskmanager.Task                    [] - Source: Values[1] -&gt; StreamingFileWriter -&gt; Sink: end (1/1)#0 (25de23919c70373c90645ab5b7bb1b8a_cbc357ccb763df2852fee8c4fc7d55f2_0_0) switched from RUNNING to FAILED with failure cause:
+java.nio.file.AccessDeniedException: t_foo_fs/part-5d498f53-ec06-4ee4-9fe2-5c7763755200-0-0:
+org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException:
+No AWS Credentials provided by DynamicTemporaryAWSCredentialsProvider TemporaryAWSCredentialsProvider SimpleAWSCredentialsProvider EnvironmentVariableCredentialsProvider IAMInstanceCredentialsProvider :
+com.amazonaws.SdkClientException: Unable to load AWS credentials from environment variables (AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY) and AWS_SECRET_KEY (or AWS_SECRET_ACCESS_KEY))
+[…]</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_credentials_and_configuration">Credentials and Configuration&nbsp;<a class="headline-hash" href="#_credentials_and_configuration">🔗</a> </h3>
+<div class="paragraph">
+<p>As we saw from the log above, without any configuration for S3 provided the job fails.
+So let’s rectify that and tell Flink how to authorise to S3 (MinIO).
+Per  <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/filesystems/s3/#configure-access-credentials">the docs</a> , this is done as part of  <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/config/#flink-configuration-file">the Flink config file</a> :</p>
+</div>
+<div class="paragraph">
+<p><strong>/conf/flink-conf.yaml</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">[…]
+s3.access.key: admin
+s3.secret.key: password</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we see from the log file that these credentials are picked up by <code>SimpleAWSCredentialsProvider</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - No credentials from TemporaryAWSCredentialsProvider: org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException: Session credentials in Hadoop configuration: No AWS Credentials
+DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - Using credentials from SimpleAWSCredentialsProvider</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What happens next is interesting.
+We see the actual call from the AWS library to S3 itself:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG com.amazonaws.request                                        [] - Sending Request: HEAD https://warehouse.s3.amazonaws.com / Headers: (amz-sdk-invocation-id: e887a1da-8ab6-26aa-20a7-7626c5e75a18, Content-Type: application/octet-stream, User-Agent: Hadoop 3.3.4, aws-sdk-java/1.12.319 Mac_OS_X/14.5 OpenJDK_64-Bit_Server_VM/11.0.21+9 java/11.0.21 vendor/Eclipse_Adoptium cfg/retry-mode/legacy, )</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note the hostname there, <code>HEAD <a href="https://warehouse.s3.amazonaws.com" class="bare">https://warehouse.s3.amazonaws.com</a></code>.
+This is actually going out to S3 itself.
+Which since we’re using the credentials for MinIO, isn’t going to work.</p>
+</div>
+<div class="paragraph">
+<p>The <code>HEAD</code> fails with HTTP 400 error:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG com.amazonaws.request                                        [] - Received error response: com.amazonaws.services.s3.model.AmazonS3Exception: Bad Request (Service: Amazon S3; Status Code: 400; Error Code: 400 Bad Request; Request ID: NZT8FG3S4ETHKT83; S3 Extended Request ID: AnoFUPCnG4gL1ve8Gly+aaP3tTGQ8tVmSN+TT57AIX/dAvw71KSUsOg2n+eh6NvI7etIoHmZ80M=; Proxy: null), S3 Extended Request ID: AnoFUPCnG4gL1ve8Gly+aaP3tTGQ8tVmSN+TT57AIX/dAvw71KSUsOg2n+eh6NvI7etIoHmZ80M=</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>There’s then a second HTTP request (a <code>POST</code>) for the file itself:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG com.amazonaws.request                                        [] - Sending Request: POST https://warehouse.s3.eu-central-1.amazonaws.com /t_foo_fs/part-12abc4d6-5b99-4627-b27a-d14788c03e36-0-0 Parameters: ({&#34;uploads&#34;:[null]}Headers: (amz-sdk-invocation-id: f8a0359c-5115-a716-ff73-76482046b4e2, Content-Length: 0, Content-Type: application/octet-stream, User-Agent: Hadoop 3.3.4, aws-sdk-java/1.12.319 Mac_OS_X/14.5 OpenJDK_64-Bit_Server_VM/11.0.21+9 java/11.0.21 vendor/Eclipse_Adoptium cfg/retry-mode/legacy, )</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This also fails, and fatally so this time:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG com.amazonaws.request                                        [] - Received error response: com.amazonaws.services.s3.model.AmazonS3Exception: The AWS Access Key Id you provided does not exist in our records. (Service: Amazon S3; Status Code: 403; Error Code: InvalidAccessKeyId; Request ID: NZTDTWG94GJKBSGX; S3 Extended Request ID: 7/fnAkRXUg+LiUUzlN9ydkLRuK4Mp/KNjvho4hvQFq9AQYDhwXrGKsEJ8c1yXKmNu+nb8jsfgaQ=; Proxy: null), S3 Extended Request ID: 7/fnAkRXUg+LiUUzlN9ydkLRuK4Mp/KNjvho4hvQFq9AQYDhwXrGKsEJ8c1yXKmNu+nb8jsfgaQ=</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This gets floated up to Flink, which terminates the job with a failure:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">WARN  org.apache.flink.runtime.taskmanager.Task                    [] - Source: Values[1] -&gt; StreamingFileWriter -&gt; Sink: end (1/1)#0 (64dd133316241806e123b88524963eb3_cbc357ccb763df2852fee8c4fc7d55f2_0_0) switched from RUNNING to FAILED with failure cause:
+java.nio.file.AccessDeniedException: t_foo_fs/part-12abc4d6-5b99-4627-b27a-d14788c03e36-0-0: initiate MultiPartUpload on t_foo_fs/part-12abc4d6-5b99-4627-b27a-d14788c03e36-0-0:
+com.amazonaws.services.s3.model.AmazonS3Exception: The AWS Access Key Id you provided does not exist in our records.
+[…]</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_configuring_an_s3_endpoint_for_minio">Configuring an S3 endpoint for MinIO&nbsp;<a class="headline-hash" href="#_configuring_an_s3_endpoint_for_minio">🔗</a> </h3>
+<div class="paragraph">
+<p>If you’re using an S3-compatible object store, such as MinIO, you need to tell the Flink S3 client where to find it, since as we saw above it defaults to literally <code>warehouse.s3.amazonaws.com</code>.</p>
+</div>
+<div class="paragraph">
+<p>Configuring the endpoint is covered  <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/filesystems/s3/#configure-non-s3-endpoint">clearly in the docs</a> —add it to your Flink config:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">s3.endpoint: http://localhost:9000</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After restarting, we see the endpoint reflected in the <code>DEBUG</code> messages as the S3 client starts up and parses its config:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Creating endpoint configuration for &#34;http://localhost:9000&#34;
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Endpoint URI = http://localhost:9000
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Endpoint http://localhost:9000 is not the default; parsing
+DEBUG org.apache.hadoop.fs.s3a.DefaultS3ClientFactory              [] - Region for endpoint http://localhost:9000, URI http://localhost:9000 is determined as null</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>One thing that I will point out here is what’s shown here in the logs a bit above these endpoint messages:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for s3.endpoint as fs.s3a.endpoint to Hadoop config
+DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for s3.access.key as fs.s3a.access.key to Hadoop config
+DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for s3.secret.key as fs.s3a.secret.key to Hadoop config</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This has been a big source of confusion for me.
+Is it <code>s3.endpoint</code> or <code>fs.s3a.endpoint</code>?
+The answer is yes!
+It’s both!
+For Flink, you configure <code>s3.</code> which then gets mapped internally to the <code>fs.s3a.</code> configuration that the  <a href="https://hadoop.apache.org/docs/stable/hadoop-aws/tools/hadoop-aws/index.html">Hadoop-AWS module</a>  refers to in its documentation.</p>
+</div>
+<div class="paragraph">
+<p>So, with the endpoint set, let’s see what happens.
+We’ll pick up where it went wrong last time; the HTTP calls to the S3 endpoint which should now be correct:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG com.amazonaws.request                                        [] - Sending Request: POST http://warehouse.localhost:9000 /t_foo_fs/part-b933eb6c-5cc4-4a25-bd33-f314268d7f8c-0-0 Parameters: ({&#34;uploads&#34;:[null]}Headers: (amz-sdk-invocation-id: be591818-8fad-1264-ed5b-9dd97dedb041, Content-Length: 0, Content-Type: application/octet-stream, User-Agent: Hadoop 3.3.4, aws-sdk-java/1.12.319 Mac_OS_X/14.5 OpenJDK_64-Bit_Server_VM/11.0.21+9 java/11.0.21 vendor/Eclipse_Adoptium cfg/retry-mode/legacy, )</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><em>(Interestingly, no HEAD request first this time like there was before.)</em></p>
+</div>
+<div class="paragraph">
+<p>However, this fails, and if you look at the hostname, you’ll see why:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">TRACE com.amazonaws.http.AmazonHttpClient                          [] - Unable to execute HTTP request: warehouse.localhost: nodename nor servname provided, or not known Request will be retried.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Somehow it’s getting <code>warehouse.localhost</code> from our configuration, which is not a hostname that exists from my machine.
+This causes the Flink job to fail (after multiple retries):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">WARN  org.apache.flink.runtime.taskmanager.Task                    [] - Source: Values[1] -&gt; StreamingFileWriter -&gt; Sink: end (1/1)#0 (de4000cf76864688506c514ebba58514_cbc357ccb763df2852fee8c4fc7d55f2_0_0) switched from RUNNING to FAILED with failure cause:
+org.apache.hadoop.fs.s3a.AWSClientIOException:
+initiate MultiPartUpload on t_foo_fs/part-b933eb6c-5cc4-4a25-bd33-f314268d7f8c-0-0:
+com.amazonaws.SdkClientException: Unable to execute HTTP request: warehouse.localhost: nodename nor servname provided, or not known:
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This problem comes about because the default option in the S3 client is to use  <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html#virtual-hosted-style-access">virtual-hosted-style requests</a>  in which the bucket name (<code>warehouse</code>, in our example) is prefixed to the endpoint hostname (<code>localhost</code>).</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_configuring_path_style_access_for_minio_from_flink_s3">Configuring path-style access for MinIO from Flink S3&nbsp;<a class="headline-hash" href="#_configuring_path_style_access_for_minio_from_flink_s3">🔗</a> </h3>
+<div class="paragraph">
+<p>Also covered  <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/filesystems/s3/">very clearly</a>  in the Flink S3 docs is how to configure it to use  <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html#path-style-access">path-style requests</a> .
+To the Flink configuration we add:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">s3.endpoint: http://localhost:9000</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And so, to recap, our <code>flink-conf.yaml</code> for S3 now looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">[…]
+s3.access.key: admin
+s3.secret.key: password
+s3.endpoint: http://localhost:9000
+s3.path.style.access: true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After restarting, things look pretty good.
+The config is being read and passed to Hadoop-AWS:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for s3.endpoint as fs.s3a.endpoint to Hadoop config
+DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for s3.access.key as fs.s3a.access.key to Hadoop config
+DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for s3.secret.key as fs.s3a.secret.key to Hadoop config
+DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for s3.path.style.access as fs.s3a.path.style.access to Hadoop config</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>POST</code> call is made to the correct MinIO endpoint, which returns an HTTP 200 successful status code:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG com.amazonaws.request                                        [] - Sending Request: POST http://localhost:9000 /warehouse/t_foo_fs/part-5caebe06-17eb-405c-bfc7-3f78f7e109da-0-0 Parameters: ({&#34;uploads&#34;:[null]}Headers: (amz-sdk-invocation-id: 68d62b6f-997b-ef70-c2ca-3bce040dee2d, Content-Length: 0, Content-Type: application/octet-stream, User-Agent: Hadoop 3.3.4, aws-sdk-java/1.12.319 Mac_OS_X/14.5 OpenJDK_64-Bit_Server_VM/11.0.21+9 java/11.0.21 vendor/Eclipse_Adoptium cfg/retry-mode/legacy, )
+[…]
+DEBUG com.amazonaws.request                                        [] - Received successful response: 200, AWS Request ID: 17E092B83B43303A</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The upload completes successfully:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.hadoop.fs.s3a.Invoker                             [] - Completing multipart upload: duration 0:00.012s
+DEBUG org.apache.hadoop.fs.s3a.S3AFileSystem                       [] - Finished write to t_foo_fs/part-5caebe06-17eb-405c-bfc7-3f78f7e109da-0-0, len 19. etag e140dda18b4f195055b066f350b52034-1, version null</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We have a (very small) file on MinIO (S3):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ mc ls --recursive minio
+[2024-07-09 14:46:17 UTC]    19B STANDARD warehouse/t_foo_fs/part-5caebe06-17eb-405c-bfc7-3f78f7e109da-0-0
+
+$ mc cat minio/warehouse/t_foo_fs/part-5caebe06-17eb-405c-bfc7-3f78f7e109da-0-0
+{&#34;c1&#34;:&#34;a&#34;,&#34;c2&#34;:42}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And finally, the Flink job completed successfully:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; show jobs;
++----------------------------------+-------------------------------------------------------+----------+-------------------------+
+|                           job id |                                              job name |   status |              start time |
++----------------------------------+-------------------------------------------------------+----------+-------------------------+
+| 1b54b5d97a3ec6536cf38fdf7e71d22c | insert-into_default_catalog.default_database.t_foo_fs | FINISHED | 2024-07-09T14:46:16.450 |
++----------------------------------+-------------------------------------------------------+----------+-------------------------+
+1 row in set</code></pre>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/08/66aabfa762af1f4adc316c18_AD_4nXe5aPirnsid2aG6h4SYCJaB2hxBD8UmrZ1DRX33A-264Ifq67WN-Y2isETbpUOnU3WgZkgy50CQ2nZQU6MQlOefTvi7uFOBdnrJAjERpzcG7lI11cRWLEbi5S_unA8ZiPqXpVjzWFwG-zhpvxO2fwPKwJNG.gif" alt="giphy"/>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_configuration_stuff">Configuration stuff&nbsp;<a class="headline-hash" href="#_configuration_stuff">🔗</a> </h3>
+<div class="paragraph">
+<p>The Flink S3 docs say to use <code>s3.</code> for configuring S3, and we saw above that these get mapped to <code>fs.s3a.</code> for the Hadoop-AWS module.
+It’s also valid to specify <code>fs.s3a.</code> directly—they get read and mapped the same:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">fs.s3a.access.key: admin
+fs.s3a.secret.key: password
+fs.s3a.endpoint: http://localhost:9000
+fs.s3a.path.style.access: true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>shows up in the log thus:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for fs.s3a.access.key as fs.s3a.access.key to Hadoop config
+DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for fs.s3a.secret.key as fs.s3a.secret.key to Hadoop config
+DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for fs.s3a.path.style.access as fs.s3a.path.style.access to Hadoop config
+DEBUG org.apache.flink.fs.s3hadoop.common.HadoopConfigLoader       [] - Adding Flink config entry for fs.s3a.endpoint as fs.s3a.endpoint to Hadoop config</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If my educated-guess reading of the code is right,  <a href="https://github.com/apache/flink/blob/4e86d98437480377973f66600c2d5bda907589d6/flink-filesystems/flink-hadoop-fs/src/main/java/org/apache/flink/runtime/util/HadoopUtils.java#L121-L136">here</a>  is where the config values are mapped across.
+The code mentions a <code>flink.hadoop.</code> prefix but this seems to be  <a href="https://github.com/apache/flink/blob/master/flink-filesystems/flink-s3-fs-hadoop/src/main/java/org/apache/flink/fs/s3hadoop/S3FileSystemFactory.java#L41-L47">overridden for flink-s3-fs-hadoop</a>  as a set of <code>FLINK_CONFIG_PREFIXES</code> which can be <code>s3., s3a., or fs.s3a.</code>—they’re all the same.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_references">References&nbsp;<a class="headline-hash" href="#_references">🔗</a> </h3>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/filesystems/s3">Flink S3 filesystem</a></p>
+</li>
+<li>
+<p><a href="https://hadoop.apache.org/docs/stable/hadoop-aws/tools/hadoop-aws/index.html">Hadoop-AWS</a></p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_theres_got_to_be_an_easier_way">There’s got to be an easier way?&nbsp;<a class="headline-hash" href="#_theres_got_to_be_an_easier_way">🔗</a> </h3>
+<div class="paragraph">
+<p>There is, and it’s called  <a href="https://www.decodable.co/product">Decodable</a>  😀</p>
+</div>
+<div class="paragraph">
+<p>With pre-built connectors for S3, Apache Iceberg, Delta Lake, and dozens more, it’s the easiest way to move data.
+To use a connector you simply provide the necessary configuration—there’s not a JAR in sight!</p>
+</div>
+<div class="paragraph">
+<p>Decodable also has managed Flink, so if you <em>really</em> want to write this stuff by hand, you can, and we’ll run it for you.</p>
+</div>
+<div class="paragraph">
+<p><a href="https://app.decodable.co/-/accounts/create">Sign up for free</a>  and give it a try.</p>
+</div>
+</div>
+	<hr>
+	<div style="background-color: rgba(204, 234, 255, 0.25); margin-bottom:50px;margin-top:50px;padding: 20px; border-width: 2px; border-style: solid; border-color: darkorange;">
+	
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+		
+	</div>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">Contents</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_test_rig">Test rig</a></li>
+    <li><a href="#_logging">Logging</a></li>
+    <li><a href="#_dependency_hadoop_s3_plugin">Dependency: Hadoop S3 plugin</a></li>
+    <li><a href="#_log_file_diving">Log File Diving</a></li>
+    <li><a href="#_credentials_and_configuration">Credentials and Configuration</a></li>
+    <li><a href="#_configuring_an_s3_endpoint_for_minio">Configuring an S3 endpoint for MinIO</a></li>
+    <li><a href="#_configuring_path_style_access_for_minio_from_flink_s3">Configuring path-style access for MinIO from Flink S3</a></li>
+    <li><a href="#_configuration_stuff">Configuration stuff</a></li>
+    <li><a href="#_references">References</a></li>
+    <li><a href="#_theres_got_to_be_an_easier_way">There’s got to be an easier way?</a></li>
+  </ul>
+</nav>
+      </div>
+      
+      <div class="toc-mobile-label">TABLE OF CONTENTS</div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+		</main>
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+	</body>
+</html>

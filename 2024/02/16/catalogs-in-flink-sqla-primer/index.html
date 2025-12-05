@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Catalogs in Flink SQL—A Primer</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2024/02/16/catalogs-in-flink-sqla-primer/">
+		
+		
+		
+		
+
+		
+		<meta property="og:title" content="Catalogs in Flink SQL—A Primer" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2024/02/daniel-forsman-ST4jAHVCEZQ-unsplash.sm.webp" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2024/02/16/catalogs-in-flink-sqla-primer/" />
+		<meta property="og:site_name" content="Catalogs in Flink SQL—A Primer" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/toc.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/retro-cards.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/custom.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+		<script src="https://rmoff.net/js/toc.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2024/02/daniel-forsman-ST4jAHVCEZQ-unsplash.sm.webp'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<link rel="preload" as="image" href="https://rmoff.net/img/repton.gif">
+						<img
+							src="https://rmoff.net/img/logo.jpg"
+							class="w2 h2 br-100"
+							alt="rmoff&#39;s random ramblings"
+							onmouseover="this.src='https:\/\/rmoff.net\/img\/repton.gif';"
+							onmouseout="this.src='https:\/\/rmoff.net\/img\/logo.jpg';"
+						/>
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fa-brands fa-x-twitter"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">
+						<span class="terminal-title">Catalogs in Flink SQL—A Primer<span class="terminal-cursor"></span></span>
+					</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2024-02-16T00:00:00Z">Feb 16, 2024</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/apache-flink" class="no-underline category near-white dim">Apache Flink</a>
+								<span class="display-print">at https://rmoff.net/2024/02/16/catalogs-in-flink-sqla-primer/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<div class="container-fluid docs">
+  <div class="row">
+    <main class="docs-content" role="main">
+
+<article class="article">
+	<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-a-primer">Decodable blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>When you’re using Flink SQL you’ll run queries that interact with objects.
+An <code>INSERT</code> against a <code>TABLE</code>, a <code>SELECT</code> against a <code>VIEW</code>, for example.
+These objects are defined using DDL—but where do these definitions live?</p>
+</div>
+<div class="paragraph">
+<p>If you’re coming to Flink SQL from a RDBMS background such as Postgres you may have never given the storage of object definitions a second thought.
+You fire up <code>psql</code>, you <code>CREATE TABLE</code>, and off you go.
+Every time you connect to the database, there are your tables.
+But if you go and ask your DBA, you’ll find out quickly enough about the  <a href="https://en.wikipedia.org/wiki/Information_schema">information schema</a> —implemented in Postgres as its <a href="https://www.postgresql.org/docs/current/catalogs-overview.html">system catalog</a>  and in Oracle as <a href="https://docs.oracle.com/en/database/oracle/oracle-database/23/refrn/about-static-data-dictionary-views.html#GUID-10024282-6729-4C66-8679-FD653C9C7DE7">static data dictionary views</a>  over catalog data—and these are stored within the database itself.</p>
+</div>
+<div class="paragraph">
+<p>Catalogs are where your object definitions live, and as a user of Flink SQL this is something you need to know about.
+That’s because Flink is a query engine that works with numerous different sources and targets of data, and it needs to know where to find them and how to interact with them.
+This is what the catalog tells it.</p>
+</div>
+<div class="paragraph">
+<p>This apparent complexity has come about as a result of the decoupling of storage and compute—a trend which began with Apache Hadoop.
+Unlike an RDBMS, it’s no longer self-evident where the catalog lives.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/02/6717dc1c82a396e17c5795fc_6702c2ab244841e00f5cbc24_66a3b680bee79c8155aa12b5_65cf631ba4e1ac9b123024fe_CleanShot%202024-02-16%20at%2013.28.19@2x.webp" alt="A series of boxes showing an explanation of the disaggregation of the stack and its implications for the need for a catalog. It constrasts this to the RDBMS in which the storage and compute are integrated and thus the catalog can be too."/>
+</div>
+</div>
+<div class="paragraph">
+<p>You can think of the Flink catalog in RDBMS terms like external tables.
+Whilst regular tables in the RDBMS have their definition and location of the data internal to the RDBMS, with external tables the RDBMS&#39; system catalog tracks the existence of the object’s definition and location of the data, but the data and possibly additional metadata exists outside of the RDBMS.
+In the same way, Flink itself doesn’t store data but needs to know where the data behind tables that you define resides.</p>
+</div>
+<div class="paragraph">
+<p>As we’re going to see in this blog post, we get to experience the highs and the lows of an open-source ecosystem when we delve into Flink’s catalogs.
+That’s because there are catalogs, and then there are <em>catalogs</em>.
+One of the most confusing things I found in my research on Flink catalogs is that different things with the name &#34;catalog&#34; actually do different things, including:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Telling a query engine about objects that the user creates and/or reads from:<br/></p>
+<div class="ulist">
+<ul>
+<li>
+<p>in one system only<br/></p>
+</li>
+<li>
+<p>in multiple systems</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Telling a query engine about objects that already exist on another system, but not creating new ones</p>
+</li>
+<li>
+<p><em>Persisting</em> these object definitions for re-use</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Completely separate from this ambiguous mish-mash of catalog meanings is the much more distinct—and nothing to do with Flink, per se— <a href="https://www.ibm.com/topics/data-catalog">Data Catalog</a>  which <a href="https://azure.microsoft.com/en-gb/products/data-catalog">any</a>  good <a href="https://www.oracle.com/uk/big-data/data-catalog/">enterprise vendor</a>  will sell you.
+These literally catalog your data, less for the purpose of supporting query engines but more from a governance, discoverability, and audit/compliance point of view.</p>
+</div>
+<div class="sect2">
+<h3 id="_we_never_said_that_this_would_be_easy">We Never Said That This Would Be Easy&nbsp;<a class="headline-hash" href="#_we_never_said_that_this_would_be_easy">🔗</a> </h3>
+<div class="paragraph">
+<p>The fun thing about running Flink SQL for yourself is that you get to run Flink SQL for yourself.
+The less fun thing is that you have to run Flink SQL for yourself 😉</p>
+</div>
+<div class="paragraph">
+<p>Flink is first and foremost a Java system, and whether you like it or not as an end user, even of Flink SQL, you’re going to get exposed to that.
+Perhaps you’ve got a solid Java background and crush classpath errors with your bare fists—but perhaps not.
+If you’re doing this locally then whether you like it or not you’re going to have to understand something about the mechanics of catalogs in Flink - what they are, what they’re not, and how to use them.</p>
+</div>
+<div class="paragraph">
+<p>In this blog series I’m going to walk you through examples of setting up and using Catalogs in Flink SQL, and also point out some of the fun Java stuff along the way, usually involving JARs, CLASSPATHs, and occasionally some wailing and gnashing of teeth.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_flinks_default_in_memory_catalog">Flink’s Default In-Memory Catalog&nbsp;<a class="headline-hash" href="#_flinks_default_in_memory_catalog">🔗</a> </h3>
+<div class="paragraph">
+<p>Let’s get started!
+Out of the box, Flink is pre-configured with an in-memory catalog.
+That means that when you create a table, it stores it and you can see it when you list the available tables.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">   ______ _ _       _       _____  ____  _         _____ _ _            _  BETA
+   |  ____| (_)     | |     / ____|/ __ \| |       / ____| (_)          | |
+   | |__  | |_ _ __ | | __ | (___ | |  | | |      | |    | |_  ___ _ __ | |_
+   |  __| | | | &#39;_ \| |/ /  \___ \| |  | | |      | |    | | |/ _ \ &#39;_ \| __|
+   | |    | | | | | |   &lt;   ____) | |__| | |____  | |____| | |  __/ | | | |_
+   |_|    |_|_|_| |_|_|\_\ |_____/ \___\_\______|  \_____|_|_|\___|_| |_|\__|
+
+        Welcome! Enter &#39;HELP;&#39; to list all available commands. &#39;QUIT;&#39; to exit.
+
+Command history file path: /root/.flink-sql-history
+
+Flink SQL&gt; CREATE TABLE foo_dg (c1 INT, c2 STRING)
+                          WITH (&#39;connector&#39; = &#39;datagen&#39;,
+                                &#39;number-of-rows&#39; = &#39;8&#39;);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; SHOW TABLES;
++------------+
+| table name |
++------------+
+|     foo_dg |
++------------+
+1 row in set
+
+Flink SQL&gt;
+
+Shutting down the session...
+done.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>However, by virtue of it being in-memory, if we restart the session, the catalog contents are now empty:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">   ______ _ _       _       _____  ____  _         _____ _ _            _  BETA
+   |  ____| (_)     | |     / ____|/ __ \| |       / ____| (_)          | |
+   | |__  | |_ _ __ | | __ | (___ | |  | | |      | |    | |_  ___ _ __ | |_
+   |  __| | | | &#39;_ \| |/ /  \___ \| |  | | |      | |    | | |/ _ \ &#39;_ \| __|
+   | |    | | | | | |   &lt;   ____) | |__| | |____  | |____| | |  __/ | | | |_
+   |_|    |_|_|_| |_|_|\_\ |_____/ \___\_\______|  \_____|_|_|\___|_| |_|\__|
+
+        Welcome! Enter &#39;HELP;&#39; to list all available commands. &#39;QUIT;&#39; to exit.
+
+Command history file path: /root/.flink-sql-history
+
+Flink SQL&gt; SHOW TABLES;
+Empty set
+
+Flink SQL&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s familiarize ourselves with a few more SQL commands before we go much further.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/dev/table/sql/show/">SHOW</a>  can be used to list various types of object, including <code>TABLES</code>, <code>DATABASES</code>, and <code>CATALOGS</code>. The default catalog in Flink is the <code>default_catalog</code>:</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SHOW CATALOGS;
++-----------------+
+|    catalog name |
++-----------------+
+| default_catalog |
++-----------------+
+1 row in set</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>CREATE CATALOG</code> can be used to … create a catalog. We’ll see a lot more of this later. For now, let’s create a second in-memory catalog:</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_new WITH (&#39;type&#39;=&#39;generic_in_memory&#39;);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; SHOW CATALOGS;
++-----------------+
+|    catalog name |
++-----------------+
+|           c_new |
+| default_catalog |
++-----------------+
+2 rows in set</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Now that we’ve got another catalog, we want to tell the SQL Client to use this one and not the other one. That’s where <code>USE</code> comes in:</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; USE CATALOG c_new;
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Catalogs store information (<em>metadata</em>) about tables.
+The actual <em>data</em> is stored wherever you tell Flink to store it.
+Here’s a table that’s just writing to a local folder (which BTW is a bad idea on a distributed system, because &#39;local&#39; is relative to the process that’s running it, and if those processes are not on the same machine confusing things will happen.
+Ask me how I know):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE TABLE t_foo (c1 varchar, c2 int)
+           WITH (&#39;connector&#39; = &#39;filesystem&#39;,
+                       &#39;path&#39; = &#39;file:///tmp/t_foo&#39;,
+                 &#39;format&#39; = &#39;csv&#39;);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; INSERT INTO t_foo VALUES (&#39;a&#39;,42);
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: d9a4f5858687d4a4332374b3d48392e4</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Inspecting the data on disk we can see it’s actually stored there:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">❯ ls -lr /tmp/t_foo
+total 8
+-rw-r--r--  1 rmoff  wheel  5 26 Jan 15:41 part-58936088-a03f-4c02-a917-20d904a45233-0-0
+❯ cat /tmp/t_foo/part-58936088-a03f-4c02-a917-20d904a45233-0-0
+a,42</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But when we query it, how does Flink know that <code>a, 42</code> is to be translated into two fields, called <code>c1</code> and <code>c2</code> of type <code>STRING</code> and <code>INT</code> respectively?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; DESCRIBE t_foo;
++------+--------+------+-----+--------+-----------+
+| name |   type | null | key | extras | watermark |
++------+--------+------+-----+--------+-----------+
+|   c1 | STRING | TRUE |     |        |           |
+|   c2 |    INT | TRUE |     |        |           |
++------+--------+------+-----+--------+-----------+
+2 rows in set
+
+Flink SQL&gt; SELECT * FROM t_foo;
++----+----+
+| c1 | c2 |
++----+----+
+|  a | 42 |
++----+----+
+1 row in set</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Well that’s the catalog.
+The <em>metadata</em> about the <em>data</em>.
+This metadata is in essence what we define in the initial <code>CREATE TABLE</code> DDL statement:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The fields: <code>c1 varchar, c2 int</code></p>
+</li>
+<li>
+<p>The location of the data and how to interpret it: <code>&#39;connector&#39; = &#39;filesystem&#39;, &#39;path&#39; = &#39;file:///tmp/t_foo&#39;, &#39;format&#39; = &#39;csv&#39;</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>And this precious metadata—what happens if we restart the SQL Client?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; EXIT;
+[INFO] Exiting Flink SQL CLI Client...
+
+Shutting down the session...
+done.
+❯ ./bin/sql-client.sh
+
+[…]
+
+Flink SQL&gt; DESCRIBE t_foo;
+[ERROR] Could not execute SQL statement. Reason:
+org.apache.flink.table.api.ValidationException: Tables or views with the identifier &#39;default_catalog.default_database.t_foo&#39; doesn&#39;t exist.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>As we noted above: the default catalog doesn’t persist metadata across sessions, making it useless for anything other than idle twiddling.
+Let’s now look at the options available for us to store this metadata properly.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_flink_catalog_types">Flink Catalog Types&nbsp;<a class="headline-hash" href="#_flink_catalog_types">🔗</a> </h3>
+<div class="paragraph">
+<p>The Flink project includes <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/dev/table/catalogs/#catalog-types">three types of catalog</a> , but confusingly they’re all a bit different.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/dev/table/catalogs/#genericinmemorycatalog">In-memory</a>  we’ve covered already. You can create and use new objects, but there’s no persistence.</p>
+</li>
+<li>
+<p><a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/connectors/table/hive/hive_catalog/">Hive</a>  enables you to define and store objects, using the <a href="https://cwiki.apache.org/confluence/display/Hive/AdminManual+Metastore+Administration">Hive Metastore</a>  which is backed by a <a href="https://cwiki.apache.org/confluence/display/Hive/AdminManual+Metastore+Administration#AdminManualMetastoreAdministration-SupportedBackendDatabasesforMetastore">relational database</a> .</p>
+</li>
+<li>
+<p><a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/connectors/table/jdbc/#jdbc-catalog">JDBC</a>  is a bit different, since it exposes query access to <em>existing</em> objects in a database connected to by JDBC. However, it doesn’t support storing new objects.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Using a centralised metastore, such as Hive’s, is important if you are wanting to make the most of different tools that can work with the same format of data without having to redefine the metadata each time.
+For example, writing to a table using Flink, to be processed by another team using Spark, which yet another team queries it with Trino.</p>
+</div>
+<div class="paragraph">
+<p>Catalogs in Flink are pluggable, and in addition to the catalogs that are provided by Flink there are several others that you have available to you.
+It’s worth noting that only the in-memory catalog actually ships with Flink; to use the Hive or JDBC catalog you must include the needful dependencies (which we’ll discuss below).</p>
+</div>
+<div class="paragraph">
+<p>Additional catalogs are usually paired to a particular technology that you’re using with Flink and often ship as part of the connector for that system.
+The JDBC one above is an example of this—it’s only useful if you’re connecting to a database to read data, and is included in the <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/connectors/table/jdbc/#jdbc-sql-connector">JDBC SQL Connector</a> .
+Other catalog implementations include:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Open-Table Formats: <a href="https://iceberg.apache.org/docs/latest/flink/#catalog-configuration">Apache Iceberg</a>  and <a href="https://hudi.apache.org/docs/sql_ddl/#create-catalog">Apache Hudi</a></p>
+</li>
+<li>
+<p><a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/flink-configure.html#flink-configure-hive-glue">AWS Glue Catalog on EMR</a>  (with an <a href="https://cwiki.apache.org/confluence/display/FLINK/FLIP-277%3A+Native+GlueCatalog+Support+in+Flink">open FLIP</a>  and <a href="https://github.com/apache/flink-connector-aws/pull/47">PR</a>  to make it available outside of EMR)</p>
+</li>
+<li>
+<p><a href="https://github.com/streamnative/flink/blob/develop/docs/content/docs/connectors/table/pulsar.md">Apache Pulsar</a></p>
+</li>
+<li>
+<p><a href="https://bahir.apache.org/docs/flink/current/flink-streaming-kudu#kudu-catalog">Apache Kudu</a></p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_hold_on_to_your_seatsbecause_this_gets_confusing">Hold on to your seats…because this gets confusing&nbsp;<a class="headline-hash" href="#_hold_on_to_your_seatsbecause_this_gets_confusing">🔗</a> </h3>
+<div class="paragraph">
+<p>At a minimum, each type of catalog tells Flink about objects that are <strong>available to query</strong>.
+Some of them also let you <strong>define new objects</strong>.
+And some also <strong>persist</strong> these definitions.</p>
+</div>
+<div class="paragraph">
+<p>Let’s look at some examples.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The Hive and Glue catalogs expose existing objects, hold definitions of new ones, and persist all of this information.</p>
+</li>
+<li>
+<p>Whether creating a table that is persisted on S3, or reading from a Kafka topic, these catalogs will store those definitions. When you start another session connecting to the same catalog, or a different user connects to these catalogs, the definitions will still be present.</p>
+</li>
+<li>
+<p>The JDBC catalog simply exposes access to objects that exist on the target.</p>
+</li>
+<li>
+<p>You can’t create new ones, and thus persisting the information (a metastore) is irrelevant.</p>
+</li>
+<li>
+<p>Iceberg, Hudi, and Delta Lake provide Flink catalogs to read and write tables written in their respective formats. Each uses its own metadata, some of which is held in the catalog and other alongside the datafiles themselves.</p>
+</li>
+<li>
+<p>All of them support using Hive Metastore for persistence of the table definitions. Iceberg includes multiple persistence options should you want them, including <a href="https://iceberg.apache.org/docs/latest/aws/#dynamodb-catalog">DynamoDB</a> , <a href="https://iceberg.apache.org/docs/latest/flink-configuration/#catalog-configuration">REST</a> , and <a href="https://iceberg.apache.org/docs/latest/jdbc/#jdbc-catalog">JDBC</a> .</p>
+</li>
+<li>
+<p><em>Fun fact</em>: when is a JDBC Catalog not a JDBC Catalog? When one is the <a href="https://iceberg.apache.org/docs/latest/jdbc/#jdbc-catalog">JDBC Catalog provided by Iceberg</a>  to persist catalog metadata, and the other is a <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/connectors/table/jdbc/#jdbc-catalog">JDBC Catalog provided by Flink</a>  to expose existing database tables for querying in Flink 😵💫</p>
+</li>
+</ul>
+</div>
+<div class="sect3">
+<h4 id="_you_thought_that_was_confusing">You thought that was confusing?&nbsp;<a class="headline-hash" href="#_you_thought_that_was_confusing">🔗</a> </h4>
+<div class="paragraph">
+<p>Just to spice things up even more, different Catalog implementations vary in how you configure the persistence implementation.</p>
+</div>
+<div class="paragraph">
+<p>Starting with the Hive catalog itself, you specify:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_hive WITH (
+  &#39;type&#39; = &#39;hive&#39;,
+  […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So far, simple, right?
+Now we get onto other catalog types, which get first claim on type, and the persistence is configured with <code>catalog-type</code>… ok?</p>
+</div>
+<div class="paragraph">
+<p>Here’s Iceberg:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_iceberg_hive WITH (
+  &#39;type&#39;=&#39;iceberg&#39;,
+  &#39;catalog-type&#39;=&#39;hive&#39;,
+  […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and Delta Lake:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_delta_hive WITH (
+  &#39;type&#39; = &#39;delta-catalog&#39;,
+  &#39;catalog-type&#39; = &#39;hive&#39;,
+  […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To really keep you on your toes, Hudi switches this up, and instead uses <code>mode:</code></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_hudi_hive WITH (
+  &#39;type&#39;=&#39;hudi&#39;,
+  &#39;mode&#39;=&#39;hms&#39;,
+  […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Finally (I hope), just to really wrangle your wossits, Iceberg also uses <code>catalog-impl</code> for catalogs that don’t support <code>catalog-type</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_iceberg_dynamodb WITH (
+  &#39;type&#39; = &#39;iceberg&#39;,
+  &#39;catalog-impl&#39; = &#39;org.apache.iceberg.aws.dynamodb.DynamoDbCatalog&#39;,
+[…]</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_and_breathe">…and breathe&nbsp;<a class="headline-hash" href="#_and_breathe">🔗</a> </h4>
+<div class="paragraph">
+<p>Let’s zoom waaay back up to the surface here, and reorientate ourselves.
+I’m sure the reasonings and rationale for the above state of catalog implementations are good ones, but in a way it doesn’t matter.
+As humble SQL monkeys we just need to know which catalog we’ll use, and how to configure it.
+That’s going to be dictated by the technologies we’re using, and perhaps existing catalogs (e.g.
+Hive Metastore, AWS Glue) in our organisation.</p>
+</div>
+<div class="paragraph">
+<p>Once we know the catalog, we can dive into the docs to understand the specific configuration to use.
+And then rapidly move on to actually running Flink SQL with it, and forget we ever cared about the inconsistencies and frustrations of <code>CREATE CATALOG</code> with a <code>type</code> but that <code>CATALOG</code> whose <code>type</code> we defined also having a <code>catalog-type</code> 😉</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_catalog_stores_its_metadata_all_the_way_down">Catalog Stores: It’s Metadata all the way down&nbsp;<a class="headline-hash" href="#_catalog_stores_its_metadata_all_the_way_down">🔗</a> </h3>
+<div class="paragraph">
+<p>Let’s take a moment for a brief tangent.
+We’ve talked about tables having data, and metadata, and catalogs storing that metadata or at least pointers to it.
+But who watches the watchers?
+Who stores the metadata about the catalogs?
+As mentioned, catalogs are not pre-configured in Flink (except for the in-memory one).</p>
+</div>
+<div class="paragraph">
+<p>Each time you start the SQL Client, you’ll see this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SHOW CATALOGS;
++-----------------+
+|    catalog name |
++-----------------+
+| default_catalog |
++-----------------+
+1 row in set</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So each time—assuming you want to access and persist metadata about the objects that you’re creating—you’ll need to go and <code>CREATE CATALOG</code>.
+Which gets kinda tedious.
+This is where a <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/dev/table/catalogs/#catalog-store">Catalog Store</a>  comes in.
+Whilst the catalog [metastore] holds the metadata about the objects in the catalog, a catalog store holds the metadata about the catalogs.</p>
+</div>
+<div class="paragraph">
+<p>By default, Flink will use an in-memory catalog store, which sounds fancy until you realise that it isn’t persisted and when you restart your SQL Client session the catalog store will be empty.
+The alternative (out of the box, at least) is the <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/dev/table/catalogs/#filecatalogstore">FileCatalogStore</a>  which writes details about your catalog(s) to disk.
+Note that it writes details about <em>the catalog</em>, and not its contents.
+So if you’re using the in-memory catalog, you still can’t persist table definitions across sessions.
+With a CatalogStore configured you’d just persist the <em>definition of</em> that in-memory catalog.</p>
+</div>
+<div class="paragraph">
+<p><em>NOTE: in older versions of Flink you could store SQL Client configuration, including catalog definitions, in sql-client-defaults.yaml.</em>
+<em>This was deprecated in 1.15 as part of</em> <a href="https://cwiki.apache.org/confluence/display/FLINK/FLIP-163%3A+SQL+Client+Improvements">FLIP-163</a> <em>and should not be used.</em></p>
+</div>
+<div class="paragraph">
+<p>To use the FileCatalogStore with Flink SQL add these lines to your <code>conf/flink-config.yaml</code> in your Flink installation folder:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">table.catalog-store.kind: file
+table.catalog-store.file.path: ./conf/catalogs</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now launch the SQL Client and define your catalog:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">❯ ./bin/sql-client.sh
+
+Flink SQL&gt; show catalogs;
++-----------------+
+|    catalog name |
++-----------------+
+| default_catalog |
++-----------------+
+1 row in set
+
+Flink SQL&gt; CREATE CATALOG c_hive WITH (
+&gt;        &#39;type&#39; = &#39;hive&#39;,
+&gt;        &#39;hive-conf-dir&#39; = &#39;./conf/&#39;);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; show catalogs;
++-----------------+
+|    catalog name |
++-----------------+
+|          c_hive |
+| default_catalog |
++-----------------+
+2 rows in set
+
+Flink SQL&gt; EXIT;
+[INFO] Exiting Flink SQL CLI Client...
+
+Shutting down the session...
+done.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Check out the metadata about the catalog definition:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">❯ ls -l conf/catalogs
+total 8
+-rw-r--r--  1 rmoff  staff  38 25 Jan 16:01 c_hive.yaml
+
+❯ cat conf/catalogs/c_hive.yaml
+type: &#34;hive&#34;
+hive-conf-dir: &#34;./conf/&#34;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Launch the SQL Client and leap with delight as your catalog is present:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">❯ ./bin/sql-client.sh
+
+Flink SQL&gt; SHOW CATALOGS;
++-----------------+
+|    catalog name |
++-----------------+
+|          c_hive |
+| default_catalog |
++-----------------+
+2 rows in set</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Fortunately in Catalog Stores there’s nothing much confusing.
+It’s clear why we need it, it works, and the configuration is straightforward.
+If only life were that simple back in the land of Catalogs themselves!
+In my next post I’m going to look at the use of the Hive and JDBC catalogs that are part of Flink, as well as a couple of others in the ecosystem.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_wrapping_up_part_one">Wrapping up Part One&nbsp;<a class="headline-hash" href="#_wrapping_up_part_one">🔗</a> </h3>
+<div class="paragraph">
+<p>One of the reasons I enjoy blogging is that it forces me to get a real handle on something that I’m trying to explain.
+What started off as a big ball of very confusing mud to me has clarified itself somewhat, and I hope the above writing has done the same for your understanding of catalogs in Flink SQL too.</p>
+</div>
+<div class="paragraph">
+<p>In the  <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">next post</a>  I’m going to show you how to use the built-in Hive catalog for Flink SQL, the JDBC catalog that is a catalog—but not how you might think—and also look at the wider ecosystem of catalogs that are supported in Flink including Apache Iceberg.</p>
+</div>
+<div class="paragraph">
+<p>I’ll wrap up the series with a magical mystery tour through the desolate landscape of troubleshooting Flink SQL catalog deployments and configurations.
+Stay tuned for all the fun!</p>
+</div>
+<div class="paragraph">
+<p><strong>Fun fact: if you use Decodable’s fully managed Flink platform you don’t ever have to worry about catalogs—we handle it all for you!</strong></p>
+</div>
+<div class="paragraph">
+<p>Cover photo credit:  <a href="https://unsplash.com/@danielforsman?utm_content=creditCopyText&amp;utm_medium=referral&amp;utm_source=unsplash">Daniel Forsman</a></p>
+</div>
+</div>
+	<hr>
+	<div style="background-color: rgba(204, 234, 255, 0.25); margin-bottom:50px;margin-top:50px;padding: 20px; border-width: 2px; border-style: solid; border-color: darkorange;">
+	
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+		
+	</div>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">Contents</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_we_never_said_that_this_would_be_easy">We Never Said That This Would Be Easy</a></li>
+    <li><a href="#_flinks_default_in_memory_catalog">Flink’s Default In-Memory Catalog</a></li>
+    <li><a href="#_flink_catalog_types">Flink Catalog Types</a></li>
+    <li><a href="#_hold_on_to_your_seatsbecause_this_gets_confusing">Hold on to your seats…because this gets confusing</a></li>
+    <li><a href="#_catalog_stores_its_metadata_all_the_way_down">Catalog Stores: It’s Metadata all the way down</a></li>
+    <li><a href="#_wrapping_up_part_one">Wrapping up Part One</a></li>
+  </ul>
+</nav>
+      </div>
+      
+      <div class="toc-mobile-label">TABLE OF CONTENTS</div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+		</main>
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+	</body>
+</html>

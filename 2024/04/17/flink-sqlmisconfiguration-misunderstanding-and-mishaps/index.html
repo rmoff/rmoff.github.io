@@ -1,0 +1,2135 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Flink SQL—Misconfiguration, Misunderstanding, and Mishaps</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2024/04/17/flink-sqlmisconfiguration-misunderstanding-and-mishaps/">
+		
+		
+		
+		
+
+		
+		<meta property="og:title" content="Flink SQL—Misconfiguration, Misunderstanding, and Mishaps" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2024/04/troubleshooting_flinksql.webp" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2024/04/17/flink-sqlmisconfiguration-misunderstanding-and-mishaps/" />
+		<meta property="og:site_name" content="Flink SQL—Misconfiguration, Misunderstanding, and Mishaps" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/toc.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/retro-cards.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/custom.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+		<script src="https://rmoff.net/js/toc.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2024/04/troubleshooting_flinksql.webp'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<link rel="preload" as="image" href="https://rmoff.net/img/repton.gif">
+						<img
+							src="https://rmoff.net/img/logo.jpg"
+							class="w2 h2 br-100"
+							alt="rmoff&#39;s random ramblings"
+							onmouseover="this.src='https:\/\/rmoff.net\/img\/repton.gif';"
+							onmouseout="this.src='https:\/\/rmoff.net\/img\/logo.jpg';"
+						/>
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fa-brands fa-x-twitter"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">
+						<span class="terminal-title">Flink SQL—Misconfiguration, Misunderstanding, and Mishaps<span class="terminal-cursor"></span></span>
+					</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2024-04-17T00:00:00Z">Apr 17, 2024</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/apache-flink" class="no-underline category near-white dim">Apache Flink</a>
+								<span class="display-print">at https://rmoff.net/2024/04/17/flink-sqlmisconfiguration-misunderstanding-and-mishaps/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<div class="container-fluid docs">
+  <div class="row">
+    <main class="docs-content" role="main">
+
+<article class="article">
+	<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.decodable.co/blog/flink-sql-misconfiguration-misunderstanding-and-mishaps">Decodable blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>I never meant to write this blog.
+I had a whole blog series about Flink SQL lined up…and then I started to write it and realised rapidly that one’s initial exposure to Flink and Flink SQL can be somewhat, shall we say, <em>interesting</em>.
+Interesting, as in the curse, &#34;may you live in interesting times&#34;.
+Because as wonderful and as powerful Flink is, it is not a simple beast to run for yourself, even as a humble developer just trying to try out some SQL.</p>
+</div>
+<div class="paragraph">
+<p>Quite a few of the problems are a subset of the broader challenge of getting the right JAR in the right place at the right time—a topic <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">worth its own blog</a> .</p>
+</div>
+<div class="paragraph">
+<p>Let’s start off by looking at the JDBC connector.
+This provides its own catalog, which I <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">explored recently</a>  in another post.
+In that article I trod the happy path; below are the potholes and pitfalls that befell me on the way 🧌.</p>
+</div>
+<div class="sect2">
+<h3 id="_the_jdbc_catalog">The JDBC Catalog&nbsp;<a class="headline-hash" href="#_the_jdbc_catalog">🔗</a> </h3>
+<div class="paragraph">
+<p><em>You can learn more about the JDBC Catalog, and Flink SQL Catalogs in general,</em> <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-a-primer">here</a> <em>and</em> <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">here</a> <em>.</em></p>
+</div>
+<div class="paragraph">
+<p>We’ll start by provisioning the environment.
+Using <a href="https://github.com/decodableco/examples/blob/main/troubleshooting-flinksql/01-flink-jdbc-catalog/docker-compose.yml">this Docker Compose</a>  from the <a href="https://github.com/decodableco/examples/">Decodable examples repository</a>  we can spin up a Postgres container and a Flink cluster.
+In the Flink cluster I’ve added the <a href="https://repo.maven.apache.org/maven2/org/apache/flink/flink-connector-jdbc/3.1.2-1.18/flink-connector-jdbc-3.1.2-1.18.jar">Flink JDBC Connector</a>  and the <a href="https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar">Postgres JDBC driver</a> .</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">docker compose up</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Once the containers are running you can inspect the pre-provisioned Postgres database:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">docker compose exec -it postgres psql -h localhost -d world-db -U world</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">world-db-# \d
+             List of relations
+ Schema |       Name       | Type  | Owner
+--------+------------------+-------+-------
+ public | city             | table | world
+ public | country          | table | world
+ public | country_flag     | table | world
+ public | country_language | table | world
+(4 rows)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we’ll head into Flink SQL and try to create a JDBC catalog so that we can query these Postgres tables:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">docker compose exec -it jobmanager bash -c &#34;./bin/sql-client.sh&#34;</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_jdbc WITH (
+       	    &#39;type&#39; = &#39;jdbc&#39;,
+       	    &#39;base-url&#39; = &#39;localhost:5432&#39;,
+       	    &#39;default-database&#39; = &#39;world-db&#39;,
+       	    &#39;username&#39; = &#39;world&#39;,
+       	    &#39;password&#39; = &#39;world123&#39;
+       	    );
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.IllegalArgumentException</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Uh-oh.
+We’re not off to a particularly illustrious start.
+What does Illegal Argument— the argument that we’ve specified for <code>base-url</code> is &#34;Illegal&#34; because it needs the fully qualified JDBC URL prefix.
+Let’s try again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_jdbc WITH (
+             	&#39;type&#39; = &#39;jdbc&#39;,
+             	&#39;base-url&#39; = &#39;jdbc:postgres://localhost:5432&#39;,
+             	&#39;default-database&#39; = &#39;world-db&#39;,
+             	&#39;username&#39; = &#39;world&#39;,
+             	&#39;password&#39; = &#39;world123&#39;
+             	);
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.IllegalStateException: Could not find any jdbc dialect factory that can handle url &#39;jdbc:postgres://localhost:5432&#39; that implements &#39;org.apache.flink.connector.jdbc.dialect.JdbcDialectFactory&#39; in the classpath.
+
+Available factories are:
+
+org.apache.flink.connector.jdbc.databases.derby.dialect.DerbyDialectFactory
+org.apache.flink.connector.jdbc.databases.mysql.dialect.MySqlDialectFactory
+org.apache.flink.connector.jdbc.databases.oracle.dialect.OracleDialectFactory
+org.apache.flink.connector.jdbc.databases.postgres.dialect.PostgresDialectFactory
+org.apache.flink.connector.jdbc.databases.sqlserver.dialect.SqlServerDialectFactory</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This error is <em>definitely</em> more esoteric than the last one.
+At the heart of it is this:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>[source,shell]</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>Could not find any jdbc dialect factory that can handle url &#39;jdbc:postgres://localhost:5432&#39;</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We’ve told the JDBC connector that it’s a JDBC dialect (jdbc:) but it can’t work out what <code>dialect</code> of JDBC it is.
+It tells us which &#34;factories&#34; it <em>does</em> understand:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Available factories are:
+
+`[…].jdbc.databases.derby.dialect.DerbyDialectFactory`
+`[…].jdbc.databases.mysql.dialect.MySqlDialectFactory`
+`[…].jdbc.databases.oracle.dialect.OracleDialectFactory`
+`[…].jdbc.databases.postgres.dialect.PostgresDialectFactory`
+`[…].jdbc.databases.sqlserver.dialect.SqlServerDialectFactory`</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So what’s up with this?
+Well if we look at the <a href="https://jdbc.postgresql.org/documentation/use/#connecting-to-the-database">Postgres JDBC URL spec</a>  we’ll see that it should be <code>jdbc:postgresql</code> (note the <code>ql</code> suffix that we’ve missed above).
+Let’s try that:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_jdbc WITH (
+             	&#39;type&#39; = &#39;jdbc&#39;,
+             	&#39;base-url&#39; = &#39;jdbc:postgresql://localhost:5432&#39;,
+             	&#39;default-database&#39; = &#39;world-db&#39;,
+             	&#39;username&#39; = &#39;world&#39;,
+             	&#39;password&#39; = &#39;world123&#39;
+             	);
+[ERROR] Could not execute SQL statement. Reason:
+java.net.ConnectException: Connection refused (Connection refused)
+
+Flink SQL&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Hey, another new error!
+That’s because <code>localhost</code> in the context of the container running <code>sql-client</code> is the Flink job manager container, so there is no Postgres on port 5432 to be found.
+Instead, we need to reference the Postgres container, conveniently called in our case`postgres`.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be44_6702c780e3a93018db085adf_661dde07587adeeb08b97c97_FP8hKRQRepR1KPtLKNImii8oO_ew2QJ2wwGGtF64okn0F0FtGb3dtgu9_B52UTNfTI52CEquR9uib_CFM4uzB3UNuJZsviq5_6n1CMPBqooochsjSJFNX0u1XLE5X0LhKusJnpmZ7mq2k_p2frnfFvc.webp" alt="6717dc5082a396e17c57be44 6702c780e3a93018db085adf 661dde07587adeeb08b97c97 FP8hKRQRepR1KPtLKNImii8oO ew2QJ2wwGGtF64okn0F0FtGb3dtgu9 B52UTNfTI52CEquR9uib CFM4uzB3UNuJZsviq5 6n1CMPBqooochsjSJFNX0u1XLE5X0LhKusJnpmZ7mq2k p2frnfFvc"/>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_jdbc WITH (
+             	&#39;type&#39; = &#39;jdbc&#39;,
+             	&#39;base-url&#39; = &#39;jdbc:postgresql://postgres:5432&#39;,
+             	&#39;default-database&#39; = &#39;world-db&#39;,
+             	&#39;username&#39; = &#39;world&#39;,
+             	&#39;password&#39; = &#39;world123&#39;
+             	);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Phew!
+😅</p>
+</div>
+<div class="paragraph">
+<p>Whilst we’re here with a Catalog created in Flink SQL, let’s cover off another thing that kept tripping me up.
+Since we’ve created the catalog, we want to tell Flink SQL to now use it as the current catalog:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; USE c_jdbc;
+[ERROR] Could not execute SQL statement. Reason:
+org.apache.flink.table.catalog.exceptions.CatalogException: A database with name [c_jdbc] does not exist in the catalog: [default_catalog].</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This comes about from an inconsistency (IMHO) in the syntax of Flink SQL here.
+<code>USE</code> on its own in Flink SQL means`USE DATABASE`.
+So if you want to actually switch the current catalog, the command is`USE CATALOG`.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; USE CATALOG c_jdbc;
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>On the other hand, if you’re getting this error and you actually did mean to switch the current database then the error is what it says - the database you’ve specified doesn’t exist in the current catalog.
+Check the current catalog with`SHOW CURRENT CATALOG`.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_whats_running_where_fun_with_java_versions">What’s Running Where? (Fun with Java Versions)&nbsp;<a class="headline-hash" href="#_whats_running_where_fun_with_java_versions">🔗</a> </h3>
+<div class="paragraph">
+<p>To recount the next incident, I’ll start by describing the environment.
+This was before the JDBC connector for Flink 1.18 was released, so I was running Flink 1.17.1, and locally on my laptop.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell"># Unpack a fresh Flink 1.17.1 tarball
+tar xf flink-1.17.1-bin-scala_2.12.tgz &amp;&amp; cd flink-1.17.1
+
+# Install JDBC connector and Postgres JDBC driver
+cd lib
+curl https://repo.maven.apache.org/maven2/org/apache/flink/flink-connector-jdbc/3.1.2-1.17/flink-connector-jdbc-3.1.2-1.17.jar -O
+curl https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar -O
+cd ..
+
+# Launch a Flink cluster and SQL Client
+$ ./bin/start-cluster.sh &amp;&amp; ./bin/sql-client.sh
+Starting cluster.
+Starting standalonesession daemon on host asgard08.
+Starting taskexecutor daemon on host asgard08.
+
+[… cute ANSI Squirrel pic…]
+
+Flink SQL&gt;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I’ve also got the same Postgres Docker image as above running, but just as a standalone container with port 5432 open for connections:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">docker run --rm --detach \
+           --name postgres \
+           --publish 5432:5432 \
+           ghusta/postgres-world-db:2.10</code></pre>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be47_6702c77fe3a93018db085aa2_661dde0726b8be32c8689a23_APTH80MSpPwAMpbnDGUSsA5Kkhzo-GqAnIEq3YJgTRFB5usFCfOBxnV-a3hmnRaw9CiZVr1dmZ6FYWaFwGkfNf1n7vYeyxCyL-Go17zVNYSdxw8wEodyKevQv2brByoAm-vtf5jlQdEyj8gZT8AKU80.webp" alt="6717dc5082a396e17c57be47 6702c77fe3a93018db085aa2 661dde0726b8be32c8689a23 APTH80MSpPwAMpbnDGUSsA5Kkhzo GqAnIEq3YJgTRFB5usFCfOBxnV a3hmnRaw9CiZVr1dmZ6FYWaFwGkfNf1n7vYeyxCyL Go17zVNYSdxw8wEodyKevQv2brByoAm vtf5jlQdEyj8gZT8AKU80"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we’ll do the same as above—create a JDBC catalog.
+Note that this time the <code>base-url</code> <em>is</em> referencing <code>localhost</code> because Flink is running locally on the machine and I’ve exposed Postgres’ port from its container, so <code>localhost</code> is the right place to access it.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_jdbc WITH (
+           &#39;type&#39; = &#39;jdbc&#39;,
+           &#39;base-url&#39; = &#39;jdbc:postgresql://localhost:5432&#39;,
+           &#39;default-database&#39; = &#39;world-db&#39;,
+           &#39;username&#39; = &#39;world&#39;,
+           &#39;password&#39; = &#39;world123&#39;
+           );
+[INFO] Execute statement succeed
+
+Flink SQL&gt; USE `c_jdbc`.`world-db`;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; SHOW TABLES;
++-------------------------+
+|              table name |
++-------------------------+
+|             public.city |
+|          public.country |
+|     public.country_flag |
+| public.country_language |
++-------------------------+
+4 rows in set</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s try querying one of these tables:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SELECT * FROM country_flag LIMIT 5;
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.reflect.InaccessibleObjectException: Unable to make field private static final int java.lang.Class.ANNOTATION accessible: module java.base does not &#34;opens java.lang&#34; to unnamed module @52bf72b5</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Huh.
+After a bit of head scratching I found a reference on StackOverflow to the version of Java, so I checked that.
+I’m using the excellent <a href="https://sdkman.io/">SDKMan</a>  which makes this kind of thing very straightforward:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ sdk current java
+
+Using java version 17.0.5-tem</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>That might be a problem.
+<a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/deployment/java_compatibility/#java-17">Support for Java 17</a>  was only <a href="https://issues.apache.org/jira/browse/FLINK-15736">added</a>  in Flink 1.18 and is considered experimental at this time._
+_I reverted my Java version to 11, and launched the SQL Client again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ sdk install java 11.0.21-tem
+$ sdk use java 11.0.21-tem
+
+Using java version 11.0.21-tem in this shell.
+$ ./bin/sql-client.sh</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I recreated the catalog, switched to the <code>world-db</code> database within it, and tried my <code>SELECT</code> again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_jdbc WITH (
+&gt;           &#39;type&#39; = &#39;jdbc&#39;,
+&gt;           &#39;base-url&#39; = &#39;jdbc:postgresql://localhost:5432&#39;,
+&gt;           &#39;default-database&#39; = &#39;world-db&#39;,
+&gt;           &#39;username&#39; = &#39;world&#39;,
+&gt;           &#39;password&#39; = &#39;world123&#39;
+&gt;           );
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; USE `c_jdbc`.`world-db`;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; SELECT * FROM country_flag LIMIT 5;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>At this point there’s no error… but no nothing either.
+After a minute or so I get this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">[ERROR] Could not execute SQL statement. Reason:
+java.net.ConnectException: Connection refused</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This puzzles me, because Postgres is up—and we can verify the connectivity from SQL Client with`SHOW TABLES`:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SHOW TABLES;
++-------------------------+
+|              table name |
++-------------------------+
+|             public.city |
+|          public.country |
+|     public.country_flag |
+| public.country_language |
++-------------------------+
+4 rows in set</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So where is the <code>Connection</code> that is being`refused`?</p>
+</div>
+<div class="paragraph">
+<p>Log files are generally a good place to go and look, particularly when one starts troubleshooting things that are beyond the obvious.
+If we search the Flink <code>log</code> folder for the <code>Connection refused</code> error we get this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ grep -r &#34;Connection refused&#34; log
+log/flink-rmoff-sql-client-asgard08.log:java.util.concurrent.CompletionException: org.apache.flink.shaded.netty4.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/127.0.0.1:8081
+flink-rmoff-sql-client-asgard08.log:Caused by: org.apache.flink.shaded.netty4.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/127.0.0.1:8081
+flink-rmoff-sql-client-asgard08.log:Caused by: java.net.ConnectException: Connection refused
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What’s interesting here is the port number.
+<code>8081</code> is not the Postgres port (<code>5432</code>) but the Flink job manager.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6702c780e3a93018db085b4d_661e4a68e9bd9fc134bcc21e_zootopia-sloth.gif" alt="6702c780e3a93018db085b4d 661e4a68e9bd9fc134bcc21e zootopia sloth"/>
+</div>
+</div>
+<div class="paragraph">
+<p>So whilst the SQL Client itself is making the request to Postgres for a <code>SHOW TABLES</code> request, a <code>SELECT</code> gets run as a Flink job—which the SQL Client will send to the job manager in order for it to execute it on an available task manager node.</p>
+</div>
+<div class="paragraph">
+<p>The outstanding question though is why the job manager isn’t available.
+We launched it already above when we did`./bin/start-cluster.sh`.
+<em>Or did we</em>?
+Let’s check the running Java process list:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ jps
+23795 Jps
+3990 SqlClient</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So neither the job manager nor task manager processes are running.
+Were they ever?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ head log/flink-rmoff-standalonesession-1-asgard08.log
+2024-04-05 14:01:48,837 INFO  org.apache.flink.runtime.entrypoint.ClusterEntrypoint        [] - Shutting StandaloneSessionClusterEntrypoint down with application status FAILED. Diagnostics java.lang.IllegalAccessError: class org.apache.flink.util.NetUtils (in unnamed module @0x5b8dfcc1) cannot access class sun.net.util.IPAddressUtil (in module java.base) because module java.base does not export sun.net.util to unnamed module @0x5b8dfcc1
+[…]
+$ head log/flink-rmoff-taskexecutor-2-asgard08.log
+2024-04-05 14:02:11,255 ERROR org.apache.flink.runtime.taskexecutor.TaskManagerRunner      [] - Terminating TaskManagerRunner with exit code 1.
+java.lang.IllegalAccessError: class org.apache.flink.util.NetUtils (in unnamed module @0x1a482e36) cannot access class sun.net.util.IPAddressUtil (in module java.base) because module java.base does not export sun.net.util to unnamed module @0x1a482e36</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>My guess is that the Java version caused these fatal errors.
+Regardless, in effect what I had running locally was this:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be72_6702c77fe3a93018db085aa5_661dde08dba26fec6958ea25_zrTth1FSCdSj2HkpmT8UkrbX8H5sXeNtrPCVhgozsPs1iOD3ey5_O22I-v0HdQ6tTQVWKJcpREPrrLce98Oeekj8agXB9BeM-SBmF75qgnHP-k9fjOTmcLBLZc_T_AfBV5QxPpTjuwLd9Qt8-_Noc1Y.webp" alt="6717dc5082a396e17c57be72 6702c77fe3a93018db085aa5 661dde08dba26fec6958ea25 zrTth1FSCdSj2HkpmT8UkrbX8H5sXeNtrPCVhgozsPs1iOD3ey5 O22I v0HdQ6tTQVWKJcpREPrrLce98Oeekj8agXB9BeM SBmF75qgnHP k9fjOTmcLBLZc T AfBV5QxPpTjuwLd9Qt8  Noc1Y"/>
+</div>
+</div>
+<div class="paragraph">
+<p>No wonder things didn’t work!
+Realising the problem I’d had with SQL Client and the Java version, it was a fair guess that the same issue was true for the Flink cluster components.</p>
+</div>
+<div class="paragraph">
+<p>Let’s try again, with Java 11, and use <code>jps</code> to verify that things are starting up correctly:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ ./bin/start-cluster.sh
+Starting cluster.
+Starting standalonesession daemon on host asgard08.
+Starting taskexecutor daemon on host asgard08.
+$ jps
+28774 StandaloneSessionClusterEntrypoint
+29064 Jps
+29049 TaskManagerRunner</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Better!
+Now we’ll launch SQL Client and see if things are now working as they should:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_jdbc WITH (
+             	&#39;type&#39; = &#39;jdbc&#39;,
+             	&#39;base-url&#39; = &#39;jdbc:postgresql://localhost:5432&#39;,
+             	&#39;default-database&#39; = &#39;world-db&#39;,
+             	&#39;username&#39; = &#39;world&#39;,
+             	&#39;password&#39; = &#39;world123&#39;
+             	);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; USE `c_jdbc`.`world-db`;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; SELECT * FROM country_flag LIMIT 5;
++----+---------+-----------+--------------------+
+| op |   code2 |     emoji |            unicode |
++----+---------+-----------+--------------------+
+| +I |      AD |        🇦🇩 |    U+1F1E6 U+1F1E9 |
+| +I |      AE |        🇦🇪 |    U+1F1E6 U+1F1EA |
+| +I |      AF |        🇦🇫 |    U+1F1E6 U+1F1EB |
+| +I |      AG |        🇦🇬 |    U+1F1E6 U+1F1EC |
+| +I |      AI |        🇦🇮 |    U+1F1E6 U+1F1EE |
++----+---------+-----------+--------------------+
+Received a total of 5 rows</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>🎉 that’s more like it!</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_whats_running_where_fun_with_jar_dependencies">What’s Running Where? (Fun with JAR dependencies)&nbsp;<a class="headline-hash" href="#_whats_running_where_fun_with_jar_dependencies">🔗</a> </h3>
+<div class="paragraph">
+<p>I wrote <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">a whole article</a>  about JAR files because they are so central to the successful operation of Flink.
+Let’s look at an example of the kind of &#34;fun&#34; you can get with them.
+Moving around the Flink versions, this incident was with 1.18.1.
+Let’s start with a clean slate and a fresh Flink install:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell"># Unpack a fresh Flink 1.18.1 tarball
+tar xf flink-1.18.1-bin-scala_2.12.tgz &amp;&amp; cd flink-1.18.1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I was exploring the <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/filesystem/">Filesystem connector</a>  and wanted to see if I could write a file in Parquet format.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE TABLE t_foo (c1 varchar, c2 int)
+      WITH (
+       &#39;connector&#39; = &#39;filesystem&#39;,
+       &#39;path&#39; = &#39;file:///tmp/t_foo&#39;,
+       &#39;format&#39; = &#39;parquet&#39;
+      );
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; INSERT INTO t_foo VALUES (&#39;bar&#39;,42);
+[ERROR] Could not execute SQL statement. Reason:
+org.apache.flink.table.api.ValidationException: Could not find any format factory for identifier &#39;parquet&#39; in the classpath.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This error (<code>Could not find any factory for identifier</code>) usually means that there’s a JAR missing.
+From the <a href="https://mvnrepository.com/artifact/org.apache.flink/flink-sql-parquet/1.18.1">Maven repository</a>  I grabbed <code>flink-sql-parquet-1.18.1.jar</code></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">cd ./lib
+curl https://repo1.maven.org/maven2/org/apache/flink/flink-sql-parquet/1.18.1/flink-sql-parquet-1.18.1.jar -O</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After restarting the SQL Client I got a different error:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; INSERT INTO t_foo VALUES (&#39;bar&#39;,42);
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: org.apache.hadoop.conf.Configuration</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This one I’d come across before - I needed the Hadoop JARs (discussed in more detail <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">here</a> ).
+I downloaded Hadoop (words I never thought I’d write in 2024 😉) and set the environment variable:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">export HADOOP_CLASSPATH=$(~/hadoop/hadoop-3.3.4/bin/hadoop classpath)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I then restarted the SQL Client (with a small detour via <a href="https://github.com/apache/flink/pull/23629">this PR</a>  for a <code>SqlClientException: Could not read from command line</code> error):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE TABLE t_foo (c1 varchar, c2 int)
+       	     WITH (
+       	      &#39;connector&#39; = &#39;filesystem&#39;,
+       	      &#39;path&#39; = &#39;file:///tmp/t_foo&#39;,
+       	      &#39;format&#39; = &#39;parquet&#39;
+       	     );
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; INSERT INTO t_foo VALUES (&#39;bar&#39;,42);
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: c49df5c96e013007d6224b06e218533c</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Success!
+Or so I thought…</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SELECT * FROM t_foo;
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: org.apache.flink.formats.parquet.ParquetColumnarRowInputFormat</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Kinda confusing, since we only just installed the Parquet JAR (which this error seems to be referencing).</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/665de628e01a0041a62ed3ba_GV-53gtSJ4sao1m5GFZiWYrig6Z9-ljoEudCIDJpUPD9FInUlJsYBMTMh9QCjP6S9wVr5vlAW80jBNHk_GKH4H6WKgYMsbwjo2dF56-U6RAXtlhr6JchFltwmx9Xn3ej1NG-wcrU9WEQNcuwxLO7l34.gif" alt="665de628e01a0041a62ed3ba GV 53gtSJ4sao1m5GFZiWYrig6Z9 ljoEudCIDJpUPD9FInUlJsYBMTMh9QCjP6S9wVr5vlAW80jBNHk GKH4H6WKgYMsbwjo2dF56 U6RAXtlhr6JchFltwmx9Xn3ej1NG wcrU9WEQNcuwxLO7l34"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s go back to our log files and look at what’s going on here.
+I’ll search for the error:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ grep -r -l &#34;java.lang.ClassNotFoundException&#34; ./log
+./log/flink-rmoff-taskexecutor-0-asgard08.log
+./log/flink-rmoff-sql-client-asgard08.log
+./log/flink-rmoff-standalonesession-0-asgard08.log</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So it’s being logged back the SQL Client (which we saw), but <em>also</em> <code>taskexecutor</code> (the Task Manager) and <code>standalonesession</code> (the Job Manager).
+Opening up the files and looking closely at the timestamps shows us that the SQL Client is surfacing the above error from a call to the job manager (<code>Could not start the JobMaster</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">ERROR org.apache.flink.table.gateway.service.operation.OperationManager [] - Failed to execute the operation 072fdeef-76bc-4813-a2af-5444b7806737.
+org.apache.flink.table.api.TableException: Failed to execute sql
+Caused by: org.apache.flink.util.FlinkException: Failed to execute job &#39;collect&#39;.
+Caused by: java.lang.RuntimeException: org.apache.flink.runtime.client.JobInitializationException: Could not start the JobMaster.
+[…]
+Caused by: java.lang.ClassNotFoundException: org.apache.flink.formats.parquet.ParquetColumnarRowInputFormat</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In fact, if we open up the rather useful Flink Dashboard UI we can see a whole lotta red:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be86_6702c77fe3a93018db085aa8_661dde07d77957b245611871_CHZXv5oxEvBAHx2X9qVXq2lPmbFO60JFrooh6MgpxQmknPHU_yF2LLouXewkxetdo4iUu6YjqCRtbW4r-vBSvZAx8C6cK_ROZFhZQvgKYOn6FG0l3EYQjwX0DUk5kA38CNemQnppmZx2PLQlGvwUtts.webp" alt="CleanShot 2024-04-05 at 17.55.24.png"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Not only has the <code>collect</code> job (the`SELECT` ) failed—but also the`INSERT`.
+Above, I saw this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; INSERT INTO t_foo VALUES (&#39;bar&#39;,42);
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: c49df5c96e013007d6224b06e218533c</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and somewhat rashly assumed that <code>successfully submitted</code> meant that it had run successfully.
+Oh, foolish and naïve one am I!
+This is an <em>asynchronous</em> job submission.
+The only success was that the job was submitted to the job manager to execute.
+If we dig into the job in the UI (or indeed the log files for the <code>taskexecutor</code> process and <code>standalonesession</code> process and scroll up from the other error), we’ll see why the <code>INSERT</code> failed—for a similar reason as the`SELECT`:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be6d_6702c780e3a93018db085b0e_661dde0764f790534023a2e4_m1jbF7wuxpcfJOqSthpq4Cko-PTom7BdE_Zs6inXXb3C-CGh344GQZZ-vTMoYBfzhelcrVujQY7I8L1Nnqh8gNFByXxuDolobs5RQ4V5XBMLa9hOmAAYubl2h571nVmbeGlrUUK2Yf0pI_baAfBv5oc.webp" alt="CleanShot 2024-04-05 at 17.58.48.png"/>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">java.lang.ClassNotFoundException: org.apache.flink.formats.parquet.ParquetWriterFactory</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So what is happening here?
+Well we’ve happily made the Parquet JAR available to the SQL Client… yet the actual business of writing and reading data is not done by the client, but the Flink task manager—and we didn’t put the JAR there.
+Or rather we did (since we’re running on the same local installation as our SQL Client is started from), but we didn’t restart the cluster components.
+We also need to remember to make sure that the <code>HADOOP_CLASSPATH</code> is in the environment variables when we do:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ ./bin/stop-cluster.sh
+Stopping taskexecutor daemon (pid: 62910) on host asgard08.
+Stopping standalonesession daemon (pid: 62630) on host asgard08.
+
+# Make the Hadoop JARs available
+$ export HADOOP_CLASSPATH=$(~/hadoop/hadoop-3.3.4/bin/hadoop classpath)
+
+# Check that the Parquet JAR is there
+$ ls -l ./lib/*parquet*
+-rw-r--r--@ 1 rmoff  staff  6740707  5 Apr 17:06 ./lib/flink-sql-parquet-1.18.1.jar
+
+# Start the cluster
+$ ./bin/start-cluster.sh
+Starting cluster.
+Starting standalonesession daemon on host asgard08.
+Starting taskexecutor daemon on host asgard08.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><em>Now</em> when we run the <code>INSERT</code> and <code>SELECT</code> from the SQL Client, things work as they should:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; INSERT INTO t_foo VALUES (&#39;bar&#39;,42);
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: 850b4771b79845790e48d57c7172f203
+
+Flink SQL&gt; SELECT * FROM t_foo;
++----+--------------------------------+-------------+
+| op |                             c1 |          c2 |
++----+--------------------------------+-------------+
+| +I |                            bar |          42 |
++----+--------------------------------+-------------+
+Received a total of 1 row</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The Flink Dashboard shows that things are healthy too:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc4f82a396e17c57be2f_6702c77ee3a93018db085a8e_661dde076649bfb91ac528cb_7V_xutoot6J9WEOGK1OzADioSqC9ZTJ8DdLldwvv7SzwPEsIG6fiU_6VBeBpMTVpS_q_zFtElZOP8ImkxFiK1b-pfUdCfpxi8Cu8dZGzZZboXDSg4p4WL3cOMfl7iqLMTIYS70EbT1T9XjLAnJ5wSLE.webp" alt="CleanShot 2024-04-05 at 18.04.32.png"/>
+</div>
+</div>
+<div class="paragraph">
+<p>And we can also double check from within the SQL Client itself that the <code>INSERT</code> job ran successfully:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SHOW JOBS;
++----------------------------------+----------------------------------------------------+----------+-------------------------+
+|                           job id |                                           job name |   status |              start time |
++----------------------------------+----------------------------------------------------+----------+-------------------------+
+| 850b4771b79845790e48d57c7172f203 | insert-into_default_catalog.default_database.t_foo | FINISHED | 2024-04-05T17:02:38.143 |
++----------------------------------+----------------------------------------------------+----------+-------------------------+
+1 row in set</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_a_jar_full_of_trouble">A JAR full of Trouble&nbsp;<a class="headline-hash" href="#_a_jar_full_of_trouble">🔗</a> </h3>
+<div class="paragraph">
+<p>Most of the problems that I’ve encountered seem bewildering at first, but once solved can be understood and reverse-engineered to see how I could, in theory, have avoided the problem from better comprehension of the documentation or concepts.
+This one though defies that.
+I fixed the error, but I still have no idea what causes it.
+Explanations welcome!</p>
+</div>
+<div class="paragraph">
+<p>My original starting point was <a href="https://github.com/wirelessr/flink-iceberg-playground">this Docker Compose</a>  file, which provides a Flink stack with support for writing to Apache Iceberg on S3-compatible <a href="https://min.io/">MinIO</a> .
+I used it as the basis for <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">exploring catalogs provided by the Iceberg Flink connector</a> , including using JDBC as a backing store for the catalog.
+I added a Postgres container to the setup, as well as adapting the <a href="https://github.com/developer-advocacy-dremio/flink-iceberg-nessie-environment/blob/main/flink-image/FLINK-ICEBERG.Dockerfile">base Flink container</a>  to include the necessary Postgres driver.</p>
+</div>
+<div class="paragraph">
+<p>The Iceberg JDBC catalog (<code>org.apache.iceberg.jdbc.JdbcCatalog</code>) uses a JDBC database for storing the metadata of the catalog, similar to what the Hive metastore would.
+When we create a Flink SQL catalog and objects (tables, etc) within it we’ll get rows written to Postgres, and when we run DML to interact with the Flink SQL table we’d expect to have queries run against Postgres to fetch the metadata for the table.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc4f82a396e17c57be2c_6702c780e3a93018db085b14_661dde072247963088f7a17d_QSHAUdvtbzJ5fMjjJPwjqZG7NyzgtWj-fNoXpyjTP4BPUV-6BAWLqZVSTVbnANbldPbtneLWCFYs13dc2iyURls8IqoFuPjeeF8KHBkvB6ZLNCfItLGcRAdQUVXlGr77FH3bAtL3-Yy34azZe3VGcLI.webp" alt="6717dc4f82a396e17c57be2c 6702c780e3a93018db085b14 661dde072247963088f7a17d QSHAUdvtbzJ5fMjjJPwjqZG7NyzgtWj fNoXpyjTP4BPUV 6BAWLqZVSTVbnANbldPbtneLWCFYs13dc2iyURls8IqoFuPjeeF8KHBkvB6ZLNCfItLGcRAdQUVXlGr77FH3bAtL3 Yy34azZe3VGcLI"/>
+</div>
+</div>
+<div class="paragraph">
+<p>I created an Iceberg catalog with JDBC metastore and a table within it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG jdbc_catalog WITH (
+  	&#39;type&#39; = &#39;iceberg&#39;,
+    &#39;io-impl&#39; = &#39;org.apache.iceberg.aws.s3.S3FileIO&#39;,
+    &#39;client.assume-role.region&#39; = &#39;us-east-1&#39;,
+    &#39;warehouse&#39; = &#39;s3://warehouse&#39;,
+    &#39;s3.endpoint&#39; = &#39;http://storage:9000&#39;,
+    &#39;s3.path-style-access&#39; = &#39;true&#39;,
+    &#39;catalog-impl&#39; = &#39;org.apache.iceberg.jdbc.JdbcCatalog&#39;,
+    &#39;uri&#39; =&#39;jdbc:postgresql://postgres:5432/world-db?user=world&amp;password=world123&#39;);
+
+USE `jdbc_catalog`.`default`;
+CREATE TABLE t_foo (c1 varchar, c2 int);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then I added a row of data, and tried to read it back:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; INSERT INTO t_foo VALUES (&#39;a&#39;,42);
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: 21803e3a205877e801536214c9f2d560
+
+Flink SQL&gt; SELECT * FROM t_foo;
+[ERROR] Could not execute SQL statement. Reason:
+java.sql.SQLException: No suitable driver found for jdbc:postgresql://postgres:5432/world-db?user=world&amp;password=world123</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>As I’d learnt the hard way previously, an <code>INSERT</code> in Flink SQL is run asynchronously, so I now knew better than to think that it had succeeded—the <code>SELECT</code> was just to see what would happen.</p>
+</div>
+<div class="paragraph">
+<p>Looking at the task manager log we can see that the <code>INSERT</code> failed with the same error as the`SELECT`:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">2024-04-09 16:15:13,773 WARN org.apache.flink.runtime.taskmanager.Task
+[] - IcebergFilesCommitter -&gt; Sink: IcebergSink jdbc_catalog.default.t_foo (1/1) #0 (fa6353abff898aa3e4005455ff93a5cb_90bea66de1c231edf33913ecd54406c1_0_0)
+switched from INITIALIZING to FAILED with failure cause: org.apache.iceberg.jdbc.UncheckedSQLException: Failed to connect: jdbc:postgresql://postgres:5432/world-db?user=world&amp;password=world123
+at org.apache.iceberg.jdbc.JdbcClientPool.newClient(JdbcClientPool.java:57)
+at org.apache.iceberg.jdbc.JdbcClientPool.newClient(JdbcClientPool.java:30)
+at org.apache.iceberg.ClientPoolImpl.get(ClientPoolImpl.java:125)
+at org.apache.iceberg.ClientPoolImpl.run(ClientPoolImpl.java:56)
+at org.apache.iceberg.ClientPoolImpl.run(ClientPoolImpl.java:51)
+at org.apache.iceberg.jdbc.JdbcCatalog.initializeCatalogTables(JdbcCatalog.java:146)[…]
+Caused by: java.sql.SQLException: No suitable driver found for jdbc:postgresql://postgres:5432/world-db?user=world&amp;password=world123
+ at java.sql/java.sql.DriverManager.getConnection(Unknown Source)
+ at java.sql/java.sql.DriverManager.getConnection(Unknown Source)
+ at org.apache.iceberg.jdbc.JdbcClientPool.newClient(JdbcClientPool.java:55)
+ ... 22 more</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The stack trace confirms that this error is when the connection to the Postgres database is attempted as part of the catalog access (<code>org.apache.iceberg.jdbc.JdbcCatalog.initializeCatalogTables</code>), and that the root cause is that the Postgres JDBC driver can’t be found.</p>
+</div>
+<div class="paragraph">
+<p>What was puzzling was that the JDBC driver <em>was</em> present on the Flink task manager container, as well as the SQL client container.
+In fact, even more puzzling was that the catalog and table creation <em>had</em> worked—so the connection to Postgres for those statements must have been ok.</p>
+</div>
+<div class="paragraph">
+<p>To save you <em>some</em> of the pain of debugging this, I’ll point out that the Docker Compose used a different image for SQL Client than the Flink task manager and job manager:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be7d_6702c77fe3a93018db085aab_661dde077421a6ea0664583c_CuP0JPpb_nO17t4UQCn7XEXIV543ic1DgYg4JROuVyFK9sJpCw6rK7Qc3_raZ15Ws5onS0MHf-MsGlFz4EGJHdSb1wy9J1r9p7UdFVqyW02kgENJTGQoGARMVcjctDu97sHYBmqJDpDP9-_fg_MtsH0.webp" alt="6717dc5082a396e17c57be7d 6702c77fe3a93018db085aab 661dde077421a6ea0664583c CuP0JPpb nO17t4UQCn7XEXIV543ic1DgYg4JROuVyFK9sJpCw6rK7Qc3 raZ15Ws5onS0MHf MsGlFz4EGJHdSb1wy9J1r9p7UdFVqyW02kgENJTGQoGARMVcjctDu97sHYBmqJDpDP9  fg MtsH0"/>
+</div>
+</div>
+<div class="paragraph">
+<p>I confirmed, re-confirmed, and then confirmed again once more that the Postgres JDBC driver was present on the Flink task manager</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">root@a3a8182bd227:/opt/flink# ls -l /opt/flink/lib/postgresql-42.7.1.jar
+-rw-r--r-- 1 root root 1084174 Jan 23 17:36 /opt/flink/lib/postgresql-42.7.1.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I also checked that it was present in the Classpath too by looking at the startup messages in the log file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">[…]
+org.apache.flink.runtime.entrypoint.ClusterEntrypoint        [] -  Classpath: /opt/flink/lib/bundle-2.20.18.jar:/opt/flink/lib/flink-cep-1.16.1.jar:/opt/flink/lib/flink-connector-files-1.16.1.jar:/opt/flink/lib/flink-csv-1.16.1.jar:/opt/flink/lib/flink-json-1.16.1.jar:/opt/flink/lib/flink-scala_2.12-1.16.1.jar:/opt/flink/lib/flink-shaded-hadoop-2-uber-2.8.3-10.0.jar:/opt/flink/lib/flink-shaded-zookeeper-3.5.9.jar:/opt/flink/lib/flink-sql-connector-hive-2.3.9_2.12-1.16.1.jar:/opt/flink/lib/flink-table-api-java-uber-1.16.1.jar:/opt/flink/lib/flink-table-planner-loader-1.16.1.jar:/opt/flink/lib/flink-table-runtime-1.16.1.jar:/opt/flink/lib/hadoop-common-2.8.3.jar:/opt/flink/lib/iceberg-flink-runtime-1.16-1.3.1.jar:/opt/flink/lib/log4j-1.2-api-2.17.1.jar:/opt/flink/lib/log4j-api-2.17.1.jar:/opt/flink/lib/log4j-core-2.17.1.jar:/opt/flink/lib/log4j-slf4j-impl-2.17.1.jar:/opt/flink/lib/postgresql-42.7.1.jar:/opt/flink/lib/flink-dist-1.16.1.jar::::
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>One thing that did stand out was the version of Flink - 1.16.1.
+No reason why this should be an issue (<em>and in the end it wasn’t</em>), but I decided to try and rebuild the environment using my own Docker Compose from scratch with Flink 1.18.1.
+You can find this on <a href="https://github.com/decodableco/examples/tree/main/troubleshooting-flinksql/02-flink-iceberg-jdbc-metastore">GitHub here</a> .
+As well as bumping the Flink version, I switched to my previous deployment model of a single Flink image, and running the SQL Client within one of the containers:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be56_6702c77ee3a93018db085a91_661dde07fb81ff0a9a7d5e97_gPSSJdYKuNjFjmHu6BtUy3v1aDhY7PejiddnZKGUt3gM-WqcXD8S5sxqjWe9MctoZZMSwbIsw3D14i8HVqBe_vRKW2dRaoHAJge-QEUxOXwH4QefXaytg7ZAsBBw81TMABTHCWLHg7p6c107UEEZ2CM.webp" alt="6717dc5082a396e17c57be56 6702c77ee3a93018db085a91 661dde07fb81ff0a9a7d5e97 gPSSJdYKuNjFjmHu6BtUy3v1aDhY7PejiddnZKGUt3gM WqcXD8S5sxqjWe9MctoZZMSwbIsw3D14i8HVqBe vRKW2dRaoHAJge QEUxOXwH4QefXaytg7ZAsBBw81TMABTHCWLHg7p6c107UEEZ2CM"/>
+</div>
+</div>
+<div class="paragraph">
+<p>All the JARs I kept the same as in the initial deployment, except pulling in the correct version for Flink 1.18.1 where needed:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>bundle-2.20.18.jar</code></p>
+</li>
+<li>
+<p><code>flink-shaded-hadoop-2-uber-2.8.3-10.0.jar</code></p>
+</li>
+<li>
+<p><code>hadoop-common-2.8.3.jar</code></p>
+</li>
+<li>
+<p><code>iceberg-flink-runtime-1.18-1.5.0.jar</code></p>
+</li>
+<li>
+<p><code>postgresql-42.7.1.jar</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>This time I got the same error, but at a different time—as soon as I tried to create the catalog:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG jdbc_catalog WITH (
+             	   &#39;type&#39; = &#39;iceberg&#39;,
+             	   &#39;io-impl&#39; = &#39;org.apache.iceberg.aws.s3.S3FileIO&#39;,
+             	   &#39;client.assume-role.region&#39; = &#39;us-east-1&#39;,
+             	   &#39;warehouse&#39; = &#39;s3://warehouse&#39;,
+             	   &#39;s3.endpoint&#39; = &#39;http://minio:9000&#39;,
+             	   &#39;s3.path-style-access&#39; = &#39;true&#39;,
+             	   &#39;catalog-impl&#39; = &#39;org.apache.iceberg.jdbc.JdbcCatalog&#39;,
+             	   &#39;uri&#39; =&#39;jdbc:postgresql://postgres:5432/world-db?user=world&amp;password=world123&#39;);
+[ERROR] Could not execute SQL statement. Reason:
+java.sql.SQLException: No suitable driver found for jdbc:postgresql://postgres:5432/world-db?user=world&amp;password=world123</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This makes sense when we realise that the SQL Client is running using the same image as the Flink cluster—where we saw the error above.
+So if there’s a problem with this environment, then it’s going to manifest itself in SQL Client too.</p>
+</div>
+<div class="paragraph">
+<p>This then prompted me to look at the difference between the <a href="https://github.com/wirelessr/flink-iceberg-playground/blob/main/sql-client/Dockerfile">original SQL Client image</a> , and <a href="https://github.com/developer-advocacy-dremio/flink-iceberg-nessie-environment/blob/main/flink-image/FLINK-ICEBERG.Dockerfile">the Flink taskmanager</a> .
+I knew that I’d added the Postgres JDBC driver to them, but I’d not looked more closely at their base configuration.</p>
+</div>
+<div class="paragraph">
+<p>It turned out that the Flink Hive connector (<code>flink-sql-connector-hive-2.3.9_2.12-1.16.1.jar</code>) was present on the <code>taskmanager</code> image, but not the SQL Client.</p>
+</div>
+<div class="paragraph">
+<p>Back on my 1.18.1 environment, I removed this JAR, rebuilt the Docker image and retried the experiment.
+Things looked better straight away:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG jdbc_catalog WITH (
+&gt;   &#39;type&#39; = &#39;iceberg&#39;,
+&gt;   &#39;io-impl&#39; = &#39;org.apache.iceberg.aws.s3.S3FileIO&#39;,
+&gt;   &#39;client.assume-role.region&#39; = &#39;us-east-1&#39;,
+&gt;   &#39;warehouse&#39; = &#39;s3://warehouse&#39;,
+&gt;   &#39;s3.endpoint&#39; = &#39;http://minio:9000&#39;,
+&gt;   &#39;s3.path-style-access&#39; = &#39;true&#39;,
+&gt;   &#39;catalog-impl&#39; = &#39;org.apache.iceberg.jdbc.JdbcCatalog&#39;,
+&gt;   &#39;uri&#39; =&#39;jdbc:postgresql://postgres:5432/world-db?user=world&amp;password=world123&#39;);
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I successfully created a table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; create database `jdbc_catalog`.`db01`;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; use `jdbc_catalog`.`db01`;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; CREATE TABLE t_foo (c1 varchar, c2 int);
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Over in Postgres I could see the catalog entries:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">world-db=# select * from iceberg_namespace_properties ;
+ catalog_name | namespace | property_key | property_value
+--------------+-----------+--------------+----------------
+ jdbc_catalog | db01      | exists       | true
+(1 row)
+
+world-db=# select * from iceberg_tables;
+ catalog_name | table_namespace | table_name |                                      metadata_location                                      | previous_metadata_location
+--------------+-----------------+------------+---------------------------------------------------------------------------------------------+----------------------------
+ jdbc_catalog | db01            | t_foo      | s3://warehouse/db01/t_foo/metadata/00000-5073e16c-36c7-493e-8653-30122a9460e5.metadata.json |
+ (1 row)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now for the crunch moment… writing data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; INSERT INTO t_foo VALUES (&#39;a&#39;,42);
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: 33d09054f65555ec08a96e1f9817f77d
+
+Flink SQL&gt; SHOW JOBS ;
++----------------------------------+-------------------------------------+----------+-------------------------+
+|                           job id |                            job name |   status |              start time |
++----------------------------------+-------------------------------------+----------+-------------------------+
+| 33d09054f65555ec08a96e1f9817f77d | insert-into_jdbc_catalog.db01.t_foo | FINISHED | 2024-04-10T10:20:53.283 |
++----------------------------------+-------------------------------------+----------+-------------------------+
+1 row in set</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It’s looking promising (the job shows`FINISHED`)…</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SELECT * FROM t_foo;
++----+--------------------------------+-------------+
+| op |                             c1 |          c2 |
++----+--------------------------------+-------------+
+| +I |                              a |          42 |
++----+--------------------------------+-------------+
+Received a total of 1 row</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Success!
+But what is going on?</p>
+</div>
+<div class="paragraph">
+<p>With the Flink Hive Connector JAR (<code>flink-sql-connector-hive-2.3.9_2.12-1.18.1.jar</code> ) present, Flink can’t find the Postgres JDBC Driver:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">java.sql.SQLException: No suitable driver found for jdbc:postgresql://postgres:5432/world-db?user=world&amp;password=world123</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If I <em>remove</em> the Hive connector JAR, then Flink finds the Postgres JDBC driver and things are just fine.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6702c781e3a93018db085b6b_661e525f737f134a77fa1254_whatever-shrug.gif" alt="6702c781e3a93018db085b6b 661e525f737f134a77fa1254 whatever shrug"/>
+</div>
+</div>
+<div class="paragraph">
+<p>When looking at the Hive connector JAR on Maven and peering at the digit-salad that is the JAR file naming style I did notice that <code>2.3.9</code> is not the latest Hive version:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc4e82a396e17c57be21_6702c77fe3a93018db085a94_661dde07937caa9d6f1bc56b_wJu8jEK-unMst-SROs10ohmIgqzzU5PV9mC8Xfy8XQgS9tcllh1DQkSUald1F2263VGd8_Bize6Wt1rtYoyl3S23JFc9cq2pKcTCjqtwZFJM_H7mo0Iigrf0Tkp_HNinzWZZnM9JO-h8oTs7fFa90C4.webp" alt="CleanShot 2024-04-10 at 11.29.48 1.png"/>
+</div>
+</div>
+<div class="paragraph">
+<p>So, in the interest of hacking around to learn stuff, I gave the most recent version (3.1.3) of the JAR (<code>flink-sql-connector-hive-3.1.3_2.12-1.18.1.jar</code>) a try.
+Same 1.18.1 environment as above when things didn’t work, except with <code>flink-sql-connector-hive-3.1.3_2.12-1.18.1.jar</code> in the place of <code>flink-sql-connector-hive-2.3.9_2.12-1.18.1.jar</code> and…it works.</p>
+</div>
+<div class="paragraph">
+<p>So ultimately it seems that something to do with <code>flink-sql-connector-hive-2.3.9_2.12-1.18.1.jar</code> stops Flink from being able to find the Postgres JDBC Driver.
+I have no idea why.
+But at least I know now how to fix it 🙂</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_writing_to_s3_from_flink">Writing to S3 from Flink&nbsp;<a class="headline-hash" href="#_writing_to_s3_from_flink">🔗</a> </h3>
+<div class="paragraph">
+<p>Unlike the previous problem, this one makes sense once you get it working and look back over what was needed.
+Nonetheless, it took me a lot of iterating (a.k.a.
+changing random things) to get it to work.</p>
+</div>
+<div class="paragraph">
+<p>Follow along as I relive the journey…</p>
+</div>
+<div class="paragraph">
+<p>I’ve got Flink 1.18 and a standalone Hive Metastore container, as well as a MinIO container.
+<a href="https://min.io/">MinIO</a>  is a S3-compatible object store that you can run locally, making it perfect for this kind of playground.</p>
+</div>
+<div class="paragraph">
+<p>The stack is running under Docker Compose (you’ll find this on <a href="https://github.com/decodableco/examples/tree/main/troubleshooting-flinksql/03-flink-s3-minio">GitHub</a>  if you want to try it).</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be4d_6702c77fe3a93018db085a97_661dde0706116925cd150eb9_nK0f-T1JMgbhLp0xbKwp08uQXDUUO1HPSOOoi5_FKDf6GcRSpfqb9femGsFzQEz1RkkG6U_Z97AflKvVJ-JyjcvI8W6KbTnJfgglxWyKEmtJccRpE2Gxy8_lnnMBVSMtQ3mnEQAoXdfq3vqIWAVLeWI.webp" alt="6717dc5082a396e17c57be4d 6702c77fe3a93018db085a97 661dde0706116925cd150eb9 nK0f T1JMgbhLp0xbKwp08uQXDUUO1HPSOOoi5 FKDf6GcRSpfqb9femGsFzQEz1RkkG6U Z97AflKvVJ JyjcvI8W6KbTnJfgglxWyKEmtJccRpE2Gxy8 lnnMBVSMtQ3mnEQAoXdfq3vqIWAVLeWI"/>
+</div>
+</div>
+<div class="paragraph">
+<p>The first step is creating the catalog (I’m using Hive) and table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_hive WITH (
+       &#39;type&#39; = &#39;hive&#39;,
+       &#39;hive-conf-dir&#39; = &#39;./conf/&#39;);
+
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; USE `c_hive`.`default`;
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Next up we define a table using the <code>filesystem</code> connector and an S3 path.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE TABLE t_foo_fs (c1 varchar, c2 int)
+           WITH (
+            &#39;connector&#39; = &#39;filesystem&#39;,
+            &#39;path&#39; = &#39;s3://warehouse/t_foo_fs/&#39;,
+            &#39;format&#39; = &#39;csv&#39;
+           );
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And then we try to add some data, which doesn’t work (the job ends with <code>FAILED</code> status):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; INSERT INTO t_foo_fs VALUES (&#39;a&#39;,42);
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: 76dd5a9044c437a2e576f29df86a3df4
+
+Flink SQL&gt; SHOW JOBS;
++----------------------------------+-------------------------------------+--------+-------------------------+
+|                           job id |                            job name | status |              start time |
++----------------------------------+-------------------------------------+--------+-------------------------+
+| 76dd5a9044c437a2e576f29df86a3df4 | insert-into_c_hive.default.t_foo_fs | FAILED | 2024-04-10T14:42:12.597 |
++----------------------------------+-------------------------------------+--------+-------------------------+</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Over to the cluster log files to see what the problem is.
+The <code>jobmanager</code> log shows us this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">2024-04-10 14:35:58,809 INFO  org.apache.flink.runtime.executiongraph.ExecutionGraph       [] -
+Source: Values[1] -&gt; StreamingFileWriter -&gt; Sink: end (1/1) (2c1d784ada116b60a9bcd63a9439410a_cbc357ccb763df2852fee8c4fc7d55f2_0_0) switched from INITIALIZING to FAILED on 192.168.97.6:41975-23ccd7 @ 03-hive-parquet-taskmanager-1.zaphod (dataPort=40685).
+        org.apache.flink.core.fs.UnsupportedFileSystemSchemeException: Could not find a file system implementation for scheme &#39;s3&#39;.
+        The scheme is directly supported by Flink through the following plugin(s): flink-s3-fs-hadoop, flink-s3-fs-presto.
+        Please ensure that each plugin resides within its own subfolder within the plugins directory.
+        See https://nightlies.apache.org/flink/flink-docs-stable/docs/deployment/filesystems/plugins/ for more information.
+        If you want to use a Hadoop file system for that scheme, please add the scheme to the configuration fs.allowed-fallback-filesystems.
+        For a full list of supported file systems, please see https://nightlies.apache.org/flink/flink-docs-stable/ops/filesystems/.
+[…]
+2024-04-10 14:35:58,836 INFO  org.apache.flink.runtime.resourcemanager.slotmanager.FineGrainedSlotManager [] - Clearing resource requirements of job a67f542ab426485698c9db3face73c36
+2024-04-10 14:35:58,845 INFO  org.apache.flink.runtime.executiongraph.ExecutionGraph       [] - Job insert-into_c_hive.default.t_foo_fs (a67f542ab426485698c9db3face73c36) switched from state RUNNING to FAILING.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is one of my favourite kinds of error message: descriptive, and overly helpful.
+(My colleague Gunnar Morling also has some more <a href="https://www.morling.dev/blog/whats-in-a-good-error-message">words of wisdom to share</a>  on this subject).</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>What’s the problem? <code>Could not find a file system implementation for scheme &#39;s3&#39;</code></p>
+</li>
+<li>
+<p>How do I fix it? <code>The scheme is directly supported by Flink through the following plugin(s): flink-s3-fs-hadoop, flink-s3-fs-presto</code></p>
+</li>
+<li>
+<p>How do I find out more? <code>See <a href="https://nightlies.apache.org/flink/flink-docs-stable/docs/deployment/filesystems/plugins/" class="bare">https://nightlies.apache.org/flink/flink-docs-stable/docs/deployment/filesystems/plugins/</a> for more information</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The S3 plugin actually ships as part of the Flink distribution; we just need to make it available at runtime by putting it in the <code>plugins</code> folder:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">mkdir ./plugins/s3-fs-hadoop &amp;&amp; \
+cp ./opt/flink-s3-fs-hadoop-1.18.1.jar ./plugins/s3-fs-hadoop/</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After bouncing the Flink cluster I got a different error from jobmanager when trying the <code>INSERT</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Job insert-into_c_hive.default.t_foo_fs (f1532244c3a97d3308d42c41ab79e092) switched from state FAILING to FAILED.
+[…]
+java.nio.file.AccessDeniedException: t_foo_fs/part-c4075636-891e-4233-8224-e09064c7c7eb-0-0: org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException: No AWS Credentials provided by DynamicTemporaryAWSCredentialsProvider TemporaryAWSCredentialsProvider SimpleAWSCredentialsProvider EnvironmentVariable
+[…]
+com.amazonaws.SdkClientException: Unable to load AWS credentials from environment variables (AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY) and AWS_SECRET_KEY (or AWS_SECRET_ACCESS_KEY))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This makes sense—we’re trying to use S3 (well, MinIO) but we’ve not provided any S3 credentials (<code>NoAuthWithAWSException: No AWS Credentials provided</code>).
+The docs for S3 offer one option— <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/deployment/filesystems/s3/#configure-access-credentials">adding them to flink-conf.yaml</a> .
+We can pass this as a runtime option by setting it in <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/deployment/resource-providers/standalone/docker/#via-environment-variables">the FLINK_PROPERTIES environment variable</a>  as part of the Docker Compose:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">jobmanager:
+[…]
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        s3.access.key: admin
+        s3.secret.key: password
+        […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now the error evolves…</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Caused by: java.nio.file.AccessDeniedException: t_foo_fs/part-ddd5011f-9863-432c-9988-50dc1d2628b3-0-0: initiate MultiPartUpload on t_foo_fs/part-ddd5011f-9863-432c-9988-50dc1d2628b3-0-0:
+com.amazonaws.services.s3.model.AmazonS3Exception: The AWS Access Key Id you provided does not exist in our records. (Service: Amazon S3; Status Code: 403; Error Code: InvalidAccessKeyId; Request ID: P6ZZ5SJAVR9C38AA; S3 Extended Request ID: 7Nxqk2li47vlMAzllA57vfRmiePcFYFrv9/vHn6Aknv5+V5gwYyLzk9KIwGC9fE/biNzCWTzozI=; Proxy: null), S3 Extended Request ID: 7Nxqk2li47vlMAzllA57vfRmiePcFYFrv9/vHn6Aknv5+V5gwYyLzk9KIwGC9fE/biNzCWTzozI=:InvalidAccessKeyId</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is because we’re trying to use the credentials that we’ve configured for MinIO (the super-secret <code>admin/password</code> 😉) against AWS S3 itself.
+Because we’re using MinIO we need to tell Flink where to direct its S3 call, and we do this with <code>s3.endpoint</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">jobmanager:
+[…]
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        s3.access.key: admin
+        s3.secret.key: password
+        s3.endpoint: http://minio:9000
+        […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>At this point things slow down, because the <code>INSERT</code> job runs… and runs…</p>
+</div>
+<div class="paragraph">
+<p>After two minutes there’s an <code>INFO</code> in the log:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">org.apache.hadoop.fs.s3a.WriteOperationHelper                [] - initiate MultiPartUpload on t_foo_fs/part-29594611-b313-4ff6-a0a0-86087ec6f262-0-0: Retried 0: org.apache.hadoop.fs.s3a.AWSClientIOException: initiate MultiPartUpload on t_foo_fs/part-29594611-b313-4ff6-a0a0-86087ec6f262-0-0: com.amazonaws.SdkClientException: Unable to execute HTTP request: warehouse.minio: Unable to execute HTTP request: warehouse.minio</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and five minutes after submitting the <code>INSERT</code> there’s this`ERROR`:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">org.apache.hadoop.fs.s3a.WriteOperationHelper                [] - initiate MultiPartUpload on t_foo_fs/part-29594611-b313-4ff6-a0a0-86087ec6f262-0-0: Retried 1:
+org.apache.hadoop.fs.s3a.AWSClientIOException: initiate MultiPartUpload on t_foo_fs/part-29594611-b313-4ff6-a0a0-86087ec6f262-0-0:
+com.amazonaws.SdkClientException: Unable to execute HTTP request: warehouse.minio: Name or service not known:
+Unable to execute HTTP request: warehouse.minio: Name or service not known</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The problem here looks like some kind of hostname issue.
+Previously we saw how referencing <code>localhost</code> from a Docker container can be a misconfiguration, but this is something different.
+<code>warehouse</code> comes from the <code>CREATE TABLE</code> configuration’path&#39; = &#39;s3://warehouse/t_foo_fs/&#39;`, whilst <code>minio</code> is the <code>s3.endpoint</code> we just set.</p>
+</div>
+<div class="paragraph">
+<p>So the S3 endpoint is being picked up, but somehow mangled together with the <code>path</code> of the table.
+Something I’ve learnt from working with MinIO before is that using <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html#path-style-access">path style access</a>  can be important.
+I added this to the`FLINK_PROPERTIES`:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">      	[…]
+        FLINK_PROPERTIES=
+        s3.access.key: admin
+        s3.secret.key: password
+        s3.endpoint: http://minio:9000
+        s3.path.style.access: true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then got <em>yet another</em> different error from the <code>INSERT</code> job:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Caused by: java.util.concurrent.ExecutionException: java.io.IOException: Stream closed.
+       at java.base/java.util.concurrent.FutureTask.report(Unknown Source)
+       at java.base/java.util.concurrent.FutureTask.get(Unknown Source)
+       at org.apache.flink.streaming.runtime.tasks.SourceStreamTask$LegacySourceFunctionThread.completeProcessing(SourceStreamTask.java:368)
+       at org.apache.flink.streaming.runtime.tasks.SourceStreamTask$LegacySourceFunctionThread.run(SourceStreamTask.java:340)
+Caused by: java.io.IOException: Stream closed.
+       at org.apache.flink.core.fs.RefCountedFileWithStream.requireOpened(RefCountedFileWithStream.java:72)
+       at org.apache.flink.core.fs.RefCountedFileWithStream.write(RefCountedFileWithStream.java:52)
+       at org.apache.flink.core.fs.RefCountedBufferingFileStream.flush(RefCountedBufferingFileStream.java:104)
+       at org.apache.flink.fs.s3.common.writer.S3RecoverableFsDataOutputStream.closeAndUploadPart(S3RecoverableFsDataOutputStream.java:209)
+       at org.apache.flink.fs.s3.common.writer.S3RecoverableFsDataOutputStream.closeForCommit(S3RecoverableFsDataOutputStream.java:177)
+       at org.apache.flink.streaming.api.functions.sink.filesystem.OutputStreamBasedPartFileWriter.closeForCommit(OutputStreamBasedPartFileWriter.java:75)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This looks like <a href="https://issues.apache.org/jira/browse/FLINK-33536">FLINK-33536</a> , and so using the convenience afforded by just writing a blog and not <em>needing</em> to use CSV as the format (which seems to be at the root of the issue) I sidestepped the issue and switched the table to Parquet.
+I also added <a href="https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-parquet/1.18.1/flink-sql-parquet-1.18.1.jar">the necessary JAR for Parquet in Flink</a>  and restarted the Flink cluster before changing the table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE t_foo_fs (c1 varchar, c2 int)
+             	WITH (
+             	 &#39;connector&#39; = &#39;filesystem&#39;,
+             	 &#39;path&#39; = &#39;s3://warehouse/t_foo_fs/&#39;,
+             	 &#39;format&#39; = &#39;parquet&#39;
+             	);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After which …wait… what is this?
+Behold!</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SHOW JOBS;
++----------------------------------+-------------------------------------+----------+-------------------------+
+|                           job id |                            job name |   status |              start time |
++----------------------------------+-------------------------------------+----------+-------------------------+
+| a8ca5cd4c59060ac4d4f0996e426af17 | insert-into_c_hive.default.t_foo_fs | FINISHED | 2024-04-11T09:51:16.904 |
++----------------------------------+-------------------------------------+----------+-------------------------+
+1 row in set</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Success!
+🥳<br/></p>
+</div>
+<div class="paragraph">
+<p>Querying the table proves it…</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SELECT * FROM t_foo_fs;
++----+--------------------------------+-------------+
+| op |                             c1 |          c2 |
++----+--------------------------------+-------------+
+| +I |                              a |          42 |
++----+--------------------------------+-------------+
+Received a total of 1 row</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To recap then, what was needed to write to S3 (MinIO) from Flink SQL was this:</p>
+</div>
+<div class="paragraph">
+<p>1.
+Add the S3 plugin to the Flink <code>./plugins</code> folder:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">mkdir ./plugins/s3-fs-hadoop &amp;&amp; \
+cp ./opt/flink-s3-fs-hadoop-1.18.1.jar ./plugins/s3-fs-hadoop/</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>2.
+Add S3 credentials to Flink configuration.
+This can be done as environment variables, or added to <code>flink-conf.yaml</code> either directly or by adding to the <code>FLINK_PROPERTIES</code> environment variable, which is what I did</p>
+</div>
+<div class="paragraph">
+<p>3.
+For MinIO, set the S3 endpoint and enable path-style access.
+As with the credentials, I set this as part of <code>FLINK_PROPERTIES</code>, which ended up as this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">services:
+jobmanager:
+[…]
+environment:
+    - |
+      FLINK_PROPERTIES=
+      s3.access.key: admin
+      s3.secret.key: password
+      s3.endpoint: http://minio:9000
+      s3.path.style.access: true
+      […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Oh - and the CSV bug that I hit is <a href="https://issues.apache.org/jira/browse/FLINK-33536">FLINK-33536</a>  and I worked around it by just not using CSV :)</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_whats_running_where_not_so_much_fun_with_hive_metastore">What’s Running Where? (Not So Much Fun with Hive MetaStore)&nbsp;<a class="headline-hash" href="#_whats_running_where_not_so_much_fun_with_hive_metastore">🔗</a> </h3>
+<div class="paragraph">
+<p>If this blog so far has been some gnarly but reasonable challenges, I’d like to round off with the big end-of-level boss.
+This brings together JARs, Flink configuration—and the importance of understanding <em>what is running where.</em></p>
+</div>
+<div class="paragraph">
+<p>To set the scene: I was doing the same as the above section—I was setting up Flink 1.18 writing files to MinIO (S3 compatible storage), using Hive Metastore for catalog persistence.
+But instead of Parquet or CSV format, I was writing Iceberg files.
+Now, that may seem insignificant, but the impact was crucial.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be80_6702c780e3a93018db085b07_661dde07ffa233a267d80d39_wBAcXnDmBFAqdcrg2cRyCNtbaUs2vIeI8XRvb5U3-_ExcRBo5d-efvflr72NnUFFT-X6yquRHAakLHiiGWjisMF2GFiTNmu0sK_wLxK1TQrst41Our30nM9J-MECTI4MPlKtO0FtWgkYJY_etx6GtO4.webp" alt="6717dc5082a396e17c57be80 6702c780e3a93018db085b07 661dde07ffa233a267d80d39 wBAcXnDmBFAqdcrg2cRyCNtbaUs2vIeI8XRvb5U3  ExcRBo5d efvflr72NnUFFT X6yquRHAakLHiiGWjisMF2GFiTNmu0sK wLxK1TQrst41Our30nM9J MECTI4MPlKtO0FtWgkYJY etx6GtO4"/>
+</div>
+</div>
+<div class="paragraph">
+<p>My environment was setup with Docker Compose as before (and available <a href="https://github.com/decodableco/examples/tree/main/troubleshooting-flinksql/04-flink-iceberg-hms-s3-minio">on GitHub</a> ):</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be4d_6702c77fe3a93018db085a97_661dde0706116925cd150eb9_nK0f-T1JMgbhLp0xbKwp08uQXDUUO1HPSOOoi5_FKDf6GcRSpfqb9femGsFzQEz1RkkG6U_Z97AflKvVJ-JyjcvI8W6KbTnJfgglxWyKEmtJccRpE2Gxy8_lnnMBVSMtQ3mnEQAoXdfq3vqIWAVLeWI.webp" alt="6717dc5082a396e17c57be4d 6702c77fe3a93018db085a97 661dde0706116925cd150eb9 nK0f T1JMgbhLp0xbKwp08uQXDUUO1HPSOOoi5 FKDf6GcRSpfqb9femGsFzQEz1RkkG6U Z97AflKvVJ JyjcvI8W6KbTnJfgglxWyKEmtJccRpE2Gxy8 lnnMBVSMtQ3mnEQAoXdfq3vqIWAVLeWI"/>
+</div>
+</div>
+<div class="paragraph">
+<p>To <a href="https://github.com/decodableco/examples/blob/main/troubleshooting-flinksql/04-flink-iceberg-hms-s3-minio/flink/Dockerfile">my base Flink image</a>  I’d added Parquet, S3, Hadoop, Hive, and Iceberg dependencies.
+Building on my lessons learnt from above, I’ve also added S3 configuration to the <code>FLINK_PROPERTIES</code> environment variable for the Flink cluster containers:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-yaml" data-lang="yaml">services:
+  jobmanager:
+  	[…]
+  	environment:
+      - |
+        FLINK_PROPERTIES=
+        s3.access.key: admin
+        s3.secret.key: password
+        s3.endpoint: http://minio:9000
+        s3.path.style.access: true
+        […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After bringing the stack up, we’ll start by creating the Iceberg catalog.
+We use <code>s3a</code> rather than <code>s3</code> per the <a href="https://iceberg.apache.org/docs/nightly/aws/?h=s3a#hadoop-s3a-filesystem">Iceberg docs</a>  (since this is all done through the Iceberg Flink support)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_iceberg_hive WITH (
+       	&#39;type&#39; = &#39;iceberg&#39;,
+       	&#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+       	&#39;catalog-type&#39;=&#39;hive&#39;,
+       	&#39;uri&#39;=&#39;thrift://localhost:9083&#39;);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now let’s see if there’s a default database provided by the catalog:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; USE CATALOG c_iceberg_hive;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; SHOW DATABASES;
+[ERROR] Could not execute SQL statement. Reason:
+java.net.ConnectException: Connection refused (Connection refused)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>Connection refused</code> here is coming from the fact that the SQL Client is trying to reach the Hive MetaStore (HMS) using`thrift://localhost:9083` —but <code>localhost</code> won’t work as that’s local to the SQL Client container.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be4a_6702c77fe3a93018db085ac7_661dde0717879c3ed0a07ad1_1pzAph8v5JSz3_MNVWpsSRkA_2joMeRErjoZLQWVU3XlvLpx6TIFVug2mMuPt1XoV-GA04uzXpWe1maxQoWSFcETaQ8ZkoV8jKUYJVKEjZdCOMoUWgBQlNxBw-2KzYzrjAsQcCwHuVJhDBsnpdn2Nt8.webp" alt="6717dc5082a396e17c57be4a 6702c77fe3a93018db085ac7 661dde0717879c3ed0a07ad1 1pzAph8v5JSz3 MNVWpsSRkA 2joMeRErjoZLQWVU3XlvLpx6TIFVug2mMuPt1XoV GA04uzXpWe1maxQoWSFcETaQ8ZkoV8jKUYJVKEjZdCOMoUWgBQlNxBw 2KzYzrjAsQcCwHuVJhDBsnpdn2Nt8"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Instead we need to use the hostname of the HMS in the <code>uri</code> configuration:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be5c_6702c77fe3a93018db085ac1_661dde07a21a0eb450cb3b80_nlBJJEM_JBbRtub6Y79nqM-cv23hM0HPNrmOdtvq7sTY50K33IZTFYkll_LYSABqtf0Tv0M4DZGgO9u6o7agKVigN_0dbhn_RN4EgRxaHzmDrAMb7lUzS6qGIKBBHr0wNse7shm4sE4anTPzZN-l1PE.webp" alt="6717dc5082a396e17c57be5c 6702c77fe3a93018db085ac1 661dde07a21a0eb450cb3b80 nlBJJEM JBbRtub6Y79nqM cv23hM0HPNrmOdtvq7sTY50K33IZTFYkll LYSABqtf0Tv0M4DZGgO9u6o7agKVigN 0dbhn RN4EgRxaHzmDrAMb7lUzS6qGIKBBHr0wNse7shm4sE4anTPzZN l1PE"/>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; DROP CATALOG c_iceberg_hive;
+[ERROR] Could not execute SQL statement. Reason:
+org.apache.flink.table.catalog.exceptions.CatalogException: Cannot drop a catalog which is currently in use.
+
+Flink SQL&gt; show catalogs;
++-----------------+
+|    catalog name |
++-----------------+
+|  c_iceberg_hive |
+| default_catalog |
++-----------------+
+2 rows in set
+
+Flink SQL&gt; use catalog default_catalog;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; DROP CATALOG c_iceberg_hive;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; CREATE CATALOG c_iceberg_hive WITH (
+       	&#39;type&#39; = &#39;iceberg&#39;,
+       	&#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+       	&#39;catalog-type&#39;=&#39;hive&#39;,
+       	&#39;uri&#39;=&#39;thrift://hms:9083&#39;);
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we can see that there is one database, called`default`:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; USE CATALOG c_iceberg_hive;
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; SHOW DATABASES;
++---------------+
+| database name |
++---------------+
+|       default |
++---------------+
+1 row in set</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s create a new one:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE DATABASE `c_iceberg_hive`.`db01`;
+[ERROR] Could not execute SQL statement. Reason:
+MetaException(message:java.lang.RuntimeException: java.lang.ClassNotFoundException: Class org.apache.hadoop.fs.s3a.S3AFileSystem not found)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Fear not!
+We’ve seen this before, right?
+Based on my exploration of Flink SQL and JARs <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">previously</a>  I thought I’d be well-equipped to deal with this one.<code>ClassNotFound</code>?
+Piece of cake.
+Right?</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5182a396e17c57bebf_6702c780e3a93018db085b11_661dde082c30ef9fef7f4481_esoOiCFdgsHC0D4l5WcNJ--KPTnsHbg_wOs1jwhOBWuRnTTRDUoYeqaSbFaq7XkroKOfugn9pOKVlj4fRnKdoNpqlSI7p7qf4RHlKvn8rExW5wI3BLBNcvf_7uBGnT9IG-6J5vyf3Oi-qVSKCvj7RmA.webp" alt="Flink SQL—Misconfiguration" width="Misunderstanding" height="and Mishaps.png"/>
+</div>
+</div>
+<div class="paragraph">
+<p>All we need to do is make sure that the Hadoop AWS JAR—that provides the <code>S3AFileSystem</code> class—is present.
+But if we head over to our Flink containers, it looks like it already is:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">flink@jobmanager:~$ tree /opt/flink/lib
+/opt/flink/lib
+├── aws
+|   ├── aws-java-sdk-bundle-1.12.648.jar
+|   └── hadoop-aws-3.3.4.jar
+[…]
+├── hive
+|   └── flink-sql-connector-hive-3.1.3_2.12-1.18.1.jar
+├── iceberg
+|   └── iceberg-flink-runtime-1.18-1.5.0.jar
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Using <code>jinfo</code>  <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">we can see that</a>  the Classpath for the SQL Client shows that the <code>hadoop-aws</code> JAR is present:<br/></p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be83_6702c780e3a93018db085b0a_661dde08256a38683d008aa5_2PCS5XYRfUas08ZRIqglZVjWW48qOeG9rWumgurHc0bDdyGX5Eu3if0OWqtPDA9q7dZ0Ws6Sr7X-WmbZNwic50xEMnyTpRlMmhowusY_-7xjEzT4HyxSTzmmg2963eHkkms1ZqOvpgKW9DM01sTqLv0.webp" alt="CleanShot 2024-04-11 at 15.30.02.png"/>
+</div>
+</div>
+<div class="paragraph">
+<p>We can even double-check that this is indeed the JAR that we want by <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">searching its contents</a>  for the class:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ jar -tf /opt/flink/lib/aws/hadoop-aws-3.3.4.jar|grep S3AFileSystem.class
+org/apache/hadoop/fs/s3a/S3AFileSystem.class</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So what next?
+Honestly, a looooot of hacking about.
+Various suggestions from colleagues, Slack groups, Stack Overflow, chatGPT—and of course Google, which included:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Check Java version</p>
+</li>
+<li>
+<p>Check Hadoop dependency version</p>
+</li>
+<li>
+<p>RTFM 📖</p>
+</li>
+<li>
+<p>Try different JAR version</p>
+</li>
+<li>
+<p>Install full Hadoop and set <code>HADOOP_CLASSPATH</code></p>
+</li>
+<li>
+<p>Try a different version of Flink</p>
+</li>
+<li>
+<p>RTFM some more 📚</p>
+</li>
+<li>
+<p>Turn it off and on again 🤞</p>
+</li>
+<li>
+<p>Add <code>iceberg-aws-bundle-1.5.0.jar</code></p>
+</li>
+<li>
+<p>Stand on one leg whilst singing La Marseillaise wearing a silver cross and holding a clove of garlic 🤪</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>All of these ended up with the same (or different) errors.
+Whatever I did, Flink just didn’t seem to be able to find the S3 class.</p>
+</div>
+<div class="paragraph">
+<p>And then…the clouds parted.
+The sun shone, the angels sang, and one of them named Aleksandr Pilipenko stepped forth on the <a href="https://flink.apache.org/what-is-flink/community/#slack">Apache Flink Slack group</a>  and did thus proclaim:</p>
+</div>
+<div class="paragraph">
+<p><em>Could this actually originate from hive side?</em>
+<em>ThriftHiveMetastore seems to me like something outside of Flink</em>
+<code>Caused by: MetaException(message:java.lang.RuntimeException: java.lang.ClassNotFoundException: Class org.apache.hadoop.fs.s3a.S3AFileSystem not found) at org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore$create_database_result$create_database_resultStandardScheme.read(ThriftHiveMetastore.java:39343)</code>
+Reader, this fixed it.</p>
+</div>
+<div class="paragraph">
+<p>Or rather, it put me on the right lines.
+Because what was happening was that <strong>the Hive MetaStore was throwing the error</strong>.
+SQL Client was simply surfacing the error.</p>
+</div>
+<div class="paragraph">
+<p>When you create a database in Iceberg, not only is there metadata written to the metastore (Hive, in this case), but <em>also</em> the warehouse on S3.</p>
+</div>
+<div class="paragraph">
+<p>When we created the catalog we told Iceberg where to find the Hive Metastore:’uri&#39;=&#39;thrift://hms:9083&#39;`.
+The Hive Metastore then writes additional Iceberg metadata to’warehouse&#39; = &#39;s3a://warehouse&#39;`.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be8c_6702c77fe3a93018db085aca_661dde075f3b9706a5afbd03_yAqIHKHFR6HSKIjOPw8ZWf3-fRD7IvbOTuWWCwRQ8HxzPe1ZXhHB1YaXDT3MCYLDrQAVJ8BApXIw649QT3Q3xr74PfkQQhURUhy-3VpDzVl0BWcBFKFWlGkMQDmW0KUwlm3SqLY11As-uZ_orlalySc.webp" alt="6717dc5082a396e17c57be8c 6702c77fe3a93018db085aca 661dde075f3b9706a5afbd03 yAqIHKHFR6HSKIjOPw8ZWf3 fRD7IvbOTuWWCwRQ8HxzPe1ZXhHB1YaXDT3MCYLDrQAVJ8BApXIw649QT3Q3xr74PfkQQhURUhy 3VpDzVl0BWcBFKFWlGkMQDmW0KUwlm3SqLY11As uZ orlalySc"/>
+</div>
+</div>
+<div class="paragraph">
+<p>You can actually see this if you look at the Hive Metastore log.
+First there’s the request from Flink’s Iceberg implementation to create the database (note the storage specified at`s3a://warehouse/db01.db`):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">source:172.24.0.4 create_database: Database(name:db01, description:null, locationUri:s3a://warehouse/db01.db, parameters:{}, ownerName:flink, ownerType:USER, catalogName:hive)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>followed shortly after by</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">ERROR [pool-6-thread-1] metastore.RetryingHMSHandler: MetaException(message:java.lang.RuntimeException: java.lang.ClassNotFoundException: Class org.apache.hadoop.fs.s3a.S3AFileSystem not found)
+at org.apache.hadoop.hive.metastore.HiveMetaStore$HMSHandler.newMetaException(HiveMetaStore.java:6937)
+at org.apache.hadoop.hive.metastore.HiveMetaStore$HMSHandler.create_database(HiveMetaStore.java:1338)
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The fix?
+<a href="https://github.com/decodableco/examples/blob/main/troubleshooting-flinksql/04-flink-iceberg-hms-s3-minio/hms-standalone-s3/Dockerfile#L5-L6">Add the Hadoop AWS JAR (which includes S3 support) to Hive Metastore</a>  (this is not the same as the Flink deployment, which <em>also</em> needs these JARs):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">cd /opt/hive-metastore/lib &amp;&amp; \
+curl https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -O</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This alone doesn’t <em>quite</em> get us over the hill:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE DATABASE `c_iceberg_hive`.`db01`;
+[ERROR] Could not execute SQL statement. Reason:
+org.apache.thrift.transport.TTransportException</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>At least this error isn’t such a red-herring; we can see it’s a thrift error, and so nursing the fresh wounds of our S3 JAR escapades above we go straight to check the Hive Metastore log:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">WARN [pool-6-thread-1] metastore.ObjectStore: Failed to get database hive.db01, returning NoSuchObjectException
+ERROR [pool-6-thread-1] metastore.RetryingHMSHandler: java.lang.NoClassDefFoundError: com/amazonaws/auth/AWSCredentialsProvider</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>AWSCredentialsProvider</code> is included with <a href="https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.648/aws-java-sdk-bundle-1.12.648.jar">aws-java-sdk-bundle</a>  and after adding that we’re very nearly there:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE DATABASE `c_iceberg_hive`.`db01`;
+[ERROR] Could not execute SQL statement. Reason:
+MetaException(message:Got exception: java.nio.file.AccessDeniedException s3a://warehouse/db01.db: org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException: No AWS Credentials provided by TemporaryAWSCredentialsProvider SimpleAWSCredentialsProvider EnvironmentVariableCredentialsProvider IAMInstanceCredentialsProvider : com.amazonaws.SdkClientException: Unable to load AWS credentials from environment variables (AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY) and AWS_SECRET_KEY (or AWS_SECRET_ACCESS_KEY)))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Building on what we learnt about S3 access from Flink we know that now we just need to add the S3 credentials and additional configuration needed for MinIO to Hive Metastore.
+We do this by adding it to the <code>./conf/hive-site.xml</code> file on the Hive Metastore:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-xml" data-lang="xml">	fs.s3a.access.key
+	admin
+
+
+
+	fs.s3a.secret.key
+	password
+
+
+
+	fs.s3a.endpoint
+	http://minio:9000
+
+
+
+	fs.s3a.path.style.access
+	true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And with that…success.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE CATALOG c_iceberg_hive WITH (
+&gt;       &#39;type&#39; = &#39;iceberg&#39;,
+&gt;       &#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+&gt;       &#39;catalog-type&#39;=&#39;hive&#39;,
+&gt;       &#39;uri&#39;=&#39;thrift://hms:9083&#39;);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; CREATE DATABASE `c_iceberg_hive`.`db01`;
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In MinIO we’ve got a object created for the database:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ mc ls -r minio/warehouse/
+[2024-04-11 16:59:06 UTC]     0B STANDARD db01.db/</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If we create a table within this Iceberg catalog and add some data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE TABLE t_foo_fs (c1 varchar, c2 int);
+
+[ERROR] Could not execute SQL statement. Reason:
+com.amazonaws.SdkClientException: Unable to load AWS credentials from environment variables (AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY) and AWS_SECRET_KEY (or AWS_SECRET_ACCESS_KEY))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What?!
+Surely not again.
+Well not quite.
+This time the error is coming from the SQL Client itself, as the log (under`./log` ) shows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Caused by: org.apache.flink.table.api.TableException: Could not execute CreateTable in path `c_iceberg_hive`.`db01`.`t_foo_fs`
+       at org.apache.flink.table.catalog.CatalogManager.execute(CatalogManager.java:1296)
+       at org.apache.flink.table.catalog.CatalogManager.createTable(CatalogManager.java:946)
+[…]
+Caused by: org.apache.iceberg.exceptions.RuntimeIOException: Failed to create file: s3a://warehouse/db01.db/t_foo_fs/metadata/00000-cec79e1d-1039-45a6-be3a-00a29528ff72.metadata.json</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We’re pretty much on the home straight now.
+In this case, the SQL Client itself is writing some of the metadata for the table to S3 (MinIO).
+Other metadata still goes to the Hive Metastore.
+I have dug into this in more detail in <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on#third-party-flink-catalogs-apache-iceberg">another article</a> .</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/04/6717dc5082a396e17c57be89_6702c780e3a93018db085b04_661dde07b8e445610d50178a_7EgrxWeCfQ5FoJU7AthOK_lIS51EqTY-KsbZpda-oZdkyExtAahmcJhuIlxZTZd6viwB_rvbrE5X4cJbAaaLujectOob091ay1-iLPfNRggVNJKVcnbvNMyVl6cbEGNbgENJbBa_0bq2Bk67Eo4KlTU.webp" alt="6717dc5082a396e17c57be89 6702c780e3a93018db085b04 661dde07b8e445610d50178a 7EgrxWeCfQ5FoJU7AthOK lIS51EqTY KsbZpda oZdkyExtAahmcJhuIlxZTZd6viwB rvbrE5X4cJbAaaLujectOob091ay1 iLPfNRggVNJKVcnbvNMyVl6cbEGNbgENJbBa 0bq2Bk67Eo4KlTU"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Whilst we’ve set the S3 configuration for the jobmanager <em>process</em> as part of the <code>FLINK_PROPERTIES</code> (which gets <a href="https://github.com/apache/flink-docker/blob/master/1.18/scala_2.12-java11-ubuntu/docker-entrypoint.sh#L86-L87">written to flink-conf.yaml at runtime</a> ), this configuration doesn’t seem to be used by the SQL Client.</p>
+</div>
+<div class="paragraph">
+<p>To simplify things, I’m going to move the S3 config away from <code>FLINK_PROPERTIES</code> and specify it in just one place, the <code>./conf/hive-site.xml</code> on the Flink containers, where it should get used by both the jobmanager, taskmanager—and SQL Client.
+It’s the same as I added to the Hive Metastore above:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-xml" data-lang="xml">        fs.s3a.access.key
+        admin
+
+
+
+        fs.s3a.secret.key
+        password
+
+
+
+        fs.s3a.endpoint
+        http://minio:9000
+
+
+
+        fs.s3a.path.style.access
+        true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For this to be picked up I also needed to add <code>hive-conf-dir</code> as part of the Iceberg catalog configuration:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_iceberg_hive WITH (
+       	&#39;type&#39; = &#39;iceberg&#39;,
+       	&#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+       	&#39;catalog-type&#39;=&#39;hive&#39;,
+       	&#39;uri&#39;=&#39;thrift://hms:9083&#39;,
+       	&#39;hive-conf-dir&#39; = &#39;./conf&#39;);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And with that—we’re done:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE TABLE t_foo_fs (c1 varchar, c2 int);
+[INFO] Execute statement succeed.
+
+Flink SQL&gt; INSERT INTO t_foo_fs VALUES (&#39;a&#39;,42);
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: da7c9c4fc427a0796729a7cf10d05b2b
+
+Flink SQL&gt; SELECT * FROM t_foo_fs;
++----+--------------------------------+-------------+
+| op |                             c1 |          c2 |
++----+--------------------------------+-------------+
+| +I |                              a |          42 |
++----+--------------------------------+-------------+
+Received a total of 1 row</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We’ll wrap up with one more little wrinkle to iron out that’s worth documenting as part of this.
+As I was testing this, I experimented with a different way of defining an Iceberg table.
+Instead of creating an Iceberg catalog, and then within that a table, you can define a table and specify it to use the Iceberg connector.
+It looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE iceberg_test WITH (
+       	&#39;connector&#39; = &#39;iceberg&#39;,
+       	&#39;catalog-type&#39;=&#39;hive&#39;,
+       	&#39;catalog-name&#39;=&#39;dev&#39;,
+       	&#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+       	&#39;uri&#39;=&#39;thrift://hms:9083&#39;,
+       	&#39;hive-conf-dir&#39; = &#39;./conf&#39;)
+  	AS SELECT * FROM (VALUES (&#39;Never Gonna&#39;,&#39;Give You&#39;,&#39;Up&#39;));</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This works great:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; SELECT * FROM iceberg_test;
++----+--------------------------------+--------------------------------+--------------------------------+
+| op |                         EXPR$0 |                         EXPR$1 |                         EXPR$2 |
++----+--------------------------------+--------------------------------+--------------------------------+
+| +I |                    Never Gonna |                       Give You |                             Up |
++----+--------------------------------+--------------------------------+--------------------------------+
+Received a total of 1 row</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But—to get to this point I had to get past this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE TABLE iceberg_test WITH (
+       &#39;connector&#39; = &#39;iceberg&#39;,
+       &#39;catalog-type&#39;=&#39;hive&#39;,
+       &#39;catalog-name&#39;=&#39;dev&#39;,
+       &#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+       &#39;hive-conf-dir&#39; = &#39;./conf&#39;)
+   AS SELECT * FROM (VALUES (&#39;Never Gonna&#39;,&#39;Give You&#39;,&#39;Up&#39;));
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: org.datanucleus.NucleusContext</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A <code>ClassNotFoundException</code> which is something we’ve dealt with before.
+But why wouldn’t this work, if in the same environment things work fine if I create the catalog first and then a table within it?</p>
+</div>
+<div class="paragraph">
+<p>The answer comes down to how Flink is picking up the Hive configuration.
+Whilst we’ve defined in the table where to find the <code>hive-site.xml</code> configuration (<code>&#39;hive-conf-dir&#39; = &#39;./conf&#39;</code> ), in that file itself it only has the S3 configuration.
+What it doesn’t have is a value for`hive.metastore.uris`.
+<a href="https://cwiki.apache.org/confluence/display/Hive/Configuration+Properties#ConfigurationProperties-MetaStore">The hive docs</a>  tell us that if <code>hive.metastore.uris</code> is not set then Flink assumes the metastore is local.
+For us that means local to the Flink container, which it’s not—and is where the JAR problem comes in.</p>
+</div>
+<div class="paragraph">
+<p>This didn’t happen when we created the table as part of the catalog because the <code>CREATE CATALOG</code> included <code>&#39;uri&#39;=&#39;thrift://hms:9083&#39;</code>  and thus could find the Hive Metastore.
+So the lesson here is that the <code>uri</code> <em>must</em> be specified somewhere—either in the DDL (the successful <code>CREATE TABLE iceberg_test</code> above does this), or by adding it to the`hive-site.xml`:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-xml" data-lang="xml">      hive.metastore.uris
+      thrift://hms:9083
+
+
+
+        fs.s3a.access.key
+        admin
+
+    […]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With this added, the <code>CREATE TABLE</code> <em>without</em> a <code>uri</code> configuration also works:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">Flink SQL&gt; CREATE TABLE iceberg_test WITH (
+       &#39;connector&#39; = &#39;iceberg&#39;,
+       &#39;catalog-type&#39;=&#39;hive&#39;,
+       &#39;catalog-name&#39;=&#39;dev&#39;,
+       &#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+       &#39;hive-conf-dir&#39; = &#39;./conf&#39;)
+   AS SELECT * FROM (VALUES (&#39;Never Gonna&#39;,&#39;Give You&#39;,&#39;Up&#39;));
+
+[INFO] Submitting SQL update statement to the cluster...
+[INFO] SQL update statement has been successfully submitted to the cluster:
+Job ID: b5588a1e34375f9c4d4d13a6e6f34d99
+
+Flink SQL&gt; SELECT * FROM iceberg_test;
++----+--------------------------------+--------------------------------+--------------------------------+
+| op |                         EXPR$0 |                         EXPR$1 |                         EXPR$2 |
++----+--------------------------------+--------------------------------+--------------------------------+
+| +I |                    Never Gonna |                       Give You |                             Up |
++----+--------------------------------+--------------------------------+--------------------------------+
+Received a total of 1 row</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Coming back to the`CREATE CATALOG`, it can also omit the <code>uri</code> if we’ve specified it in the`hive-site.xml`, which slims it down to this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE CATALOG c_iceberg_hive WITH (
+       &#39;type&#39; = &#39;iceberg&#39;,
+       &#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+       &#39;catalog-type&#39;=&#39;hive&#39;,
+       &#39;hive-conf-dir&#39; = &#39;./conf&#39;);</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_gosh_thats_all_rather_confusing_and_down_in_the_weeds_isnt_it">😲 Gosh. That’s all rather confusing and down-in-the-weeds, isn’t it?&nbsp;<a class="headline-hash" href="#_gosh_thats_all_rather_confusing_and_down_in_the_weeds_isnt_it">🔗</a> </h3>
+<div class="paragraph">
+<p>Well, yes.
+That is the joy of running a complex distributed system—and one with a venerable history dating back to the Apache Hadoop ecosystem—for yourself.</p>
+</div>
+<div class="paragraph">
+<p>If you want to spend your time solving your business problems instead of debugging infrastructure, check our Decodable.
+Our fully-managed platform gives you access to Flink SQL and connectors (including Iceberg) and does all the gnarly stuff for you.
+Not a JAR or Catalog to worry about in sight!
+(Of course, you <em>can</em> bring your own Flink JAR jobs if you want to run a <a href="https://docs.decodable.co/pipelines/create-pipelines-using-your-own-apache-flink-jobs.html">custom pipeline</a> , but that’s a point for a different blog post on a different day).</p>
+</div>
+<div class="paragraph">
+<p>Decodable has a free trial that doesn’t require a credit card to use—so <a href="https://app.decodable.co/-/accounts/create?selected_plan_id=free">give it a try today</a> .</p>
+</div>
+</div>
+	<hr>
+	<div style="background-color: rgba(204, 234, 255, 0.25); margin-bottom:50px;margin-top:50px;padding: 20px; border-width: 2px; border-style: solid; border-color: darkorange;">
+	
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+		
+	</div>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">Contents</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_the_jdbc_catalog">The JDBC Catalog</a></li>
+    <li><a href="#_whats_running_where_fun_with_java_versions">What’s Running Where? (Fun with Java Versions)</a></li>
+    <li><a href="#_whats_running_where_fun_with_jar_dependencies">What’s Running Where? (Fun with JAR dependencies)</a></li>
+    <li><a href="#_a_jar_full_of_trouble">A JAR full of Trouble</a></li>
+    <li><a href="#_writing_to_s3_from_flink">Writing to S3 from Flink</a></li>
+    <li><a href="#_whats_running_where_not_so_much_fun_with_hive_metastore">What’s Running Where? (Not So Much Fun with Hive MetaStore)</a></li>
+    <li><a href="#_gosh_thats_all_rather_confusing_and_down_in_the_weeds_isnt_it">😲 Gosh. That’s all rather confusing and down-in-the-weeds, isn’t it?</a></li>
+  </ul>
+</nav>
+      </div>
+      
+      <div class="toc-mobile-label">TABLE OF CONTENTS</div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+		</main>
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+	</body>
+</html>

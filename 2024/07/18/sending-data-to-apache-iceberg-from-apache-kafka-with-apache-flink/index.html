@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Sending Data to Apache Iceberg from Apache Kafka with Apache Flink</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2024/07/18/sending-data-to-apache-iceberg-from-apache-kafka-with-apache-flink/">
+		
+		
+		
+		
+
+		
+		<meta property="og:title" content="Sending Data to Apache Iceberg from Apache Kafka with Apache Flink" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2024/07/6717dc3082a396e17c57a59a_6702b313ba409e39eee51f23_66884e3f38cc82cbe10d8b31_AD_4nXd2dALz1nQWoouC2exuwXTaEFKIOLoK7AB1ZJtco1Q40A8_ZDqryvMnnm3uDjFL4RyrdmZv3ImqmIvc0-wJKCDJEx7UA70I0SNd-lI5_gj59L_L_KDUkSgSHW_rJTgC4k2gD_kRFXrav8KZZwLZveF87JL-.webp" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2024/07/18/sending-data-to-apache-iceberg-from-apache-kafka-with-apache-flink/" />
+		<meta property="og:site_name" content="Sending Data to Apache Iceberg from Apache Kafka with Apache Flink" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/toc.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/retro-cards.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/custom.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+		<script src="https://rmoff.net/js/toc.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2024/07/6717dc3082a396e17c57a59a_6702b313ba409e39eee51f23_66884e3f38cc82cbe10d8b31_AD_4nXd2dALz1nQWoouC2exuwXTaEFKIOLoK7AB1ZJtco1Q40A8_ZDqryvMnnm3uDjFL4RyrdmZv3ImqmIvc0-wJKCDJEx7UA70I0SNd-lI5_gj59L_L_KDUkSgSHW_rJTgC4k2gD_kRFXrav8KZZwLZveF87JL-.webp'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<link rel="preload" as="image" href="https://rmoff.net/img/repton.gif">
+						<img
+							src="https://rmoff.net/img/logo.jpg"
+							class="w2 h2 br-100"
+							alt="rmoff&#39;s random ramblings"
+							onmouseover="this.src='https:\/\/rmoff.net\/img\/repton.gif';"
+							onmouseout="this.src='https:\/\/rmoff.net\/img\/logo.jpg';"
+						/>
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fa-brands fa-x-twitter"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">
+						<span class="terminal-title">Sending Data to Apache Iceberg from Apache Kafka with Apache Flink<span class="terminal-cursor"></span></span>
+					</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2024-07-18T00:00:00Z">Jul 18, 2024</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/apache-flink" class="no-underline category near-white dim">Apache Flink</a>
+								<span class="display-print">at https://rmoff.net/2024/07/18/sending-data-to-apache-iceberg-from-apache-kafka-with-apache-flink/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<div class="container-fluid docs">
+  <div class="row">
+    <main class="docs-content" role="main">
+
+<article class="article">
+	<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.decodable.co/blog/kafka-to-iceberg-with-flink">Decodable blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p><em>Sometimes it’s not possible to have too much of a good thing, and whilst this blog may look at first-glance rather similar to the one that</em> <a href="https://www.decodable.co/blog/kafka-to-iceberg-with-decodable">I published just recently</a> <em>, today we’re looking at a 100% pure Apache solution.</em>
+<em>Because who knows, maybe you prefer rolling your own tech stacks instead of letting Decodable do it for you 😉.</em></p>
+</div>
+<div class="paragraph">
+<p>Apache Iceberg is an open-table format (OTF) which along with Delta Lake has been gaining a huge amount of traction in recent months.
+Supported by most of the big platforms—including now, notably, Databricks with their acquisition of Tabular—it’s proving popular in &#34;Data Lakehouse&#34; implementations.
+This splices the concept of data lake (chuck it all in an object store and worry about it later) with that of a data warehouse (y’know, a bit of data modeling and management wouldn’t be entirely the worst idea ever).
+Apache Hudi and Apache Paimon are also part of this cohort, although with less apparent traction so far.</p>
+</div>
+<div class="paragraph">
+<p>Let’s look at implementing a very common requirement: taking a stream of data in Kafka and writing it to Iceberg.
+Depending on your pipeline infrastructure of choice you might decide to do this using <a href="https://github.com/tabular-io/iceberg-kafka-connect">Kafka Connect</a> , or as is the case commonly these days, Apache Flink—and that’s what we’re going to look at here.
+Using Flink SQL for streaming data to Iceberg also gives us the advantage of being able to do some transformation to the data directly with SQL.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/07/6717dc3082a396e17c57a59a_6702b313ba409e39eee51f23_66884e3f38cc82cbe10d8b31_AD_4nXd2dALz1nQWoouC2exuwXTaEFKIOLoK7AB1ZJtco1Q40A8_ZDqryvMnnm3uDjFL4RyrdmZv3ImqmIvc0-wJKCDJEx7UA70I0SNd-lI5_gj59L_L_KDUkSgSHW_rJTgC4k2gD_kRFXrav8KZZwLZveF87JL-.webp" alt="6717dc3082a396e17c57a59a 6702b313ba409e39eee51f23 66884e3f38cc82cbe10d8b31 AD 4nXd2dALz1nQWoouC2exuwXTaEFKIOLoK7AB1ZJtco1Q40A8 ZDqryvMnnm3uDjFL4RyrdmZv3ImqmIvc0 wJKCDJEx7UA70I0SNd lI5 gj59L L KDUkSgSHW rJTgC4k2gD kRFXrav8KZZwLZveF87JL "/>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_tldr_create_a_source_create_a_sink">tl;dr Create a Source; Create a Sink&nbsp;<a class="headline-hash" href="#_tldr_create_a_source_create_a_sink">🔗</a> </h3>
+<div class="paragraph">
+<p>Let’s leave the messy and boring dependency prerequisites for later, and jump straight to the action.
+For now, all you need to know for getting data from Kafka to Iceberg with Flink SQL is that you need to do the following:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Create a Kafka *source*table</p>
+</li>
+<li>
+<p>Create an Iceberg *sink*table</p>
+</li>
+<li>
+<p>Submit an <code>INSERT</code> that reads data from the Kafka source and writes it to the Iceberg sink</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The Kafka source needs to declare the schema of the data in the topic, its serialisation format, and then <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/kafka/#connector-options">configuration details</a>  about the topic and broker:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE t_k_orders
+  (
+     orderId          STRING,
+     customerId       STRING,
+     orderNumber      INT,
+     product          STRING,
+     backordered      BOOLEAN,
+     cost             FLOAT,
+     description      STRING,
+     create_ts        BIGINT,
+     creditCardNumber STRING,
+     discountPercent  INT
+  ) WITH (
+    &#39;connector&#39;                    = &#39;kafka&#39;,
+    &#39;topic&#39;                        = &#39;orders&#39;,
+    &#39;properties.bootstrap.servers&#39; = &#39;broker:29092&#39;,
+    &#39;scan.startup.mode&#39;            = &#39;earliest-offset&#39;,
+    &#39;format&#39;                       = &#39;json&#39;
+  );</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is for reading a Kafka topic called <code>orders</code> with a payload that looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ kcat -b broker:29092 -C -t orders -c1
+
+{
+    &#34;create_ts&#34;: 1719830895031,
+    &#34;customerId&#34;: &#34;e6658457-532f-6daa-c31b-7c136db250e0&#34;,
+    &#34;product&#34;: &#34;Enormous Granite Table&#34;,
+    &#34;cost&#34;: 122.30769057331563,
+    &#34;creditCardNumber&#34;: &#34;1211-1221-1234-2201&#34;,
+    &#34;backordered&#34;: false,
+    &#34;orderNumber&#34;: 0,
+    &#34;orderId&#34;: &#34;f5e7256c-1572-b986-a4fc-ba22badac9cd&#34;,
+    &#34;discountPercent&#34;: 8,
+    &#34;description&#34;: &#34;Alias eligendi quam perspiciatis quia eos quis tenetur.&#34;
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now to set up the Iceberg sink.
+We’re going to combine it with an implicit <code>INSERT</code> and do it as a single piece of DDL.
+Before that, let’s make sure that we get some data written to the files, by telling Flink to periodically checkpoint and flush the data to Iceberg:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">SET &#39;execution.checkpointing.interval&#39; = &#39;60sec&#39;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>All that’s left to do now is create the Iceberg table, using the <code>CREATE TABLE…AS SELECT</code> syntax:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE t_i_orders WITH (
+	  &#39;connector&#39;     = &#39;iceberg&#39;,
+	  &#39;catalog-type&#39;  = &#39;hive&#39;,
+	  &#39;catalog-name&#39;  = &#39;dev&#39;,
+	  &#39;warehouse&#39;     = &#39;s3a://warehouse&#39;,
+	  &#39;hive-conf-dir&#39; = &#39;./conf&#39;)
+  AS SELECT * FROM t_k_orders;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This creates the table, and also a Flink SQL job:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; SHOW JOBS;
++----------------------------------+---------------------------------------------------------+---------+-------------------------+
+|                           job id |                                                job name |  status |              start time |
++----------------------------------+---------------------------------------------------------+---------+-------------------------+
+| b26d89f20f2665f099609f616ef34d10 | insert-into_default_catalog.default_database.t_i_orders | RUNNING | 2024-07-01T12:30:47.098 |
++----------------------------------+---------------------------------------------------------+---------+-------------------------+</code></pre>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/07/6717dc3182a396e17c57a5ba_6702b313ba409e39eee51f32_66884e3fda90f2afe81518a4_AD_4nXfGPa6RyosZ5Ajuv1wznzBvxAtGN1d7rHtnignbD_chtu9LfFGPHkGOsAZJftCZE9_HAtjajQFiYO6CM13ODvq8fAllLI74Q74Vg53bLLvAK1i5F2nc8SgkJyCk9gtfb4ACi_az0Di6ew6xe6d35k3rbkhy.webp" alt="6717dc3182a396e17c57a5ba 6702b313ba409e39eee51f32 66884e3fda90f2afe81518a4 AD 4nXfGPa6RyosZ5Ajuv1wznzBvxAtGN1d7rHtnignbD chtu9LfFGPHkGOsAZJftCZE9 HAtjajQFiYO6CM13ODvq8fAllLI74Q74Vg53bLLvAK1i5F2nc8SgkJyCk9gtfb4ACi az0Di6ew6xe6d35k3rbkhy"/>
+</div>
+</div>
+<div class="paragraph">
+<p>We’re writing the Iceberg files to MinIO, which is a self-hosted S3-compatible object store.
+Once the job has checkpointed (which I’ve configured to happen every minute) I can see files appearing in the object store:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">❯ docker exec mc bash -c \
+        &#34;mc ls -r minio/warehouse/&#34;
+[2024-06-28 15:23:45 UTC] 6.3KiB STANDARD default_database.db/t_i_orders/data/00000-0-131b86c6-f4fc-4f26-9541-674ec3101ea8-00001.parquet
+[2024-06-28 15:22:55 UTC] 2.0KiB STANDARD default_database.db/t_i_orders/metadata/00000-59d5c01b-1ab2-457b-9365-bf1cd056bf1d.metadata.json
+[2024-06-28 15:23:47 UTC] 3.1KiB STANDARD default_database.db/t_i_orders/metadata/00001-5affbf21-7bb7-4360-9d65-d547211d63ab.metadata.json
+[2024-06-28 15:23:46 UTC] 7.2KiB STANDARD default_database.db/t_i_orders/metadata/6bf97c2e-0e10-410f-8db8-c6cc279e3475-m0.avro
+[2024-06-28 15:23:46 UTC] 4.1KiB STANDARD default_database.db/t_i_orders/metadata/snap-3773022978137163897-1-6bf97c2e-0e10-410f-8db8-c6cc279e3475.avro</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So that’s our writing to Iceberg set up and running.
+Now it’s just Iceberg, so we can use any Iceberg-compatible tooling with it.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_examining_the_metadata_with_pyiceberg">Examining the metadata with pyiceberg&nbsp;<a class="headline-hash" href="#_examining_the_metadata_with_pyiceberg">🔗</a> </h3>
+<div class="paragraph">
+<p>A bunch of Parquet and Avro files in an object store aren’t much use on their own; but combined they make up the <a href="https://iceberg.apache.org/spec/">Iceberg table format</a> .
+A quick way to inspect them is with <code>pyiceberg</code> which offers a CLI.
+To use it you need to connect it to a catalog—in my example I’m using the Hive MetaStore, so configure it thus:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">export PYICEBERG_CATALOG__DEFAULT__URI=thrift://localhost:9083
+export PYICEBERG_CATALOG__DEFAULT__S3__ACCESS_KEY_ID=admin
+export PYICEBERG_CATALOG__DEFAULT__S3__SECRET_ACCESS_KEY=password
+export PYICEBERG_CATALOG__DEFAULT__S3__PATH_STYLE_ACCESS=true
+export PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://localhost:9000</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we can find out about the Iceberg table directly:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ pyiceberg schema default_database.t_i_orders
+orderId           string
+customerId        string
+orderNumber       int
+product           string
+backordered       boolean
+cost              float
+description       string
+create_ts         long
+creditCardNumber  string
+discountPercent   int
+
+$ pyiceberg properties get table default_database.t_i_orders
+hive-conf-dir                    ./conf
+connector                        iceberg
+write.parquet.compression-codec  zstd
+catalog-type                     hive
+catalog-name                     dev
+warehouse                        s3a://warehouse</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_querying_iceberg_data_with_duckdb">Querying Iceberg data with DuckDB&nbsp;<a class="headline-hash" href="#_querying_iceberg_data_with_duckdb">🔗</a> </h3>
+<div class="paragraph">
+<p>Having poked around the metadata, let’s query the data itself.
+There are a variety of engines and platforms that can read Iceberg data, including <a href="https://iceberg.apache.org/docs/nightly/flink/">Flink</a>  (obviously!), <a href="https://iceberg.apache.org/docs/nightly/spark-getting-started/">Apache Spark</a> , <a href="https://trino.io/docs/current/connector/iceberg.html">Trino</a> , <a href="https://docs.snowflake.com/en/user-guide/tables-iceberg">Snowflake</a> , <a href="https://prestodb.io/docs/current/connector/iceberg.html">Presto</a> , <a href="https://cloud.google.com/bigquery/docs/query-iceberg-data">BigQuery</a> , and <a href="https://clickhouse.com/docs/en/engines/table-engines/integrations/iceberg">ClickHouse</a> .
+Here I’m going to use DuckDB.</p>
+</div>
+<div class="paragraph">
+<p>We’ll install a couple of libraries that are needed; <a href="https://duckdb.org/docs/extensions/iceberg.html">iceberg</a>  (can you guess why?!) and <a href="https://duckdb.org/docs/extensions/httpfs/overview">httpfs</a>  (because we’re reading data from S3/MinIO):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">INSTALL httpfs;
+INSTALL iceberg;
+LOAD httpfs;
+LOAD iceberg;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then we set up the connection details for the local MinIO instance:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE SECRET minio (
+    TYPE S3,
+    KEY_ID &#39;admin&#39;,
+    SECRET &#39;password&#39;,
+    REGION &#39;us-east-1&#39;,
+    ENDPOINT &#39;minio:9000&#39;,
+    URL_STYLE &#39;path&#39;,
+    USE_SSL &#39;false&#39;
+);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Finally, let’s query the data.
+There’s no direct catalog support in DuckDB yet so we have to point it directly at the Iceberg manifest file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">SELECT count(*) AS row_ct,
+       strftime(to_timestamp(max(create_ts)/1000),&#39;%Y-%m-%d %H:%M:%S&#39;) AS max_ts,
+       AVG(cost) AS avg_cost,
+       MIN(cost) AS min_cost
+ FROM iceberg_scan(&#39;s3://warehouse/default_database.db/t_i_orders/metadata/00015-a166b870-551b-4279-a9f9-ef3572b53816.metadata.json&#39;);</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">┌────────┬─────────────────────┬────────────────────┬───────────┐
+| row_ct |       max_ts        |      avg_cost      | min_cost  |
+| int64  |       varchar       |       double       |   float   |
+├────────┼─────────────────────┼────────────────────┼───────────┤
+|   1464 | 2024-07-01 11:48:13 | 115.64662482569126 | 100.01529 |
+└────────┴─────────────────────┴────────────────────┴───────────┘</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_back_to_the_start_️">Back to the start ↩️&nbsp;<a class="headline-hash" href="#_back_to_the_start_️">🔗</a> </h3>
+<div class="paragraph">
+<p>Well that wasn’t so bad, right?
+In fact, pretty simple, I would say.
+Create a table, create a sink, and off you go.</p>
+</div>
+<div class="paragraph">
+<p>There are a few bits that I hugely skimmed over in my keenness to show you the Iceberg-y goodness which I’m now going to cover in more detail</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>When I created the sink the CTAS statement did a lot of heavy lifting in terms of its potential power, and I’m going to discuss that some more below</p>
+</li>
+<li>
+<p>I presented my working Iceberg deployment as a <em>fait accompli</em>, when in reality it was the output of rather a lot of learning and <a href="https://libquotes.com/linus-torvalds/quote/lbr1k4j">random jiggling</a>  until I got it to work—so I’m going to explain that bit too.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_all_the_power_of_sql">All the power of SQL 💪&nbsp;<a class="headline-hash" href="#_all_the_power_of_sql">🔗</a> </h3>
+<div class="paragraph">
+<p>Let’s have a look at this innocuous CTAS that we ran above:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE t_i_orders WITH (
+	  &#39;connector&#39; = &#39;iceberg&#39;,
+	  &#39;catalog-type&#39;=&#39;hive&#39;,
+	  &#39;catalog-name&#39;=&#39;dev&#39;,
+	  &#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+	  &#39;hive-conf-dir&#39; = &#39;./conf&#39;)
+  AS SELECT * FROM t_k_orders;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It’s doing several things, only one of which is particularly obvious:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The obvious: creating a table with a bunch of Iceberg properties</p>
+</li>
+<li>
+<p>Less obvious (1): defining the schema for the Iceberg table implicitly as matching that of the source <code>t_k_orders</code></p>
+</li>
+<li>
+<p>Less obvious (2): populating the Iceberg table with an <em>unmodified</em> stream of records fetched from Kafka</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Looking at that final point though, we could do so much more.
+How about filtering for orders with a high cost value?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE t_i_orders WITH (
+	  &#39;connector&#39; = &#39;iceberg&#39;,
+[…]
+  AS SELECT *
+	   FROM t_k_orders
+	  WHERE cost &gt; 100;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Or customers who are VIPs?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE t_i_orders WITH (
+	  &#39;connector&#39; = &#39;iceberg&#39;,
+[…]
+  AS SELECT *
+       FROM t_k_orders
+      WHERE customerId IN (SELECT customerId
+				             FROM customers
+				            WHERE vip_status = &#39;Gold&#39;);
+
+-- Do the same thing but using JOINs
+CREATE TABLE t_i_orders WITH (
+	  &#39;connector&#39; = &#39;iceberg&#39;,
+[…]
+  AS SELECT ko.*
+       FROM t_k_orders ko
+		    INNER JOIN
+		    customers c
+		    ON ko.customerId = c.customerId
+      WHERE c.vip_status = &#39;Gold&#39;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We can also project a different set of columns, perhaps to extract just a subset of the fields needed for optimisation reasons:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE t_i_orders WITH (
+	  &#39;connector&#39; = &#39;iceberg&#39;,
+[…]
+  AS SELECT orderId, product, cost
+       FROM t_k_orders;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Finally, we don’t have to use CTAS.
+Perhaps you simply want to decouple the creation from the population, or you want to have multiple streams populating the same sink and keeping things separate is more logical.
+The above two examples combined might look like this:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/07/6717dc3082a396e17c57a5a9_6702b313ba409e39eee51f27_66884e3f4be90236c6e30492_AD_4nXclzqw2DP8yOKl4Tn904WcrnU3xvkkFy5gjXOThLk04wQecjJsmsoyMa34T8ivFXi02pPdQhSaqD2F7wGKXfMzIZ4zN_O0fxry10okYvoxUDSEcwHf0rGGdNFcEMmHGu5N4UnOJ19t-2UhO_3mTnUNuHck.webp" alt="6717dc3082a396e17c57a5a9 6702b313ba409e39eee51f27 66884e3f4be90236c6e30492 AD 4nXclzqw2DP8yOKl4Tn904WcrnU3xvkkFy5gjXOThLk04wQecjJsmsoyMa34T8ivFXi02pPdQhSaqD2F7wGKXfMzIZ4zN O0fxry10okYvoxUDSEcwHf0rGGdNFcEMmHGu5N4UnOJ19t 2UhO 3mTnUNuHck"/>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">-- Create the Iceberg sink.
+-- Using the LIKE syntax we can copy across the schema.
+-- N.B. no data is sent to it at this point
+CREATE TABLE t_i_orders WITH (
+	  &#39;connector&#39; = &#39;iceberg&#39;,
+	  &#39;catalog-type&#39;=&#39;hive&#39;,
+	  &#39;catalog-name&#39;=&#39;dev&#39;,
+	  &#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+	  &#39;hive-conf-dir&#39; = &#39;./conf&#39;)
+  LIKE t_k_orders;
+
+-- Now, send data to it
+INSERT INTO t_i_orders
+SELECT *
+	   FROM t_k_orders
+	  WHERE cost &gt; 100;
+
+-- Send more data to it
+INSERT INTO t_i_orders
+SELECT ko.*
+       FROM t_k_orders ko
+		    INNER JOIN
+		    customers c
+		    ON ko.customerId = c.customerId
+      WHERE c.vip_status = &#39;Gold&#39;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>INSERT</code> statements are streaming jobs that run continuously, as can be seen from the <code>SHOW JOBS</code> output:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; SHOW JOBS;
++----------------------------------+---------------------------------------------------------+----------+-------------------------+
+|                           job id |                                                job name |   status |              start time |
++----------------------------------+---------------------------------------------------------+----------+-------------------------+
+| 949b0010858fdc29f5176b532b77dc50 | insert-into_default_catalog.default_database.t_i_orders |  RUNNING | 2024-07-01T15:47:01.183 |
+| 66f2277aee439ae69ad7300a86725947 | insert-into_default_catalog.default_database.t_i_orders |  RUNNING | 2024-07-01T15:46:29.247 |
++----------------------------------+---------------------------------------------------------+----------+-------------------------+</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Finally, you could even combine the two <code>INSERT`s with a `UNION</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">INSERT INTO t_i_orders
+SELECT *
+	   FROM t_k_orders
+	  WHERE cost &gt; 100
+UNION ALL
+SELECT ko.*
+       FROM t_k_orders ko
+		    INNER JOIN
+		    customers c
+		    ON ko.customerId = c.customerId
+      WHERE c.vip_status = &#39;Gold&#39;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This gives us a single Flink job that looks like this:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/07/6717dc3182a396e17c57a5e8_6702b313ba409e39eee51f35_66884e3f21e36c3365b7ee30_AD_4nXfBebJNN3uxtdWn8B3AQJh_HzGrhmT1kHVXwDYusWDvfEHf91eZ52UITlo-hTtHnoIzMD2CFjDVrlgAhZhu1Qdms9dSnyaU-aZaSMM1JnBp6Nq7IdRiw1qbcHlBNkdjmCNoLncy7QyXmt0GVtstFP8213rK.webp" alt="6717dc3182a396e17c57a5e8 6702b313ba409e39eee51f35 66884e3f21e36c3365b7ee30 AD 4nXfBebJNN3uxtdWn8B3AQJh HzGrhmT1kHVXwDYusWDvfEHf91eZ52UITlo hTtHnoIzMD2CFjDVrlgAhZhu1Qdms9dSnyaU aZaSMM1JnBp6Nq7IdRiw1qbcHlBNkdjmCNoLncy7QyXmt0GVtstFP8213rK"/>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_iceberg_table_properties">Iceberg table properties&nbsp;<a class="headline-hash" href="#_iceberg_table_properties">🔗</a> </h3>
+<div class="paragraph">
+<p>There are <a href="https://iceberg.apache.org/docs/1.5.2/configuration/#write-properties">various properties</a>  that you can configure for an Iceberg table.
+In my example above I just specified the bare minimum and let everything else use its default.</p>
+</div>
+<div class="paragraph">
+<p>You can specify additional properties when you create the table.
+For example, to change the format of the data files from the default of Parquet to ORC, set the <code>write.format.default</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-sql" data-lang="sql">CREATE TABLE iceberg_test WITH (
+    &#39;connector&#39; = &#39;iceberg&#39;,
+    &#39;catalog-type&#39;=&#39;hive&#39;,
+    &#39;catalog-name&#39;=&#39;dev&#39;,
+    &#39;warehouse&#39; = &#39;s3a://warehouse&#39;,
+    &#39;hive-conf-dir&#39; = &#39;./conf&#39;,
+    &#39;write.format.default&#39;=&#39;orc&#39;);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Which when populated stores the data, as expected, in ORC format:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">❯ docker exec mc bash -c \
+        &#34;mc ls -r minio/warehouse/&#34;
+[2024-07-01 10:41:49 UTC]   398B STANDARD default_database.db/iceberg_test/data/00000-0-023674bd-dc7d-4249-8c50-8c1238881e57-00001.orc
+[…]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can also change the value after creation:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; ALTER TABLE iceberg_test SET (&#39;write.format.default&#39;=&#39;avro&#39;);
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>or reset it to its default value:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; ALTER TABLE iceberg_test RESET (&#39;write.format.default&#39;);
+[INFO] Execute statement succeed.</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_iceberg_dependencies_for_flink">Iceberg dependencies for Flink&nbsp;<a class="headline-hash" href="#_iceberg_dependencies_for_flink">🔗</a> </h3>
+<div class="paragraph">
+<p>As I explored (<em>at length</em> 😅) in <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">several</a>  <a href="https://www.decodable.co/blog/flink-sql-misconfiguration-misunderstanding-and-mishaps">previous</a>  <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">articles</a> , you often need to add dependencies to Flink for it to work with other technologies.
+Whether it’s formats (such as Parquet), catalogs (such as Hive), or connectors (such as Iceberg), juggling JARs is one of <em>the most fun</em> aspects of running Flink yourself.
+Of course, if you don’t enjoy <em>that</em> kind of fun, you could just <a href="https://www.decodable.co/blog/kafka-to-iceberg-with-decodable">let Decodable do it for you</a> .</p>
+</div>
+<div class="sect3">
+<h4 id="_catalog">Catalog&nbsp;<a class="headline-hash" href="#_catalog">🔗</a> </h4>
+<div class="paragraph">
+<p>To use Iceberg you need to have a catalog metastore.
+Catalogs in Flink can be a bit hairy to understand at first, but have a read of <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-a-primer">this primer</a>  that I wrote for a gentle yet thorough introduction to them.</p>
+</div>
+<div class="paragraph">
+<p>Iceberg can work with different catalogs (I explore several of them <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">here</a> ), and in this blog article I’ve used the Hive Metastore (HMS).</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/07/6717dc3182a396e17c57a5f4_6702b313ba409e39eee51f2a_66884e3f1b06a6fc506bc681_AD_4nXeEw-X8llqxCUmO8EJuvejwMoR9nPSD31qTPlN95msDL4-Mp_6lzs2w1k12Vjya8XVGFhLcm7XMCFaq-YAG0NQ4TGpT8Oob3Dew3XxJi1ibGpAuvSQshrNIzg0wZ-M5uAgJsvFcMHcYaYY57aZtQSo52XvB.webp" alt="6717dc3182a396e17c57a5f4 6702b313ba409e39eee51f2a 66884e3f1b06a6fc506bc681 AD 4nXeEw X8llqxCUmO8EJuvejwMoR9nPSD31qTPlN95msDL4 Mp 6lzs2w1k12Vjya8XVGFhLcm7XMCFaq YAG0NQ4TGpT8Oob3Dew3XxJi1ibGpAuvSQshrNIzg0wZ M5uAgJsvFcMHcYaYY57aZtQSo52XvB"/>
+</div>
+</div>
+<div class="paragraph">
+<p>To use the Hive metastore with Flink you need the <a href="https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/hive/overview/#dependencies">Hive connector</a>  <code>flink-sql-connector-hive-3.1.3</code> which <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">you can find</a>  on <a href="https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-hive-3.1.3_2.12/">Maven repository</a> —make sure you use the correct one for your version of Flink.</p>
+</div>
+<div class="paragraph">
+<p>As well as the Hive connector, you need Hadoop dependencies.
+I wrote about this <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">elsewhere</a>  but you either install the full Hadoop distribution, or cherry-pick just the JARs needed.</p>
+</div>
+<div class="paragraph">
+<p>You also need to configure <code>conf/hive-site.xml</code> so that Flink can find the Hive MetaStore:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-xml" data-lang="xml">[…]
+
+   hive.metastore.local
+   false
+
+
+
+   hive.metastore.uris
+   thrift://hms:9083
+
+[…]</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_iceberg_jars">Iceberg JARs&nbsp;<a class="headline-hash" href="#_iceberg_jars">🔗</a> </h4>
+<div class="paragraph">
+<p>Iceberg support in Flink is provided by the <code>iceberg-flink-runtime</code> JAR.
+As with the catalog JAR, make sure you line up your versions—so in this case both Iceberg and Flink.
+For Iceberg 1.5.0 and Flink 1.18 I used <a href="https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-1.18/1.5.0/">iceberg-flink-runtime-1.18-1.5.0.jar</a></p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_object_store_s3">Object Store (S3)&nbsp;<a class="headline-hash" href="#_object_store_s3">🔗</a> </h4>
+<div class="paragraph">
+<p>Finally, since we’re writing to data on S3-compatible MinIO, we need the correct JARs for that.
+I’m using <code>s3a</code>, which is provided by <a href="https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/">hadoop-aws-3.3.4.jar</a> .</p>
+</div>
+<div class="paragraph">
+<p>Flink will also need to know how to authenticate to S3, and in the case of MinIO, how to find it.
+One way to do this is supply these details as part of <code>conf/hive-site.xml</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-xml" data-lang="xml">[…]
+
+       fs.s3a.access.key
+       admin
+
+
+
+       fs.s3a.secret.key
+       password
+
+
+
+       fs.s3a.endpoint
+       http://minio:9000
+
+
+
+       fs.s3a.path.style.access
+       true
+
+[…]</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_want_the_easy_route">Want the easy route?&nbsp;<a class="headline-hash" href="#_want_the_easy_route">🔗</a> </h4>
+<div class="paragraph">
+<p><em>(Of course, the</em>*really*<em>easy route is to</em> <a href="https://www.decodable.co/blog/kafka-to-iceberg-with-decodable">use Decodable</a> <em>, where we do all of this for you.</em>
+<em>😁)</em></p>
+</div>
+<div class="paragraph">
+<p>I’ve shared on the Decodable <a href="https://github.com/decodableco/examples/">examples GitHub repo</a>  the following:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>a <a href="https://github.com/decodableco/examples/blob/main/kafka-iceberg/apache-flink/docker-compose.yml">Docker Compose</a>  so that you can run all of this yourself just by running <code>docker compose up</code></p>
+</li>
+<li>
+<p>a <a href="https://github.com/decodableco/examples/blob/main/kafka-iceberg/apache-flink/flink/Dockerfile#L29">list of the specific JAR files</a>  that I used</p>
+</li>
+<li>
+<p><a href="https://github.com/decodableco/examples/tree/main/kafka-iceberg/apache-flink">and more</a> …sample SQL statements, step-by-step README, and some other noodling around with Iceberg and catalogs for good measure.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_what_if_you_get_in_a_jam_with_your_jars">What if you get in a jam with your JARs?&nbsp;<a class="headline-hash" href="#_what_if_you_get_in_a_jam_with_your_jars">🔗</a> </h4>
+<div class="paragraph">
+<p>Here are the various errors (usually a <code>ClassNotFoundException</code>, but not always) that you can expect to see if you miss a JAR from your dependencies.
+The missing JAR shown is based on the following versions:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Flink 1.18</p>
+</li>
+<li>
+<p>Hive 3.1.3</p>
+</li>
+<li>
+<p>Iceberg 1.5.0</p>
+</li>
+<li>
+<p>Hadoop 3.3.4</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>You can find out more here about <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">locating the correct JAR to download</a>  and where to put it once you’ve downloaded it.</p>
+</div>
+<div class="paragraph">
+<p>th, td {
+padding: 4px;
+border-bottom: 1px solid black;
+word-wrap: break-word;
+font-size: 0.8rem;
+}</p>
+</div>
+<div class="paragraph">
+<p><strong>Error</strong></p>
+</div>
+<div class="paragraph">
+<p><strong>Missing JAR</strong></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: com.amazonaws.AmazonClientException</code></p>
+</div>
+<div class="paragraph">
+<p><code>aws-java-sdk-bundle-1.12.648.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: org.apache.commons.configuration2.Configuration</code></p>
+</div>
+<div class="paragraph">
+<p><code>commons-configuration2-2.1.1.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: org.apache.commons.logging.LogFactory</code></p>
+</div>
+<div class="paragraph">
+<p><code>commons-logging-1.1.3.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: org.apache.hadoop.hive.metastore.api.NoSuchObjectException</code></p>
+</div>
+<div class="paragraph">
+<p><code>flink-sql-connector-hive-3.1.3_2.12-1.18.1.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.NoClassDefFoundError: Could not initialize class org.apache.hadoop.security.UserGroupInformation</code></p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p><em>Prevents the Flink jobmanager and taskmanager starting if not present, only happens if</em>  ` flink-sql-connector-hive-3.1.3_2.12-1.18.1.jar `  <em>is present.</em></p>
+</div>
+<div class="paragraph">
+<p><code>hadoop-auth-3.3.4.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: Class org.apache.hadoop.fs.s3a.S3AFileSystem not found</code></p>
+</div>
+<div class="paragraph">
+<p><code>hadoop-aws-3.3.4.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: org.apache.hadoop.conf.Configuration</code></p>
+</div>
+<div class="paragraph">
+<p><code>hadoop-common-3.3.4.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: org.apache.hadoop.hdfs.HdfsConfiguration</code></p>
+</div>
+<div class="paragraph">
+<p><code>hadoop-hdfs-client-3.3.4.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: org.apache.hadoop.mapred.JobConf</code></p>
+</div>
+<div class="paragraph">
+<p><code>hadoop-mapreduce-client-core-3.3.4.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: org.apache.hadoop.thirdparty.com.google.common.base.Preconditions</code></p>
+</div>
+<div class="paragraph">
+<p><code>hadoop-shaded-guava-1.1.1.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>org.apache.flink.table.api.ValidationException: Could not find any factory for identifier &#39;iceberg&#39; that implements &#39;org.apache.flink.table.factories.DynamicTableFactory&#39; in the classpath.</code>
+<code>Available factory identifiers are:</code>
+<code>blackhole</code>
+<code>datagen</code>
+<code>[…]</code></p>
+</div>
+<div class="paragraph">
+<p><code>iceberg-flink-runtime-1.18-1.5.0.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: org.codehaus.stax2.XMLInputFactory2</code></p>
+</div>
+<div class="paragraph">
+<p><code>stax2-api-4.2.1.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: com.ctc.wstx.io.InputBootstrapper</code></p>
+</div>
+<div class="paragraph">
+<p><code>woodstox-core-5.3.0.jar</code></p>
+</div>
+<div class="paragraph">
+<p><code>java.lang.ClassNotFoundException: org.datanucleus.NucleusContext</code></p>
+</div>
+<div class="paragraph">
+<p><em>This is a really fun one—I got it when I’d not configured</em>`hive.metastore.local`
+<em>in Flink’s</em>`conf/hive-site.xml`</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_conclusion">Conclusion&nbsp;<a class="headline-hash" href="#_conclusion">🔗</a> </h3>
+<div class="paragraph">
+<p>I’ve shown you in this blog post how to stream data from Kafka to Iceberg using purely open source tools.
+I used MinIO for storage, but it would work just the same with S3.
+The catalog I used was Hive Metastore, but there are others—such as AWS Glue.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2024/07/6717dc3082a396e17c57a59a_6702b313ba409e39eee51f23_66884e3f38cc82cbe10d8b31_AD_4nXd2dALz1nQWoouC2exuwXTaEFKIOLoK7AB1ZJtco1Q40A8_ZDqryvMnnm3uDjFL4RyrdmZv3ImqmIvc0-wJKCDJEx7UA70I0SNd-lI5_gj59L_L_KDUkSgSHW_rJTgC4k2gD_kRFXrav8KZZwLZveF87JL-.webp" alt="6717dc3082a396e17c57a59a 6702b313ba409e39eee51f23 66884e3f38cc82cbe10d8b31 AD 4nXd2dALz1nQWoouC2exuwXTaEFKIOLoK7AB1ZJtco1Q40A8 ZDqryvMnnm3uDjFL4RyrdmZv3ImqmIvc0 wJKCDJEx7UA70I0SNd lI5 gj59L L KDUkSgSHW rJTgC4k2gD kRFXrav8KZZwLZveF87JL "/>
+</div>
+</div>
+<div class="paragraph">
+<p>If you want to try it out for yourself head to <a href="https://github.com/decodableco/examples/tree/main/kafka-iceberg/apache-flink">the GitHub repository</a> , and if you want to try loading data from Kafka to Iceberg but don’t fancy running Flink for yourself <a href="https://app.decodable.co/-/accounts/create">sign up for a free Decodable account</a>  today and give our fully managed service a go.</p>
+</div>
+</div>
+	<hr>
+	<div style="background-color: rgba(204, 234, 255, 0.25); margin-bottom:50px;margin-top:50px;padding: 20px; border-width: 2px; border-style: solid; border-color: darkorange;">
+	
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+		
+	</div>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">Contents</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_tldr_create_a_source_create_a_sink">tl;dr Create a Source; Create a Sink</a></li>
+    <li><a href="#_examining_the_metadata_with_pyiceberg">Examining the metadata with pyiceberg</a></li>
+    <li><a href="#_querying_iceberg_data_with_duckdb">Querying Iceberg data with DuckDB</a></li>
+    <li><a href="#_back_to_the_start_️">Back to the start ↩️</a></li>
+    <li><a href="#_all_the_power_of_sql">All the power of SQL 💪</a></li>
+    <li><a href="#_iceberg_table_properties">Iceberg table properties</a></li>
+    <li><a href="#_iceberg_dependencies_for_flink">Iceberg dependencies for Flink</a></li>
+    <li><a href="#_conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+      </div>
+      
+      <div class="toc-mobile-label">TABLE OF CONTENTS</div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+		</main>
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+	</body>
+</html>

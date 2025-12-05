@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Flink SQL and the Joy of JARs</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2024/02/27/flink-sql-and-the-joy-of-jars/">
+		
+		
+		
+		
+
+		
+		<meta property="og:title" content="Flink SQL and the Joy of JARs" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2024/02/jars_sm.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2024/02/27/flink-sql-and-the-joy-of-jars/" />
+		<meta property="og:site_name" content="Flink SQL and the Joy of JARs" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<link rel="stylesheet" href="https://rmoff.net/css/tachyons.min.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/story.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/descartes.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/toc.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/retro-cards.css" />
+		<link rel="stylesheet" href="https://rmoff.net/css/custom.css" />
+		
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+		<link href="https://fonts.googleapis.com/css?family=Quattrocento+Sans:400,400i,700,700i|Quattrocento:400,700|Spectral:400,400i,700,700i&amp;subset=latin-ext" rel="stylesheet">
+		
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+            posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P',{api_host:'https://eu.i.posthog.com', person_profiles: 'identified_only' 
+                })
+		</script>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		
+		<script src="https://rmoff.net/js/story.js"></script>
+		<script src="https://rmoff.net/js/toc.js"></script>
+
+	</head>
+	<body class="ma0 bg-white section-post page-kind-page is-page-true ">
+		
+		<header class="cover bg-top" style="background-image: url('https://rmoff.net/images/2024/02/jars_sm.jpg'); background-position: center;">
+			<div class="bg-black-30 bb bt">
+
+				<nav class="hide-print sans-serif  border-box pa3 ph5-l">
+					<a href="https://rmoff.net" title="Home">
+						<link rel="preload" as="image" href="https://rmoff.net/img/repton.gif">
+						<img
+							src="https://rmoff.net/img/logo.jpg"
+							class="w2 h2 br-100"
+							alt="rmoff&#39;s random ramblings"
+							onmouseover="this.src='https:\/\/rmoff.net\/img\/repton.gif';"
+							onmouseout="this.src='https:\/\/rmoff.net\/img\/logo.jpg';"
+						/>
+					</a>
+					<div class="fr h2 pv2 tr">
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net/bio">about</a>
+						<a class="link f5 ml2 dim near-white" href="https://talks.rmoff.net">talks</a>
+						<a class="link f5 ml2 dim near-white" href="https://bsky.app/profile/rmoff.net"><i class="fa-brands fa-bluesky"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://twitter.com/rmoff/"><i class="fa-brands fa-x-twitter"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://github.com/rmoff/"><i class="fab fa-github-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.youtube.com/c/rmoff"><i class="fab fa-youtube-square"></i></a>
+						<a class="link f5 ml2 dim near-white" href="https://www.linkedin.com/in/robinmoffatt/"><i class="fab fa-linkedin"></i></a>
+						<a class="link f5 ml2 dim near-white fas fa-rss-square" href="https://rmoff.net/index.xml" title="RSS Feed"></a>
+						<a class="link f5 ml2 dim near-white fas fa-search" href="https://rmoff.net/search/" role="search" title="Search"></a>
+					</div>
+				</nav>
+
+				<div id="hdr" class="tc-l pv4-ns pv5-l pv2 ph3 ph4-ns">
+					<h1 class="near-white mt1-ns f2 fw3 mb0 mt0 lh-title">
+						<span class="terminal-title">Flink SQL and the Joy of JARs<span class="terminal-cursor"></span></span>
+					</h1>
+					<h2 class="near-white mt3-l mb4-l fw1 f6 f3-l measure-wide-l center lh-copy mt2 mb3">
+						
+						
+							
+								Published
+								<time datetime="2024-02-27T00:00:00Z">Feb 27, 2024</time>
+								<span class="display-print">by </span>
+								 in <a href="https://rmoff.net/categories/apache-flink" class="no-underline category near-white dim">Apache Flink</a>
+								<span class="display-print">at https://rmoff.net/2024/02/27/flink-sql-and-the-joy-of-jars/</span>
+							
+						
+					</h2>
+				</div>
+
+				
+				
+				
+				<div class="w-100 cf hide-print">
+					<a class="fr f6 ma0 pa2 link white-50 dim fas fa-camera" href="https://bsky.app/profile/rmoff.net" title="Photo Credit"></a>
+				</div>
+				
+				
+
+			</div>
+		</header>
+		
+		<main role="main">
+		
+<div class="container-fluid docs">
+  <div class="row">
+    <main class="docs-content" role="main">
+
+<article class="article">
+	<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">Decodable blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>I will wager you half of my lottery winnings from 2023[1] that you’re going to encounter this lovely little error at some point on your Flink SQL journey:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Could not execute SQL statement. Reason: java.lang.ClassNotFoundException</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It comes in a variety of flavours, such as this one:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE CATALOG c_hive WITH (
+&gt;        &#39;type&#39; = &#39;hive&#39;,
+&gt;        &#39;hive-conf-dir&#39; = &#39;./conf/&#39;
+&gt;    );
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: org.apache.hadoop.fs.FSDataInputStream</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In terms of cause, <code>ClassNotFoundException</code> is about as generic and common as errors get.
+It means that part of the code (a &#39;class&#39;) that the program needs to run can’t be found.
+In practice, it means that you’re missing one or more JAR files, or you have them but they’re not getting loaded, perhaps being in the wrong location.
+A JAR file is a “Java ARchive” made up of a set of Java resources such as code and compressed similar to how a ZIP file is.</p>
+</div>
+<div class="paragraph">
+<p>To fix it you need the right JAR, and that JAR in the right place.
+Let’s look at this in a bit more detail.</p>
+</div>
+<div class="sect2">
+<h3 id="_identifying_the_correct_jar">Identifying the correct JAR&nbsp;<a class="headline-hash" href="#_identifying_the_correct_jar">🔗</a> </h3>
+<div class="paragraph">
+<p>Perhaps it’ll be clear which JAR you need based on what you’re trying to do—but often not.
+As you get more familiar with Flink you’ll learn certain patterns of what dependencies there are.
+These include:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Hadoop, including—but not only—if you’re using Hive or Hive Metastore. You can go and get the specific JARs one-by-one, or just make the whole Hadoop distribution available to Flink by setting the <code>HADOOP_CLASSPATH</code> as detailed in <a href="https://decodable.co/blog/catalogs-in-flink-sql-hands-on">my earlier blog post</a>  and covered in the <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/connectors/table/hive/overview/#dependencies">documentation too</a> .</p>
+</li>
+<li>
+<p><a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/connectors/table/overview/">Connectors</a> , which might include those within the Flink project such as <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/connectors/table/kafka/">for Apache Kafka</a> —but also those outside of it (and what you might perhaps think of as format rather than connector) such as <a href="https://iceberg.apache.org/docs/latest/flink/">Apache Iceberg</a> .</p>
+</li>
+<li>
+<p><a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/connectors/table/formats/overview/">Formats</a> , such as Parquet</p>
+</li>
+<li>
+<p><a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/deployment/filesystems/overview/">Filesystems</a> , such as S3</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The easy-but-dangerous route is Google.
+It might shortcut you to the right JAR, but it might also send you off down a rathole of irrelevant links and outdated solutions.
+Beware finding a solution that looks like a hammer for your nail of a problem if you’ve actually got a screw!</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_jar_naming">JAR Naming&nbsp;<a class="headline-hash" href="#_jar_naming">🔗</a> </h3>
+<div class="paragraph">
+<p>Pay very close attention to names and versions of your JAR files.
+It might look like a bunch of word-and-number salad, but herein can lie the root cause of many a problem.</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>Make sure that you line up the package name with what you actually need.
+For example:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>flink-parquet</code> is different from <code>flink-sql-parquet</code>, since the latter includes all its dependencies whilst the former doesn’t. This is  <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/dev/configuration/connector/#available-artifacts">a standard used in the naming of Flink JARs</a> : if it’s a <code>flink-sql</code> prefix then it includes the dependencies, whilst <code>flink</code>- on its own means that it doesn’t..  That’s what the <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/dev/configuration/connector/#available-artifacts">flink- vs flink-sql prefix</a>  indicates.</p>
+</li>
+<li>
+<p><code>1.14.6</code> is a pretty old version of Flink if you’re using <code>1.18.1</code> and so a JAR intended for it is likely not to work. In fact, it’s generally a bad idea to mix versions, even if it appears to work.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>When you start integrating with other systems you’ll also see their versions come into play, like this:<br/></p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_finding_jars">Finding JARs&nbsp;<a class="headline-hash" href="#_finding_jars">🔗</a> </h3>
+<div class="paragraph">
+<p><a href="https://maven.org/">Maven Central Repository</a>  is where you’ll find most of the JARs you need.
+It’s used widely in the Java (and adjacent communities) for publishing and retrieving open-source libraries.
+As such, you might find that if you’re coming to it as someone just looking to get Flink SQL to work you might find it a bit confusing (I did) and navigating it takes a little bit of practice.</p>
+</div>
+<div class="paragraph">
+<p>Let’s say we want the necessary JAR to be able to use Parquet with the Flink SQL client.
+With the ever-so useful hindsight, we’d know that we go to the Flink docs, find the <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/connectors/table/formats/parquet/">Parquet format page</a>  and click on &#34;Download&#34; under SQL Client.</p>
+</div>
+<div class="paragraph">
+<p>(If you do this you’ll notice that <a href="https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-parquet/1.18.1/flink-sql-parquet-1.18.1.jar">the JAR linked to</a>  is indeed on Maven Central)</p>
+</div>
+<div class="paragraph">
+<p>Now, that presumes that we knew that we’d find information about Parquet under &#34;Connectors&#34; (<em>…okay?</em>), and then Table API Connectors (<em>…riight?</em>), and then Formats (yep that one makes sense).
+If we didn’t, we’d do what anyone does - Google it.
+And then Google tells you that you need a flink-sql-parquet JAR, and off you go.
+<a href="https://central.sonatype.com/search?q=flink-sql-parquet">Searching for this on Maven Central</a>  gives us this:</p>
+</div>
+<div class="paragraph">
+<p>The first thing to check is the <code>Latest version</code> and <code>Published</code>.
+You want to get your JARs lined up with your Flink distribution, and since I’m using <code>1.18.1</code> I can discount the second two results which show their latest version as <code>1.14.6</code> (with the <code>_2.12</code> and <code>_2.11</code> suffixes).</p>
+</div>
+<div class="paragraph">
+<p>Clicking on  <a href="https://central.sonatype.com/artifact/org.apache.flink/flink-sql-parquet">flink-sql-parquet</a>  takes us to the overview page, with no download link:</p>
+</div>
+<div class="paragraph">
+<p><em>If you’re anything like me in your web browsing, stop randomly clicking stuff, and just cool your boots at this point and be patient.</em>
+_Don’t click away, because we’re_nearly there.</p>
+</div>
+<div class="paragraph">
+<p>Click on <strong>Versions</strong> and then <strong>Browse</strong> for the 1.18.1 version</p>
+</div>
+<div class="paragraph">
+<p>The last page is a blast from the past—and if we’re going to be nostalgic, a refreshing break from the jarring visual junk yards that are web pages today 😉—with just a directory listing.</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>Look <em>very</em> carefully, and you want the .jar file (but not the -sources one)</p>
+</div>
+<div class="paragraph">
+<p>Last tip on this: if you have a Maven URL for a JAR and want a different version (or different package), you can just strip back the URL to the parent folders to up the hierarchy and then back down again.
+For example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">https://repo1.maven.org/maven2/org/apache/flink/flink-sql-parquet/1.18.1
+👇
+https://repo1.maven.org/maven2/org/apache/flink/flink-sql-parquet/
+👇
+https://repo1.maven.org/maven2/org/apache/flink/
+👇
+https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/
+👇
+https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.0.2-1.18/</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_putting_the_jar_in_the_right_place">Putting the JAR in the right place&nbsp;<a class="headline-hash" href="#_putting_the_jar_in_the_right_place">🔗</a> </h3>
+<div class="paragraph">
+<p>JARs should go under the <code>./lib</code> folder of your Flink installation (or installation*s*) if you’re running it as a distributed cluster.</p>
+</div>
+<div class="paragraph">
+<p>You can create subfolders under <code>./lib</code> if you like to keep things tidy:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">lib
+├── aws
+|   ├── aws-java-sdk-bundle-1.12.648.jar
+|   └── hadoop-aws-3.3.4.jar
+[…]
+├── flink-table-runtime-1.18.1.jar
+├── formats
+|   └── flink-sql-parquet-1.18.1.jar
+├── hadoop
+|   ├── commons-configuration2-2.1.1.jar
+|   ├── commons-logging-1.1.3.jar
+|   ├── hadoop-auth-3.3.4.jar
+[…]
+|   ├── stax2-api-4.2.1.jar
+|   └── woodstox-core-5.3.0.jar
+├── hive
+|   └── flink-sql-connector-hive-3.1.3_2.12-1.18.1.jar
+[…]
+└── log4j-slf4j-impl-2.17.1.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You’ll notice that I’ve got a <code>hadoop</code> folder with just a small number of JARs in.
+These are just the bare essentials that I found Flink needed.
+However, the proper (and more reliable) way that’s documented is to set the <code>HADOOP_CLASSPATH</code> pointing to your <a href="https://hadoop.apache.org/releases.html">Hadoop download</a> :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">export HADOOP_CLASSPATH=$(/hadoop-3.3.4/bin/hadoop classpath)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>HADOOP_CLASSPATH</code> gets  <a href="https://github.com/apache/flink/tree/release-1.18/flink-table/flink-sql-client/bin/sql-client.sh#L84">added to the classpath</a>  (via the  <a href="https://github.com/apache/flink/tree/release-1.18/flink-dist/src/main/flink-bin/bin/config.sh#L402">INTERNAL_HADOOP_CLASSPATH</a>  variable) with which Flink is launched.</p>
+</div>
+<div class="paragraph">
+<p>A final note on <code>HADOOP_CLASSPATH</code> is that it’s an environment variable local to the session in which you set it.
+So if you do this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell"># terminal session 1
+./bin/start-cluster.sh</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell"># terminal session 2
+export HADOOP_CLASSPATH=$(/hadoop-3.3.4/bin/hadoop classpath)
+./bin/sql-client</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You’ll find that the SQL Client seems to work just fine (at least, doesn’t throw an error):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; INSERT INTO `c_hive`.`db_rmoff`.t_foo VALUES (&#39;a&#39;, 42);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But querying doesn’t work:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; select * from `c_hive`.`db_rmoff`.t_foo;
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: org.apache.hadoop.conf.Configuration</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is because the Flink taskmanager, started as part of <code>./bin/start-cluster.sh</code> as shown above, didn’t have <code>HADOOP_CLASSPATH</code> set when it was launched.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_checking_where_flink_is_looking_for_jars">Checking where Flink is looking for JARs&nbsp;<a class="headline-hash" href="#_checking_where_flink_is_looking_for_jars">🔗</a> </h3>
+<div class="paragraph">
+<p>You can inspect the classpath that each Flink process is running with through the <code>jinfo</code> command:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ jinfo $(pgrep -f org.apache.flink.table.client.SqlClient) | grep java_class_path
+java_class_path (initial): /Users/rmoff/flink/flink-1.18.1/lib/aws/aws-java-sdk-bundle-1.12.648.jar:/Users/rmoff/flink/flink-1.18.1/lib/aws/hadoop-aws-3.3.4.jar:/Users/rmoff/flink/flink-1.18.1/lib/flink-cep-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/flink-connector-files-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/flink-csv-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/flink-json-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/flink-scala_2.12-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/flink-table-api-java-uber-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/flink-table-planner-loader-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/flink-table-runtime-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/hadoop/commons-configuration2-2.1.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/hadoop/commons-logging-1.1.3.jar:/Users/rmoff/flink/flink-1.18.1/lib/hadoop/hadoop-auth-3.3.4.jar:/Users/rmoff/flink/flink-1.18.1/lib/hadoop/hadoop-common-3.3.4.jar:/Users/rmoff/flink/flink-1.18.1/lib/hadoop/hadoop-hdfs-client-3.3.4.jar:/Users/rmoff/flink/flink-1.18.1/lib/hadoop/hadoop-mapreduce-client-core-3.3.4.jar:/Users/rmoff/flink/flink-1.18.1/lib/hadoop/hadoop-shaded-guava-1.1.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/hadoop/stax2-api-4.2.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/hadoop/woodstox-core-5.3.0.jar:/Users/rmoff/flink/flink-1.18.1/lib/hive/flink-sql-connector-hive-3.1.3_2.12-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/iceberg/iceberg-aws-bundle-1.4.3.jar:/Users/rmoff/flink/flink-1.18.1/lib/iceberg/iceberg-flink-runtime-1.17-1.4.3.jar:/Users/rmoff/flink/flink-1.18.1/lib/log4j-1.2-api-2.17.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/log4j-api-2.17.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/log4j-core-2.17.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/log4j-slf4j-impl-2.17.1.jar:/Users/rmoff/flink/flink-1.18.1/lib/flink-dist-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/opt/flink-python-1.18.1.jar:/Users/rmoff/flink/flink-1.18.1/opt/flink-sql-gateway-1.18.1.jar::::/Users/rmoff/fli</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With a bit more bash we can display it in a way that’s much easier to read, splitting out just the classpath and putting each entry on a new line:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ jinfo $(pgrep -f org.apache.flink.table.client.SqlClient) | grep java_class_path | tr &#39;:&#39; &#39;\n&#39;
+
+/Users/rmoff/flink/flink-1.18.1/lib/aws/aws-java-sdk-bundle-1.12.648.jar
+/Users/rmoff/flink/flink-1.18.1/lib/aws/hadoop-aws-3.3.4.jar
+/Users/rmoff/flink/flink-1.18.1/lib/flink-cep-1.18.1.jar
+/Users/rmoff/flink/flink-1.18.1/lib/flink-connector-files-1.18.1.jar
+[…]</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_dont_forget_to_restart_all_the_flink_processes">Don’t Forget to Restart All the Flink processes&nbsp;<a class="headline-hash" href="#_dont_forget_to_restart_all_the_flink_processes">🔗</a> </h3>
+<div class="paragraph">
+<p>When you add or remove a JAR you need to make sure to restart <em>all</em> the Flink components so that they pick it up.
+Some interactions the SQL Client does directly, others get submitted to the job manager and you’ll only hit an error then.</p>
+</div>
+<div class="paragraph">
+<p>Particularly if you’re frantically dropping JARs in and out to try and fix a dependency issue, make a point of deliberately restarting all the processes each time.
+Otherwise you find that something &#39;suddenly&#39; stops working because it’s only after numerous changes that you restarted it and now you can’t remember what permutation things were in when it did work.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_have_you_got_the_right_jar_looking_inside_a_jar">Have you got the right JAR? Looking Inside a JAR 🔎&nbsp;<a class="headline-hash" href="#_have_you_got_the_right_jar_looking_inside_a_jar">🔗</a> </h3>
+<div class="paragraph">
+<p>So you’ve hit the dreaded <code>ClassNotFoundException</code> error.
+You know that it’s usually down to not having the right JAR loaded by Flink SQL.
+But what if you <em>think</em> you’ve got the right JAR and want to confirm it?</p>
+</div>
+<div class="paragraph">
+<p>Let’s take this example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE CATALOG c_hive WITH (
+&gt;        &#39;type&#39; = &#39;hive&#39;,
+&gt;        &#39;hive-conf-dir&#39; = &#39;./conf/&#39;
+&gt;    );
+[ERROR] Could not execute SQL statement. Reason:
+java.lang.ClassNotFoundException: org.apache.hadoop.fs.FSDataInputStream</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A JAR file is just an archive of code, and using the <code>-t</code> attribute of the <code>jar</code> command we can list its contents.
+Let’s verify if the JAR we <em>think</em> provides this class does indeed do so:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">$ jar -tf hadoop-common-3.3.2.jar | grep org.apache.hadoop.fs.FSDataInputStream
+org/apache/hadoop/fs/FSDataInputStream.class</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Yes it does!
+We can also search a folder for a given class, with this little bit of Bash:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">find ~/hadoop-3.3.4 -name &#39;*.jar&#39; | while read jar; do
+    if jar -tf &#34;$jar&#34; | grep -q &#39;org.apache.hadoop.fs.FSDataInputStream&#39;; then
+        echo &#34;Found in: $jar&#34;
+    fi
+done</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So we’ve checked one possible issue off our list, and can move onto the point below: is the JAR even getting picked up by Flink?</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_did_the_jar_even_get_loaded">Did the JAR even get loaded?&nbsp;<a class="headline-hash" href="#_did_the_jar_even_get_loaded">🔗</a> </h3>
+<div class="paragraph">
+<p>There’s something in Java called classloading, and you can read about how Flink does it <a href="https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/ops/debugging/debugging_classloading/">here</a> ._
+_From an end-user point of view if you’re trying to understand what’s going on with a JAR file one useful trick is to see if it’s even being loaded, or perhaps if it is by what.</p>
+</div>
+<div class="paragraph">
+<p>If you set <code>JVM_ARGS</code> to <code>-verbose:class</code> when you run the SQL Client you can see what’s going on.
+Couple it with putting your SQL statements in a file that you pass with -f and you can dump and end-to-end process out to a log file to then poke through at your leisure:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">JVM_ARGS=-verbose:class ./bin/sql-client.sh -f ../my_sql_statements.sql \
+  &gt; jvm_debug_stuff.log</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><a href="https://gist.github.com/rmoff/41a9324f5aa0854946de18b264540b75#file-iceberg-log-L3329">Here</a>  is an example of the kind of thing you might see, showing where a particular catalog is being loaded from:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">[0.768s][info][class,load] org.apache.iceberg.flink.FlinkCatalog source:
+file:/Users/rmoff/flink/flink-1.18.1/lib/iceberg-flink-runtime-1.17-1.4.3.jar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In this example we can see that in our 1.18 installation of Flink the <code>FlinkCatalog</code> is being loaded from a JAR intended for use with 1.17—which as we discussed above, is often going to lead to problem since versions should be kept in alignment.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_does_it_really_need_to_be_this_complicated">Does it really need to be this complicated?&nbsp;<a class="headline-hash" href="#_does_it_really_need_to_be_this_complicated">🔗</a> </h3>
+<div class="paragraph">
+<p>No, not if you use Decodable’s fully managed platform.
+🙂 We have Flink SQL and do all of the jarring-JAR fiddling for you.
+<a href="https://app.decodable.co/-/accounts/create">Give it a whirl today</a> .</p>
+</div>
+<div class="paragraph">
+<p>[1] I didn’t play the lottery in 2023 😉</p>
+</div>
+</div>
+	<hr>
+	<div style="background-color: rgba(204, 234, 255, 0.25); margin-bottom:50px;margin-top:50px;padding: 20px; border-width: 2px; border-style: solid; border-color: darkorange;">
+	
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+		
+	</div>
+		
+				<div class="hide-print sans-serif f6 f5-l mt5 ph3 pb6 center nested-copy-line-height lh-copy nested-links mw-100 measure-wide">
+		<div class="about-the-author">
+		
+			
+			
+				
+					<hr>
+<p><img src="/images/2018/05/ksldn18-01.jpg" alt="Robin Moffatt"></p>
+<p><a href="https://bsky.app/profile/rmoff.net"><b class="fa-brands fa-bluesky"></b></a>  <em>Robin Moffatt works on the DevRel team at Confluent. He likes writing about himself in the third person, eating good breakfasts, and drinking good beer.</em></p>
+
+				
+			
+		
+		</div>
+		
+	</div>
+
+		
+
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">Contents</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_identifying_the_correct_jar">Identifying the correct JAR</a></li>
+    <li><a href="#_jar_naming">JAR Naming</a></li>
+    <li><a href="#_finding_jars">Finding JARs</a></li>
+    <li><a href="#_putting_the_jar_in_the_right_place">Putting the JAR in the right place</a></li>
+    <li><a href="#_checking_where_flink_is_looking_for_jars">Checking where Flink is looking for JARs</a></li>
+    <li><a href="#_dont_forget_to_restart_all_the_flink_processes">Don’t Forget to Restart All the Flink processes</a></li>
+    <li><a href="#_have_you_got_the_right_jar_looking_inside_a_jar">Have you got the right JAR? Looking Inside a JAR 🔎</a></li>
+    <li><a href="#_did_the_jar_even_get_loaded">Did the JAR even get loaded?</a></li>
+    <li><a href="#_does_it_really_need_to_be_this_complicated">Does it really need to be this complicated?</a></li>
+  </ul>
+</nav>
+      </div>
+      
+      <div class="toc-mobile-label">TABLE OF CONTENTS</div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+		</main>
+		
+		
+		<footer class="hide-print sans-serif f6 fw1 bg-black near-white bottom-0 w-100 pa3" role="contentinfo">
+			<p class="w-50 fr tr">
+			<a class="no-underline near-white" href="https://github.com/xaprb/story"><img class="dib" title="Made with Hugo and Story" alt="Story logo" src="https://rmoff.net/img/story-logo-white.svg" style="width: 1.5rem; height: 1.5rem" /></a>
+			</p>
+			<p class="w-50 near-white">
+				&copy; 2025 
+			</p>
+		</footer>
+		
+	</body>
+</html>
