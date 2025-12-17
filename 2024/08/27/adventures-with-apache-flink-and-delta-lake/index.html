@@ -129,7 +129,7 @@ This post originally appeared on the <a href="https://www.decodable.co/blog/adve
 <div class="paragraph">
 <p><a href="https://delta.io/">Delta Lake</a>  (or Delta, as it’s often shortened to) is an open-source project from the Linux Foundation that’s primarily backed by Databricks.
 It’s an open table format (OTF) similar in concept to Apache Iceberg and Apache Hudi.
-Having  <a href="https://www.decodable.co/blog-author/robin-moffatt">previously</a>  dug into using Iceberg with both  <a href="https://www.decodable.co/blog/kafka-to-iceberg-with-flink">Apache Flink</a>  and  <a href="https://www.decodable.co/blog/kafka-to-iceberg-with-decodable">Decodable</a> , I wanted to see what it was like to use Delta with Flink—and specifically, Flink SQL.</p>
+Having  <a href="https://www.decodable.co/blog-author/robin-moffatt">previously</a>  dug into using Iceberg with both  <a href="/2024/07/18/sending-data-to-apache-iceberg-from-apache-kafka-with-apache-flink/">Apache Flink</a>  and  <a href="/2024/06/18/how-to-get-data-from-apache-kafka-to-apache-iceberg-on-s3-with-decodable/">Decodable</a> , I wanted to see what it was like to use Delta with Flink—and specifically, Flink SQL.</p>
 </div>
 <div class="paragraph">
 <p>The Delta Lake project provides  <a href="https://github.com/delta-io/delta/tree/master/connectors/flink">a connector for Flink</a> .
@@ -140,15 +140,16 @@ Which given that Delta is backed by Databricks (whose whole platform stems from 
 </div>
 <div class="paragraph">
 <p>Just a tip before we begin: regardless of table format, if you’re using Flink you need to understand catalogs and catalog metastores before going any further.
-The good news for you is that I’ve written both a  <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-a-primer">primer</a>  and detailed  <a href="https://www.decodable.co/blog/catalogs-in-flink-sql-hands-on">hands-on guide</a> .
-Once you’ve understood catalogs, you’ll also want to have an appreciation of  <a href="https://www.decodable.co/blog/flink-sql-and-the-joy-of-jars">JAR management in Flink</a> .</p>
+The good news for you is that I’ve written both a  <a href="/2024/02/16/catalogs-in-flink-sqla-primer/">primer</a>  and detailed  <a href="/2024/02/19/catalogs-in-flink-sqlhands-on/">hands-on guide</a> .
+Once you’ve understood catalogs, you’ll also want to have an appreciation of  <a href="/2024/02/27/flink-sql-and-the-joy-of-jars/">JAR management in Flink</a> .</p>
 </div>
 <div class="paragraph">
-<p>This blog post follows on from the one that prompted it,  <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">Understanding Flink and S3 configuration</a> , since as you’ll see later this is the very nub of the challenge that I had getting Delta to work with Flink SQL.
+<p>This blog post follows on from the one that prompted it,  <a href="/2024/08/06/troubleshooting-flink-sql-s3-problems/">Understanding Flink and S3 configuration</a> , since as you’ll see later this is the very nub of the challenge that I had getting Delta to work with Flink SQL.
 To begin with, I’ll give you the conclusion, and then work backwards from there.</p>
 </div>
-<div class="sect2">
-<h3 id="_tldr_getting_flink_to_write_to_delta_lake_on_s3">tl;dr: Getting Flink to write to Delta Lake on S3&nbsp;<a class="headline-hash" href="#_tldr_getting_flink_to_write_to_delta_lake_on_s3">🔗</a> </h3>
+<div class="sect1">
+<h2 id="_tldr_getting_flink_to_write_to_delta_lake_on_s3">tl;dr: Getting Flink to write to Delta Lake on S3&nbsp;<a class="headline-hash" href="#_tldr_getting_flink_to_write_to_delta_lake_on_s3">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>1.
 In <code>conf/flink-conf.yaml</code> configure your S3 authentication with <strong>both</strong> sets of prefixes:</p>
@@ -264,8 +265,10 @@ Delta on Flink SQL.
 Read on below to find out the gorey details of how I got here, and how you can troubleshoot errors that you might encounter on the way.</p>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_running_it_with_docker_compose">Running it with Docker Compose&nbsp;<a class="headline-hash" href="#_running_it_with_docker_compose">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_running_it_with_docker_compose">Running it with Docker Compose&nbsp;<a class="headline-hash" href="#_running_it_with_docker_compose">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>I’ve built out a self-contained stack so that you can experiment with running Flink SQL and Delta Lake together.
 It’s on the  <a href="https://github.com/decodableco/examples/">Decodable examples repository</a> .</p>
@@ -297,8 +300,11 @@ docker compose exec -it jobmanager bash -c &#34;./bin/sql-client.sh -f /data/del
 [2024-07-10 19:11:39 UTC]   428B STANDARD warehouse/t_foo/part-9ac74dad-4111-42d5-a287-915f1a0d3dc8-0.snappy.parquet</code></pre>
 </div>
 </div>
-<div class="sect3">
-<h4 id="_reading_the_delta_lake_table_with_duckdb">Reading the Delta Lake table with DuckDB&nbsp;<a class="headline-hash" href="#_reading_the_delta_lake_table_with_duckdb">🔗</a> </h4>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_reading_the_delta_lake_table_with_duckdb">Reading the Delta Lake table with DuckDB&nbsp;<a class="headline-hash" href="#_reading_the_delta_lake_table_with_duckdb">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p><em>Unfortunately DuckDB Delta</em> <a href="https://github.com/duckdb/duckdb_delta/issues/14">doesn’t seem to yet support MinIO</a> <em>, but if I re-run the test against a real S3 bucket we can query the Delta Lake data successfully</em>:</p>
 </div>
@@ -328,8 +334,9 @@ Run Time (s): real 7.059 user 0.354942 sys 1.599596</code></pre>
 </div>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_getting_from_hereto_there_a_flinkdelta_lake_troubleshooting_detective_story">Getting from here…to there: a Flink/Delta Lake troubleshooting detective story 🔍&nbsp;<a class="headline-hash" href="#_getting_from_hereto_there_a_flinkdelta_lake_troubleshooting_detective_story">🔗</a> </h3>
+<div class="sect1">
+<h2 id="_getting_from_hereto_there_a_flinkdelta_lake_troubleshooting_detective_story">Getting from here…to there: a Flink/Delta Lake troubleshooting detective story 🔍&nbsp;<a class="headline-hash" href="#_getting_from_hereto_there_a_flinkdelta_lake_troubleshooting_detective_story">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>Above is what works, since that’s usually what people find most useful.
 But what can also be useful is understanding how I got there, since it can throw up some useful pointers for others experiencing the same problems, as well as a general lesson in methodical troubleshooting.</p>
@@ -414,8 +421,10 @@ INSERT INTO c_delta.db_new.t_foo
 </div>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_step_1_add_delta_jars">Step 1: Add Delta JARs&nbsp;<a class="headline-hash" href="#_step_1_add_delta_jars">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_step_1_add_delta_jars">Step 1: Add Delta JARs&nbsp;<a class="headline-hash" href="#_step_1_add_delta_jars">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>Based loosely on the  <a href="https://github.com/delta-io/delta/tree/master/connectors/flink#sql-support">Delta Lake connector doc</a>  I started by adding Delta JARs to my Flink <code>./lib</code> folder:</p>
 </div>
@@ -441,8 +450,10 @@ logger.delta.level = TRACE</code></pre>
 </div>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_trying_it_out_for_the_first_time">Trying it out for the first time…🤞&nbsp;<a class="headline-hash" href="#_trying_it_out_for_the_first_time">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_trying_it_out_for_the_first_time">Trying it out for the first time…🤞&nbsp;<a class="headline-hash" href="#_trying_it_out_for_the_first_time">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>The very first statement failed:</p>
 </div>
@@ -488,8 +499,10 @@ java.lang.ClassNotFoundException: io.delta.storage.LogStore</code></pre>
 <p>(At this point I’m not going to repeat &#39;<em>and then I bounced the stack</em>&#39;; take it as a given that after each thing I changed, I bounced the stack and reran the test, using the bash code I showed above.)</p>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_when_is_s3afilesystem_not_s3afilesystem">When is S3AFileSystem not S3AFileSystem?&nbsp;<a class="headline-hash" href="#_when_is_s3afilesystem_not_s3afilesystem">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_when_is_s3afilesystem_not_s3afilesystem">When is S3AFileSystem not S3AFileSystem?&nbsp;<a class="headline-hash" href="#_when_is_s3afilesystem_not_s3afilesystem">🔗</a> </h2>
+<div class="sectionbody">
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE TABLE c_delta.db_new.t_foo (c1 varchar, c2 int)
@@ -560,7 +573,7 @@ Caused by: java.lang.RuntimeException: java.lang.ClassNotFoundException: Class o
 </div>
 </div>
 <div class="paragraph">
-<p>What’s really puzzling me here is that <code>S3AFileSystem</code> was found just fine on exactly the same deployment when I used it to write my  <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">previous article</a>  about S3 troubleshooting.
+<p>What’s really puzzling me here is that <code>S3AFileSystem</code> was found just fine on exactly the same deployment when I used it to write my  <a href="/2024/08/06/troubleshooting-flink-sql-s3-problems/">previous article</a>  about S3 troubleshooting.
 All that’s changed is setting the Hadoop classpath, and adding the Delta JARs:</p>
 </div>
 <div class="listingblock">
@@ -646,8 +659,10 @@ java.lang.ClassNotFoundException: com.amazonaws.AmazonClientException</code></pr
 <p>From past, bitter, experience I know that I need <code>aws-java-sdk-bundle</code> JAR here, so add <code>aws-java-sdk-bundle-1.12.648.jar</code> to the <code>./lib</code> folder too.</p>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_s3_authentication_from_flink_with_delta_lake">S3 Authentication from Flink with Delta Lake&nbsp;<a class="headline-hash" href="#_s3_authentication_from_flink_with_delta_lake">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_s3_authentication_from_flink_with_delta_lake">S3 Authentication from Flink with Delta Lake&nbsp;<a class="headline-hash" href="#_s3_authentication_from_flink_with_delta_lake">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>Things now move on past JAR files and onto other problems:</p>
 </div>
@@ -668,7 +683,7 @@ Credentials, end points, it’s all good.
 But switch to writing to S3 via the Delta connector and everything goes screwy.</p>
 </div>
 <div class="paragraph">
-<p>Heading to the <code>sql-client</code> log file we can see that our existing <code>flink-conf.yaml</code> configuration for S3 just isn’t being used, as evidenced by the lack of a custom S3 endpoint being recognised (see my  <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">previous post</a>  for more detail):</p>
+<p>Heading to the <code>sql-client</code> log file we can see that our existing <code>flink-conf.yaml</code> configuration for S3 just isn’t being used, as evidenced by the lack of a custom S3 endpoint being recognised (see my  <a href="/2024/08/06/troubleshooting-flink-sql-s3-problems/">previous post</a>  for more detail):</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -732,7 +747,7 @@ What’s more, it includes this:</p>
 </div>
 </div>
 <div class="paragraph">
-<p>I talked about <code>FLINK_CONFIG_PREFIXES</code> in my previous  <a href="https://www.decodable.co/blog/troubleshooting-flink-sql-s3-problems">Flink S3 troubleshooting post</a> .
+<p>I talked about <code>FLINK_CONFIG_PREFIXES</code> in my previous  <a href="/2024/08/06/troubleshooting-flink-sql-s3-problems/">Flink S3 troubleshooting post</a> .
 Taking a bit of a punt, let’s change our <code>flink-conf.yaml</code> and add this <code>flink.hadoop.</code> prefix:</p>
 </div>
 <div class="listingblock">
@@ -768,8 +783,10 @@ DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] - Using cr
 <p>So similar to the previous (but different 😡) S3 configuration handling, what’s needed in the Flink configuration file isn’t what the <code>S3AFileSystem</code> module is using (or logging), which is all <code>fs.s3a.</code> prefixed.</p>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_more_jars_please">More JARs Please&nbsp;<a class="headline-hash" href="#_more_jars_please">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_more_jars_please">More JARs Please&nbsp;<a class="headline-hash" href="#_more_jars_please">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>Anyway, back to our next error:</p>
 </div>
@@ -786,8 +803,10 @@ java.lang.ClassNotFoundException: shapeless.Generic</code></pre>
 _Adding this to <code>./lib</code> did the trick!</p>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_success_almost">Success! (almost)&nbsp;<a class="headline-hash" href="#_success_almost">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_success_almost">Success! (almost)&nbsp;<a class="headline-hash" href="#_success_almost">🔗</a> </h2>
+<div class="sectionbody">
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-shell" data-lang="shell">Flink SQL&gt; CREATE TABLE c_delta.db_new.t_foo (c1 varchar, c2 int)
@@ -851,8 +870,10 @@ $ mc cat minio/warehouse/_delta_log/00000000000000000000.json</code></pre>
 </div>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_even_more_jars_please">Even More JARs Please&nbsp;<a class="headline-hash" href="#_even_more_jars_please">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_even_more_jars_please">Even More JARs Please&nbsp;<a class="headline-hash" href="#_even_more_jars_please">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>Now can we write data to our new Delta Lake table?</p>
 </div>
@@ -895,8 +916,10 @@ Job ID: 1dbe63859fa78caf50bc93ed75861907</code></pre>
 </div>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_s3_authentication_again">S3 Authentication (again!)&nbsp;<a class="headline-hash" href="#_s3_authentication_again">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_s3_authentication_again">S3 Authentication (again!)&nbsp;<a class="headline-hash" href="#_s3_authentication_again">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>Looking at the <code>taskexecutor</code> log file from the Flink job manager we can see a very familiar error:</p>
 </div>
@@ -1072,8 +1095,10 @@ Received a total of 1 rows</code></pre>
 </div>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_troubleshooting_will_the_real_s3afilesystem_please_stand_up">Troubleshooting: Will the real S3AFileSystem please stand up?&nbsp;<a class="headline-hash" href="#_troubleshooting_will_the_real_s3afilesystem_please_stand_up">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_troubleshooting_will_the_real_s3afilesystem_please_stand_up">Troubleshooting: Will the real S3AFileSystem please stand up?&nbsp;<a class="headline-hash" href="#_troubleshooting_will_the_real_s3afilesystem_please_stand_up">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>Since we’re into the realms of trying random shit, let’s think about the <code>S3AFileSystem</code> dependency.
 If we’re just writing vanilla JSON (for example) from Flink, we add the <code>flink-s3-fs-hadoop</code> JAR.
@@ -1116,8 +1141,10 @@ org.apache.flink.core.fs.UnsupportedFileSystemSchemeException: Could not find a 
 </div>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_finding_the_smoking_gun">Finding the smoking gun&nbsp;<a class="headline-hash" href="#_finding_the_smoking_gun">🔗</a> </h3>
+</div>
+<div class="sect1">
+<h2 id="_finding_the_smoking_gun">Finding the smoking gun&nbsp;<a class="headline-hash" href="#_finding_the_smoking_gun">🔗</a> </h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>Having a bit of an itch to scratch here I wanted to find out more about the conflicting log messages.
 After a perusal of the  <a href="https://logging.apache.org/log4j/2.x/manual/layouts.html#PatternLayout">log4j PatternLayout codes</a>  I amended the log4j.properties to use:</p>
@@ -1150,6 +1177,7 @@ DEBUG org.apache.hadoop.fs.s3a.AWSCredentialProviderList           [] tid:80 [t_
 <div class="paragraph">
 <p>So there are two threads: a <code>Global Committer</code> and a <code>Writer</code> (for table <code>t_foo</code>).
 As we saw above, writes to the table (<code>Writer</code> thread) seem to be done using <code>S3AFileSystem</code> from <code>flink-s3-fs-hadoop</code>, whilst those for the metadata (<code>Global Committer</code>) using <code>S3AFileSystem</code> from <code>hadoop-aws</code>.</p>
+</div>
 </div>
 </div>
 	<hr>
@@ -1204,6 +1232,7 @@ As we saw above, writes to the table (<code>Writer</code> thread) seem to be don
   <ul>
     <li><a href="#_tldr_getting_flink_to_write_to_delta_lake_on_s3">tl;dr: Getting Flink to write to Delta Lake on S3</a></li>
     <li><a href="#_running_it_with_docker_compose">Running it with Docker Compose</a></li>
+    <li><a href="#_reading_the_delta_lake_table_with_duckdb">Reading the Delta Lake table with DuckDB</a></li>
     <li><a href="#_getting_from_hereto_there_a_flinkdelta_lake_troubleshooting_detective_story">Getting from here…to there: a Flink/Delta Lake troubleshooting detective story 🔍</a></li>
     <li><a href="#_step_1_add_delta_jars">Step 1: Add Delta JARs</a></li>
     <li><a href="#_trying_it_out_for_the_first_time">Trying it out for the first time…🤞</a></li>
