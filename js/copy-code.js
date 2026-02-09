@@ -1,60 +1,38 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const codeBlocks = document.querySelectorAll('.rouge.highlight');
+document.addEventListener('DOMContentLoaded', function() {
+  var copySVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="0" ry="0"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  var checkSVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
-    codeBlocks.forEach((block) => {
-      // Create copy button
-      const copyButton = document.createElement('button');
-      copyButton.className = 'copy-button';
-      copyButton.innerHTML = '<i class="fas fa-copy"></i>';
-      copyButton.style.display = 'none';
+  document.querySelectorAll('.rouge.highlight').forEach(function(block) {
+    var copyButton = document.createElement('button');
+    copyButton.className = 'copy-button';
+    copyButton.innerHTML = copySVG;
+    copyButton.style.display = 'none';
 
-      // Position the button
-      block.style.position = 'relative';
-      block.appendChild(copyButton);
+    block.style.position = 'relative';
+    block.appendChild(copyButton);
 
-      // Show button on hover
-      block.addEventListener('mouseenter', () => {
-        copyButton.style.display = 'block';
+    block.addEventListener('mouseenter', function() { copyButton.style.display = 'block'; });
+    block.addEventListener('mouseleave', function() { copyButton.style.display = 'none'; });
+
+    copyButton.addEventListener('click', function() {
+      var codeElement = block.querySelector('code');
+      var temp = document.createElement('div');
+      temp.innerHTML = codeElement.innerHTML;
+      temp.querySelectorAll('span').forEach(function(span) {
+        span.outerHTML = span.textContent;
       });
+      navigator.clipboard.writeText(temp.textContent);
 
-      block.addEventListener('mouseleave', () => {
-        copyButton.style.display = 'none';
-      });
+      var originalHTML = copyButton.innerHTML;
+      copyButton.innerHTML = checkSVG;
+      copyButton.style.backgroundColor = '#1A6B5C';
+      copyButton.style.color = 'white';
 
-      // Copy functionality
-      copyButton.addEventListener('click', () => {
-        const codeElement = block.querySelector('code');
-
-        // Get the raw text content by creating a temporary element
-        const temp = document.createElement('div');
-        temp.innerHTML = codeElement.innerHTML;
-
-        // Replace all spans with their text content
-        const spans = temp.querySelectorAll('span');
-        spans.forEach(span => {
-          span.outerHTML = span.textContent;
-        });
-
-        // Get the cleaned text
-        const rawCode = temp.textContent;
-
-        // Copy to clipboard
-        navigator.clipboard.writeText(rawCode);
-
-        // Visual feedback
-        const originalBackground = copyButton.style.backgroundColor;
-        const originalColor = copyButton.style.color;
-        const originalHTML = copyButton.innerHTML;
-
-        copyButton.innerHTML = '<i class="fas fa-check"></i>';
-        copyButton.style.backgroundColor = 'green';
-        copyButton.style.color = 'white';
-
-        setTimeout(() => {
-          copyButton.innerHTML = originalHTML;
-          copyButton.style.backgroundColor = originalBackground;
-          copyButton.style.color = originalColor;
-        }, 2000);
-      });
+      setTimeout(function() {
+        copyButton.innerHTML = originalHTML;
+        copyButton.style.backgroundColor = '';
+        copyButton.style.color = '';
+      }, 2000);
     });
   });
+});
