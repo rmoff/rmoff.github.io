@@ -142,48 +142,194 @@
 	<h2 id="introduction">Introduction&nbsp;<a class="headline-hash" href="#introduction">🔗</a> </h2>
 <p>This is the second part of three detailed articles making up a mini-series about <a href="/2010/12/06/obiee-monitoring/">OBIEE monitoring</a>. It demonstrates how to capture OBIEE performance information, and optionally graph it out and serve it through an auto-updating webpage.</p>
 <p>This article takes data that <a href="/2010/12/06/collecting-obiee-systems-management-data-with-jmx/">part one</a> showed you how to collect into a tab-separated file that looks something like this:</p>
-<p>[sourcecode] 2010-11-29-14:48:18 1 0 11 0 3 2 1 676 340 0 53 1 0 41 0 3 0 2010-11-29-14:49:18 1 0 11 0 3 2 1 676 0 0 0 1 0 0 0 3 0 2010-11-29-14:50:18 2 0 16 1 4 3 1 679 0 0 0 1 0 0 0 4 0 2010-11-29-14:51:18 2 2 19 1 4 3 1 679 32 0 53 1 0 58 0 4 0 2010-11-29-14:52:18 2 1 19 1 4 3 4 682 0 0 0 1 0 0 0 4 0 2010-11-29-14:53:18 2 1 19 1 4 3 4 682 0 0 0 1 0 0 0 4 0 2010-11-29-14:54:18 2 0 19 1 4 3 1 682 0 0 0 1 0 0 0 4 0 [/sourcecode]</p>
-<p>and plot it into something like looks like this: <img src="/images/rnm1978/summary-6hr.png" alt="" title="summary.6hr"></p>
+<pre tabindex="0"><code>2010-11-29-14:48:18     1       0       11      0       3       2       1       676     340     0       53      1       0       41      0       3       0
+2010-11-29-14:49:18     1       0       11      0       3       2       1       676     0       0       0       1       0       0       0       3       0
+2010-11-29-14:50:18     2       0       16      1       4       3       1       679     0       0       0       1       0       0       0       4       0
+2010-11-29-14:51:18     2       2       19      1       4       3       1       679     32      0       53      1       0       58      0       4       0
+2010-11-29-14:52:18     2       1       19      1       4       3       4       682     0       0       0       1       0       0       0       4       0
+2010-11-29-14:53:18     2       1       19      1       4       3       4       682     0       0       0       1       0       0       0       4       0
+2010-11-29-14:54:18     2       0       19      1       4       3       1       682     0       0       0       1       0       0       0       4       0
+</code></pre><p>and plot it into something like looks like this: <img src="/images/rnm1978/summary-6hr.png" alt="" title="summary.6hr"></p>
 <h2 id="gnuplot">gnuplot&nbsp;<a class="headline-hash" href="#gnuplot">🔗</a> </h2>
 <p>Depending on what you&rsquo;re wanting to use the data for, and your level of comfort with command-line tools, you may just want to take your datafile and plot it with something like Excel for ad-hoc analysis. However, for fully automated data capture and rendering, I&rsquo;d recommend giving gnuplot a go. It&rsquo;s not the simplest of tools and the documentation is so vast as to be overwhelming - but if you&rsquo;ve the time to tweak it then you will find it very flexible.</p>
 <p>gnuplot can be run interactively (which is useful for trialling settings) or as part of batch script, and can output to screen or file (eg. png). It assumes that your data is tab separated (which it should be if you&rsquo;ve used my script).</p>
-<p>The key bit to understand is the &ldquo;plot xxx using yyy&rdquo; statement. In this, xxx is your data file, whilst yyy is the columns to plot for x and y data respectively. So assuming that your x-axis is time and the first column in your datafile, and you want to plot the number of Active Sessions (which in my script is the fourth metric, so the fifth column - time being the first), you would have &ldquo;using 1:5&rdquo;. [sourcecode] plot &ldquo;datafile.jmx&rdquo; using 1:5 with lines [/sourcecode]</p>
-<p>To plot to a PNG file, use a script like this:</p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] gnuplot &laquo;EOF set xdata time set timefmt &ldquo;%Y-%m-%d-%H:%M:%S&rdquo; set format x &ldquo;%d %b\n%H:%M&rdquo; set yrange[0:30] set grid set key box outside below set terminal png font &ldquo;arial, 7&rdquo; size 410,200 enhanced truecolor set output &ldquo;graph01.png&rdquo; set title &ldquo;Oracle BI PS Sessions\nActive Sessions&rdquo; plot &ldquo;datafile.jmx&rdquo; using 1:5 with lines [/sourcecode]</p>
-<p>This line invokes gnuplot, and &laquo;EOF tells it to pass the subsequent lines to gnuplot until end of file (or you put EOF literal in the file).</p>
-<p>[sourcecode] gnuplot &laquo;EOF [/sourcecode]</p>
-<p>This sets the x-axis as a time axis, gnuplot then scales it appropriately. The timefmt defines the format of the time data in the input file.</p>
-<p>[sourcecode] set xdata time set timefmt &ldquo;%Y-%m-%d-%H:%M:%S&rdquo; [/sourcecode]</p>
-<p>The format of the axis labels on the x-axis is defined thus:</p>
-<p>[sourcecode] set format x &ldquo;%d %b\n%H:%M&rdquo; [/sourcecode]</p>
-<p>This hard-codes the y-axis range. Use &ldquo;set autoscale&rdquo; to revert to the default of gnuplot setting the range.</p>
-<p>[sourcecode] set yrange[0:30] [/sourcecode]</p>
-<p>This puts a grid on the chart, and defines the title</p>
-<p>[sourcecode] set grid set title &ldquo;Oracle BI PS Sessions\nActive Sessions&rdquo; [/sourcecode]</p>
-<p>This tells gnuplot to write to a png file, using arial 7pt font, 410x200 pixels, and higher resolution. The &ldquo;set output&rdquo; command defines the actual filename.</p>
-<p>[sourcecode] set terminal png font &ldquo;arial, 7&rdquo; size 410,200 enhanced truecolor set output &ldquo;graph01.png&rdquo; [/sourcecode]</p>
-<p>If you omit the &ldquo;set terminal png [&hellip;]&rdquo; line you&rsquo;ll get an interactive graph from gnuplot, which can be useful for testing different settings.</p>
+<p>The key bit to understand is the &ldquo;plot xxx using yyy&rdquo; statement. In this, xxx is your data file, whilst yyy is the columns to plot for x and y data respectively. So assuming that your x-axis is time and the first column in your datafile, and you want to plot the number of Active Sessions (which in my script is the fourth metric, so the fifth column - time being the first), you would have &ldquo;using 1:5&rdquo;.</p>
+<pre tabindex="0"><code>plot &#34;datafile.jmx&#34; using 1:5 with lines
+</code></pre><p>To plot to a PNG file, use a script like this:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>gnuplot &lt;&lt;EOF
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> xdata <span style="color:#008000">time</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> timefmt <span style="color:#ba2121">&#34;%Y-%m-%d-%H:%M:%S&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> format x <span style="color:#ba2121">&#34;%d %b\n%H:%M&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> yrange<span style="color:#666">[</span>0:30<span style="color:#666">]</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> grid
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> key box outside below
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> terminal png font <span style="color:#ba2121">&#34;arial, 7&#34;</span> size 410,200 enhanced truecolor
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> output <span style="color:#ba2121">&#34;graph01.png&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> title <span style="color:#ba2121">&#34;Oracle BI PS Sessions\nActive Sessions&#34;</span>
+</span></span><span style="display:flex;"><span>plot <span style="color:#ba2121">&#34;datafile.jmx&#34;</span> using 1:5 with lines
+</span></span></code></pre></div><p>This line invokes gnuplot, and &laquo;EOF tells it to pass the subsequent lines to gnuplot until end of file (or you put EOF literal in the file).</p>
+<pre tabindex="0"><code>gnuplot &lt;&lt;EOF
+</code></pre><p>This sets the x-axis as a time axis, gnuplot then scales it appropriately. The timefmt defines the format of the time data in the input file.</p>
+<pre tabindex="0"><code>set xdata time
+set timefmt &#34;%Y-%m-%d-%H:%M:%S&#34;
+</code></pre><p>The format of the axis labels on the x-axis is defined thus:</p>
+<pre tabindex="0"><code>set format x &#34;%d %b\n%H:%M&#34;
+</code></pre><p>This hard-codes the y-axis range. Use &ldquo;set autoscale&rdquo; to revert to the default of gnuplot setting the range.</p>
+<pre tabindex="0"><code>set yrange[0:30]
+</code></pre><p>This puts a grid on the chart, and defines the title</p>
+<pre tabindex="0"><code>set grid
+set title &#34;Oracle BI PS Sessions\nActive Sessions&#34;
+</code></pre><p>This tells gnuplot to write to a png file, using arial 7pt font, 410x200 pixels, and higher resolution. The &ldquo;set output&rdquo; command defines the actual filename.</p>
+<pre tabindex="0"><code>set terminal png font &#34;arial, 7&#34; size 410,200 enhanced truecolor
+set output &#34;graph01.png&#34;
+</code></pre><p>If you omit the &ldquo;set terminal png [&hellip;]&rdquo; line you&rsquo;ll get an interactive graph from gnuplot, which can be useful for testing different settings.</p>
 <h2 id="plotting-multiple-datasets">Plotting multiple datasets&nbsp;<a class="headline-hash" href="#plotting-multiple-datasets">🔗</a> </h2>
 <p>You can visualise multiple datasets alongside each other easily in gnuplot. You might want to do this for related metrics (eg Active Sessions vs Current Sessions), or a clustered OBIEE deployment:</p>
 <p><img src="/images/rnm1978/obia_6hr.png" alt="" title="obia_6hr"></p>
 <p><img src="/images/rnm1978/summary-6hr.png" alt="" title="summary.6hr"></p>
-<p>To do this you append multiple statements to the &ldquo;plot&rdquo; command, separated by a comma: [sourcecode] plot &ldquo;datafile_server01.jmx&rdquo; using 1:4 with lines title &ldquo;Server 01&rdquo;\ , &ldquo;datafile_server02.jmx&rdquo; using 1:4 with lines title &ldquo;Server 02&rdquo; [/sourcecode] (the \ is a line-continuation character)</p>
-<p>The title for each dataset is defined as part of the statement as is seen above. This can be shown in a key which is enabled by default and can be moved to the bottom of the graph by using: [sourcecode] set key box outside below [/sourcecode]</p>
-<h2 id="generating-gnuplot-scripts-automagically">Generating gnuplot scripts automagically&nbsp;<a class="headline-hash" href="#generating-gnuplot-scripts-automagically">🔗</a> </h2>
+<p>To do this you append multiple statements to the &ldquo;plot&rdquo; command, separated by a comma:</p>
+<pre tabindex="0"><code>plot &#34;datafile_server01.jmx&#34; using 1:4 with lines title &#34;Server 01&#34;\
+, &#34;datafile_server02.jmx&#34; using 1:4 with lines title &#34;Server 02&#34;
+</code></pre><p>(the \ is a line-continuation character)</p>
+<p>The title for each dataset is defined as part of the statement as is seen above. This can be shown in a key which is enabled by default and can be moved to the bottom of the graph by using:</p>
+<pre tabindex="0"><code>set key box outside below
+</code></pre><h2 id="generating-gnuplot-scripts-automagically">Generating gnuplot scripts automagically&nbsp;<a class="headline-hash" href="#generating-gnuplot-scripts-automagically">🔗</a> </h2>
 <p>You may have realised by now that this is all quite fiddly to set up. Here are two scripts that will help generate gnuplot scripts. It&rsquo;s based on the tcl script from <a href="/2010/12/06/collecting-obiee-systems-management-data-with-jmx/">part one</a> and uses the first item in the array, ID, to determine the column number that a metric will appear in in the datafile.</p>
-<p>This first one writes a series of gnuplot statements to plot each metric out on an individual graph, and assumes you have a two-server cluster so plots the datafiles from two servers on the same graph. [sourcecode language=&ldquo;bash&rdquo;] cat gnuplot_header grep lappend obieejmx_server01.tcl|\ sed s/{//g|\ sed s/}//g|\ sed s/&ldquo;lappend mbeanattrs &ldquo;//g|\ sed s/&ldquo;Oracle BI Management:Oracle BI=Performance,AppName=&rdquo;//g|\ sed s/&ldquo;Oracle BI Server,&rdquo;/&ldquo;BI&rdquo;/g|\ sed s/&ldquo;name=Oracle BI General&rdquo;/&rdquo;&quot;/g|\ sed s/&ldquo;type=Oracle BI Physical DB,name=Oracle Data Warehouse&rdquo;/&ldquo;DB&rdquo;/g|\ sed s/&ldquo;type=Oracle BI DB Connection Pool,name=Star_Oracle Data Warehouse_Oracle Data Warehouse Connection Pool&rdquo;/&ldquo;Conn Pool&rdquo;/g|\ sed s/&ldquo;Oracle BI Presentation Server,name=Oracle BI PS &ldquo;/&ldquo;BIPS&rdquo;/g|\ sed s/&ldquo;Connection&rdquo;/&ldquo;Conn&rdquo;/g|\ sed s/&ldquo;Current&rdquo;/&ldquo;Curr&rdquo;/g|\ sed s/&ldquo;Sessions&rdquo;/&ldquo;Sess&rdquo;/g|\ awk &lsquo;FS=&rdquo;\t&rdquo; { $1+=1 print &ldquo;set output \&rdquo;&quot;$1&rdquo;.png\&quot;&quot; print &ldquo;set title \&rdquo;&quot; $2 &ldquo;\\n&rdquo; $3 &ldquo;\&rdquo;&quot; print &ldquo;plot \&ldquo;server01.jmx\&rdquo; using 1:&rdquo; $1 &quot; with lines title \&ldquo;server01\&rdquo;,\&ldquo;server02.jmx\&rdquo; using 1:&quot; $1 &quot; with lines title \&ldquo;server02\&rdquo;&quot; }&rsquo; [/sourcecode]</p>
-<p>gnuplot_header is a file you need to create in the same directory, and can just be a copy of the example gnuplot statement above.</p>
-<p>This script plots multiple metrics for a single server onto the same graph. You may want to break the statements up into separate graph plots to group together related metrics or ones with similar ranges - this script will at least give you the correct column and titles to get you started. [sourcecode language=&ldquo;bash&rdquo;] cat gnuplot_header grep lappend obieejmx_server01.tcl|\ sed s/{//g|\ sed s/}//g|\ sed s/&ldquo;lappend mbeanattrs &ldquo;//g|\ sed s/&ldquo;Oracle BI Management:Oracle BI=Performance,AppName=&rdquo;//g|\ sed s/&ldquo;Oracle BI Server,&rdquo;/&ldquo;BI&rdquo;/g|\ sed s/&ldquo;name=Oracle BI General&rdquo;/&rdquo;&quot;/g|\ sed s/&ldquo;type=Oracle BI Physical DB,name=Oracle Data Warehouse&rdquo;/&ldquo;DB&rdquo;/g|\ sed s/&ldquo;type=Oracle BI DB Connection Pool,name=Star_Oracle Data Warehouse_Oracle Data Warehouse Connection Pool&rdquo;/&ldquo;Conn Pool&rdquo;/g|\ sed s/&ldquo;Oracle BI Presentation Server,name=Oracle BI PS &ldquo;/&ldquo;BIPS&rdquo;/g|\ sed s/&ldquo;Connection&rdquo;/&ldquo;Conn&rdquo;/g|\ sed s/&ldquo;Current&rdquo;/&ldquo;Curr&rdquo;/g|\ sed s/&ldquo;Sessions&rdquo;/&ldquo;Sess&rdquo;/g|\ awk &lsquo;BEGIN { FS=&rdquo;\t&rdquo; print &ldquo;set output \&ldquo;server01.png\&rdquo;&rdquo; print &ldquo;set title \&ldquo;server01\&rdquo;&rdquo; printf &ldquo;plot &quot; } { $1+=1 if (NR&gt;1) {printf &ldquo;\\\n,&rdquo;} printf &quot; \&ldquo;server01.jmx\&rdquo; using 1:&rdquo; $1 &quot; with lines title \&rdquo;&quot; $2 &ldquo;:&rdquo; $3 &ldquo;\&rdquo;&quot; } END {print &ldquo;&rdquo;}&rsquo; [/sourcecode]</p>
-<p>Both scripts use a series of sed statements to try and trim down the MBean names into something shorter for plotting on the graph key.</p>
-<p>An example output would look something like this: [sourcecode language=&ldquo;bash&rdquo;] # One metric per graph, across two servers gnuplot &ndash;persist &laquo;EOF set xdata time set timefmt &ldquo;%Y-%m-%d-%H:%M:%S&rdquo; set format x &ldquo;%d %b\n%H:%M&rdquo; set grid set key box outside below set terminal png font &ldquo;arial, 7&rdquo; size 410,200 enhanced truecolor set yrange [0:30] set output &ldquo;2.obiee.png&rdquo; set title &ldquo;Oracle BI Presentation Server - Oracle BI PS Connection Pool\nCurrent Open Connections&rdquo; plot &ldquo;server01.jmx&rdquo; using 1:2 with lines title &ldquo;server01&rdquo;,&ldquo;server02.jmx&rdquo; using 1:2 with lines title &ldquo;server02&rdquo; set output &ldquo;3.obiee.png&rdquo; set title &ldquo;Oracle BI Presentation Server - Oracle BI PS Query Cache\nCurrent Running Queries&rdquo; plot &ldquo;server01.jmx&rdquo; using 1:3 with lines title &ldquo;server01&rdquo;,&ldquo;server02.jmx&rdquo; using 1:3 with lines title &ldquo;server02&rdquo; set output &ldquo;5.obiee.png&rdquo; set title &ldquo;Oracle BI Presentation Server - Oracle BI PS Sessions\nActive Sessions&rdquo; plot &ldquo;server01.jmx&rdquo; using 1:5 with lines title &ldquo;server01&rdquo;,&ldquo;server02.jmx&rdquo; using 1:5 with lines title &ldquo;server02&rdquo; set output &ldquo;6.obiee.png&rdquo; set title &ldquo;Oracle BI Presentation Server - Oracle BI PS Sessions\nCurrent Sessions&rdquo; plot &ldquo;server01.jmx&rdquo; using 1:6 with lines title &ldquo;server01&rdquo;,&ldquo;server02.jmx&rdquo; using 1:6 with lines title &ldquo;server02&rdquo; set output &ldquo;7.obiee.png&rdquo; set title &ldquo;Oracle BI Presentation Server - Oracle BI PS Sessions\nSessions Logged On&rdquo; plot &ldquo;server01.jmx&rdquo; using 1:7 with lines title &ldquo;server01&rdquo;,&ldquo;server02.jmx&rdquo; using 1:7 with lines title &ldquo;server02&rdquo; set output &ldquo;8.obiee.png&rdquo; [/sourcecode]</p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] # Single server, multiple metrics on one graph gnuplot &ndash;persist &laquo;EOF set xdata time set timefmt &ldquo;%Y-%m-%d-%H:%M:%S&rdquo; set format x &ldquo;%d %b\n%H:%M&rdquo; set grid set key box outside right set terminal png font &ldquo;arial,9&rdquo; size 1224,500 enhanced truecolor</p>
-<p>set output &ldquo;server01.png&rdquo; set title &ldquo;server01&rdquo; set yrange[0:30] plot &ldquo;server01.jmx&rdquo; using 1:2 with lines title &ldquo;BIPSConn Pool:Curr Open Conns&rdquo;\ , &ldquo;server01.jmx&rdquo; using 1:3 with lines title &ldquo;BIPSQuery Cache:Curr Running Queries&rdquo;\ , &ldquo;server01.jmx&rdquo; using 1:5 with lines title &ldquo;BIPSSess:Active Sess&rdquo;\ , &ldquo;server01.jmx&rdquo; using 1:6 with lines title &ldquo;BIPSSess:Curr Sess&rdquo;\ , &ldquo;server01.jmx&rdquo; using 1:7 with lines title &ldquo;BIPSSess:Sess Logged On&rdquo;\ , &ldquo;server01.jmx&rdquo; using 1:8 with lines title &ldquo;BIConn Pool:Curr Busy Conn Count&rdquo;\ , &ldquo;server01.jmx&rdquo; using 1:13 with lines title &ldquo;BI:Active Execute Requests&rdquo;\ , &ldquo;server01.jmx&rdquo; using 1:14 with lines title &ldquo;BI:Active Fetch Requests&rdquo;\ , &ldquo;server01.jmx&rdquo; using 1:17 with lines title &ldquo;BI:Total sessions&rdquo; [/sourcecode]</p>
-<h2 id="plotting-subsets-of-data">Plotting subsets of data&nbsp;<a class="headline-hash" href="#plotting-subsets-of-data">🔗</a> </h2>
-<p>You may well want to plot out subsets of the graph data, for example, the last 24 hours. This is simple to do, just run the jmx datafile through something like tail first: [sourcecode language=&ldquo;bash&rdquo;] # Create 24 hour extract of data # Data is sampled every minute, so the last 24 hours will be 60*24 = 1440 tail -n 1440 server01.jmx &gt; server01.24hr.jmx [/sourcecode]</p>
-<h2 id="refreshing-your-graphs-automagically">Refreshing your graphs automagically&nbsp;<a class="headline-hash" href="#refreshing-your-graphs-automagically">🔗</a> </h2>
-<p>Assuming you&rsquo;ve got your graph plotting script(s) in separate shell file(s), create a wrapper like this: [sourcecode language=&ldquo;bash&rdquo;] # Uncomment this for debug, to echo each statement as it&rsquo;s executed # set -x # # This will loop for ever and ever # (or until one becomes less than two) while [ 1 -lt 2 ] do # create any subset data files, using tail, as described above ./create_6hr_logs.sh ./create_24hr_logs.sh # plot your graph(s) ./plot_by_server.sh ./plot_by_server_summary.sh ./plot_by_server_6hr.sh ./plot_by_server_6hr_summary.sh ./plot_6hr_graphs.sh ./plot_24hr_graphs.sh # Copy all output png files to a tmp folder # from where they&rsquo;ll be served up as a web page # (I told you it was a hack) cp *.png /tmp/obieejmx chmod g+r /tmp/obieejmx/*.png # # Write the current time, for debug purposes date # Wait for a minute sleep 60 done [/sourcecode]</p>
-<p>And then run your wrapper in the same way as the metric collection, using nohup and &amp; [sourcecode language=&ldquo;bash&rdquo;] nohup ./run_graphs_forever.sh &amp; [/sourcecode]</p>
-<h2 id="what-next">What next?&nbsp;<a class="headline-hash" href="#what-next">🔗</a> </h2>
+<p>This first one writes a series of gnuplot statements to plot each metric out on an individual graph, and assumes you have a two-server cluster so plots the datafiles from two servers on the same graph.</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>cat gnuplot_header
+</span></span><span style="display:flex;"><span>grep lappend obieejmx_server01.tcl|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#666">{</span>//g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#666">}</span>//g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;lappend mbeanattrs &#34;</span>//g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Oracle BI Management:Oracle BI=Performance,AppName=&#34;</span>//g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Oracle BI Server,&#34;</span>/<span style="color:#ba2121">&#34;BI&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;name=Oracle BI General&#34;</span>/<span style="color:#ba2121">&#34;&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;type=Oracle BI Physical DB,name=Oracle Data Warehouse&#34;</span>/<span style="color:#ba2121">&#34;DB&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;type=Oracle BI DB Connection Pool,name=Star_Oracle Data Warehouse_Oracle Data Warehouse Connection Pool&#34;</span>/<span style="color:#ba2121">&#34;Conn Pool&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Oracle BI Presentation Server,name=Oracle BI PS &#34;</span>/<span style="color:#ba2121">&#34;BIPS&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Connection&#34;</span>/<span style="color:#ba2121">&#34;Conn&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Current&#34;</span>/<span style="color:#ba2121">&#34;Curr&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Sessions&#34;</span>/<span style="color:#ba2121">&#34;Sess&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>awk <span style="color:#ba2121">&#39;FS=&#34;\t&#34; {
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        $1+=1
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        print &#34;set output \&#34;&#34;$1&#34;.png\&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        print &#34;set title \&#34;&#34; $2 &#34;\\n&#34; $3 &#34;\&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        print &#34;plot \&#34;server01.jmx\&#34; using 1:&#34; $1 &#34; with lines title \&#34;server01\&#34;,\&#34;server02.jmx\&#34; using 1:&#34; $1 &#34; with lines title \&#34;server02\&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">}&#39;</span>
+</span></span></code></pre></div><p>gnuplot_header is a file you need to create in the same directory, and can just be a copy of the example gnuplot statement above.</p>
+<p>This script plots multiple metrics for a single server onto the same graph. You may want to break the statements up into separate graph plots to group together related metrics or ones with similar ranges - this script will at least give you the correct column and titles to get you started.</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>cat gnuplot_header
+</span></span><span style="display:flex;"><span>grep lappend obieejmx_server01.tcl|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#666">{</span>//g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#666">}</span>//g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;lappend mbeanattrs &#34;</span>//g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Oracle BI Management:Oracle BI=Performance,AppName=&#34;</span>//g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Oracle BI Server,&#34;</span>/<span style="color:#ba2121">&#34;BI&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;name=Oracle BI General&#34;</span>/<span style="color:#ba2121">&#34;&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;type=Oracle BI Physical DB,name=Oracle Data Warehouse&#34;</span>/<span style="color:#ba2121">&#34;DB&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;type=Oracle BI DB Connection Pool,name=Star_Oracle Data Warehouse_Oracle Data Warehouse Connection Pool&#34;</span>/<span style="color:#ba2121">&#34;Conn Pool&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Oracle BI Presentation Server,name=Oracle BI PS &#34;</span>/<span style="color:#ba2121">&#34;BIPS&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Connection&#34;</span>/<span style="color:#ba2121">&#34;Conn&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Current&#34;</span>/<span style="color:#ba2121">&#34;Curr&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>sed s/<span style="color:#ba2121">&#34;Sessions&#34;</span>/<span style="color:#ba2121">&#34;Sess&#34;</span>/g|<span style="color:#b62;font-weight:bold">\
+</span></span></span><span style="display:flex;"><span><span style="color:#b62;font-weight:bold"></span>awk <span style="color:#ba2121">&#39;BEGIN {
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        FS=&#34;\t&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        print &#34;set output \&#34;server01.png\&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        print &#34;set title \&#34;server01\&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        printf &#34;plot &#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">     }
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">     {
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        $1+=1
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        if (NR&gt;1) {printf &#34;\\\n,&#34;}
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">        printf &#34; \&#34;server01.jmx\&#34; using 1:&#34; $1 &#34; with lines title \&#34;&#34; $2 &#34;:&#34; $3 &#34;\&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">     }
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">     END {print &#34;&#34;}&#39;</span>
+</span></span></code></pre></div><p>Both scripts use a series of sed statements to try and trim down the MBean names into something shorter for plotting on the graph key.</p>
+<p>An example output would look something like this:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># One metric per graph, across two servers</span>
+</span></span><span style="display:flex;"><span>gnuplot --persist &lt;&lt;EOF
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> xdata <span style="color:#008000">time</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> timefmt <span style="color:#ba2121">&#34;%Y-%m-%d-%H:%M:%S&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> format x <span style="color:#ba2121">&#34;%d %b\n%H:%M&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> grid
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> key box outside below
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> terminal png font <span style="color:#ba2121">&#34;arial, 7&#34;</span> size 410,200 enhanced truecolor
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> yrange <span style="color:#666">[</span>0:30<span style="color:#666">]</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> output <span style="color:#ba2121">&#34;2.obiee.png&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> title <span style="color:#ba2121">&#34;Oracle BI Presentation Server - Oracle BI PS Connection Pool\nCurrent Open Connections&#34;</span>
+</span></span><span style="display:flex;"><span>plot <span style="color:#ba2121">&#34;server01.jmx&#34;</span> using 1:2 with lines title <span style="color:#ba2121">&#34;server01&#34;</span>,<span style="color:#ba2121">&#34;server02.jmx&#34;</span> using 1:2 with lines title <span style="color:#ba2121">&#34;server02&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> output <span style="color:#ba2121">&#34;3.obiee.png&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> title <span style="color:#ba2121">&#34;Oracle BI Presentation Server - Oracle BI PS Query Cache\nCurrent Running Queries&#34;</span>
+</span></span><span style="display:flex;"><span>plot <span style="color:#ba2121">&#34;server01.jmx&#34;</span> using 1:3 with lines title <span style="color:#ba2121">&#34;server01&#34;</span>,<span style="color:#ba2121">&#34;server02.jmx&#34;</span> using 1:3 with lines title <span style="color:#ba2121">&#34;server02&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> output <span style="color:#ba2121">&#34;5.obiee.png&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> title <span style="color:#ba2121">&#34;Oracle BI Presentation Server - Oracle BI PS Sessions\nActive Sessions&#34;</span>
+</span></span><span style="display:flex;"><span>plot <span style="color:#ba2121">&#34;server01.jmx&#34;</span> using 1:5 with lines title <span style="color:#ba2121">&#34;server01&#34;</span>,<span style="color:#ba2121">&#34;server02.jmx&#34;</span> using 1:5 with lines title <span style="color:#ba2121">&#34;server02&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> output <span style="color:#ba2121">&#34;6.obiee.png&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> title <span style="color:#ba2121">&#34;Oracle BI Presentation Server - Oracle BI PS Sessions\nCurrent Sessions&#34;</span>
+</span></span><span style="display:flex;"><span>plot <span style="color:#ba2121">&#34;server01.jmx&#34;</span> using 1:6 with lines title <span style="color:#ba2121">&#34;server01&#34;</span>,<span style="color:#ba2121">&#34;server02.jmx&#34;</span> using 1:6 with lines title <span style="color:#ba2121">&#34;server02&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> output <span style="color:#ba2121">&#34;7.obiee.png&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> title <span style="color:#ba2121">&#34;Oracle BI Presentation Server - Oracle BI PS Sessions\nSessions Logged On&#34;</span>
+</span></span><span style="display:flex;"><span>plot <span style="color:#ba2121">&#34;server01.jmx&#34;</span> using 1:7 with lines title <span style="color:#ba2121">&#34;server01&#34;</span>,<span style="color:#ba2121">&#34;server02.jmx&#34;</span> using 1:7 with lines title <span style="color:#ba2121">&#34;server02&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">set</span> output <span style="color:#ba2121">&#34;8.obiee.png&#34;</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># Single server, multiple metrics on one graph</span>
+</span></span><span style="display:flex;"><span>gnuplot --persist <span style="color:#ba2121">&lt;&lt;EOF
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">set xdata time
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">set timefmt &#34;%Y-%m-%d-%H:%M:%S&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">set format x &#34;%d %b\n%H:%M&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">set grid
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">set key box outside right
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">set terminal png font &#34;arial,9&#34; size 1224,500 enhanced truecolor
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">set output &#34;server01.png&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">set title &#34;server01&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">set yrange[0:30]
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">plot  &#34;server01.jmx&#34; using 1:2 with lines title &#34;BIPSConn Pool:Curr Open Conns&#34;\
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">, &#34;server01.jmx&#34; using 1:3 with lines title &#34;BIPSQuery Cache:Curr Running Queries&#34;\
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">, &#34;server01.jmx&#34; using 1:5 with lines title &#34;BIPSSess:Active Sess&#34;\
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">, &#34;server01.jmx&#34; using 1:6 with lines title &#34;BIPSSess:Curr Sess&#34;\
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">, &#34;server01.jmx&#34; using 1:7 with lines title &#34;BIPSSess:Sess Logged On&#34;\
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">, &#34;server01.jmx&#34; using 1:8 with lines title &#34;BIConn Pool:Curr Busy Conn Count&#34;\
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">, &#34;server01.jmx&#34; using 1:13 with lines title &#34;BI:Active E</span>xecute Requests<span style="color:#ba2121">&#34;\
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">, &#34;</span>server01.jmx<span style="color:#ba2121">&#34; using 1:14 with lines title &#34;</span>BI:Active Fetch Requests<span style="color:#ba2121">&#34;\
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">, &#34;</span>server01.jmx<span style="color:#ba2121">&#34; using 1:17 with lines title &#34;</span>BI:Total sessions<span style="color:#ba2121">&#34;
+</span></span></span></code></pre></div><h2 id="plotting-subsets-of-data">Plotting subsets of data&nbsp;<a class="headline-hash" href="#plotting-subsets-of-data">🔗</a> </h2>
+<p>You may well want to plot out subsets of the graph data, for example, the last 24 hours. This is simple to do, just run the jmx datafile through something like tail first:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># Create 24 hour extract of data</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># Data is sampled every minute, so the last 24 hours will be 60*24 = 1440</span>
+</span></span><span style="display:flex;"><span>tail -n <span style="color:#666">1440</span> server01.jmx &gt; server01.24hr.jmx
+</span></span></code></pre></div><h2 id="refreshing-your-graphs-automagically">Refreshing your graphs automagically&nbsp;<a class="headline-hash" href="#refreshing-your-graphs-automagically">🔗</a> </h2>
+<p>Assuming you&rsquo;ve got your graph plotting script(s) in separate shell file(s), create a wrapper like this:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># Uncomment this for debug, to echo each statement as it&#39;s executed</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># set -x</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic">#</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># This will loop for ever and ever</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># (or until one becomes less than two)</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">while</span> <span style="color:#666">[</span> <span style="color:#666">1</span> -lt <span style="color:#666">2</span> <span style="color:#666">]</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">do</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># create any subset data files, using tail, as described above </span>
+</span></span><span style="display:flex;"><span>        ./create_6hr_logs.sh
+</span></span><span style="display:flex;"><span>        ./create_24hr_logs.sh
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># plot your graph(s)</span>
+</span></span><span style="display:flex;"><span>        ./plot_by_server.sh
+</span></span><span style="display:flex;"><span>        ./plot_by_server_summary.sh
+</span></span><span style="display:flex;"><span>        ./plot_by_server_6hr.sh
+</span></span><span style="display:flex;"><span>        ./plot_by_server_6hr_summary.sh
+</span></span><span style="display:flex;"><span>        ./plot_6hr_graphs.sh
+</span></span><span style="display:flex;"><span>        ./plot_24hr_graphs.sh
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># Copy all output png files to a tmp folder</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># from where they&#39;ll be served up as a web page</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># (I told you it was a hack)</span>
+</span></span><span style="display:flex;"><span>        cp *.png /tmp/obieejmx
+</span></span><span style="display:flex;"><span>        chmod g+r /tmp/obieejmx/*.png
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic">#</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># Write the current time, for debug purposes</span>
+</span></span><span style="display:flex;"><span>        date
+</span></span><span style="display:flex;"><span>        <span style="color:#408080;font-style:italic"># Wait for a minute</span>
+</span></span><span style="display:flex;"><span>        sleep <span style="color:#666">60</span>
+</span></span><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">done</span>
+</span></span></code></pre></div><p>And then run your wrapper in the same way as the metric collection, using nohup and &amp;</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>nohup ./run_graphs_forever.sh &amp;
+</span></span></code></pre></div><h2 id="what-next">What next?&nbsp;<a class="headline-hash" href="#what-next">🔗</a> </h2>
 <p>So you&rsquo;ve got your data &hellip; you&rsquo;ve got your graphs &hellip; now why not serve them up through a convenient webpage that refreshes automatically? <a href="/2010/12/06/adding-obiee-monitoring-graphs-into-oas/">Click here for part three</a> that shows you how to bolt this onto an existing OAS installation.</p>
 
 	<hr>

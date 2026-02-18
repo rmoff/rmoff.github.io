@@ -140,12 +140,29 @@
 <h2 id="validation-using-sawserver-logs">Validation using sawserver logs&nbsp;<a class="headline-hash" href="#validation-using-sawserver-logs">🔗</a> </h2>
 <p>It&rsquo;s no use running a load test if the load you think you&rsquo;re applying isn&rsquo;t actually being applied. To validate the test you compare what happens on the server when the scenario is manually performed with what happens with it&rsquo;s from a VUser and hopefully the same behaviour is observed.</p>
 <p>To validate the replay, enable detailed sawserver logging in logconfig.xml:</p>
-<p>[sourcecode language=&ldquo;xml&rdquo;] <Writers> [&hellip;] &lt;Writer implementation=&ldquo;FileLogWriter&rdquo; [&hellip;] fmtName=&ldquo;short&rdquo; [&hellip;] /&gt; [&hellip;] </Writers> [&hellip;] <Filters> [&hellip;] <FilterRecord writerClassGroup="File" path = "saw" information="31" warning="100" error="100" security="41"/> <FilterRecord writerClassGroup="File" path = "saw.charts.pop" information="100" warning="100" error="100" security="41"/> <FilterRecord writerClassGroup="File" path = "saw.odbc.statement.execute.sql" information="100" warning="100" error="100" security="41"/> <FilterRecord writerClassGroup="File" path = "saw.httpserver" information="100" warning="100" error="100" security="41"/> [&hellip;] </Filters> [/sourcecode]</p>
-<p>Restart sawserver, manually perform the scenario. Stop sawserver, save sawlog0.log. Restart sawserver (wait until it&rsquo;s fully down - grep for netstat a-|grep 9710 until TIME_WAIT not showing), run vuser to completion. Stop sawserver, save sawlog0.log. WinMerge to compare sawlog0.log files. Should be same number of ODBC calls, HTTP requests and responses, and calls to PopChart (?). <a href="http://rnm1978.files.wordpress.com/2009/09/lr16.png"><img src="http://rnm1978.files.wordpress.com/2009/09/lr16.png?w=300" alt="LR16" title="LR16"></a></p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span>[...]
+</span></span><span style="display:flex;"><span>		
+</span></span><span style="display:flex;"><span>[...]
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>[...]
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>[...]
+</span></span><span style="display:flex;"><span>                
+</span></span><span style="display:flex;"><span>                
+</span></span><span style="display:flex;"><span>                
+</span></span><span style="display:flex;"><span>                
+</span></span><span style="display:flex;"><span>[...]
+</span></span></code></pre></div><p>Restart sawserver, manually perform the scenario. Stop sawserver, save sawlog0.log. Restart sawserver (wait until it&rsquo;s fully down - grep for netstat a-|grep 9710 until TIME_WAIT not showing), run vuser to completion. Stop sawserver, save sawlog0.log. WinMerge to compare sawlog0.log files. Should be same number of ODBC calls, HTTP requests and responses, and calls to PopChart (?). <a href="/images/2009/09/lr16.webp"><img src="/images/2009/09/lr16.webp" alt="LR16" title="LR16"></a></p>
 <h2 id="charts">Charts&nbsp;<a class="headline-hash" href="#charts">🔗</a> </h2>
 <p>Charts in OBIEE are Shockwave flash. They&rsquo;re requested from the sawserver with a uniqueID (called StateID) that is generated when the parent page is created dynamically:</p>
-<p>[sourcecode language=&ldquo;html&rdquo;] web_url(&ldquo;saw.dll_11&rdquo;, &ldquo;URL=http://10.3.105.181:7777/analytics/saw.dll?DocPart&amp;_scid=9mEXbnHnTew&amp;StateID=14036570&rdquo;, &ldquo;Resource=1&rdquo;, &ldquo;RecContentType=application/x-shockwave-flash&rdquo;, &ldquo;Referer=http://10.3.105.181:7777/analytics/saw.dll?Dashboard&rdquo;, &ldquo;Snapshot=t140.inf&rdquo;, LAST); [/sourcecode]</p>
-<p>This causes two issues:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-html" data-lang="html"><span style="display:flex;"><span>web_url(&#34;saw.dll_11&#34;,
+</span></span><span style="display:flex;"><span>		&#34;URL=http://10.3.105.181:7777/analytics/saw.dll?DocPart<span style="">&amp;</span>_scid=9mEXbnHnTew<span style="">&amp;</span>StateID=14036570&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Resource=1&#34;,
+</span></span><span style="display:flex;"><span>		&#34;RecContentType=application/x-shockwave-flash&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Referer=http://10.3.105.181:7777/analytics/saw.dll?Dashboard&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Snapshot=t140.inf&#34;,
+</span></span><span style="display:flex;"><span>		LAST);
+</span></span></code></pre></div><p>This causes two issues:</p>
 <ol>
 <li>If you leave the request in then you will get an &ldquo;Invalid state identifier&rdquo; error, because the request will be for a chart object associated with a previously generated report (rather than the current one)</li>
 <li>You therefore cannot simulate the load that requesting each chart will impose on the sawserver and network between sawserver and client. HOWEVER, by monitoring /data/tmp/sawcharts it&rsquo;s possible to correlate the generation of charts with VUser requests, so we CAN reproduce the chart-generation load on the server (just not the request and transport of the charts to the client)</li>
@@ -153,19 +170,51 @@
 <h2 id="correlation">Correlation&nbsp;<a class="headline-hash" href="#correlation">🔗</a> </h2>
 <p>Most web applications will use some kind of session state variable. LoadRunner can spot these and handle them. If they&rsquo;re not done properly then the web application will get confused because you&rsquo;ll be specifying a session that&rsquo;s long-gone. That&rsquo;s what the Invalid State Identifier seen above is about.</p>
 <p>If you record your script in one go then you&rsquo;ll find LoadRunner does some automatic correlation for you based on the Siebel setting you enabled when you set the recording options- you&rsquo;ll see lines like this:</p>
-<p>[sourcecode language=&ldquo;xml&rdquo;] /* Registering parameter(s) from source task id 71 // {Siebel_Analytic_ViewState14} = &ldquo;boo89b1camkd4ctutdb9qe33p6&rdquo; // */</p>
-<p>web_reg_save_param(&ldquo;Siebel_Analytic_ViewState14&rdquo;, &ldquo;LB/IC=ViewState\&rdquo; value=\&quot;&quot;, &ldquo;RB/IC=\&rdquo;&quot;, &ldquo;Ord=1&rdquo;, &ldquo;Search=Body&rdquo;, &ldquo;RelFrameId=1&rdquo;, LAST); [/sourcecode]</p>
-<p>This populates a parameter which is used in a subsequent step:</p>
-<p>[sourcecode language=&ldquo;xml&rdquo;]</p>
-<p>web_submit_data(&ldquo;saw.dll_7&rdquo;, [&hellip;] &ldquo;Name=ViewState&rdquo;, &ldquo;Value={Siebel_Analytic_ViewState14}&rdquo;, ENDITEM, [&hellip;] [/sourcecode]</p>
-<p>Without knowing properly how sawserver works, it still appears that the ViewState parameter is optional, because commenting it out of ITEMDATA lists gives the same behaviour as if it is there:</p>
-<p>[sourcecode language=&ldquo;xml&rdquo;] web_submit_data(&ldquo;saw.dll_7&rdquo;, &ldquo;Action=http://10.3.105.181:7777/analytics/saw.dll?Dashboard&rdquo;, &ldquo;Method=POST&rdquo;, &ldquo;RecContentType=text/html&rdquo;, &ldquo;Referer=http://10.3.105.181:7777/analytics/saw.dll?Dashboard&rdquo;, &ldquo;Snapshot=t68.inf&rdquo;, &ldquo;Mode=HTTP&rdquo;, ITEMDATA, &ldquo;Name=_scid&rdquo;, &ldquo;Value=X0OQ7O8dJ0k&rdquo;, ENDITEM, &ldquo;Name=PortalPath&rdquo;, &ldquo;Value=/shared/Sample Sales/_portal/02 History &amp; Benching&rdquo;, ENDITEM, &ldquo;Name=Page&rdquo;, &ldquo;Value=22 Indexing&rdquo;, ENDITEM, /* &ldquo;Name=ViewState&rdquo;, &ldquo;Value={Siebel_Analytic_ViewState14}&rdquo;, ENDITEM, */ &ldquo;Name=StateAction&rdquo;, &ldquo;Value=NewPage&rdquo;, ENDITEM, LAST); [/sourcecode]</p>
-<p>Removing it makes the script easier to work with - but as I say, may be breaking something in the long-run so do test and don&rsquo;t take my word for it.</p>
-<p>After replaying your recording you should scan for further correlations by pressing Ctrl-F8. It should pick up the scid which I think is the session ID as it is constant across sessions. It&rsquo;ll also pick up the character set. <a href="http://rnm1978.files.wordpress.com/2009/09/lr48.png"><img src="http://rnm1978.files.wordpress.com/2009/09/lr48.png?w=300" alt="LR48" title="LR48"></a>Click on Correlate and go to vuser_init where you should see a new web_reg_save_param statement. This populates the paramater based on the search condition defined, so in this case parses the body of the page for a value between _scid= and &quot;</p>
-<p>[sourcecode language=&ldquo;xml&rdquo;] // [WCSPARAM WCSParam_Diff1 11 X0OQ7O8dJ0k] Parameter {WCSParam_Diff1} created by Correlation Studio web_reg_save_param(&ldquo;WCSParam_Diff1&rdquo;, &ldquo;LB=_scid=&rdquo;, &ldquo;RB=\&rdquo;&quot;, &ldquo;Ord=2&rdquo;, &ldquo;RelFrameId=1&rdquo;, &ldquo;Search=Body&rdquo;, &ldquo;IgnoreRedirections=Yes&rdquo;, LAST); [/sourcecode]</p>
-<p>Once you&rsquo;ve figured out common correlations for an application you can program them into a rule, see above for an OBIEE file I&rsquo;ve created.</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span>/* Registering parameter(s) from source task id 71
+</span></span><span style="display:flex;"><span>	// {Siebel_Analytic_ViewState14} = &#34;boo89b1camkd4ctutdb9qe33p6&#34;
+</span></span><span style="display:flex;"><span>	// */
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	web_reg_save_param(&#34;Siebel_Analytic_ViewState14&#34;,
+</span></span><span style="display:flex;"><span>		&#34;LB/IC=ViewState\&#34; value=\&#34;&#34;,
+</span></span><span style="display:flex;"><span>		&#34;RB/IC=\&#34;&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Ord=1&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Search=Body&#34;,
+</span></span><span style="display:flex;"><span>		&#34;RelFrameId=1&#34;,
+</span></span><span style="display:flex;"><span>		LAST);
+</span></span></code></pre></div><p>This populates a parameter which is used in a subsequent step:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span>web_submit_data(&#34;saw.dll_7&#34;,
+</span></span><span style="display:flex;"><span>	[...]
+</span></span><span style="display:flex;"><span>		&#34;Name=ViewState&#34;, &#34;Value={Siebel_Analytic_ViewState14}&#34;, ENDITEM,
+</span></span><span style="display:flex;"><span>	[...]
+</span></span></code></pre></div><p>Without knowing properly how sawserver works, it still appears that the ViewState parameter is optional, because commenting it out of ITEMDATA lists gives the same behaviour as if it is there:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span>web_submit_data(&#34;saw.dll_7&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Action=http://10.3.105.181:7777/analytics/saw.dll?Dashboard&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Method=POST&#34;,
+</span></span><span style="display:flex;"><span>		&#34;RecContentType=text/html&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Referer=http://10.3.105.181:7777/analytics/saw.dll?Dashboard&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Snapshot=t68.inf&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Mode=HTTP&#34;,
+</span></span><span style="display:flex;"><span>		ITEMDATA,
+</span></span><span style="display:flex;"><span>		&#34;Name=_scid&#34;, &#34;Value=X0OQ7O8dJ0k&#34;, ENDITEM,
+</span></span><span style="display:flex;"><span>		&#34;Name=PortalPath&#34;, &#34;Value=/shared/Sample Sales/_portal/02 History <span style="">&amp;</span> Benching&#34;, ENDITEM,
+</span></span><span style="display:flex;"><span>		&#34;Name=Page&#34;, &#34;Value=22 Indexing&#34;, ENDITEM,
+</span></span><span style="display:flex;"><span>/*		&#34;Name=ViewState&#34;, &#34;Value={Siebel_Analytic_ViewState14}&#34;, ENDITEM, */
+</span></span><span style="display:flex;"><span>		&#34;Name=StateAction&#34;, &#34;Value=NewPage&#34;, ENDITEM,
+</span></span><span style="display:flex;"><span>		LAST);
+</span></span></code></pre></div><p>Removing it makes the script easier to work with - but as I say, may be breaking something in the long-run so do test and don&rsquo;t take my word for it.</p>
+<p>After replaying your recording you should scan for further correlations by pressing Ctrl-F8. It should pick up the scid which I think is the session ID as it is constant across sessions. It&rsquo;ll also pick up the character set. <a href="/images/2009/09/lr48.webp"><img src="/images/2009/09/lr48.webp" alt="LR48" title="LR48"></a>Click on Correlate and go to vuser_init where you should see a new web_reg_save_param statement. This populates the paramater based on the search condition defined, so in this case parses the body of the page for a value between _scid= and &quot;</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span>// [WCSPARAM WCSParam_Diff1 11 X0OQ7O8dJ0k] Parameter {WCSParam_Diff1} created by Correlation Studio
+</span></span><span style="display:flex;"><span>	web_reg_save_param(&#34;WCSParam_Diff1&#34;,
+</span></span><span style="display:flex;"><span>		&#34;LB=_scid=&#34;,
+</span></span><span style="display:flex;"><span>		&#34;RB=\&#34;&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Ord=2&#34;,
+</span></span><span style="display:flex;"><span>		&#34;RelFrameId=1&#34;,
+</span></span><span style="display:flex;"><span>		&#34;Search=Body&#34;,
+</span></span><span style="display:flex;"><span>		&#34;IgnoreRedirections=Yes&#34;,
+</span></span><span style="display:flex;"><span>		LAST);
+</span></span></code></pre></div><p>Once you&rsquo;ve figured out common correlations for an application you can program them into a rule, see above for an OBIEE file I&rsquo;ve created.</p>
 <h2 id="testing-nqserver-directly">Testing NQServer directly&nbsp;<a class="headline-hash" href="#testing-nqserver-directly">🔗</a> </h2>
-<p><strong>This idea nicked wholesale from the document provided by Oracle Support :-)</strong> LoadRunner works with the ODBC protocol and can therefore be used for load testing the Analytics (NQServer) directly, i.e. excluding the Presentation Services web front-end. This would be done by recording activity through nQCmd: <img src="/images/rnm1978/lr60.png" alt="" title="LR59"><img src="http://rnm1978.files.wordpress.com/2009/10/lr60.png?w=300" alt="LR60" title="LR60"></p>
+<p><strong>This idea nicked wholesale from the document provided by Oracle Support :-)</strong> LoadRunner works with the ODBC protocol and can therefore be used for load testing the Analytics (NQServer) directly, i.e. excluding the Presentation Services web front-end. This would be done by recording activity through nQCmd: <img src="/images/rnm1978/lr60.png" alt="" title="LR59"><img src="/images/2009/10/lr60.webp" alt="LR60" title="LR60"></p>
 <p><img src="/images/rnm1978/lr62.png" alt="" title="LR61"><img src="/images/rnm1978/lr62.png" alt="LR62" title="LR62"></p>
 
 	<hr>

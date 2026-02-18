@@ -148,26 +148,64 @@
 <blockquote>
 <p>500 Internal Server Error Servlet error: An exception occurred. The current application deployment descriptors do not allow for including it in this response. Please consult the application log for details.</p>
 </blockquote>
-<p>Which IE and Firefox render something like this: <a href="http://rnm1978.files.wordpress.com/2009/12/500-int-2009-12-09_093628.png"><img src="http://rnm1978.files.wordpress.com/2009/12/500-int-2009-12-09_093628.png?w=300" alt="" title="500 int 2009-12-09_093628"></a> <a href="http://rnm1978.files.wordpress.com/2009/12/500-2009-12-09_093740.png"><img src="http://rnm1978.files.wordpress.com/2009/12/500-2009-12-09_093740.png?w=1024" alt="" title="500 2009-12-09_093740"></a></p>
+<p>Which IE and Firefox render something like this: <a href="/images/2009/12/500-int-2009-12-09_093628.webp"><img src="/images/2009/12/500-int-2009-12-09_093628.webp" alt="" title="500 int 2009-12-09_093628"></a> <a href="/images/2009/12/500-2009-12-09_093740.webp"><img src="/images/2009/12/500-2009-12-09_093740.webp" alt="" title="500 2009-12-09_093740"></a></p>
 <p>At this stage all this means is the analytics plugin, i.e. the J2EE or ISAPI servlet, has thrown an error. That is all. Now, 95% of the time this will be because Presentation Services isn&rsquo;t running, either by design (i.e. you forgot to start it) or because it&rsquo;s barfed (in which case you need to check its log files etc and fix the problem).</p>
 <h2 id="analytics-logfile">Analytics logfile&nbsp;<a class="headline-hash" href="#analytics-logfile">🔗</a> </h2>
 <p>Best practice demands a logical approach, so rather than rushing off to Presentation Services, take moment to examine the analytics logfile. For OAS or OC4J you&rsquo;ll normally find this in $J2EE_HOME/home/application-deployments/analytics/home_default_group_1/application.log (where $J2EE_HOME will be the j2ee directory underneath your OAS or OC4J installation folder). Open up the logfile and navigate to the bottom of it, and work up it backwards until you get a date and timestamp and a message like this:</p>
-<p>[sourcecode] 09/12/09 09:38:30.885 analytics: Servlet error [/sourcecode]</p>
-<p>The next line(s) will tell you what the problem is, followed by a bunch of generic java gibberish and stack. Ignore the latter and pick out the action error, which will often be: [sourcecode] java.net.ConnectException: Connection refused [/sourcecode] or sometimes: [sourcecode] java.net.ConnectException: Connection timed out [/sourcecode]</p>
-<p>(Does anyone have additional errors to add in here?)</p>
+<pre tabindex="0"><code>09/12/09 09:38:30.885 analytics: Servlet error
+</code></pre><p>The next line(s) will tell you what the problem is, followed by a bunch of generic java gibberish and stack. Ignore the latter and pick out the action error, which will often be:</p>
+<pre tabindex="0"><code>java.net.ConnectException: Connection refused
+</code></pre><p>or sometimes:</p>
+<pre tabindex="0"><code>java.net.ConnectException: Connection timed out
+</code></pre><p>(Does anyone have additional errors to add in here?)</p>
 <h2 id="troubleshooting">Troubleshooting&nbsp;<a class="headline-hash" href="#troubleshooting">🔗</a> </h2>
 <p>The errors are often self-explanatory (so long as you understand the architecture); &ldquo;Connection refused&rdquo; means that analytics tried to connect to sawserver and couldn&rsquo;t. Once the problem is established then it&rsquo;s a case of working through in a logical manner to determine the cause. Connection refused is 95% of the time simply that Presentation Services (sawserver) isn&rsquo;t running. Or maybe it is running, but on a different host or port than analytics is looking for.</p>
-<p>To check where analytics is going to be looking for sawserver, examine the analytics configuration file <strong>$J2EE_home/applications/analytics/analytics/WEB-INF/web.xml</strong> (different for ISAPI, see last paragraph <a href="/2009/11/06/obiee-clustering-specifying-multiple-presentation-services-from-presentation-services-plug-in/">here</a>). There&rsquo;ll be configuration lines matching one of these two examples. The default is this: [sourcecode language=&ldquo;xml&rdquo;] <init-param> <param-name>oracle.bi.presentation.sawserver.Host</param-name> <param-value>localhost</param-value> </init-param> <init-param> <param-name>oracle.bi.presentation.sawserver.Port</param-name> <param-value>9710</param-value> </init-param> [/sourcecode] A customised (e.g. for &lt;a href=&quot;<a href="/2009/11/06/obiee-clustering-specifying-multiple-presentation-services-from-presentation-services-plug-in/">clustered resilience</a>) entry may look like this: [sourcecode language=&ldquo;xml&rdquo;] <init-param> <param-name>oracle.bi.presentation.sawservers</param-name> <param-value>BISandbox01:9710;BISandbox02:9710</param-value> </init-param>[/sourcecode]</p>
-<h3 id="sawserver">sawserver&nbsp;<a class="headline-hash" href="#sawserver">🔗</a> </h3>
-<p>Let&rsquo;s check the connectivity from both sides. First off, is Presentation Services (sawserver) running on the server we&rsquo;re expecting it to be and listening on the correct port? In unix we can check this quite simply using the ps command and filtering it with the grep command. On the host that we&rsquo;re expecting sawserver to be, run this: [sourcecode] $ ps -ef|grep sawserver oracle 14827 1 0 09:58 pts/0 00:00:00 /bin/sh /app/oracle/product/obiee/setup/sawserver.sh oracle 14842 14827 35 09:58 pts/0 00:00:01 /app/oracle/product/obiee/web/bin/sawserver [/sourcecode] If there&rsquo;s no output from this (or only the grep itself) then sawserver&rsquo;s not running, and you need to fix that before proceeding. On Windows check the Services window (services.msc) and task manager for sawserver.exe.</p>
-<p>Assuming sawserver is running, now check that it is listening on the port specific in the analytics configuration file (see above). In this example, I&rsquo;m checking for the default port, 9710: [sourcecode] $ netstat -a|grep 9710 tcp 0 0 *:9710 *:* LISTEN [/sourcecode] If there&rsquo;s no output from the command then it means that port 9710 is not in use, i.e. sawserver is not listening on it. N.B. at this point it is theoretically possible that another application is using port 9710 - all we&rsquo;re proving is that <strong>something</strong> is using it. But unless you&rsquo;ve changed sawserver&rsquo;s port (in instanceconfig.xml) then the fact it&rsquo;s started up means that it is it using 9710 because it won&rsquo;t start if another application is using its port. In Windows you can use netstat -a but there&rsquo;s no grep by default so you need to scroll down the output to look for the port.</p>
+<p>To check where analytics is going to be looking for sawserver, examine the analytics configuration file <strong>$J2EE_home/applications/analytics/analytics/WEB-INF/web.xml</strong> (different for ISAPI, see last paragraph <a href="/2009/11/06/obiee-clustering-specifying-multiple-presentation-services-from-presentation-services-plug-in/">here</a>). There&rsquo;ll be configuration lines matching one of these two examples. The default is this:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span>oracle.bi.presentation.sawserver.Host
+</span></span><span style="display:flex;"><span>localhost
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>oracle.bi.presentation.sawserver.Port
+</span></span><span style="display:flex;"><span>9710
+</span></span></code></pre></div><p>A customised (e.g. for &lt;a href=&quot;<a href="/2009/11/06/obiee-clustering-specifying-multiple-presentation-services-from-presentation-services-plug-in/">clustered resilience</a>) entry may look like this:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span>oracle.bi.presentation.sawservers
+</span></span><span style="display:flex;"><span>BISandbox01:9710;BISandbox02:9710
+</span></span></code></pre></div><h3 id="sawserver">sawserver&nbsp;<a class="headline-hash" href="#sawserver">🔗</a> </h3>
+<p>Let&rsquo;s check the connectivity from both sides. First off, is Presentation Services (sawserver) running on the server we&rsquo;re expecting it to be and listening on the correct port? In unix we can check this quite simply using the ps command and filtering it with the grep command. On the host that we&rsquo;re expecting sawserver to be, run this:</p>
+<pre tabindex="0"><code>$ ps -ef|grep sawserver
+oracle   14827     1  0 09:58 pts/0    00:00:00 /bin/sh /app/oracle/product/obiee/setup/sawserver.sh
+oracle   14842 14827 35 09:58 pts/0    00:00:01 /app/oracle/product/obiee/web/bin/sawserver
+</code></pre><p>If there&rsquo;s no output from this (or only the grep itself) then sawserver&rsquo;s not running, and you need to fix that before proceeding. On Windows check the Services window (services.msc) and task manager for sawserver.exe.</p>
+<p>Assuming sawserver is running, now check that it is listening on the port specific in the analytics configuration file (see above). In this example, I&rsquo;m checking for the default port, 9710:</p>
+<pre tabindex="0"><code>$ netstat -a|grep 9710
+tcp        0      0 *:9710                      *:*                         LISTEN
+</code></pre><p>If there&rsquo;s no output from the command then it means that port 9710 is not in use, i.e. sawserver is not listening on it. N.B. at this point it is theoretically possible that another application is using port 9710 - all we&rsquo;re proving is that <strong>something</strong> is using it. But unless you&rsquo;ve changed sawserver&rsquo;s port (in instanceconfig.xml) then the fact it&rsquo;s started up means that it is it using 9710 because it won&rsquo;t start if another application is using its port. In Windows you can use netstat -a but there&rsquo;s no grep by default so you need to scroll down the output to look for the port.</p>
 <p>So - sawserver is running on the expected host, and listening on the correct port.</p>
 <h3 id="analytics">analytics&nbsp;<a class="headline-hash" href="#analytics">🔗</a> </h3>
 <p>Now let&rsquo;s examine connectivity from the point of view of the analytics plugin (which is flow of the traffic too, i.e. connecting <em>TO</em> sawserver). On the server hosting your application server (OAS/OC4J/IIS, etc) -which may or may not be the same as your Presentation Services - we want to test if Presentation Services can be connected to at the network layer. To do this we&rsquo;re going to prod the port and host that it&rsquo;s configured on (according to web.xml, see above).</p>
-<p>The following is on OEL 4, which is a based on RedHat so I&rsquo;d expect that to behave the same. First get a &ldquo;control&rdquo; output for connecting to a port that most definitely is not open to traffic. Find a port on your sawserver host (which may or may not be local) that&rsquo;s unused: [sourcecode] $ netstat -a|grep 9999 $ [/sourcecode] If you get output from the netstat then pick another port until you don&rsquo;t Now let&rsquo;s try connecting to it to see what happens when we connect to a closed port: [sourcecode] $ telnet localhost 9999 Trying 127.0.0.1&hellip; telnet: connect to address 127.0.0.1: Connection refused [/sourcecode] So - our control output for a closed port is this <em>telnet: connect to address 127.0.0.1: Connection refused</em>.</p>
-<p>Recall what host and port we determined analytics was trying to connect to (from web.xml, see above), and run the test for it. In this example I&rsquo;ll check for the default - localhost and 9710. If we get something like this: [sourcecode] $ telnet localhost 9710 Trying 127.0.0.1&hellip; Connected to localhost. Escape character is &lsquo;^]&rsquo;. [/sourcecode] then it shows the port and host is accepting connections. You can&rsquo;t do much more from here that I&rsquo;m aware of, but it proves the port is open.</p>
-<p>However if we get this: [sourcecode] $ telnet localhost 9710 Trying 127.0.0.1&hellip; telnet: connect to address 127.0.0.1: Connection refused [/sourcecode] then it would tell us that the port we&rsquo;re expecting to be open isn&rsquo;t - and you have a problem! See below for further suggestions.</p>
-<p>On Windows you&rsquo;ll get similar behaviour for a failed connection: [sourcecode] C:\&gt;telnet localhost 9999 Connecting To localhost&hellip;Could not open connection to the host, on port 9999: Connect failed [/sourcecode] For a successful connection you will normally find the command window clears and you get a flashing cursor. Enter a few random characters or hit Ctrl-C to return to the command prompt.</p>
+<p>The following is on OEL 4, which is a based on RedHat so I&rsquo;d expect that to behave the same. First get a &ldquo;control&rdquo; output for connecting to a port that most definitely is not open to traffic. Find a port on your sawserver host (which may or may not be local) that&rsquo;s unused:</p>
+<pre tabindex="0"><code>$ netstat -a|grep 9999
+$
+</code></pre><p>If you get output from the netstat then pick another port until you don&rsquo;t Now let&rsquo;s try connecting to it to see what happens when we connect to a closed port:</p>
+<pre tabindex="0"><code>$ telnet localhost 9999
+Trying 127.0.0.1...
+telnet: connect to address 127.0.0.1: Connection refused
+</code></pre><p>So - our control output for a closed port is this <em>telnet: connect to address 127.0.0.1: Connection refused</em>.</p>
+<p>Recall what host and port we determined analytics was trying to connect to (from web.xml, see above), and run the test for it. In this example I&rsquo;ll check for the default - localhost and 9710. If we get something like this:</p>
+<pre tabindex="0"><code>$ telnet localhost 9710
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is &#39;^]&#39;.
+</code></pre><p>then it shows the port and host is accepting connections. You can&rsquo;t do much more from here that I&rsquo;m aware of, but it proves the port is open.</p>
+<p>However if we get this:</p>
+<pre tabindex="0"><code>$ telnet localhost 9710
+Trying 127.0.0.1...
+telnet: connect to address 127.0.0.1: Connection refused
+</code></pre><p>then it would tell us that the port we&rsquo;re expecting to be open isn&rsquo;t - and you have a problem! See below for further suggestions.</p>
+<p>On Windows you&rsquo;ll get similar behaviour for a failed connection:</p>
+<pre tabindex="0"><code>C:\&gt;telnet localhost 9999
+Connecting To localhost...Could not open connection to the host, on port 9999: Connect failed
+</code></pre><p>For a successful connection you will normally find the command window clears and you get a flashing cursor. Enter a few random characters or hit Ctrl-C to return to the command prompt.</p>
 <h2 id="further-troubleshooting">Further troubleshooting&nbsp;<a class="headline-hash" href="#further-troubleshooting">🔗</a> </h2>
 <p>If you get a connection error when you telnet to the host and port that you think sawserver should be on then you have identified the problem, and now need to diagnose the cause. Starting points for this are:</p>
 <ul>
@@ -179,18 +217,46 @@
 <p>This is a fairly low-level way of methodically picking your way through problems between two of the OBIEE components. As I&rsquo;ve said, 95% of the time it&rsquo;s a simple thing, that Presentation Services isn&rsquo;t running. However hopefully this article gives you more of a basis on which to diagnose and solve the remaining 5% of issues. <strong>If you can&rsquo;t telnet to sawserver&rsquo;s host and port from the machine that your application service is running on then your problem lies in connectivity and you need to fix that before trying to fix anything else.</strong></p>
 <h2 id="footnote---sawping">Footnote - sawping&nbsp;<a class="headline-hash" href="#footnote---sawping">🔗</a> </h2>
 <p>Just after writing this article I remembered a utility called sawping that I first saw mentioned by Srinivas Malyala <a href="http://tipsonobiee.blogspot.com/2009/07/sawping.html">here</a>. In essence it does the same as what I documented using telnet above - it tests for sawserver on a given hostname and port. I&rsquo;d be interested to know if it does any more than check for the open port (i.e. does it interrogate the application on the end of the port to check it is sawserver). Watching saw.rpc entries to the sawserver.log it doesn&rsquo;t look like it, or if it does it&rsquo;s not logged.</p>
-<p>To use it in unix you need to dot-source $OBIEE_HOME/setup/sa-init.sh (or sa-init64.sh) first to set your environment variables and paths: [sourcecode] $ . ./sa-init.sh $ [/sourcecode] Test the default hostname and port (I don&rsquo;t think this parses analytics&rsquo; web.xml): [sourcecode language=&ldquo;bash&rdquo;] $sawping Server alive and well [/sourcecode] Add the -v flag for more verbose output if you get an error: [sourcecode] $ sawping Unable to connect to server. The server may be down or may be too busy to accept additional connections.</p>
-<p>$ sawping -v Unable to connect to server. The server may be down or may be too busy to accept additional connections. An error occurred during execution of &ldquo;connect&rdquo;. Connection refused [Socket:3] Error Codes: ETI2U8FA</p>
-<p>[/sourcecode]</p>
-<p>Test for sawserver on a different host: [sourcecode] $ sawping -s bisandbox02 Server alive and well [/sourcecode]</p>
-<p>Note the message tells you what the problem is if there is an error (in this example, &ldquo;Unable to resolve address&rdquo;) [sourcecode] $ sawping -s bisandboxxxxx02 -v An error occured during process. Run in verbose mode to see error details. Unable to resolve the address for bisandboxxxxx02. Error Codes: AXSBMN8D:</p>
-<p>TRY_AGAIN [/sourcecode]</p>
-<p>Test for sawserver on a different host and port:</p>
-<p>[sourcecode] $ sawping -s bisandbox02 -p 9711 -v Server alive and well [/sourcecode]</p>
-<p>To use the utility in Windows either add $OBIEE_Home/web/bin to your PATH environment variable, or reference it directly. The argument syntax remains the same: [sourcecode] C:\&gt;c:\OracleBI\web\bin\sawping.exe Server alive and well</p>
-<p>C:\&gt;c:\OracleBI\web\bin\sawping.exe -s bisandbox02 Server alive and well</p>
-<p>C:\&gt;c:\OracleBI\web\bin\sawping.exe -p 9711 -v Unable to connect to server. The server may be down or may be too busy to accept additional connections. An error occurred during execution of &ldquo;connect&rdquo;. No connection could be made because the target machine actively refused it. [Socket:1808] Error Codes: ETI2U8FA [/sourcecode]</p>
+<p>To use it in unix you need to dot-source $OBIEE_HOME/setup/sa-init.sh (or sa-init64.sh) first to set your environment variables and paths:</p>
+<pre tabindex="0"><code>$ . ./sa-init.sh
+$
+</code></pre><p>Test the default hostname and port (I don&rsquo;t think this parses analytics&rsquo; web.xml):</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#19177c">$sawping</span>
+</span></span><span style="display:flex;"><span>Server alive and well
+</span></span></code></pre></div><p>Add the -v flag for more verbose output if you get an error:</p>
+<pre tabindex="0"><code>$ sawping
+Unable to connect to server. The server may be down or may be too busy to accept additional connections.
 
+$ sawping -v
+Unable to connect to server. The server may be down or may be too busy to accept additional connections.
+An error occurred during execution of &#34;connect&#34;. Connection refused [Socket:3]
+Error Codes: ETI2U8FA
+</code></pre><p>Test for sawserver on a different host:</p>
+<pre tabindex="0"><code>$ sawping -s bisandbox02
+Server alive and well
+</code></pre><p>Note the message tells you what the problem is if there is an error (in this example, &ldquo;Unable to resolve address&rdquo;)</p>
+<pre tabindex="0"><code>$ sawping -s bisandboxxxxx02 -v
+An error occured during process. Run in verbose mode to see error details.
+Unable to resolve the address for bisandboxxxxx02.
+Error Codes: AXSBMN8D:
+
+TRY_AGAIN
+</code></pre><p>Test for sawserver on a different host and port:</p>
+<pre tabindex="0"><code>$ sawping -s bisandbox02 -p 9711 -v
+Server alive and well
+</code></pre><p>To use the utility in Windows either add $OBIEE_Home/web/bin to your PATH environment variable, or reference it directly. The argument syntax remains the same:</p>
+<pre tabindex="0"><code>C:\&gt;c:\OracleBI\web\bin\sawping.exe
+Server alive and well
+
+C:\&gt;c:\OracleBI\web\bin\sawping.exe  -s bisandbox02
+Server alive and well
+
+C:\&gt;c:\OracleBI\web\bin\sawping.exe -p 9711 -v
+Unable to connect to server. The server may be down or may be too busy to accept additional connections.
+An error occurred during execution of &#34;connect&#34;. No connection could be made because the target machine actively refused it.
+ [Socket:1808]
+Error Codes: ETI2U8FA
+</code></pre>
 	<hr>
 	<div class="giscus-container">
 		<script src="https://giscus.app/client.js"

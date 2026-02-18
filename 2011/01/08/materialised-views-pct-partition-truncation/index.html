@@ -209,19 +209,29 @@
 <li><strong>The materialized view should be range or list partitioned</strong></li>
 <li><strong>PCT refresh is nonatomic</strong>
 <ul>
-<li>That is, you specify the atomic_refresh parameter in your refresh call as false: [sourcecode language=&ldquo;sql&rdquo;]EXEC DBMS_MVIEW.REFRESH( […], […], atomic_refresh=&gt;false, […]); [/sourcecode]</li>
-<li><strong>By default (i.e. if you do not specify it), atomic_refresh=&gt;true</strong></li>
+<li>That is, you specify the atomic_refresh parameter in your refresh call as false:</li>
 </ul>
 </li>
 </ol>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">EXEC</span><span style="color:#bbb"> </span>DBMS_MVIEW.REFRESH(<span style="color:#bbb">	</span>[<span style="">…</span>],<span style="color:#bbb"> 
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">			</span>[<span style="">…</span>],<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">			</span>atomic_refresh<span style="color:#666">=&gt;</span><span style="color:#008000;font-weight:bold">false</span>,<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">			</span>[<span style="">…</span>]);<span style="color:#bbb">
+</span></span></span></code></pre></div><pre><code>- **By default (i.e. if you do not specify it), atomic\_refresh=&gt;true**
+</code></pre>
 <p><grumble> The documentation on all this is there, if you look for it. My personal opinion is that other functionality of Oracle DB is better documented than this, and that DBMS_MVIEW as a whole gives away its long history in the disjointed nature of the documentation. If it were re-written today with a focus on data warehousing I&rsquo;m confident it would be clearer. Anyway, that&rsquo;s my excuse for not RTFMing properly&hellip; </grumble></p>
 <h2 id="what-it-doesnt-say-in-the-manual">What it doesn&rsquo;t say in the manual&nbsp;<a class="headline-hash" href="#what-it-doesnt-say-in-the-manual">🔗</a> </h2>
 <p>Despite having met all the above conditions for PCT partition truncation, it still wasn’t happening. When adding or updating data for an existing weekly partition, we always saw DELETE … INSERT, rather than TRUNCATE … INSERT. The DELETE took ages, as would be expected</p>
-<p>A 10979 trace (see below) on the MView refresh showed this crucial line : [sourcecode] [&hellip;]</p>
-<p>Value of _mv_refresh_costing : rule</p>
-<p>[&hellip;] [/sourcecode]</p>
-<p>This undocumented parameter is at the very heart of getting PCT partition truncation. By default it is set to Rule, which means that you will get DELETE &hellip; INSERT and never TRUNCATE&hellip;INSERT. There is a document on My Oracle Support: <a href="https://supporthtml.oracle.com/ep/faces/secure/km/DocumentDisplay.jspx?id=733673.1">PCT REFRESH ISSUES DELETE WHERE IT SHOULD ISSUE TRUNCATE (Doc ID 733673.1)</a>.</p>
-<p>The suggested solution is to set it to Cost, which instructs Oracle to cost the different options and use the best for the given situation. However, during testing we saw an instance of bad costing on this leading Oracle to still DELETE instead of TRUNCATE. Therefore, we opted for forcing the choice through rule, but specified in order of preference: [sourcecode language=&ldquo;sql&rdquo;] alter session set &ldquo;_mv_refresh_costing&rdquo;=&lsquo;rule_pt_pd_fa_co&rsquo;; [/sourcecode] where:</p>
+<p>A 10979 trace (see below) on the MView refresh showed this crucial line :</p>
+<pre tabindex="0"><code>[...]
+
+Value of _mv_refresh_costing : rule
+
+[...]
+</code></pre><p>This undocumented parameter is at the very heart of getting PCT partition truncation. By default it is set to Rule, which means that you will get DELETE &hellip; INSERT and never TRUNCATE&hellip;INSERT. There is a document on My Oracle Support: <a href="https://supporthtml.oracle.com/ep/faces/secure/km/DocumentDisplay.jspx?id=733673.1">PCT REFRESH ISSUES DELETE WHERE IT SHOULD ISSUE TRUNCATE (Doc ID 733673.1)</a>.</p>
+<p>The suggested solution is to set it to Cost, which instructs Oracle to cost the different options and use the best for the given situation. However, during testing we saw an instance of bad costing on this leading Oracle to still DELETE instead of TRUNCATE. Therefore, we opted for forcing the choice through rule, but specified in order of preference:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">alter</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">session</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">set</span><span style="color:#bbb"> </span><span style="color:#ba2121">&#34;_mv_refresh_costing&#34;</span><span style="color:#666">=</span><span style="color:#ba2121">&#39;rule_pt_pd_fa_co&#39;</span>;<span style="color:#bbb">
+</span></span></span></code></pre></div><p>where:</p>
 <ul>
 <li>pt = PCT – TRUNC <em>(i.e. TRUNCATE &hellip; INSERT)</em></li>
 <li>pd = PCT – DEL/TRUNC <em>(i.e. DELETE &hellip; INSERT)</em></li>
@@ -233,39 +243,112 @@
 <h2 id="what-it-kind-of-says-in-the-manual---default-global-index">[What it kind of says in the manual] - Default global index&nbsp;<a class="headline-hash" href="#what-it-kind-of-says-in-the-manual---default-global-index">🔗</a> </h2>
 <p>Our elation at seeing a TRUNCATE occur was short-lived, because the refresh still took ages to run.</p>
 <p>After a bit of head-scratching and more RTFMing, we found that the reason for the slow refresh time was down to a default global index that is created on MViews. Named I_SNAP$.[&hellip;], they are used when you do &ldquo;fast&rdquo; (incremental) refreshes, using the mv$log tables. However, if you&rsquo;re only doing PCT refreshes of a MView, they are a positive hindrance because they need rebuilding every time. On an MView with millions of rows this takes a long time.</p>
-<p>Here is an abridged trace for a PCT-Truncate refresh of an MView with the default global index in place: [sourcecode language=&ldquo;sql&rdquo;] /* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &ldquo;HR&rdquo;.&ldquo;I_SNAP$_MV_WEEK&rdquo; UNUSABLE</p>
-<p>ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION PART_20101122 UPDATE GLOBAL INDEXES</p>
-<p>/* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX APPEND BYPASS_RECURSIVE_CHECK */ INTO[…]</p>
-<p>BEGIN sys.dbms_index_utl.multi_level_build(index_list=&gt;&rsquo;&ldquo;HR&rdquo;.&ldquo;I_SNAP$_MV_WEEK&rdquo;&rsquo;,just_unusable=&gt;TRUE, cont_after_err=&gt;TRUE, concurrent=&gt;TRUE); END; [/sourcecode]</p>
-<p>By defining the MView using the USING NO INDEX clause, the global index is not created and the PCT-Truncate works much more efficiently: [sourcecode language=&ldquo;sql&rdquo;] ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION[…]</p>
-<p>/* MV_REFRESH (INS) */ INSERT /*+ APPEND […] [/sourcecode]</p>
-<h2 id="refresh-method">Refresh method&nbsp;<a class="headline-hash" href="#refresh-method">🔗</a> </h2>
-<p>To get PCT refresh, use method=&gt;&lsquo;P&rsquo; [sourcecode language=&ldquo;sql&rdquo;]EXEC DBMS_MVIEW.REFRESH( […], […], method=&gt;&lsquo;P&rsquo;, […]); [/sourcecode] You can also use method=&gt;&rsquo;?&rsquo; where Oracle will try PCT first, and then Complete if PCT is not possible. However, if PCT isn&rsquo;t possible you may have a problem that you want to know about rather than rebuilding the MV each time without you being aware of it.</p>
+<p>Here is an abridged trace for a PCT-Truncate refresh of an MView with the default global index in place:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#408080;font-style:italic">/* MV_REFRESH (IND_UNUSABLE) */</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">ALTER</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">INDEX</span><span style="color:#bbb"> </span><span style="color:#ba2121">&#34;HR&#34;</span>.<span style="color:#ba2121">&#34;I_SNAP$_MV_WEEK&#34;</span><span style="color:#bbb"> </span>UNUSABLE<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb"></span><span style="color:#008000;font-weight:bold">ALTER</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">TABLE</span><span style="color:#bbb"> </span><span style="color:#ba2121">&#34;HR&#34;</span>.<span style="color:#ba2121">&#34;MV_WEEK&#34;</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">TRUNCATE</span><span style="color:#bbb">  </span>PARTITION<span style="color:#bbb"> </span>PART_20101122<span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">UPDATE</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">GLOBAL</span><span style="color:#bbb"> </span>INDEXES<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb"></span><span style="color:#408080;font-style:italic">/* MV_REFRESH (INS) */</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">INSERT</span><span style="color:#bbb"> </span><span style="color:#408080;font-style:italic">/*+ SKIP_UNQ_UNUSABLE_IDX APPEND BYPASS_RECURSIVE_CHECK */</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">INTO</span>[<span style="">…</span>]<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb"></span><span style="color:#008000;font-weight:bold">BEGIN</span><span style="color:#bbb">  </span>sys.dbms_index_utl.multi_level_build(index_list<span style="color:#666">=&gt;</span><span style="color:#ba2121">&#39;&#34;HR&#34;.&#34;I_SNAP$_MV_WEEK&#34;&#39;</span>,just_unusable<span style="color:#666">=&gt;</span><span style="color:#008000;font-weight:bold">TRUE</span>,<span style="color:#bbb"> </span>cont_after_err<span style="color:#666">=&gt;</span><span style="color:#008000;font-weight:bold">TRUE</span>,<span style="color:#bbb"> </span>concurrent<span style="color:#666">=&gt;</span><span style="color:#008000;font-weight:bold">TRUE</span>);<span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">END</span>;<span style="color:#bbb">
+</span></span></span></code></pre></div><p>By defining the MView using the USING NO INDEX clause, the global index is not created and the PCT-Truncate works much more efficiently:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">ALTER</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">TABLE</span><span style="color:#bbb"> </span><span style="color:#ba2121">&#34;HR&#34;</span>.<span style="color:#ba2121">&#34;MV_WEEK&#34;</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">TRUNCATE</span><span style="color:#bbb"> </span>PARTITION[<span style="">…</span>]<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb"></span><span style="color:#408080;font-style:italic">/* MV_REFRESH (INS) */</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">INSERT</span><span style="color:#bbb"> </span><span style="color:#408080;font-style:italic">/*+ APPEND  […]
+</span></span></span></code></pre></div><h2 id="refresh-method">Refresh method&nbsp;<a class="headline-hash" href="#refresh-method">🔗</a> </h2>
+<p>To get PCT refresh, use method=&gt;&lsquo;P&rsquo;</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#008000;font-weight:bold">EXEC</span><span style="color:#bbb"> </span>DBMS_MVIEW.REFRESH(<span style="color:#bbb">	</span>[<span style="">…</span>],<span style="color:#bbb"> 
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">			</span>[<span style="">…</span>],<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">			</span><span style="color:#008000;font-weight:bold">method</span><span style="color:#666">=&gt;</span><span style="color:#ba2121">&#39;P&#39;</span>,<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb">			</span>[<span style="">…</span>]);<span style="color:#bbb">
+</span></span></span></code></pre></div><p>You can also use method=&gt;&rsquo;?&rsquo; where Oracle will try PCT first, and then Complete if PCT is not possible. However, if PCT isn&rsquo;t possible you may have a problem that you want to know about rather than rebuilding the MV each time without you being aware of it.</p>
 <h2 id="bug-interval-partitioned-mview-and-pct-partition-truncation">Bug: Interval Partitioned MView and PCT Partition Truncation&nbsp;<a class="headline-hash" href="#bug-interval-partitioned-mview-and-pct-partition-truncation">🔗</a> </h2>
-<p>Interval partitioning removes the headache of partition management for new data. Unfortunately, it appears that you can’t partition MViews and refresh them using PCT partition truncation. If you try to PCT partition truncate refresh an interval-partitioned MView, you get this error: [sourcecode] ERROR at line 1: ORA-12008: error in materialized view refresh path ORA-00936: missing expression ORA-06512: at &ldquo;SYS.DBMS_SNAPSHOT&rdquo;, line 2545 ORA-06512: at &ldquo;SYS.DBMS_SNAPSHOT&rdquo;, line 2751 ORA-06512: at &ldquo;SYS.DBMS_SNAPSHOT&rdquo;, line 2720 ORA-06512: at line 1 [/sourcecode]</p>
-<p>You don&rsquo;t get the error if you do a non-atomic refresh - but if you do a non-atomic refresh you don&rsquo;t get partition truncation (you get DELETE instead).</p>
-<p>Test case: <a href="http://rnm1978.wordpress.com/mv_issue_01a-sql/">mv_issue_01a.sql</a></p>
+<p>Interval partitioning removes the headache of partition management for new data. Unfortunately, it appears that you can’t partition MViews and refresh them using PCT partition truncation. If you try to PCT partition truncate refresh an interval-partitioned MView, you get this error:</p>
+<pre tabindex="0"><code>ERROR at line 1:
+ORA-12008: error in materialized view refresh path
+ORA-00936: missing expression
+ORA-06512: at &#34;SYS.DBMS_SNAPSHOT&#34;, line 2545
+ORA-06512: at &#34;SYS.DBMS_SNAPSHOT&#34;, line 2751
+ORA-06512: at &#34;SYS.DBMS_SNAPSHOT&#34;, line 2720
+ORA-06512: at line 1
+</code></pre><p>You don&rsquo;t get the error if you do a non-atomic refresh - but if you do a non-atomic refresh you don&rsquo;t get partition truncation (you get DELETE instead).</p>
+<p>Test case: <a href="https://rmoff.net/mv_issue_01a-sql/">mv_issue_01a.sql</a></p>
 <h2 id="bug-mview-defined-with-ansi-sql">Bug: MView defined with ANSI SQL&nbsp;<a class="headline-hash" href="#bug-mview-defined-with-ansi-sql">🔗</a> </h2>
 <p>This will probably have some people exclaiming &ldquo;serves you right &hellip;&rdquo; but ANSI SQL joins (INNER JOIN etc, instead of joining tables in the WHERE clause) is what I was brought up on. I discovered after several frustrating hours that you shouldn&rsquo;t use it when you define MViews, as it can result in an erroneous &ldquo;COMPILATION ERROR&rdquo; state for the MView when data on the base table is changed. There&rsquo;s a of MOS article: <a href="https://supporthtml.oracle.com/ep/faces/secure/km/DocumentDisplay.jspx?id=1081493.1">Mview Refresh Fails And COMPILE_STATE =&gt; COMPILATION_ERROR (Doc ID 1081493.1)</a>, which refers to bug <a href="https://supporthtml.oracle.com/ep/faces/secure/km/BugDisplay.jspx?id=5759944&amp;bugProductSource=Oracle">5759944</a> and for which there&rsquo;s a patch number. It&rsquo;s supposedly fixed in 11.2 but appears to still be present in 11.2.0.1.0.</p>
-<p>Test case: <a href="http://rnm1978.wordpress.com/mv_issue_02-sql/">mv_issue_02.sql</a></p>
+<p>Test case: <a href="https://rmoff.net/mv_issue_02-sql/">mv_issue_02.sql</a></p>
 <h2 id="10979-tracing">10979 Tracing&nbsp;<a class="headline-hash" href="#10979-tracing">🔗</a> </h2>
-<p>To understand exactly what happens when a MView refresh takes place, you can enable tracing using: [sourcecode language=&ldquo;sql&rdquo;] &ndash; enable the trace alter session set events &lsquo;10979 trace name context forever&rsquo;; &ndash; SQL commands to trace go here [&hellip;] &ndash; Disable the trace alter session set events &lsquo;10979 trace name context off&rsquo;; [/sourcecode]</p>
-<p>Here&rsquo;s an annotated trace log of a successful PCT partition truncation MView refresh:</p>
-<p>First is one of the key bits - is the refresh atomic (atomic_refresh=&gt;&lsquo;true&rsquo;, which is the default) or non-atomic (atomic_refresh=&gt;&lsquo;false&rsquo;) which is required for PCT partition truncation [sourcecode] NON ATOMIC REFRESH ON DEMAND REFRESH</p>
-<p>ONLY TRUNCATE based PCT REFRESH possible [/sourcecode] Next follows the statements that Oracle would execute, for all of the MV refresh methods that it thinks are applicable in this refresh scenario.</p>
+<p>To understand exactly what happens when a MView refresh takes place, you can enable tracing using:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#408080;font-style:italic">-- enable the trace
+</span></span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"></span><span style="color:#008000;font-weight:bold">alter</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">session</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">set</span><span style="color:#bbb"> </span>events<span style="color:#bbb"> </span><span style="color:#ba2121">&#39;10979 trace name context forever&#39;</span>;<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb"></span><span style="color:#408080;font-style:italic">-- SQL commands to trace go here
+</span></span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"></span><span style="color:#bbb"> </span>[...]<span style="color:#bbb">
+</span></span></span><span style="display:flex;"><span><span style="color:#bbb"></span><span style="color:#408080;font-style:italic">-- Disable the trace 
+</span></span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"></span><span style="color:#008000;font-weight:bold">alter</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">session</span><span style="color:#bbb"> </span><span style="color:#008000;font-weight:bold">set</span><span style="color:#bbb"> </span>events<span style="color:#bbb"> </span><span style="color:#ba2121">&#39;10979 trace name context off&#39;</span>;<span style="color:#bbb">
+</span></span></span></code></pre></div><p>Here&rsquo;s an annotated trace log of a successful PCT partition truncation MView refresh:</p>
+<p>First is one of the key bits - is the refresh atomic (atomic_refresh=&gt;&lsquo;true&rsquo;, which is the default) or non-atomic (atomic_refresh=&gt;&lsquo;false&rsquo;) which is required for PCT partition truncation</p>
+<pre tabindex="0"><code>NON ATOMIC REFRESH
+ ON DEMAND REFRESH
+
+ ONLY TRUNCATE based PCT REFRESH possible
+</code></pre><p>Next follows the statements that Oracle would execute, for all of the MV refresh methods that it thinks are applicable in this refresh scenario.</p>
 <p>Method 4 is a DELETE &hellip; INSERT, whilst Method 5 is TRUNCATE &hellip; INSERT. Note that the global index hasn&rsquo;t been removed from the MView, hence the additional index maintenance commands</p>
-<p>[sourcecode] Refresh Method 4 REFRESH Stmt 0 /* MV_REFRESH (DEL) */ DELETE FROM &ldquo;HR&rdquo;.&ldquo;MV_WEE[&hellip;] REFRESH Stmt 1 /* MV_REFRESH (INS) */ INSERT /*+ BYPASS_RECURSIVE_CHEC[&hellip;]</p>
-<p>Refresh Method 5 REFRESH Stmt 0 /* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &ldquo;HR[&hellip;] REFRESH Stmt 1 ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION [&hellip;] REFRESH Stmt 2 /* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX[&hellip;] REFRESH Stmt 3 BEGIN sys.dbms_index_utl.multi_level_build(index_list=[&hellip;] [/sourcecode] Watch out for this parameter value - it&rsquo;s crucial! [sourcecode]</p>
-<p>Value of _mv_refresh_costing : COST</p>
-<p>[/sourcecode] By default (11.1.0.7) it&rsquo;s &ldquo;RULE&rdquo; and will do DELETE&hellip;INSERT *always* instead of TRUNCATE&hellip;INSERT</p>
-<p>If you&rsquo;re using COST, then the cost of the possible refresh methods will be calculated: [sourcecode] REFRESH STATEMENT /* MV_REFRESH (DEL) */ DELETE FROM &ldquo;HR&rdquo;.&ldquo;MV_WEE[&hellip;] COST = 4.002855 REFRESH STATEMENT /* MV_REFRESH (INS) */ INSERT /*+ BYPASS_RECURSIVE_CHEC[&hellip;] COST = 2.571476 TOTAL COST OF REFRESH = 6.574331</p>
-<p>REFRESH STATEMENT /* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &ldquo;HR[&hellip;] COST = 0.000000 REFRESH STATEMENT ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION [&hellip;] COST = 0.000000 REFRESH STATEMENT /* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX[&hellip;] COST = 2.279282 REFRESH STATEMENT BEGIN sys.dbms_index_utl.multi_level_build(index_list=[&hellip;] COST = 0.000000 TOTAL COST OF REFRESH = 2.279282</p>
-<p>[/sourcecode] After costing, or by rule, the method chosen will be stated: [sourcecode]</p>
-<p>Refresh method picked PCT - TRUNC</p>
-<p>[/sourcecode] Oracle then records the actual statements executed: [sourcecode]</p>
-<p>Executed Stmt - /* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &ldquo;HR[&hellip;] Executed Stmt - ALTER TABLE &ldquo;HR&rdquo;.&ldquo;MV_WEEK&rdquo; TRUNCATE PARTITION [&hellip;] Executed Stmt - /* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX[&hellip;] Executed Stmt - BEGIN sys.dbms_index_utl.multi_level_build(index_list=[&hellip;]</p>
-<p>[/sourcecode]</p>
-<p>A final word of warning - remember that the trace file is an internal diagnostic, it is not for user-consumption. I spent a while worrying about this entry in the log: [sourcecode] PARSE ERROR #19:len=12330 dep=1 uid=142 oct=3 lid=142 tim=35441256289311 err=10980 SELECT &ldquo;R&rdquo;.&ldquo;BSNS_WK_KEY&rdquo; &ldquo;WK_KEY&rdquo;,&ldquo;D&rdquo;.&ldquo;SOURCE_SYSTEM_KEY&rdquo; &ldquo;SOURCE_SYSTEM_KEY&rdquo;,&ldquo;D&rdquo;.&rdquo; CLOSE #19:c=0,e=0,dep=1,type=0,tim=35441256289311 [/sourcecode] Even though there was no error returned to the user session calling the refresh, I figured this must be some problem. However, according to MOS doc <a href="https://supporthtml.oracle.com/ep/faces/secure/km/DocumentDisplay.jspx?id=294513.1">Errors In Refresh Snapshot Trace Files ORA-10980 (Doc ID 294513.1)</a> the parse error is raised and cleared internally and therefore nothing to worry about.</p>
+<pre tabindex="0"><code>Refresh Method 4
+REFRESH Stmt 0
+/* MV_REFRESH (DEL) */ DELETE FROM &#34;HR&#34;.&#34;MV_WEE[...]
+REFRESH Stmt 1
+/* MV_REFRESH (INS) */ INSERT /*+ BYPASS_RECURSIVE_CHEC[...]
+
+Refresh Method 5
+REFRESH Stmt 0
+/* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &#34;HR[...]
+REFRESH Stmt 1
+ALTER TABLE &#34;HR&#34;.&#34;MV_WEEK&#34; TRUNCATE  PARTITION [...]
+REFRESH Stmt 2
+/* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX[...]
+REFRESH Stmt 3
+BEGIN  sys.dbms_index_utl.multi_level_build(index_list=[...]
+</code></pre><p>Watch out for this parameter value - it&rsquo;s crucial!</p>
+<pre tabindex="0"><code>Value of _mv_refresh_costing : COST
+</code></pre><p>By default (11.1.0.7) it&rsquo;s &ldquo;RULE&rdquo; and will do DELETE&hellip;INSERT *always* instead of TRUNCATE&hellip;INSERT</p>
+<p>If you&rsquo;re using COST, then the cost of the possible refresh methods will be calculated:</p>
+<pre tabindex="0"><code>REFRESH STATEMENT
+/* MV_REFRESH (DEL) */ DELETE FROM &#34;HR&#34;.&#34;MV_WEE[...]
+COST = 4.002855
+REFRESH STATEMENT
+/* MV_REFRESH (INS) */ INSERT /*+ BYPASS_RECURSIVE_CHEC[...]
+COST = 2.571476
+TOTAL COST OF REFRESH = 6.574331
+
+
+REFRESH STATEMENT
+/* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &#34;HR[...]
+COST = 0.000000
+REFRESH STATEMENT
+ALTER TABLE &#34;HR&#34;.&#34;MV_WEEK&#34; TRUNCATE  PARTITION [...]
+COST = 0.000000
+REFRESH STATEMENT
+/* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX[...]
+COST = 2.279282
+REFRESH STATEMENT
+BEGIN  sys.dbms_index_utl.multi_level_build(index_list=[...]
+COST = 0.000000
+TOTAL COST OF REFRESH = 2.279282
+</code></pre><p>After costing, or by rule, the method chosen will be stated:</p>
+<pre tabindex="0"><code>Refresh method picked PCT - TRUNC
+</code></pre><p>Oracle then records the actual statements executed:</p>
+<pre tabindex="0"><code>Executed Stmt -
+/* MV_REFRESH (IND_UNUSABLE) */ ALTER INDEX &#34;HR[...]
+ Executed Stmt -
+ALTER TABLE &#34;HR&#34;.&#34;MV_WEEK&#34; TRUNCATE  PARTITION [...]
+ Executed Stmt -
+/* MV_REFRESH (INS) */ INSERT /*+ SKIP_UNQ_UNUSABLE_IDX[...]
+ Executed Stmt -
+BEGIN  sys.dbms_index_utl.multi_level_build(index_list=[...]
+</code></pre><p>A final word of warning - remember that the trace file is an internal diagnostic, it is not for user-consumption. I spent a while worrying about this entry in the log:</p>
+<pre tabindex="0"><code>PARSE ERROR #19:len=12330 dep=1 uid=142 oct=3 lid=142 tim=35441256289311 err=10980
+SELECT &#34;R&#34;.&#34;BSNS_WK_KEY&#34; &#34;WK_KEY&#34;,&#34;D&#34;.&#34;SOURCE_SYSTEM_KEY&#34; &#34;SOURCE_SYSTEM_KEY&#34;,&#34;D&#34;.&#34;
+CLOSE #19:c=0,e=0,dep=1,type=0,tim=35441256289311
+</code></pre><p>Even though there was no error returned to the user session calling the refresh, I figured this must be some problem. However, according to MOS doc <a href="https://supporthtml.oracle.com/ep/faces/secure/km/DocumentDisplay.jspx?id=294513.1">Errors In Refresh Snapshot Trace Files ORA-10980 (Doc ID 294513.1)</a> the parse error is raised and cleared internally and therefore nothing to worry about.</p>
 
 	<hr>
 	<div class="giscus-container">

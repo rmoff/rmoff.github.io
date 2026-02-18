@@ -163,30 +163,58 @@
 <p>&ldquo;WARNING: A potential security issue has been identified with password authentication for JMX remote connectors when the client obtains the remote connector from an insecure RMI registry (the default). If an attacker starts a bogus RMI registry on the target server before the legitmate one is started, then the attacker can steal clients&rsquo; passwords.&rdquo;</p>
 </blockquote>
 <p>To enable password authentication you need to edit three files. The first file to edit is the agent script, runagent.sh. You&rsquo;ll find this in $ORACLEBI_HOME/systemsmanagement. By default, the file looks like this:</p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] #!/bin/sh # this is a template of runagent.sh to be used on Unix. # The installer will fill in JAVA_HOME, SAROOTDIR, and SATEMPDIR</p>
-<p>export JAVA_HOME=/usr/java/jdk1.6.0_17 export SAROOTDIR=/app/oracle/product/obiee export SADATADIR=/data export SATEMPDIR=/data/tmp export UNIXPERFDIR=${SATEMPDIR}</p>
-<p>java_cmd=&quot;${JAVA_HOME}/bin/java -Djava.library.path=${SAROOTDIR}/server/Bin -Dcom.sun.management.jmxremote -classpath analytics-jmx.jar:lib/xmlparserv2.jar oracle.bi.analytics.management.StandardConsoleAgent&quot;</p>
-<p>${java_cmd} [/sourcecode]</p>
-<p>To enable remote access to the JMX agent you change the java_cmd to the following:</p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] java_cmd=&quot;${JAVA_HOME}/bin/java -Djava.library.path=${SAROOTDIR}/server/Bin -Dcom.sun.management.jmxremote -Dcom.sun.man agement.jmxremote.port=9980 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false - classpath analytics-jmx.jar:lib/xmlparserv2.jar oracle.bi.analytics.management.StandardConsoleAgent&quot; [/sourcecode]</p>
-<p>Note that jmxremote.authenticate is set to false. To secure the JMX agent you change it to true:</p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] java_cmd=&quot;${JAVA_HOME}/bin/java -Djava.library.path=${SAROOTDIR}/server/Bin -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=9980 -Dcom.sun.management.jmxremote.authenticate=true -classpath analytics-jmx.jar:lib/xmlparserv2.jar oracle.bi.analytics.management.StandardConsoleAgent&quot; [/sourcecode]</p>
-<p>Now note what JAVA_HOME is set to in the runagent.sh file (in the above example it&rsquo;s /usr/java/jdk1.6.0_17). Navigate to this directory, and then to <strong>jre/lib/management</strong>. You should see these four files:</p>
-<p>[sourcecode] jmxremote.access jmxremote.password.template management.properties snmp.acl.template [/sourcecode]</p>
-<p>Create a copy of jmxremote.password.template to a file called <strong>jmxremote.password</strong>. Open the file and you&rsquo;ll see two default users (or &ldquo;roles&rdquo;) as the documentation calls them.</p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] $cp jmxremote.password.template jmxremote.password $vi jmxremote.password [/sourcecode]</p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] # # Following are two commented-out entries. The &ldquo;measureRole&rdquo; role has # password &ldquo;QED&rdquo;. The &ldquo;controlRole&rdquo; role has password &ldquo;R&amp;D&rdquo;. # # monitorRole QED # controlRole R&amp;D [/sourcecode]</p>
-<p>We&rsquo;ll come back to this file in a moment. Now open <strong>jmxremote.access</strong> and you&rsquo;ll see the access rights for the users (&ldquo;roles&rdquo;) in the password file are defined here:</p>
-<p>[sourcecode] # &ldquo;readonly&rdquo; grants access to read attributes of MBeans. # For monitoring, this means that a remote client in this # role can read measurements but cannot perform any action # that changes the environment of the running program. # &ldquo;readwrite&rdquo; grants access to read and write attributes of MBeans, # to invoke operations on them, and to create or remove them. # This access should be granted to only trusted clients, # since they can potentially interfere with the smooth # operation of a running program [/sourcecode]</p>
-<p>So, now decide how you want to regulate access. <strong>I would strongly recommend that the only access available through remote JMX is readonly</strong>. Read/Write access to configuration needs to be through one auditable route, and I&rsquo;d suggest this isn&rsquo;t the best one. If that&rsquo;s how we&rsquo;re going to configure it, we set the files up like this: (delete or comment out everything in the files first, having taken a backup first) <strong>jmxremote.password:</strong></p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] jmxobiee S3cur3Passw0rd [/sourcecode]</p>
-<p><strong>jmxremote.access</strong></p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] jmxobiee readonly [/sourcecode]</p>
-<p>Finally, secure access to the password file so that it&rsquo;s only readable by the application owner ID:</p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] chmod 600 jmxremote.password [/sourcecode]</p>
-<p>Now, go back to $ORACLEBI_HOME/systemsmanagement, and start the JMX agent:</p>
-<p>[sourcecode language=&ldquo;bash&rdquo;] nohup ./runagent &amp; [/sourcecode]</p>
-<p>(the nohup and &amp; make it run in the background so it doesn&rsquo;t quit when you exit your session)</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#bc7a00">#!/bin/sh
+</span></span></span><span style="display:flex;"><span><span style="color:#bc7a00"></span><span style="color:#408080;font-style:italic"># this is a template of runagent.sh to be used on Unix.</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># The installer will fill in JAVA_HOME, SAROOTDIR, and SATEMPDIR</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#008000">export</span> <span style="color:#19177c">JAVA_HOME</span><span style="color:#666">=</span>/usr/java/jdk1.6.0_17
+</span></span><span style="display:flex;"><span><span style="color:#008000">export</span> <span style="color:#19177c">SAROOTDIR</span><span style="color:#666">=</span>/app/oracle/product/obiee
+</span></span><span style="display:flex;"><span><span style="color:#008000">export</span> <span style="color:#19177c">SADATADIR</span><span style="color:#666">=</span>/data
+</span></span><span style="display:flex;"><span><span style="color:#008000">export</span> <span style="color:#19177c">SATEMPDIR</span><span style="color:#666">=</span>/data/tmp
+</span></span><span style="display:flex;"><span><span style="color:#008000">export</span> <span style="color:#19177c">UNIXPERFDIR</span><span style="color:#666">=</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">SATEMPDIR</span><span style="color:#b68;font-weight:bold">}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#19177c">java_cmd</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">JAVA_HOME</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">/bin/java -Djava.library.path=</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">SAROOTDIR</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">/server/Bin -Dcom.sun.management.jmxremote -classpath analytics-jmx.jar:lib/xmlparserv2.jar oracle.bi.analytics.management.StandardConsoleAgent&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">java_cmd</span><span style="color:#b68;font-weight:bold">}</span>
+</span></span></code></pre></div><p>To enable remote access to the JMX agent you change the java_cmd to the following:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#19177c">java_cmd</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">JAVA_HOME</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">/bin/java -Djava.library.path=</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">SAROOTDIR</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">/server/Bin -Dcom.sun.management.jmxremote -Dcom.sun.man
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">agement.jmxremote.port=9980 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -
+</span></span></span><span style="display:flex;"><span><span style="color:#ba2121">classpath analytics-jmx.jar:lib/xmlparserv2.jar oracle.bi.analytics.management.StandardConsoleAgent&#34;</span>
+</span></span></code></pre></div><p>Note that jmxremote.authenticate is set to false. To secure the JMX agent you change it to true:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#19177c">java_cmd</span><span style="color:#666">=</span><span style="color:#ba2121">&#34;</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">JAVA_HOME</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">/bin/java -Djava.library.path=</span><span style="color:#b68;font-weight:bold">${</span><span style="color:#19177c">SAROOTDIR</span><span style="color:#b68;font-weight:bold">}</span><span style="color:#ba2121">/server/Bin -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=9980 -Dcom.sun.management.jmxremote.authenticate=true -classpath analytics-jmx.jar:lib/xmlparserv2.jar oracle.bi.analytics.management.StandardConsoleAgent&#34;</span>
+</span></span></code></pre></div><p>Now note what JAVA_HOME is set to in the runagent.sh file (in the above example it&rsquo;s /usr/java/jdk1.6.0_17). Navigate to this directory, and then to <strong>jre/lib/management</strong>. You should see these four files:</p>
+<pre tabindex="0"><code>jmxremote.access
+jmxremote.password.template
+management.properties
+snmp.acl.template
+</code></pre><p>Create a copy of jmxremote.password.template to a file called <strong>jmxremote.password</strong>. Open the file and you&rsquo;ll see two default users (or &ldquo;roles&rdquo;) as the documentation calls them.</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#19177c">$cp</span> jmxremote.password.template jmxremote.password
+</span></span><span style="display:flex;"><span><span style="color:#19177c">$vi</span> jmxremote.password
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#408080;font-style:italic">#</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># Following are two commented-out entries.  The &#34;measureRole&#34; role has</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># password &#34;QED&#34;.  The &#34;controlRole&#34; role has password &#34;R&amp;D&#34;.</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic">#</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># monitorRole  QED</span>
+</span></span><span style="display:flex;"><span><span style="color:#408080;font-style:italic"># controlRole   R&amp;D</span>
+</span></span></code></pre></div><p>We&rsquo;ll come back to this file in a moment. Now open <strong>jmxremote.access</strong> and you&rsquo;ll see the access rights for the users (&ldquo;roles&rdquo;) in the password file are defined here:</p>
+<pre tabindex="0"><code>#       &#34;readonly&#34; grants access to read attributes of MBeans.
+#                   For monitoring, this means that a remote client in this
+#                   role can read measurements but cannot perform any action
+#                   that changes the environment of the running program.
+#       &#34;readwrite&#34; grants access to read and write attributes of MBeans,
+#                   to invoke operations on them, and to create or remove them.
+#                   This access should be granted to only trusted clients,
+#                   since they can potentially interfere with the smooth
+#                   operation of a running program
+</code></pre><p>So, now decide how you want to regulate access. <strong>I would strongly recommend that the only access available through remote JMX is readonly</strong>. Read/Write access to configuration needs to be through one auditable route, and I&rsquo;d suggest this isn&rsquo;t the best one. If that&rsquo;s how we&rsquo;re going to configure it, we set the files up like this: (delete or comment out everything in the files first, having taken a backup first) <strong>jmxremote.password:</strong></p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>jmxobiee  S3cur3Passw0rd
+</span></span></code></pre></div><p><strong>jmxremote.access</strong></p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>jmxobiee <span style="color:#008000">readonly</span>
+</span></span></code></pre></div><p>Finally, secure access to the password file so that it&rsquo;s only readable by the application owner ID:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>chmod <span style="color:#666">600</span> jmxremote.password
+</span></span></code></pre></div><p>Now, go back to $ORACLEBI_HOME/systemsmanagement, and start the JMX agent:</p>
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>nohup ./runagent &amp;
+</span></span></code></pre></div><p>(the nohup and &amp; make it run in the background so it doesn&rsquo;t quit when you exit your session)</p>
 <p>Having started your agent, you can go to JConsole and login to it remotely.</p>
 <p>See the document <a href="http://java.sun.com/j2se/1.5.0/docs/guide/management/agent.html#remote">here</a> for the full details of securing JMX, including use of SSL and alternative password file locations.</p>
 <h2 id="using-jconsole">Using JConsole&nbsp;<a class="headline-hash" href="#using-jconsole">🔗</a> </h2>
