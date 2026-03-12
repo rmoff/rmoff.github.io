@@ -137,30 +137,30 @@
 <p>With my server in place, I ran a memtest on it &hellip; which with 128G took a while ;)</p>
 <p><img src="/images/2016/06/IMG_7889.jpg" alt="memtest"></p>
 <p>And then installed <a href="https://www.proxmox.com/en/">Proxmox 4</a>, using a bootable USB that I&rsquo;d created on my Mac from the ISO downloaded from Proxmox&rsquo;s website. To create the bootable USB, create the <code>img</code> file:</p>
-<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>hdiutil convert -format UDRW -o target.img source.iso
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>hdiutil convert -format UDRW -o target.img source.iso
 </span></span></code></pre></div><p>and then burn it to USB:</p>
-<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>sudo dd <span style="color:#008000;font-weight:bold">if</span><span style="color:#666">=</span>target.img <span style="color:#19177c">of</span><span style="color:#666">=</span>/dev/rdiskN <span style="color:#19177c">bs</span><span style="color:#666">=</span>1m
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>sudo dd <span style="color:#008000;font-weight:bold">if</span><span style="color:#666">=</span>target.img <span style="color:#19177c">of</span><span style="color:#666">=</span>/dev/rdiskN <span style="color:#19177c">bs</span><span style="color:#666">=</span>1m
 </span></span></code></pre></div><p>Replace <strong><code>N</code></strong> with the correct device based on <code>diskutil list</code> output. Don&rsquo;t get it wrong, else you&rsquo;ll properly knacker your machine :D</p>
 <p>After booting the machine from the USB the Proxmox installation is a simple click-click-next-next job, after which it reboots and you&rsquo;re good to go. Proxmox is a Debian-based Linux distribution, so you SSH to it as you would any other box, and it also has a GUI at <code>https://&lt;IP&gt;:8006</code> (note HTTPS not HTTP).</p>
 <hr>
 <p>Once the OS was in place, I then set up the filesystems. There&rsquo;s a SDD I&rsquo;m using for the main OS and binaries, along with four 3TB spinning disks. <em>I&rsquo;ve opted to keep them un-raided, since one of the things I&rsquo;m interested in is performance of things like HDFS and Kafka where from my limited understanding the raw spindles are as important as the logical devices that&rsquo;d be presented on top of RAID. Maybe I&rsquo;ll be wrong and have to rebuild the machine in a few months&rsquo; time ;)</em></p>
 <p>I formatted each 3TB disk as ext4:</p>
-<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>mkfs.ext4 /dev/sdb
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>mkfs.ext4 /dev/sdb
 </span></span><span style="display:flex;"><span>mkfs.ext4 /dev/sdc
 </span></span><span style="display:flex;"><span>mkfs.ext4 /dev/sdd
 </span></span><span style="display:flex;"><span>mkfs.ext4 /dev/sde
 </span></span></code></pre></div><p><em>I did wonder about looking at other filesystems such as XFS, but figured that the standard mainstream option was probably absolutely fine for my needs. Quite possibly others are &ldquo;better&rdquo;, but as long as there&rsquo;s nothing &ldquo;wrong&rdquo; with this one, it&rsquo;ll do just fine. I&rsquo;ve a long list of topics to investigate once the server&rsquo;s up and running already, without adding FS comparisons to it.</em></p>
 <p>Added a label to each one (to make mounting easier, and identifying them if I physically swap them in/out):</p>
-<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>e2label /dev/sdb data01
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>e2label /dev/sdb data01
 </span></span><span style="display:flex;"><span>e2label /dev/sdc data02
 </span></span><span style="display:flex;"><span>e2label /dev/sdd data03
 </span></span><span style="display:flex;"><span>e2label /dev/sde data04
 </span></span></code></pre></div><p>Strangely, only one of the labels showed up:</p>
-<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:/# ls -l /dev/disk/by-label/
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:/# ls -l /dev/disk/by-label/
 </span></span><span style="display:flex;"><span>total <span style="color:#666">0</span>
 </span></span><span style="display:flex;"><span>lrwxrwxrwx <span style="color:#666">1</span> root root  <span style="color:#666">9</span> Jun  <span style="color:#666">1</span> 09:34 data03 -&gt; ../../sdd
 </span></span></code></pre></div><p>Looking at the block devices, it seemed <code>sdd</code> was different from the other three:</p>
-<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:/# lsblk
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:/# lsblk
 </span></span><span style="display:flex;"><span>NAME               MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
 </span></span><span style="display:flex;"><span>sda                  8:0    <span style="color:#666">0</span> 447.1G  <span style="color:#666">0</span> disk
 </span></span><span style="display:flex;"><span>├─sda1               8:1    <span style="color:#666">0</span>  1007K  <span style="color:#666">0</span> part
@@ -180,7 +180,7 @@
 </span></span><span style="display:flex;"><span>sde                  8:64   <span style="color:#666">0</span>   2.7T  <span style="color:#666">0</span> disk
 </span></span><span style="display:flex;"><span>└─sde1               8:65   <span style="color:#666">0</span>   128M  <span style="color:#666">0</span> part
 </span></span></code></pre></div><p>So a reboot (maybe there&rsquo;s a better way?) fixed this:</p>
-<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:~# lsblk
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:~# lsblk
 </span></span><span style="display:flex;"><span>NAME               MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
 </span></span><span style="display:flex;"><span>sda                  8:0    <span style="color:#666">0</span> 111.8G  <span style="color:#666">0</span> disk
 </span></span><span style="display:flex;"><span>├─sda1               8:1    <span style="color:#666">0</span>   200M  <span style="color:#666">0</span> part
@@ -207,14 +207,14 @@
 </span></span><span style="display:flex;"><span>lrwxrwxrwx <span style="color:#666">1</span> root root  <span style="color:#666">9</span> Jun  <span style="color:#666">1</span> 09:49 data03 -&gt; ../../sde
 </span></span><span style="display:flex;"><span>lrwxrwxrwx <span style="color:#666">1</span> root root  <span style="color:#666">9</span> Jun  <span style="color:#666">1</span> 09:49 data04 -&gt; ../../sdf
 </span></span></code></pre></div><p>Created host folders</p>
-<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>mkdir /data01 /data02 /data03 /data04
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>mkdir /data01 /data02 /data03 /data04
 </span></span></code></pre></div><p>Added entry to <code>/etc/fstab</code></p>
 <pre tabindex="0"><code>LABEL=data01 /data01 ext4 defaults 0 2
 LABEL=data02 /data02 ext4 defaults 0 2
 LABEL=data03 /data03 ext4 defaults 0 2
 LABEL=data04 /data04 ext4 defaults 0 2
 </code></pre><p>Another reboot to test the auto-mounting, and it&rsquo;s all good:</p>
-<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:~# df -h
+<div class="highlight"><pre tabindex="0" style=";-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>root@proxmox01:~# df -h
 </span></span><span style="display:flex;"><span>Filesystem      Size  Used Avail Use% Mounted on
 </span></span><span style="display:flex;"><span>udev             10M     <span style="color:#666">0</span>   10M   0% /dev
 </span></span><span style="display:flex;"><span>tmpfs            26G  9.6M   26G   1% /run
