@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		
+		<title>Streaming data from Oracle using Oracle GoldenGate and Kafka Connect</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2016/10/12/streaming-data-from-oracle-using-oracle-goldengate-and-kafka-connect/">
+		
+		
+
+		
+		<meta property="og:title" content="Streaming data from Oracle using Oracle GoldenGate and Kafka Connect" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/img/default-header-img.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2016/10/12/streaming-data-from-oracle-using-oracle-goldengate-and-kafka-connect/" />
+		<meta property="og:site_name" content="Streaming data from Oracle using Oracle GoldenGate and Kafka Connect" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<style>
+			html { background-color: #FAF8F5; color: #2D2926; }
+			body { opacity: 0; transition: opacity 0.1s ease; }
+			body.loaded { opacity: 1; }
+			.site-header { height: 60px; background-color: #FAF8F5; border-bottom: 1px solid #E8421E; }
+		</style>
+
+		
+		
+		
+		<link rel="stylesheet" href="/css/redesign.0549ef1f1a520caaa205998e607f39487a7449f68e5ed56b7a56d7f18a88bcab.css" />
+		
+		<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap">
+		<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+		<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
+		
+
+		
+		
+		<script src="/js/copy-code.a37ee9cf1d31a02dd198332f434b0595201bfac8f5fced07bbcfa510292ee9f6.js"></script>
+		
+
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+			posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P', {
+				api_host: 'https://bobby.moffatt.me',
+				defaults: '2026-01-30'
+			})
+		</script>
+
+		
+		
+		<script src="/js/story.7e8e3e8a35f21c2c00b5e62cd32b02a066e8ff9a9f7194061becb5f8cb9b854e.js"></script>
+		
+		<script src="/js/toc.465cf3045885a3be466e09ee2eda7b42d235cb925f5cea7216dd796117d3ba69.js"></script>
+		
+		<script src="/js/medium-mirror.35aebfe5abe1f5550feac89e219440c133cef497f763b606819f30bad8647115.js"></script>
+		<script src="/js/lightbox.js" defer></script>
+	</head>
+	<body class="ma0 section-post page-kind-page is-page-true  feature-nohdr">
+		<script>document.body.classList.add('loaded');</script>
+
+		<header class="site-header hide-print">
+	<div class="site-header-inner">
+		<a href="/" class="site-title">rmoff's random ramblings</a>
+		<nav class="site-nav">
+			<a href="/categories/interesting-links/" class="nav-il"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Interesting Links</a>
+			<span class="nav-sep"></span>
+			<a href="/categories/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Categories</a>
+			<a href="/search/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search</a>
+			<a href="/index.xml"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg> RSS</a>
+			<div class="nav-social">
+				<a href="https://www.linkedin.com/in/robinmoffatt/" title="linkedin"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+				<a href="https://twitter.com/rmoff/" title="twitter"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+				<a href="https://bsky.app/profile/rmoff.net" title="bluesky"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 568 501" fill="currentColor"><path d="M123.121 33.664C188.241 82.553 258.281 181.68 284 234.873c25.719-53.192 95.759-152.32 160.879-201.21C491.866-1.611 568-28.906 568 57.947c0 17.346-9.945 145.713-15.778 166.555-20.275 72.453-94.155 90.933-159.875 79.748C507.222 323.8 536.444 388.56 473.333 453.32c-119.86 122.992-172.272-30.859-185.702-70.281-2.462-7.227-3.614-10.608-3.631-7.733-.017-2.875-1.169.506-3.631 7.733-13.43 39.422-65.842 193.273-185.702 70.281-63.111-64.76-33.89-129.52 80.986-149.071-65.72 11.185-139.6-7.295-159.875-79.748C10.945 203.659 1 75.291 1 57.946 1-28.906 76.135-1.612 123.121 33.664z"/></svg></a>
+				<a href="https://www.youtube.com/c/rmoff" title="youtube"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+				<a href="https://talks.rmoff.net" title="talks"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/><polyline points="7 8 12 12 17 8"/></svg></a>
+				<a href="https://github.com/rmoff/" title="github"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+			</div>
+		</nav>
+		<button class="nav-toggle" onclick="document.querySelector('.mobile-nav').classList.toggle('open')" aria-label="Menu">
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+		</button>
+	</div>
+	<nav class="mobile-nav">
+		<a href="/">Home</a>
+		<a href="/categories/">Categories</a>
+		<a href="/categories/interesting-links/">Interesting Links</a>
+		<a href="/search/">Search</a>
+		<a href="/index.xml">RSS</a>
+		<a href="https://www.linkedin.com/in/robinmoffatt/">linkedin</a>
+		<a href="https://twitter.com/rmoff/">twitter</a>
+		<a href="https://bsky.app/profile/rmoff.net">bluesky</a>
+		<a href="https://www.youtube.com/c/rmoff">youtube</a>
+		<a href="https://talks.rmoff.net">talks</a>
+		<a href="https://github.com/rmoff/">github</a>
+	</nav>
+</header>
+
+
+		<main role="main">
+		
+
+<div class="article-header">
+	<div class="title-box">
+		<h1>Streaming data from Oracle using Oracle GoldenGate and Kafka Connect</h1>
+		<p class="title-subtitle">
+			
+				Published
+				<time datetime="2016-10-12T00:00:00Z">12 Oct 2016</time>
+				<span class="display-print">by </span>
+				 in <a href="/categories/kafka-connect">Kafka Connect</a>, <a href="/categories/apache-kafka">Apache Kafka</a>, <a href="/categories/oracle-goldengate">Oracle GoldenGate</a>, <a href="/categories/elasticsearch">Elasticsearch</a>, <a href="/categories/monitoring">Monitoring</a>
+				<span class="display-print">at https://rmoff.net/2016/10/12/streaming-data-from-oracle-using-oracle-goldengate-and-kafka-connect/</span>
+			
+		</p>
+	</div>
+</div>
+
+
+<details class="toc-mobile">
+	<summary>Table of Contents</summary>
+	<nav id="TableOfContents">
+  <ul>
+    <li><a href="#_environment">Environment</a></li>
+    <li><a href="#_starting_confluent_platform">Starting Confluent Platform</a></li>
+    <li><a href="#_configuring_oracle_goldengate_to_send_transactions_to_kafka_connect">Configuring Oracle GoldenGate to send transactions to Kafka Connect</a></li>
+    <li><a href="#_testing_the_replication">Testing the Replication</a></li>
+    <li><a href="#_configuring_elasticsearch">Configuring Elasticsearch</a>
+      <ul>
+        <li><a href="#_setting_up_the_elasticsearch_kafka_connect_handler">Setting up the Elasticsearch Kafka Connect handler</a></li>
+        <li><a href="#_elasticseach_index_mappings_and_dynamic_templates">Elasticseach, Index Mappings, and Dynamic Templates</a></li>
+      </ul>
+    </li>
+    <li><a href="#_running_a_full_swingbench_test">Running a Full Swingbench Test</a>
+      <ul>
+        <li><a href="#_configuration">Configuration</a></li>
+        <li><a href="#_running_swingbench">Running Swingbench</a></li>
+        <li><a href="#_auditing_the_pipeline">Auditing the Pipeline</a></li>
+        <li><a href="#_monitoring_the_pipeline">Monitoring the Pipeline</a></li>
+      </ul>
+    </li>
+    <li><a href="#_conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+</details>
+
+<div class="container-fluid docs">
+	<div class="row">
+		<main class="docs-content" role="main">
+
+<article class="article" data-pagefind-body>
+	<span data-pagefind-filter="category" style="display:none">Kafka Connect</span><span data-pagefind-filter="category" style="display:none">Apache Kafka</span><span data-pagefind-filter="category" style="display:none">Oracle GoldenGate</span><span data-pagefind-filter="category" style="display:none">Elasticsearch</span><span data-pagefind-filter="category" style="display:none">Monitoring</span>
+	<img data-pagefind-meta="image[src]" src="/img/default-header-img.jpg" style="display:none" alt="">
+	
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2016/10/streaming-data-from-oracle-using-oracle-goldengate-and-kafka-connect/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p><em>This article was also posted on the <a href="http://www.confluent.io/blog/streaming-data-oracle-using-oracle-goldengate-kafka-connect/">Confluent blog</a>, head over there for more great Kafka-related content!</em></p>
+</div>
+<hr/>
+<div class="paragraph">
+<p><a href="http://docs.confluent.io/3.0.0/connect/index.html">Kafka Connect</a> is part of the <a href="http://www.confluent.io/product">Confluent Platform</a>, providing a set of connectors and a standard interface with which to ingest data to Kafka, and store or process it the other end. <a href="http://www.confluent.io/blog/how-to-build-a-scalable-etl-pipeline-with-kafka-connect">Initially launched</a> with a JDBC source and HDFS sink, the <a href="http://www.confluent.io/product/connectors">list of connectors</a> has grown to include a dozen certified connectors, and twice as many again &#39;community&#39; connectors. These cover technologies such as MongoDB, InfluxDB, Kudu, MySQL - and of course as with any streaming technology, twitter, the de-facto source for any streaming how-to. Two connectors of note that were recently released are for Oracle GoldenGate as a source, and Elasticsearch as a sink. In this article I’m going to walk through how to set these up, and demonstrate how the flexibility and power of the Kafka Connect platform can enable rapid changes and evolutions to the data pipeline.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges20.png" alt="ogges20"/>
+</div>
+</div>
+<div class="paragraph">
+<p>The above diagram shows an overview of what we’re building. Change Data Capture (CDC) on the database streams every single change made to the data over to Kafka, from where it is streamed into Elasticsearch. Once in Elasticsearch it can be viewed in tools search as Kibana, for search and analytics:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges14.png" alt="ogges14"/>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges21.png" alt="ogges21"/>
+</div>
+</div>
+<div class="paragraph">
+<p><a href="http://www.oracle.com/technetwork/middleware/goldengate/overview/index.html">Oracle GoldenGate</a> (OGG) is a realtime data replication tool, falling under the broad umbrella of Change Data Capture (CDC) software, albeit at the high end in terms of functionality. It supports multiple RDBMS platforms, including - obviously - Oracle, as well as DB2, MySQL, and SQL Server. You can find the <a href="http://www.oracle.com/technetwork/middleware/data-integration/goldengate12-2-x-cert-matrix-2769360.xls">full certification list here</a>. It uses log-based technology to stream all changes to a database from source, to target - which may be another database of the same type, or a different one. It is commonly used for data integration, as well as replication of data for availability purposes.</p>
+</div>
+<div class="paragraph">
+<p>In the context of Kafka, Oracle GoldenGate provides a way of streaming <em>all changes made to a table</em>, or set of tables, and making them available to other processes in our data pipeline. These processes could include microservices relying on an up-to-date feed of data from a particular table, as well as persisting a replica copy of the data from the source system into a common datastore for analysis alongside data from other systems.</p>
+</div>
+<div class="paragraph">
+<p><a href="https://www.elastic.co/products/elasticsearch">Elasticsearch</a> is an open-source distributed document store, <a href="https://www.elastic.co/use-cases">used heavily</a> for both search, and analytics. It comes with some great tools including <a href="https://www.elastic.co/products/kibana">Kibana</a> for data discovery and analysis, as well as a <a href="https://www.rittmanmead.com/blog/2016/04/experiments-with-elastics-graph-tool/">Graph</a> tool. Whilst Elasticsearch is capable of being a primary data store in its own right, it is also commonly used as a secondary store in order to take advantage of its rapid search and analytics capabilities. It is the latter use-case that we’re interested in here - using Elasticsearch to store a copy of data produced in Oracle.</p>
+</div>
+<div class="paragraph">
+<p>Confluent’s Elasticsearch Connector is an open source connector plug-in for Kafka Connect that sends data from Kafka to Elasticsearch. It is highly efficient, utilising Elasticsearch’s <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html">bulk API</a>. It also supports all Elasticsearch’s data types which it automatically infers, and evolves the Elasticsearch mappings from the schema stored in Kafka records.</p>
+</div>
+<div class="paragraph">
+<p>Oracle GoldenGate can be used with Kafka to directly stream <em>every single change made to your database</em>. Everything that happens in the database gets recorded in the transaction log (OGG or not), and OGG takes that ands sends it to Kafka. In this blog we’re using Oracle as the source database, but don’t forget that Oracle GoldenGate supports <a href="http://www.oracle.com/technetwork/middleware/data-integration/goldengate12-2-x-cert-matrix-2769360.xls">many sources</a>. To use Oracle GoldenGate with Kafka, we use the &#34;<a href="https://www.oracle.com/goldengate/big-data/index.html">Oracle GoldenGate for Big Data</a>&#34; version (which has different binaries). Oracle GoldenGate has a significant advantage over the <a href="http://docs.confluent.io/3.0.0/connect/connect-jdbc/docs/index.html">JDBC Source Connector for Kafka Connect</a> in that it is a &#39;push&#39; rather than periodic &#39;pull&#39; from the source, thus it :</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Has much lower latency</p>
+</li>
+<li>
+<p>Requires less resource on the source database, since OGG mines the transaction log instead of directly querying the database for changes made based on a timestamp or key.</p>
+</li>
+<li>
+<p>Scales better, since entire schemas or whole databases can be replicated with minimal configuration changes. The JDBC connector requires each table, or SQL statement, to be specified.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Note that Oracle Golden Gate for Big Data also has its own <a href="http://docs.oracle.com/goldengate/bd1221/gg-bd/GADBD/GUID-2561CA12-9BAC-454B-A2E3-2D36C5C60EE5.htm#GADBD449">native Kafka Handler</a>, which can produce data in various formats directly to Kafka (rather than integrating with the Kafka Connect framework).</p>
+</div>
+<div class="sect1">
+<h2 id="_environment">Environment&nbsp;<a class="headline-hash" href="#_environment">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>I’m using the <a href="http://www.oracle.com/technetwork/database/bigdata-appliance/oracle-bigdatalite-2104726.html">Oracle BigDataLite VM 4.5</a> as the base machine for this. It includes Oracle 12c, Oracle GoldenGate for Big Data, as well as a CDH installation which provides HDFS and Hive for us to also integrate with later on.</p>
+</div>
+<div class="paragraph">
+<p>On to the VM you need to also install:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Confluent Plaform 3.0</p>
+</li>
+<li>
+<p>Oracle GoldenGate Kafka Connect connector</p>
+</li>
+<li>
+<p>Elasticsearch Kafka Connect connector</p>
+</li>
+<li>
+<p>Elasticsearch 2.4</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>To generate the schema and continuous workload, I used <a href="http://dominicgiles.com/swingbench.html">Swingbench</a> 2.5.</p>
+</div>
+<div class="paragraph">
+<p>For a step-by-step guide on how to set up these additional components, see <a href="https://gist.github.com/rmoff/c3813ec709d66d9a471e2a7f79fc3819">this gist</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_starting_confluent_platform">Starting Confluent Platform&nbsp;<a class="headline-hash" href="#_starting_confluent_platform">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>There are three processes that need starting up, and each retains control of the session, so you’ll want to use screen/tmux here, or wrap the commands in <code>nohup [.. command ..] &amp;</code> so that they don’t die when you close the window.</p>
+</div>
+<div class="paragraph">
+<p>On BigDataLite the Zookeeper service is already installed, and should have started at server boot:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>[oracle@bigdatalite ~]$ sudo service zookeeper-server status
+zookeeper-server is running</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If it isn’t running, then start it with <code>sudo service zookeeper-server start</code>.</p>
+</div>
+<div class="paragraph">
+<p>Next start up Kafka:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #75715e;font-style: italic"># On BigDataLite I had to remove this folder for Kafka to start</span>
+<span style="color: #f8f8f2">sudo rm</span> <span style="color: #f92672">-r</span> /var/lib/kafka/.oracle_jre_usage
+<span style="color: #f8f8f2">sudo</span> /usr/bin/kafka-server-start /etc/kafka/server.properties</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and finally the Schema Registry:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">sudo</span> /usr/bin/schema-registry-start /etc/schema-registry/schema-registry.properties</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that on BigDataLite the Oracle TNS Listener is using port 8081 - the default for the Schema Registry - so I amended <code>/etc/schema-registry/schema-registry.properties</code> to change</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"><span style="color: #f8f8f2;background-color: #49483e">listeners</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">http://0.0.0.0:8081</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>to</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"><span style="color: #f8f8f2;background-color: #49483e">listeners</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">http://0.0.0.0:18081</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_configuring_oracle_goldengate_to_send_transactions_to_kafka_connect">Configuring Oracle GoldenGate to send transactions to Kafka Connect&nbsp;<a class="headline-hash" href="#_configuring_oracle_goldengate_to_send_transactions_to_kafka_connect">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Oracle GoldenGate (OGG) works on the concept of an <strong>Extract</strong> process which reads the source-specific transaction log and writes an OGG <em>trail file</em> in a generic OGG format. From this a <strong>Replicat</strong> process reads the trail file and delivers the transactions to the target.</p>
+</div>
+<div class="paragraph">
+<p>In this example we’ll be running the Extract against Oracle database, specifically, the SOE schema that Swingbench generated for us - and which we’ll be able to generate live transactions against using Swingbench later on.</p>
+</div>
+<div class="paragraph">
+<p>The Replicat will be sending the transactions from the trail file over to Kafka Connect.</p>
+</div>
+<div class="paragraph">
+<p>I’m assuming here that you’ve already successfully defined and set running an extract against the Swingbench schema (SOE), with a trail file being delivered to <code>/u01/ogg-bd/dirdat</code>. For a step-by-step guide on how to do this all from scratch, <a href="https://gist.github.com/rmoff/5a78bdcd0cf24941ed4b30b604fb44ad">see here</a>.</p>
+</div>
+<div class="paragraph">
+<p>You can find information about the OGG-Kafka Connect adapter in the <a href="https://java.net/downloads/oracledi/GoldenGate/Oracle%20GoldenGate%20Adapter%20for%20Kafka%20Connect/README.txt">README here</a>.</p>
+</div>
+<div class="paragraph">
+<p>To use it, first configure the replicat and supporting files as shown.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Replicat parameters</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Create <code>/u01/ogg-bd/dirprm/rconf.prm</code> with the following contents:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code> REPLICAT rconf
+ TARGETDB LIBFILE libggjava.so SET property=dirprm/conf.props
+ REPORTCOUNT EVERY 1 MINUTES, RATE
+ GROUPTRANSOPS 1000
+ MAP *.*.*, TARGET *.*.*;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+
+. Handler configuration</p>
+</div>
+<div class="paragraph">
+<p>Edit the existing <code>/u01/ogg-bd/dirprm/conf.props</code> and amend <code>gg.classpath</code> as shown below. The classpath shown works for BigDataLite - on your own environment you need to make the necessary jar files available per the dependencies listed in the <a href="https://java.net/downloads/oracledi/GoldenGate/Oracle%20GoldenGate%20Adapter%20for%20Kafka%20Connect/README.txt">README</a>.</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"> <span style="color: #f8f8f2;background-color: #49483e">gg.handlerlist</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">confluent</span>
+
+ <span style="color: #75715e;font-style: italic">#The handler properties
+</span> <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.type</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">oracle.goldengate.kafkaconnect.KafkaConnectHandler</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.kafkaProducerConfigFile</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">confluent.properties</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.mode</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">tx</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.sourceRecordGeneratorClass</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">oracle.goldengate.kafkaconnect.DefaultSourceRecordGenerator</span>
+
+ <span style="color: #75715e;font-style: italic">#The formatter properties
+</span> <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.format</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">oracle.goldengate.kafkaconnect.formatter.KafkaConnectFormatter</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.format.insertOpKey</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">I</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.format.updateOpKey</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">U</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.format.deleteOpKey</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">D</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.format.treatAllColumnsAsStrings</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">false</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.format.iso8601Format</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">false</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.handler.confluent.format.pkUpdateHandling</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">abend</span>
+
+
+ <span style="color: #f8f8f2;background-color: #49483e">goldengate.userexit.timestamp</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">utc</span>
+ <span style="color: #f8f8f2;background-color: #49483e">goldengate.userexit.writers</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">javawriter</span>
+ <span style="color: #f8f8f2;background-color: #49483e">javawriter.stats.display</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">TRUE</span>
+ <span style="color: #f8f8f2;background-color: #49483e">javawriter.stats.full</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">TRUE</span>
+
+ <span style="color: #f8f8f2;background-color: #49483e">gg.log</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">log4j</span>
+ <span style="color: #f8f8f2;background-color: #49483e">gg.log.level</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">INFO</span>
+
+ <span style="color: #f8f8f2;background-color: #49483e">gg.report.time</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">30sec</span>
+
+ <span style="color: #75715e;font-style: italic">#Set the classpath here
+</span> <span style="color: #f8f8f2;background-color: #49483e">gg.classpath</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">dirprm/:/u01/ogg-bd/ggjava/resources/lib*:/usr/share/java/kafka-connect-hdfs/*:/usr/share/java/kafka/*</span>
+
+ <span style="color: #f8f8f2;background-color: #49483e">javawriter.bootoptions</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">-Xmx512m -Xms32m -Djava.class.path=.:ggjava/ggjava.jar:./dirprm</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>Note the <code>gg.log.level</code> setting - this can be very useful to switch to <code>DEBUG</code> if you’re investigating problems with the handler.
+. Kafka Connect settings</p>
+</div>
+<div class="paragraph">
+<p>Edit the existing <code>/u01/ogg-bd/dirprm/confluent.properties</code> and amend the <code>schema.registry.url</code> URL to reflect the port change made above. All other values can be left as defaults.</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"> <span style="color: #f8f8f2;background-color: #49483e">bootstrap.servers</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">localhost:9092</span>
+
+ <span style="color: #f8f8f2;background-color: #49483e">value.serializer</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">org.apache.kafka.common.serialization.ByteArraySerializer</span>
+ <span style="color: #f8f8f2;background-color: #49483e">key.serializer</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">org.apache.kafka.common.serialization.ByteArraySerializer</span>
+ <span style="color: #f8f8f2;background-color: #49483e">schema.registry.url</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">http://localhost:18081</span>
+
+ <span style="color: #f8f8f2;background-color: #49483e">value.converter</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">org.apache.kafka.connect.json.JsonConverter</span>
+ <span style="color: #f8f8f2;background-color: #49483e">key.converter</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">org.apache.kafka.connect.json.JsonConverter</span>
+ <span style="color: #f8f8f2;background-color: #49483e">internal.value.converter</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">org.apache.kafka.connect.json.JsonConverter</span>
+ <span style="color: #f8f8f2;background-color: #49483e">internal.key.converter</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">org.apache.kafka.connect.json.JsonConverter</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>Now we can add the replicat. If not already, launch <code>ggsci</code> from the <code>ogg-bd</code> folder:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">cd</span> /u01/ogg-bd/
+rlwrap ./ggsci</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and define the replicat, and start it</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>ADD REPLICAT RCONF, EXTTRAIL ./dirdat/rt
+START RCONF</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Check its status:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>GGSCI (bigdatalite.localdomain) 13&gt; INFO RCONF
+
+REPLICAT   RCONF     Last Started 2016-09-02 15:39   Status RUNNING
+Checkpoint Lag       00:00:00 (updated 00:00:02 ago)
+Process ID           25415
+Log Read Checkpoint  File ./dirdat/rt000000000
+                     First Record  RBA 0</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that on BigDataLite 4.5 VM there are two existing replicats configured, <code>RKAFKA</code> and <code>RMOV</code>. You can ignore these, or delete them if you want to keep things simple and clear.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_testing_the_replication">Testing the Replication&nbsp;<a class="headline-hash" href="#_testing_the_replication">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>We’ll run Swingbench in a moment to generate some proper throughput, but let’s start with a single transaction to check things out.</p>
+</div>
+<div class="paragraph">
+<p>Connect to Oracle and insert a row, not forgetting to commit the transaction (he says, from frustrating experience ;) )</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">oracle</span><span style="color: #f92672;font-weight: bold">@</span><span style="color: #f8f8f2;background-color: #49483e">bigdatalite</span> <span style="color: #f8f8f2;background-color: #49483e">ogg</span><span style="color: #f8f8f2;background-color: #49483e">]</span><span style="color: #960050;background-color: #1e0010">$</span> <span style="color: #f8f8f2;background-color: #49483e">sqlplus</span> <span style="color: #f8f8f2;background-color: #49483e">soe</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">soe</span><span style="color: #f92672;font-weight: bold">@</span><span style="color: #f8f8f2;background-color: #49483e">orcl</span>
+
+<span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">Plus</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">Release</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span> <span style="color: #f8f8f2;background-color: #49483e">Production</span> <span style="color: #66d9ef;font-weight: bold">on</span> <span style="color: #f8f8f2;background-color: #49483e">Fri</span> <span style="color: #f8f8f2;background-color: #49483e">Sep</span> <span style="color: #ae81ff">2</span> <span style="color: #ae81ff">15</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">48</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">18</span> <span style="color: #ae81ff">2016</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Copyright</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">c</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #ae81ff">1982</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">2014</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">Oracle</span><span style="color: #f8f8f2;background-color: #49483e">.</span>  <span style="color: #66d9ef;font-weight: bold">All</span> <span style="color: #f8f8f2;background-color: #49483e">rights</span> <span style="color: #f8f8f2;background-color: #49483e">reserved</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #66d9ef;font-weight: bold">Last</span> <span style="color: #f8f8f2;background-color: #49483e">Successful</span> <span style="color: #f8f8f2;background-color: #49483e">login</span> <span style="color: #f8f8f2">time</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">Fri</span> <span style="color: #f8f8f2;background-color: #49483e">Sep</span> <span style="color: #ae81ff">02</span> <span style="color: #ae81ff">2016</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">48</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">22</span> <span style="color: #f92672;font-weight: bold">+</span><span style="color: #ae81ff">01</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">00</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Connected</span> <span style="color: #66d9ef;font-weight: bold">to</span><span style="color: #f8f8f2;background-color: #49483e">:</span>
+<span style="color: #f8f8f2;background-color: #49483e">Oracle</span> <span style="color: #66d9ef;font-weight: bold">Database</span> <span style="color: #ae81ff">12</span><span style="color: #66d9ef;font-weight: bold">c</span> <span style="color: #f8f8f2;background-color: #49483e">Enterprise</span> <span style="color: #f8f8f2;background-color: #49483e">Edition</span> <span style="color: #f8f8f2;background-color: #49483e">Release</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span> <span style="color: #f92672;font-weight: bold">-</span> <span style="color: #ae81ff">64</span><span style="color: #f8f8f2">bit</span> <span style="color: #f8f8f2;background-color: #49483e">Production</span>
+<span style="color: #66d9ef;font-weight: bold">With</span> <span style="color: #f8f8f2;background-color: #49483e">the</span> <span style="color: #f8f8f2;background-color: #49483e">Partitioning</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">OLAP</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">Advanced</span> <span style="color: #f8f8f2;background-color: #49483e">Analytics</span> <span style="color: #66d9ef;font-weight: bold">and</span> <span style="color: #f8f8f2">Real</span> <span style="color: #f8f8f2;background-color: #49483e">Application</span> <span style="color: #f8f8f2;background-color: #49483e">Testing</span> <span style="color: #66d9ef;font-weight: bold">options</span>
+
+<span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">insert</span> <span style="color: #66d9ef;font-weight: bold">into</span> <span style="color: #f8f8f2;background-color: #49483e">soe</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">logon</span> <span style="color: #66d9ef;font-weight: bold">values</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;background-color: #49483e">sysdate</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+
+<span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span> <span style="color: #f8f8f2;background-color: #49483e">created</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">commit</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #66d9ef;font-weight: bold">Commit</span> <span style="color: #f8f8f2;background-color: #49483e">complete</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">soe</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">logon</span> <span style="color: #66d9ef;font-weight: bold">where</span> <span style="color: #f8f8f2;background-color: #49483e">logon_id</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">LOGON_ID</span> <span style="color: #f8f8f2;background-color: #49483e">CUSTOMER_ID</span> <span style="color: #f8f8f2;background-color: #49483e">LOGON_DAT</span>
+<span style="color: #75715e;font-style: italic">---------- ----------- ---------</span>
+<span style="color: #ae81ff">42</span>       <span style="color: #ae81ff">50865</span> <span style="color: #ae81ff">12</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">AUG</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">11</span>
+<span style="color: #ae81ff">42</span>          <span style="color: #ae81ff">42</span> <span style="color: #ae81ff">02</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">SEP</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">16</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now if you list the topics defined within Kafka, you should see a new one has been created, for the SOE.LOGON table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>[oracle@bigdatalite dirrpt]$ kafka-topics --zookeeper localhost:2181 --list
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/usr/lib/zookeeper/lib/slf4j-log4j12-1.7.5.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/usr/share/java/kafka/slf4j-log4j12-1.7.21.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.slf4j.impl.Log4jLoggerFactory]
+ORCL.SOE.LOGON
+_schemas</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and you can view the record:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="json"><span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #960050;background-color: #1e0010">oracle@bigdatalite</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">dirrpt</span><span style="color: #f8f8f2;background-color: #49483e">]</span><span style="color: #960050;background-color: #1e0010">$</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">kafka-console-consumer</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">--zookeeper</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">localhost:</span><span style="color: #ae81ff">2181</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">--topic</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">ORCL.SOE.LOGON</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">--from-beginning</span><span style="color: #f8f8f2">
+
+</span><span style="color: #f8f8f2;background-color: #49483e">{</span><span style="color: #f8f8f2;font-weight: bold">&#34;schema&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:{</span><span style="color: #f8f8f2;font-weight: bold">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;struct&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;fields&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:[{</span><span style="color: #f8f8f2;font-weight: bold">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;string&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;field&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;table&#34;</span><span style="color: #f8f8f2;background-color: #49483e">},{</span><span style="color: #f8f8f2;font-weight: bold">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;string&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;field&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;op_type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">},{</span><span style="color: #f8f8f2;font-weight: bold">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;string&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;field&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;op_ts&#34;</span><span style="color: #f8f8f2;background-color: #49483e">},{</span><span style="color: #f8f8f2;font-weight: bold">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;string&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;field&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;current_ts&#34;</span><span style="color: #f8f8f2;background-color: #49483e">},{</span><span style="color: #f8f8f2;font-weight: bold">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;string&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;field&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;pos&#34;</span><span style="color: #f8f8f2;background-color: #49483e">},{</span><span style="color: #f8f8f2;font-weight: bold">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;double&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #66d9ef;font-weight: bold">true</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;field&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;LOGON_ID&#34;</span><span style="color: #f8f8f2;background-color: #49483e">},{</span><span style="color: #f8f8f2;font-weight: bold">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;double&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #66d9ef;font-weight: bold">true</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;field&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;CUSTOMER_ID&#34;</span><span style="color: #f8f8f2;background-color: #49483e">},{</span><span style="color: #f8f8f2;font-weight: bold">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;string&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #66d9ef;font-weight: bold">true</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;field&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;LOGON_DATE&#34;</span><span style="color: #f8f8f2;background-color: #49483e">}],</span><span style="color: #f8f8f2;font-weight: bold">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;name&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;ORCL.SOE.LOGON&#34;</span><span style="color: #f8f8f2;background-color: #49483e">},</span><span style="color: #f8f8f2;font-weight: bold">&#34;payload&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:{</span><span style="color: #f8f8f2;font-weight: bold">&#34;table&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;ORCL.SOE.LOGON&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;op_type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;I&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;op_ts&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;2016-09-02 14:56:26.000411&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;current_ts&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;2016-09-02 15:56:34.111000&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;pos&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;00000000000000002010&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;LOGON_ID&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42.0</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;CUSTOMER_ID&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">42.0</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;font-weight: bold">&#34;LOGON_DATE&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #e6db74">&#34;2016-09-02:15:56:25&#34;</span><span style="color: #f8f8f2;background-color: #49483e">}}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Hit Ctrl-C to cancel the consumer — otherwise it’ll sit there and wait for additional messages to be sent to the topic. Useful for monitoring when we’ve got lots of records flowing through, but not so useful now.</p>
+</div>
+<div class="paragraph">
+<p>The message is JSON, so a useful tool to install is <a href="https://stedolan.github.io/jq/"><code>jq</code></a>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">sudo </span>yum <span style="color: #f8f8f2">install</span> <span style="color: #f92672">-y</span> jq</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can then pipe the output of <code>kafka-console-consumer</code> through <code>jq</code> to pretty-print it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="json"><span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #960050;background-color: #1e0010">oracle@bigdatalite</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">dirrpt</span><span style="color: #f8f8f2;background-color: #49483e">]</span><span style="color: #960050;background-color: #1e0010">$</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">kafka-console-consumer</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">--zookeeper</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">localhost:</span><span style="color: #ae81ff">2181</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">--topic</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">ORCL.SOE.LOGON</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">--from-beginning|jq</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">&#39;.&#39;</span><span style="color: #f8f8f2">
+
+</span><span style="color: #f8f8f2;background-color: #49483e">{</span><span style="color: #f8f8f2">
+  </span><span style="color: #f8f8f2;font-weight: bold">&#34;payload&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #f8f8f2;background-color: #49483e">{</span><span style="color: #f8f8f2">
+    </span><span style="color: #f8f8f2;font-weight: bold">&#34;LOGON_DATE&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #e6db74">&#34;2016-09-02:15:56:25&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2">
+    </span><span style="color: #f8f8f2;font-weight: bold">&#34;CUSTOMER_ID&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2">
+    </span><span style="color: #f8f8f2;font-weight: bold">&#34;LOGON_ID&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #ae81ff">42</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2">
+    </span><span style="color: #f8f8f2;font-weight: bold">&#34;pos&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #e6db74">&#34;00000000000000002010&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2">
+    </span><span style="color: #f8f8f2;font-weight: bold">&#34;current_ts&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #e6db74">&#34;2016-09-02 15:56:34.111000&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2">
+    </span><span style="color: #f8f8f2;font-weight: bold">&#34;op_ts&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #e6db74">&#34;2016-09-02 14:56:26.000411&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2">
+    </span><span style="color: #f8f8f2;font-weight: bold">&#34;op_type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #e6db74">&#34;I&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2">
+    </span><span style="color: #f8f8f2;font-weight: bold">&#34;table&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #e6db74">&#34;ORCL.SOE.LOGON&#34;</span><span style="color: #f8f8f2">
+  </span><span style="color: #f8f8f2;background-color: #49483e">},</span><span style="color: #f8f8f2">
+</span><span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #960050;background-color: #1e0010">...</span><span style="color: #f8f8f2;background-color: #49483e">]</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>or even show just sections of the message using jq’s syntax (explore it <a href="https://jqplay.org/">here</a>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>[oracle@bigdatalite dirrpt]$ kafka-console-consumer --zookeeper localhost:2181 --topic ORCL.SOE.LOGON --from-beginning|jq &#39;.payload.op_ts&#39;
+
+&#34;2016-09-02 14:56:26.000411&#34;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So we’ve got successful replication of Oracle transactions into Kafka, via Oracle GoldenGate. Now let’s bring Elasticsearch into the mix.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_configuring_elasticsearch">Configuring Elasticsearch&nbsp;<a class="headline-hash" href="#_configuring_elasticsearch">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>We’re going to use Elasticsearch as a destination for storing the data coming through Kafka from Oracle. Each Oracle table will map to a separate Elasticsearch index. In Elasticsearch an &#39;index&#39; is roughly akin to an RDBMS table, a &#39;document&#39; to a row, a &#39;field&#39; to a column, and a &#39;mapping&#39; to a schema.</p>
+</div>
+<div class="paragraph">
+<p>Elasticsearch itself needs no configuration out of the box if you want to just get up and running with it, you simply execute it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>/opt/elasticsearch-2.4.0/bin/elasticsearch</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><em>Note that this wouldn’t suffice for a Production deployment, in which you’d want to allocate heap space, check open file limits, configure data paths, and so on.</em></p>
+</div>
+<div class="paragraph">
+<p>With Elasticsearch running, you can then load Kopf, which is a web-based admin plugin. You’ll find it at <code><a href="http://&lt;server&gt;:9200/_plugin/kopf" class="bare">http://&lt;server&gt;:9200/_plugin/kopf</a></code></p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges04.png" alt="ogges04"/>
+</div>
+</div>
+<div class="paragraph">
+<p>From Kopf you can see which nodes there are in the Elasticsearch cluster (just the one at the moment, with a random name inspired by Marvel), along with details of the indices as they’re created - in the above screenshot there are none yet, because we’ve not loaded any data.</p>
+</div>
+<div class="sect2">
+<h3 id="_setting_up_the_elasticsearch_kafka_connect_handler">Setting up the Elasticsearch Kafka Connect handler&nbsp;<a class="headline-hash" href="#_setting_up_the_elasticsearch_kafka_connect_handler">🔗</a> </h3>
+<div class="paragraph">
+<p>Create a configuration file for the Elasticsearch Kafka Connect handler. I’ve put it in with the Elasticsearch configuration itself at <code>/opt/elasticsearch-2.4.0/config/elasticsearch-kafka-connect.properties</code>; you can use other paths if you want.</p>
+</div>
+<div class="paragraph">
+<p>The defaults mostly suffice to start with, but we do need to update the <code>topics</code> value:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"><span style="color: #f8f8f2;background-color: #49483e">name</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">elasticsearch-sink</span>
+<span style="color: #f8f8f2;background-color: #49483e">connector.class</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">io.confluent.connect.elasticsearch.ElasticsearchSinkConnector</span>
+<span style="color: #f8f8f2;background-color: #49483e">tasks.max</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">1</span>
+<span style="color: #f8f8f2;background-color: #49483e">connection.url</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">http://localhost:9200</span>
+<span style="color: #f8f8f2;background-color: #49483e">type.name</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">kafka-connect</span>
+<span style="color: #75715e;font-style: italic"># Custom config
+</span><span style="color: #f8f8f2;background-color: #49483e">topics</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">ORCL.SOE.LOGON</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Because Elasticsearch indices cannot be uppercase, we need to provide a mapping from the Kafka topic to the Elasticsearch index, so add a configuration to the file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"><span style="color: #f8f8f2;background-color: #49483e">topic.index.map</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">ORCL.SOE.LOGON:soe.logon</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you don’t do this you’ll get an <code>InvalidIndexNameException</code>. You also need to add</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"><span style="color: #f8f8f2;background-color: #49483e">topic.key.ignore</span> <span style="color: #f8f8f2;background-color: #49483e">=</span> <span style="color: #e6db74">ORCL.SOE.LOGON</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that the global <code>key.ignore</code> <a href="https://github.com/confluentinc/kafka-connect-elasticsearch/issues/23">is currently ignored</a> if you are also overriding another <code>topic</code> parameter. If you don’t set this flag for the topic, you’ll get <code>org.apache.kafka.connect.errors.DataException: STRUCT is not supported as the document id.</code>.</p>
+</div>
+<div class="paragraph">
+<p>Now we can run our connector. I’m setting the <code>CLASSPATH</code> necessary to pick up the connector itself, as well as the dependecies. I also set <code>JMX_PORT</code> so that the metrics are exposed on JMX for helping with debug/monitoring.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>export CLASSPATH=/opt/kafka-connect-elasticsearch/*
+export JMX_PORT=4243
+/usr/bin/connect-standalone /etc/kafka/connect-standalone.properties /opt/elasticsearch-2.4.0/config/elasticsearch-kafka-connect.properties</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You’ll not get much from the console after the initial flurry of activity, except:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>[pool-2-thread-1] INFO org.apache.kafka.connect.runtime.WorkerSinkTask - WorkerSinkTask{id=elasticsearch-sink-0} Committing offsets</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But if you head over to Elasticsearch you should now have some data. In Kopf you’ll see that there are now &#39;documents&#39; in the index:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges05.png" alt="ogges05"/>
+</div>
+</div>
+<div class="paragraph">
+<p>In addition the header bar of Kopf has gone a yellow/gold colour, because your Elasticsearch cluster is now in &#34;YELLOW&#34; state - we’ll come back to this and the cause (unassigned shards) shortly.</p>
+</div>
+<div class="paragraph">
+<p>Interactions with Elasticsearch are primarily through a REST API, which you can use to query the number of records in an index:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>[oracle@bigdatalite ~]$ curl -s -X &#34;GET&#34; &#34;http://localhost:9200/soe.logon/_count?pretty=true&#34;
+{
+&#34;count&#34; : 4,
+&#34;_shards&#34; : {
+&#34;total&#34; : 5,
+&#34;successful&#34; : 5,
+&#34;failed&#34; : 0
+}
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and you can pair it up with <code>jq</code> as above to select just one of the fields:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>curl <span style="color: #f92672">-s</span> <span style="color: #f92672">-X</span> <span style="color: #e6db74">&#34;GET&#34;</span> <span style="color: #e6db74">&#34;http://localhost:9200/soe.logon/_count?pretty=true&#34;</span>|jq <span style="color: #e6db74">&#39;.count&#39;</span>
+4</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To see the data itself:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>curl <span style="color: #f92672">-s</span> <span style="color: #f92672">-X</span> <span style="color: #e6db74">&#34;GET&#34;</span> <span style="color: #e6db74">&#34;http://localhost:9200/soe.logon/_search?pretty=true&#34;</span>
+<span style="color: #f92672;font-weight: bold">{</span>
+  <span style="color: #e6db74">&#34;took&#34;</span> : 25,
+  <span style="color: #e6db74">&#34;timed_out&#34;</span> : <span style="color: #f8f8f2">false</span>,
+  <span style="color: #e6db74">&#34;_shards&#34;</span> : <span style="color: #f92672;font-weight: bold">{</span>
+    <span style="color: #e6db74">&#34;total&#34;</span> : 5,
+    <span style="color: #e6db74">&#34;successful&#34;</span> : 5,
+    <span style="color: #e6db74">&#34;failed&#34;</span> : 0
+  <span style="color: #f92672;font-weight: bold">}</span>,
+  <span style="color: #e6db74">&#34;hits&#34;</span> : <span style="color: #f92672;font-weight: bold">{</span>
+    <span style="color: #e6db74">&#34;total&#34;</span> : 4,
+    <span style="color: #e6db74">&#34;max_score&#34;</span> : 1.0,
+    <span style="color: #e6db74">&#34;hits&#34;</span> : <span style="color: #f92672;font-weight: bold">[</span> <span style="color: #f92672;font-weight: bold">{</span>
+      <span style="color: #e6db74">&#34;_index&#34;</span> : <span style="color: #e6db74">&#34;soe.logon&#34;</span>,
+      <span style="color: #e6db74">&#34;_type&#34;</span> : <span style="color: #e6db74">&#34;kafka-connect&#34;</span>,
+      <span style="color: #e6db74">&#34;_id&#34;</span> : <span style="color: #e6db74">&#34;ORCL.SOE.LOGON+0+3&#34;</span>,
+      <span style="color: #e6db74">&#34;_score&#34;</span> : 1.0,
+      <span style="color: #e6db74">&#34;_source&#34;</span> : <span style="color: #f92672;font-weight: bold">{</span>
+    <span style="color: #e6db74">&#34;table&#34;</span> : <span style="color: #e6db74">&#34;ORCL.SOE.LOGON&#34;</span>,
+    <span style="color: #e6db74">&#34;op_type&#34;</span> : <span style="color: #e6db74">&#34;I&#34;</span>,
+    <span style="color: #e6db74">&#34;op_ts&#34;</span> : <span style="color: #e6db74">&#34;2016-09-05 14:46:16.000436&#34;</span>,
+    <span style="color: #e6db74">&#34;current_ts&#34;</span> : <span style="color: #e6db74">&#34;2016-09-05 15:46:21.860000&#34;</span>,
+    <span style="color: #e6db74">&#34;pos&#34;</span> : <span style="color: #e6db74">&#34;00000000000000002748&#34;</span>,
+    <span style="color: #e6db74">&#34;LOGON_ID&#34;</span> : 42.0,
+    <span style="color: #e6db74">&#34;CUSTOMER_ID&#34;</span> : 42.0,
+    <span style="color: #e6db74">&#34;LOGON_DATE&#34;</span> : <span style="color: #e6db74">&#34;2016-09-05:15:46:11&#34;</span>
+      <span style="color: #f92672;font-weight: bold">}</span>
+    <span style="color: #f92672;font-weight: bold">}</span>,</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is looking good! But …​ there’s a wrinkle. Let’s fire up Kibana, an analytical tool for data in Elasticsearch, and see why.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>/opt/kibana-4.6.0-linux-x86_64/bin/kibana</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Go to <code><a href="http://&lt;server&gt;:5601/" class="bare">http://&lt;server&gt;:5601/</a></code> and the first thing you’ll see (assuming this is the first time you’ve run Kibana) is this:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges06.png" alt="ogges06"/>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_elasticseach_index_mappings_and_dynamic_templates">Elasticseach, Index Mappings, and Dynamic Templates&nbsp;<a class="headline-hash" href="#_elasticseach_index_mappings_and_dynamic_templates">🔗</a> </h3>
+<div class="paragraph">
+<p>Kibana is a pretty free-form analysis tool, and you don’t have to write SQL, define dimensions, and so on — but what you do have to do is tell it where to find the data. So let’s specify our index name, which in this example is <code>soe.logon</code>:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges07.png" alt="ogges07"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that the <strong>Time-field name</strong> remains blank. If you untick <strong>Index contains time-based events</strong> and then click <strong>Create</strong> you’ll see the index fields and their types:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges08.png" alt="ogges08"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Columns that are timestamps are coming across as strings - which is an issue here, because Time is one of the dimensions by which we’ll pretty much always want to analyse data, and if it’s not present Kibana (or any other user of the Elasticsearch data) can’t do its clever time-based filtering and aggregation, such as this example taken from another (time-based) Elasticsearch index:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges09.png" alt="ogges09"/>
+</div>
+</div>
+<div class="paragraph">
+<p>As a side note, the schema coming through from OGG Kafka Connect connector is listing these timestamp fields as strings, as we can see with a bit of fancy <code>jq</code> processing to show the schema entry for one of the fields (<code>op_ts</code>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #960050;background-color: #1e0010">$</span> <span style="color: #f8f8f2;background-color: #49483e">kafka</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">console</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">consumer</span> <span style="color: #75715e;font-style: italic">--zookeeper localhost:2181 --topic ORCL.SOE.LOGON --from-beginning --max-messages 1|jq &#39;.schema.fields[] | select (.field | contains(&#34;op_ts&#34;))&#39;</span>
+<span style="color: #f8f8f2;background-color: #49483e">{</span>
+    <span style="color: #f8f8f2">&#34;field&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">&#34;op_ts&#34;</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2">&#34;optional&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">false</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2">&#34;type&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">&#34;string&#34;</span>
+<span style="color: #f8f8f2;background-color: #49483e">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This string-based schema is actually coming through from the OGG replicat itself - whilst the Kafka Connect handler interprets and assumes the datatypes of columns such as numbers, it doesn’t for timestamps.</p>
+</div>
+<div class="paragraph">
+<p>So - how do we fix these data types in Elasticsearch so that we can make good use of the data? Enter <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic-templates.html">Dynamic Templates</a>. These enable you to specify the mapping (similar to a schema) of an index prior to it being created for a field for the first time, and you can wildcard field names too so that, for example, anything with a <code>_ts</code> suffix is treated as a timestamp data type.</p>
+</div>
+<div class="paragraph">
+<p>To configure the dynamic template we’ll use the REST API again, and whilst <code>curl</code> is fine for simple and repeated command line work, we’ll switch to the web-based Elasticsearch REST API client, <a href="https://www.elastic.co/guide/en/sense/current/introduction.html">Sense</a>. Assuming that you installed it following the process above you can access it at <code><a href="http://&lt;server&gt;:5601/app/sense" class="bare">http://&lt;server&gt;:5601/app/sense</a></code>.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges10.png" alt="ogges10"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Click <strong>Get to work</strong> to close the intro banner, and in the main editor paste the following JSON (<a href="https://gist.github.com/rmoff/4d57a815a539b9f34eeec1ed4cdf8ede">gist here</a>)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>DELETE /_template/kafkaconnect/
+PUT /_template/kafkaconnect/
+{
+  &#34;template&#34;: &#34;soe*&#34;,
+  &#34;settings&#34;: {
+    &#34;number_of_shards&#34;: 1,
+    &#34;number_of_replicas&#34;: 0
+  },
+  &#34;mappings&#34;: {
+    &#34;_default_&#34;: {
+      &#34;dynamic_templates&#34;: [
+        {
+          &#34;dates&#34;: {
+            &#34;match&#34;: &#34;*_ts&#34;,
+            &#34;mapping&#34;: {
+              &#34;type&#34;: &#34;date&#34;,
+              &#34;format&#34;: &#34;YYYY-MM-dd HH:mm:ss.SSSSSS&#34;
+            }
+          }
+        },
+        {
+          &#34;non_analysed_string_template&#34;: {
+            &#34;match&#34;: &#34;*&#34;,
+            &#34;match_mapping_type&#34;: &#34;string&#34;,
+            &#34;mapping&#34;: {
+              &#34;type&#34;: &#34;string&#34;,
+              &#34;index&#34;: &#34;not_analyzed&#34;
+            }
+          }
+        }
+      ]
+    }
+  }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What this is doing:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The <code>DELETE</code> is just there so that you can re-run these statements, since Elasticsearch won’t update an existing template.</p>
+</li>
+<li>
+<p>Any index beginning with <code>soe</code> will be matched against this template.</p>
+</li>
+<li>
+<p>This is based on a single-node Elasticsearch instance, so setting the number of replicas to zero, and shards to one. In a multi-node Production cluster you’d want to set these differently. If you leave replicas as the default (1) then your Elasticsearch cluster will remain in &#34;YELLOW&#34; health status as there’ll forever be unassigned shards.</p>
+</li>
+<li>
+<p>The <code>dates</code> template matches any field with <code>_ts</code> suffix and sets it to a Date type. The inbound data must match the format shown. For details of the date format specifics, see the <a href="https://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html">JodaTime documentation</a>.</p>
+</li>
+<li>
+<p>The <code>non_analysed_string_template</code> template matches any string field and creates two instances of it; one analyzed and one not. Analyzed is where it gets tokenized which is useful for full-text searching etc, and non-analyzed is necessary for aggregations against the full field value. For example, &#34;New York&#34; would otherwise aggregate as &#39;New&#39; and a separate instance &#39;York&#39;.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Put the cursor over each statement and click the green play arrow that appears to the right of the column.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges11.png" alt="ogges11"/>
+</div>
+</div>
+<div class="paragraph">
+<p>For the <code>DELETE</code> statement you’ll get an error the first time it’s run (because the index template isn’t there to delete), and the <code>PUT</code> should succeed with</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="json"><span style="color: #f8f8f2;background-color: #49483e">{</span><span style="color: #f8f8f2">
+    </span><span style="color: #f8f8f2;font-weight: bold">&#34;acknowledged&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #f8f8f2"> </span><span style="color: #66d9ef;font-weight: bold">true</span><span style="color: #f8f8f2">
+</span><span style="color: #f8f8f2;background-color: #49483e">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we’ll delete the index itself so that it can be recreated and pick up the dynamic mappings. Here I’m using curl but you can run this in Sense too if you want.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>curl <span style="color: #f92672">-X</span> <span style="color: #e6db74">&#34;DELETE&#34;</span> <span style="color: #e6db74">&#34;http://localhost:9200/soe.logon&#34;</span>
+<span style="color: #f92672;font-weight: bold">{</span><span style="color: #e6db74">&#34;acknowledged&#34;</span>:true<span style="color: #f92672;font-weight: bold">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Watch out here, because Elasticsearch will delete an index before you can say &#39;oh sh…​.&#39; — there is no &#34;Are you sure you want to drop this index?&#34; type interaction. You can even wildcard the above REST request for real destruction and mayhem - <code>action.destructive_requires_name</code> can be set to limit this risk.</p>
+</div>
+<hr/>
+<div class="paragraph">
+<p><strong>So, to recap</strong> - we’ve successfully run Kafka Connect to load data from a Kafka topic into an Elasticsearch index. We’ve taken that index and seen that the field mappings aren’t great for timestamp fields, so have defined a dynamic template in Elasticsearch so that new indices created will set any column ending <code>_ts</code> to a timestamp. Finally, we deleted the existing index so that we can use the new template from now on.</p>
+</div>
+<div class="paragraph">
+<p>Let’s test out the new index mapping. Since we deleted the index that had our data in (albeit test data) we can take advantage of the awesomeness that is Kafka by simply replaying the topic from the start. To do this change the <code>name</code> value in the Elasticsearch connector configuration (<code>elasticsearch-kafka-connect.properties</code>), e.g. add a number to its suffix:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"><span style="color: #f8f8f2;background-color: #49483e">name</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">elasticsearch-sink-01</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you’re running Kafka Connect in standalone mode then you could also just delete the offsets file to achieve the same.</p>
+</div>
+<div class="paragraph">
+<p>Whilst in the configuration file you need to also add another entry, telling the connector to ignore the schema that is passed from Kafka and instead dynamically infer the types (as well as honour the dynamic mappings that we specified)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"><span style="color: #f8f8f2;background-color: #49483e">topic.schema.ignore</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">ORCL.SOE.LOGON</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now restart the connector (make sure you did delete the Elasticsearch index per above, otherwise you’ll see no difference in the mappings)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>export CLASSPATH=/opt/kafka-connect-elasticsearch/*
+export JMX_PORT=4243
+/usr/bin/connect-standalone /etc/kafka/connect-standalone.properties /opt/elasticsearch-2.4.0/config/elasticsearch-kafka-connect.properties</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And go check out Elasticsearch, first the mapping:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>curl <span style="color: #f92672">-X</span> <span style="color: #e6db74">&#34;GET&#34;</span> <span style="color: #e6db74">&#34;http://localhost:9200/soe.logon/_mapping?pretty&#34;</span>
+
+    <span style="color: #f92672;font-weight: bold">{</span>
+      <span style="color: #e6db74">&#34;soe.logon&#34;</span> : <span style="color: #f92672;font-weight: bold">{</span>
+        <span style="color: #e6db74">&#34;mappings&#34;</span> : <span style="color: #f92672;font-weight: bold">{</span>
+            <span style="color: #f92672;font-weight: bold">[</span>...]
+              <span style="color: #e6db74">&#34;LOGON_ID&#34;</span> : <span style="color: #f92672;font-weight: bold">{</span>
+                <span style="color: #e6db74">&#34;type&#34;</span> : <span style="color: #e6db74">&#34;double&#34;</span>
+              <span style="color: #f92672;font-weight: bold">}</span>,
+              <span style="color: #e6db74">&#34;current_ts&#34;</span> : <span style="color: #f92672;font-weight: bold">{</span>
+                <span style="color: #e6db74">&#34;type&#34;</span> : <span style="color: #e6db74">&#34;date&#34;</span>,
+                <span style="color: #e6db74">&#34;format&#34;</span> : <span style="color: #e6db74">&#34;YYYY-MM-dd HH:mm:ss.SSSSSS&#34;</span>
+              <span style="color: #f92672;font-weight: bold">}</span>,
+              <span style="color: #e6db74">&#34;op_ts&#34;</span> : <span style="color: #f92672;font-weight: bold">{</span>
+                <span style="color: #e6db74">&#34;type&#34;</span> : <span style="color: #e6db74">&#34;date&#34;</span>,
+                <span style="color: #e6db74">&#34;format&#34;</span> : <span style="color: #e6db74">&#34;YYYY-MM-dd HH:mm:ss.SSSSSS&#34;</span>
+            <span style="color: #f92672;font-weight: bold">[</span>...]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that the two timestamp columns are now <code>date</code> type. If you still see them as strings, make sure you’ve set the <code>topic.schema.ignore</code> configuration as shown above in the Kafka Connect properties for the Elasticsearch connector.</p>
+</div>
+<div class="paragraph">
+<p>Looking at the row count, we can see that all the records from the topic have been successfully replayed from Kafka and loaded into Elasticsearch. This ability to replay data on demand whilst developing and testing the ingest into a subsequent pipeline is a massive benefit of using Kafka!</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>curl <span style="color: #f92672">-s</span> <span style="color: #f92672">-X</span> <span style="color: #e6db74">&#34;GET&#34;</span> <span style="color: #e6db74">&#34;http://localhost:9200/soe.logon/_count?pretty=true&#34;</span>|jq <span style="color: #e6db74">&#39;.count&#39;</span>
+16</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Over in Kibana head to the Index Patterns setting page (<code><a href="http://&lt;server&gt;:5601/app/kibana#/settings/indices" class="bare">http://&lt;server&gt;:5601/app/kibana#/settings/indices</a></code>), or from the Settings → Indices menu buttons at the top. If you already have the index defined here then delete it - we want Kibana to pick up the new shiny version we’ve created because it includes the timestamp columns. Now configure a new index pattern:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges12.png" alt="ogges12"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that the <strong>Time-field name</strong> field is now populated. I’ve selected <code>op_ts</code>. Click on <strong>Create</strong> and then go to the <strong>Discover</strong> page (from the option at the top of the page). You may well see &#34;No results found&#34; - if so use the button in the top-right of the page to change the time window to broaden it to include the time at which you inserted record(s) to the SOE.LOGON table in the testing above.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges13.png" alt="ogges13"/>
+</div>
+</div>
+<div class="paragraph">
+<p>To explore the data further you can click on the <strong>add</strong> button that you get when hovering over each of the fields on the left of the page, which will add them as columns to the main table, replacing the default <code>_source</code> (which shows all fields):</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges14-1.png" alt="ogges14 1"/>
+</div>
+</div>
+<div class="paragraph">
+<p>In this example you can see that there was quite a few testing records inserted (<code>op_type</code> = <code>I</code>), with nothing changing between than the <code>LOGON_DATE</code>.</p>
+</div>
+<div class="sect3">
+<h4 id="_connector_errors_after_adding_dynamic_templates">Connector errors after adding dynamic templates&nbsp;<a class="headline-hash" href="#_connector_errors_after_adding_dynamic_templates">🔗</a> </h4>
+<div class="paragraph">
+<p>Note that if you get an error like this when running the connector:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="json"><span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #960050;background-color: #1e0010">pool</span><span style="color: #ae81ff">-2</span><span style="color: #960050;background-color: #1e0010">-thread</span><span style="color: #ae81ff">-1</span><span style="color: #f8f8f2;background-color: #49483e">]</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">ERROR</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">org.apache.kafka.connect.runtime.WorkerSinkTask</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">-</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">Task</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">elasticsearch-sink</span><span style="color: #ae81ff">-02-0</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">threw</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">an</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">uncaught</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">and</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">unrecoverable</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">exception</span><span style="color: #f8f8f2">
+</span><span style="color: #960050;background-color: #1e0010">org.apache.kafka.connect.errors.ConnectException:</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">Cannot</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">create</span><span style="color: #f8f8f2"> </span><span style="color: #960050;background-color: #1e0010">mapping:</span><span style="color: #f8f8f2;background-color: #49483e">{</span><span style="color: #f8f8f2;font-weight: bold">&#34;kafka-connect&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:{</span><span style="color: #f8f8f2;font-weight: bold">&#34;properties&#34;</span><span style="color: #f8f8f2;background-color: #49483e">:{</span><span style="color: #e6db74">&#34;[...]
+at io.confluent.connect.elasticsearch.Mapping.createMapping(Mapping.java:65)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>then check the Elasticsearch log/stdout, where you’ll find more details. This kind of thing that can cause problems would be an index not deleted before re-running it with the new template, as well as a date format in the template that doesn’t match the data.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_running_a_full_swingbench_test">Running a Full Swingbench Test&nbsp;<a class="headline-hash" href="#_running_a_full_swingbench_test">🔗</a> </h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_configuration">Configuration&nbsp;<a class="headline-hash" href="#_configuration">🔗</a> </h3>
+<div class="paragraph">
+<p>If you’ve made it this far, congratulations! Now we’re going to set up the necessary configuration to run Swingbench. This will generate a stream of changes to multiple tables, enabling us to get a feel for how the pipeline behaves in &#39;real world&#39; conditions.</p>
+</div>
+<div class="paragraph">
+<p>To start will, let’s get a list of all the tables involved:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #960050;background-color: #1e0010">$</span> <span style="color: #f8f8f2;background-color: #49483e">rlwrap</span> <span style="color: #f8f8f2;background-color: #49483e">sqlplus</span> <span style="color: #f8f8f2;background-color: #49483e">soe</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">soe</span><span style="color: #f92672;font-weight: bold">@</span><span style="color: #f8f8f2;background-color: #49483e">orcl</span>
+
+<span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">Plus</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">Release</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span> <span style="color: #f8f8f2;background-color: #49483e">Production</span> <span style="color: #66d9ef;font-weight: bold">on</span> <span style="color: #f8f8f2;background-color: #49483e">Tue</span> <span style="color: #f8f8f2;background-color: #49483e">Sep</span> <span style="color: #ae81ff">6</span> <span style="color: #ae81ff">11</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">45</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">02</span> <span style="color: #ae81ff">2016</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Copyright</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">c</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #ae81ff">1982</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">2014</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">Oracle</span><span style="color: #f8f8f2;background-color: #49483e">.</span>  <span style="color: #66d9ef;font-weight: bold">All</span> <span style="color: #f8f8f2;background-color: #49483e">rights</span> <span style="color: #f8f8f2;background-color: #49483e">reserved</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #66d9ef;font-weight: bold">Last</span> <span style="color: #f8f8f2;background-color: #49483e">Successful</span> <span style="color: #f8f8f2;background-color: #49483e">login</span> <span style="color: #f8f8f2">time</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">Fri</span> <span style="color: #f8f8f2;background-color: #49483e">Sep</span> <span style="color: #ae81ff">02</span> <span style="color: #ae81ff">2016</span> <span style="color: #ae81ff">15</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">49</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">03</span> <span style="color: #f92672;font-weight: bold">+</span><span style="color: #ae81ff">01</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">00</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Connected</span> <span style="color: #66d9ef;font-weight: bold">to</span><span style="color: #f8f8f2;background-color: #49483e">:</span>
+<span style="color: #f8f8f2;background-color: #49483e">Oracle</span> <span style="color: #66d9ef;font-weight: bold">Database</span> <span style="color: #ae81ff">12</span><span style="color: #66d9ef;font-weight: bold">c</span> <span style="color: #f8f8f2;background-color: #49483e">Enterprise</span> <span style="color: #f8f8f2;background-color: #49483e">Edition</span> <span style="color: #f8f8f2;background-color: #49483e">Release</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span> <span style="color: #f92672;font-weight: bold">-</span> <span style="color: #ae81ff">64</span><span style="color: #f8f8f2">bit</span> <span style="color: #f8f8f2;background-color: #49483e">Production</span>
+<span style="color: #66d9ef;font-weight: bold">With</span> <span style="color: #f8f8f2;background-color: #49483e">the</span> <span style="color: #f8f8f2;background-color: #49483e">Partitioning</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">OLAP</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">Advanced</span> <span style="color: #f8f8f2;background-color: #49483e">Analytics</span> <span style="color: #66d9ef;font-weight: bold">and</span> <span style="color: #f8f8f2">Real</span> <span style="color: #f8f8f2;background-color: #49483e">Application</span> <span style="color: #f8f8f2;background-color: #49483e">Testing</span> <span style="color: #66d9ef;font-weight: bold">options</span>
+
+<span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">table_name</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">user_tables</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #66d9ef;font-weight: bold">TABLE_NAME</span>
+<span style="color: #75715e;font-style: italic">--------------------------------------------------------------------------------</span>
+<span style="color: #f8f8f2;background-color: #49483e">WAREHOUSES</span>
+<span style="color: #f8f8f2;background-color: #49483e">PRODUCT_INFORMATION</span>
+<span style="color: #f8f8f2;background-color: #49483e">PRODUCT_DESCRIPTIONS</span>
+<span style="color: #f8f8f2;background-color: #49483e">ORDER_ITEMS</span>
+<span style="color: #f8f8f2;background-color: #49483e">ORDERS</span>
+<span style="color: #f8f8f2;background-color: #49483e">ORDERENTRY_METADATA</span>
+<span style="color: #f8f8f2;background-color: #49483e">LOGON</span>
+<span style="color: #f8f8f2;background-color: #49483e">INVENTORIES</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMERS</span>
+<span style="color: #f8f8f2;background-color: #49483e">CARD_DETAILS</span>
+<span style="color: #f8f8f2;background-color: #49483e">ADDRESSES</span>
+
+<span style="color: #ae81ff">11</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #f8f8f2;background-color: #49483e">selected</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The OGG replication is already defined with a wildcard, to pick up all tables in the <code>SOE</code> schema:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>[oracle@bigdatalite config]$ cat /u01/ogg/dirprm/ext1.prm
+EXTRACT EXT1
+USERID SYSTEM, PASSWORD welcome1
+EXTTRAIL ./dirdat/lt
+SOURCECATALOG ORCL
+TABLE SOE.*;
+
+[oracle@bigdatalite config]$ cat /u01/ogg-bd/dirprm/rconf.prm
+REPLICAT rconf
+TARGETDB LIBFILE libggjava.so SET property=dirprm/conf.props
+REPORTCOUNT EVERY 1 MINUTES, RATE
+GROUPTRANSOPS 1000
+MAP *.*.*, TARGET *.*.*;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The OGG Kafka Connect handler will automatically create a topic for every table that it receives from OGG. So all we need to do now is add each table to the Elasticsearch Sink configuration. For this, I created a second version of the configuration file, at <code>/opt/elasticsearch-2.4.0/config/elasticsearch-kafka-connect-full.properties</code></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"><span style="color: #f8f8f2;background-color: #49483e">name</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">elasticsearch-sink-full-00</span>
+<span style="color: #f8f8f2;background-color: #49483e">connector.class</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">io.confluent.connect.elasticsearch.ElasticsearchSinkConnector</span>
+<span style="color: #f8f8f2;background-color: #49483e">tasks.max</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">1</span>
+<span style="color: #f8f8f2;background-color: #49483e">connection.url</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">http://localhost:9200</span>
+<span style="color: #f8f8f2;background-color: #49483e">type.name</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">kafka-connect</span>
+<span style="color: #f8f8f2;background-color: #49483e">topics</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">ORCL.SOE.WAREHOUSES ,ORCL.SOE.PRODUCT_INFORMATION ,ORCL.SOE.PRODUCT_DESCRIPTIONS ,ORCL.SOE.ORDER_ITEMS ,ORCL.SOE.ORDERS ,ORCL.SOE.ORDERENTRY_METADATA ,ORCL.SOE.LOGON ,ORCL.SOE.INVENTORIES ,ORCL.SOE.CUSTOMERS ,ORCL.SOE.CARD_DETAILS ,ORCL.SOE.ADDRESSES</span>
+<span style="color: #f8f8f2;background-color: #49483e">topic.schema.ignore</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">ORCL.SOE.WAREHOUSES ,ORCL.SOE.PRODUCT_INFORMATION ,ORCL.SOE.PRODUCT_DESCRIPTIONS ,ORCL.SOE.ORDER_ITEMS ,ORCL.SOE.ORDERS ,ORCL.SOE.ORDERENTRY_METADATA ,ORCL.SOE.LOGON ,ORCL.SOE.INVENTORIES ,ORCL.SOE.CUSTOMERS ,ORCL.SOE.CARD_DETAILS ,ORCL.SOE.ADDRESSES</span>
+<span style="color: #f8f8f2;background-color: #49483e">topic.key.ignore</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">ORCL.SOE.WAREHOUSES ,ORCL.SOE.PRODUCT_INFORMATION ,ORCL.SOE.PRODUCT_DESCRIPTIONS ,ORCL.SOE.ORDER_ITEMS ,ORCL.SOE.ORDERS ,ORCL.SOE.ORDERENTRY_METADATA ,ORCL.SOE.LOGON ,ORCL.SOE.INVENTORIES ,ORCL.SOE.CUSTOMERS ,ORCL.SOE.CARD_DETAILS ,ORCL.SOE.ADDRESSES</span>
+<span style="color: #f8f8f2;background-color: #49483e">topic.index.map</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">ORCL.SOE.WAREHOUSES:soe.warehouses ,ORCL.SOE.PRODUCT_INFORMATION:soe.product_information ,ORCL.SOE.PRODUCT_DESCRIPTIONS:soe.product_descriptions ,ORCL.SOE.ORDER_ITEMS:soe.order_items ,ORCL.SOE.ORDERS:soe.orders ,ORCL.SOE.ORDERENTRY_METADATA:soe.orderentry_metadata ,ORCL.SOE.LOGON:soe.logon ,ORCL.SOE.INVENTORIES:soe.inventories ,ORCL.SOE.CUSTOMERS:soe.customers ,ORCL.SOE.CARD_DETAILS:soe.card_details ,ORCL.SOE.ADDRESSES:soe.addresses</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Having created the configuration, run the connector. If the previous connector from the earlier testing is running then stop it first, otherwise you’ll get a port clash (and be double-processing the <code>ORCL.SOE.LOGON</code> topic).</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>/usr/bin/connect-standalone /etc/kafka/connect-standalone.properties /opt/elasticsearch-2.4.0/config/elasticsearch-kafka-connect-full.properties</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_running_swingbench">Running Swingbench&nbsp;<a class="headline-hash" href="#_running_swingbench">🔗</a> </h3>
+<div class="paragraph">
+<p>I’m using <code>charbench</code> which is a commandline interface for Swingbench:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>/opt/swingbench/bin/charbench <span style="color: #f92672">-cs</span> localhost:1521/orcl <span style="color: #f92672">-u</span> soe <span style="color: #f92672">-p</span> soe <span style="color: #f92672">-v</span> trans,users
+Author  :        Dominic Giles
+Version :        2.5.0.971
+
+Results will be written to results.xml.
+Hit Return to Terminate Run...
+
+Time            NCR     UCD     BP      OP      PO      BO      SQ      WQ      WA      Users
+06:59:14        0       0       0       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>0/1]
+06:59:15        0       0       0       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>0/1]
+06:59:16        0       0       0       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>0/1]
+06:59:17        0       0       0       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>0/1]
+06:59:18        0       0       0       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>0/1]
+06:59:19        0       0       0       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>0/1]
+06:59:20        0       0       0       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>0/1]
+06:59:21        0       0       0       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>0/1]
+06:59:22        0       0       0       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>1/1]
+06:59:23        2       0       2       0       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>1/1]
+06:59:24        3       0       4       5       0       0       0       0       0       <span style="color: #f92672;font-weight: bold">[</span>1/1]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Each of the columns with abbreviated headings are different transactions run, and as soon as you see numbers above zero in them it indicates that you should be getting data in the Oracle tables, and thus through into Kafka and Elasticsearch.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_auditing_the_pipeline">Auditing the Pipeline&nbsp;<a class="headline-hash" href="#_auditing_the_pipeline">🔗</a> </h3>
+<div class="paragraph">
+<p>Let’s see how many records are on the ORDERS table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #960050;background-color: #1e0010">$</span> <span style="color: #f8f8f2;background-color: #49483e">rlwrap</span> <span style="color: #f8f8f2;background-color: #49483e">sqlplus</span> <span style="color: #f8f8f2;background-color: #49483e">soe</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">soe</span><span style="color: #f92672;font-weight: bold">@</span><span style="color: #f8f8f2;background-color: #49483e">orcl</span>
+
+<span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">Plus</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">Release</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span> <span style="color: #f8f8f2;background-color: #49483e">Production</span> <span style="color: #66d9ef;font-weight: bold">on</span> <span style="color: #f8f8f2;background-color: #49483e">Tue</span> <span style="color: #f8f8f2;background-color: #49483e">Sep</span> <span style="color: #ae81ff">6</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">21</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">13</span> <span style="color: #ae81ff">2016</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Copyright</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">c</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #ae81ff">1982</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">2014</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">Oracle</span><span style="color: #f8f8f2;background-color: #49483e">.</span>  <span style="color: #66d9ef;font-weight: bold">All</span> <span style="color: #f8f8f2;background-color: #49483e">rights</span> <span style="color: #f8f8f2;background-color: #49483e">reserved</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #66d9ef;font-weight: bold">Last</span> <span style="color: #f8f8f2;background-color: #49483e">Successful</span> <span style="color: #f8f8f2;background-color: #49483e">login</span> <span style="color: #f8f8f2">time</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">Tue</span> <span style="color: #f8f8f2;background-color: #49483e">Sep</span> <span style="color: #ae81ff">06</span> <span style="color: #ae81ff">2016</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">21</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">09</span> <span style="color: #f92672;font-weight: bold">+</span><span style="color: #ae81ff">01</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">00</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Connected</span> <span style="color: #66d9ef;font-weight: bold">to</span><span style="color: #f8f8f2;background-color: #49483e">:</span>
+<span style="color: #f8f8f2;background-color: #49483e">Oracle</span> <span style="color: #66d9ef;font-weight: bold">Database</span> <span style="color: #ae81ff">12</span><span style="color: #66d9ef;font-weight: bold">c</span> <span style="color: #f8f8f2;background-color: #49483e">Enterprise</span> <span style="color: #f8f8f2;background-color: #49483e">Edition</span> <span style="color: #f8f8f2;background-color: #49483e">Release</span> <span style="color: #ae81ff">12</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0</span> <span style="color: #f92672;font-weight: bold">-</span> <span style="color: #ae81ff">64</span><span style="color: #f8f8f2">bit</span> <span style="color: #f8f8f2;background-color: #49483e">Production</span>
+<span style="color: #66d9ef;font-weight: bold">With</span> <span style="color: #f8f8f2;background-color: #49483e">the</span> <span style="color: #f8f8f2;background-color: #49483e">Partitioning</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">OLAP</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">Advanced</span> <span style="color: #f8f8f2;background-color: #49483e">Analytics</span> <span style="color: #66d9ef;font-weight: bold">and</span> <span style="color: #f8f8f2">Real</span> <span style="color: #f8f8f2;background-color: #49483e">Application</span> <span style="color: #f8f8f2;background-color: #49483e">Testing</span> <span style="color: #66d9ef;font-weight: bold">options</span>
+
+<span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">count</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">orders</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #66d9ef;font-weight: bold">COUNT</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f92672;font-weight: bold">*</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #75715e;font-style: italic">----------</span>
+<span style="color: #ae81ff">143001</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But, this includes the records that were <strong>pre-seeded</strong> by Swingbench <em>before</em> we set up the OGG extract. How do we know how many have been read by GoldenGate since, and should therefore be downstream on Kafka, and Elasticsearch? Enter <strong>logdump</strong>. This is a GoldenGate tool that gives a commandline interface to analysing the OGG trail file itself. You can read more about it <a href="https://docs.oracle.com/goldengate/1212/gg-winux/GLOGD/wu_logdump.htm#GLOGD107">here</a>, <a href="http://www.ateam-oracle.com/oracle-goldengate-logdump/">here</a>, and <a href="https://www.rittmanmead.com/blog/2016/09/using-logdump-to-debug-oracle-goldengate-and-kafka/">here</a>.</p>
+</div>
+<div class="paragraph">
+<p>First, determine the trail file name:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">ls</span> <span style="color: #f92672">-l</span> /u01/ogg/dirdat/<span style="color: #66d9ef;font-weight: bold">*</span>
+<span style="color: #f92672">-rw-r-----</span><span style="color: #f8f8f2">.</span> 1 oracle oinstall 64068 Sep  9 10:16 /u01/ogg/dirdat/lt000000015</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>And then launch logdump (optionally, but preferably, with <code>rlwrap</code> to give command history and search):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">cd</span> /u01/ogg/
+<span style="color: #f8f8f2">$ </span>rlwrap ./logdump</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>From the `Logdump &gt; ` prompt, open the trail file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>Logdump 1 &gt;OPEN /u01/ogg/dirdat/lt000000015
+Current LogTrail is /u01/ogg/dirdat/lt000000015</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then filter to only show records relating to the table we’re interested in:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>Logdump 2 &gt;FILTER FILENAME ORCL.SOE.ORDERS</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then give a summary of the records present:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Logdump</span> <span style="color: #ae81ff">3</span> <span style="color: #f92672;font-weight: bold">&gt;</span><span style="color: #66d9ef;font-weight: bold">COUNT</span>
+<span style="color: #f8f8f2;background-color: #49483e">LogTrail</span> <span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">u01</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">ogg</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">dirdat</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">lt000000015</span> <span style="color: #f8f8f2;background-color: #49483e">has</span> <span style="color: #ae81ff">46</span> <span style="color: #f8f8f2;background-color: #49483e">records</span>
+<span style="color: #f8f8f2;background-color: #49483e">Total</span> <span style="color: #66d9ef;font-weight: bold">Data</span> <span style="color: #f8f8f2;background-color: #49483e">Bytes</span>              <span style="color: #ae81ff">14056</span>
+  <span style="color: #66d9ef;font-weight: bold">Avg</span> <span style="color: #f8f8f2;background-color: #49483e">Bytes</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">Record</span>              <span style="color: #ae81ff">305</span>
+<span style="color: #66d9ef;font-weight: bold">Insert</span>                           <span style="color: #ae81ff">22</span>
+<span style="color: #66d9ef;font-weight: bold">Update</span>                           <span style="color: #ae81ff">23</span>
+<span style="color: #f8f8f2;background-color: #49483e">Metadata</span> <span style="color: #f8f8f2;background-color: #49483e">Records</span>                  <span style="color: #ae81ff">1</span>
+<span style="color: #66d9ef;font-weight: bold">After</span> <span style="color: #f8f8f2;background-color: #49483e">Images</span>                     <span style="color: #ae81ff">45</span>
+<span style="color: #f8f8f2;background-color: #49483e">Filtering</span> <span style="color: #f8f8f2;background-color: #49483e">matched</span>           <span style="color: #ae81ff">46</span> <span style="color: #f8f8f2;background-color: #49483e">records</span>
+          <span style="color: #f8f8f2;background-color: #49483e">suppressed</span>       <span style="color: #ae81ff">208</span> <span style="color: #f8f8f2;background-color: #49483e">records</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Here we can see that there are a total of 45 insert/update records that have been captured.</p>
+</div>
+<div class="paragraph">
+<p>Let’s check the replicat’s trail file also matches:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #960050;background-color: #1e0010">$</span> <span style="color: #f8f8f2;background-color: #49483e">ls</span> <span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">l</span> <span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">u01</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">ogg</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">bd</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">dirdat</span><span style="color: #75715e;font-style: italic">/*
+-rw-r-----. 1 oracle oinstall 64416 Sep  9 10:16 /u01/ogg-bd/dirdat/rt000000000
+
+$ cd /u01/ogg-bd
+$ rlwrap ./logdump
+
+Oracle GoldenGate Log File Dump Utility
+Version 12.2.0.1.160419 OGGCORE_12.2.0.1.0OGGBP_PLATFORMS_160430.1401
+
+Copyright (C) 1995, 2016, Oracle and/or its affiliates. All rights reserved.
+
+
+Logdump 1 &gt;OPEN /u01/ogg-bd/dirdat/rt000000000
+Current LogTrail is /u01/ogg-bd/dirdat/rt000000000
+Logdump 2 &gt;FILTER FILENAME ORCL.SOE.ORDERS
+Logdump 3 &gt;COUNT
+LogTrail /u01/ogg-bd/dirdat/rt000000000 has 46 records
+Total Data Bytes              14056
+  Avg Bytes/Record              305
+Insert                           22
+Update                           23
+Metadata Records                  1
+After Images                     45
+Filtering matched           46 records
+          suppressed       213 records
+
+Average of 3 Transactions
+Bytes/Trans .....       5421
+Records/Trans ...         15
+Files/Trans .....          4</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Looks good - a total of 45 records again.</p>
+</div>
+<div class="paragraph">
+<p>So from OGG, the data flows via the Kafka Connect connect into a Kafka topic, one per table. We can count how many messages there are on the corresponding Kafka topic by running a console consumer, redirecting the messages to file (and using <code>&amp;</code> to return control to the console):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>kafka-console-consumer <span style="color: #f92672">--zookeeper</span> localhost:2181 <span style="color: #f92672">--topic</span> ORCL.SOE.ORDERS <span style="color: #f92672">--from-beginning</span> <span style="color: #f92672;font-weight: bold">&gt;</span> /tmp/kafka_orcl.soe.orders &amp;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then issue a <code>wc</code> to count the number of lines currently in the resulting file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span> <span style="color: #f8f8f2">wc</span> <span style="color: #f92672">-l</span> /tmp/kafka_orcl.soe.orders
+45 /tmp/kafka_orcl.soe.orders</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Since the console consumer process is still running in the background (type <code>fg</code> to bring it back to the foreground if you want to cancel it), you can re-issue the <code>wc</code> as required to see the current count of messages on the topic.</p>
+</div>
+<div class="paragraph">
+<p>Finally, to see the number of documents on the corresponding Elasticsearch index:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>curl <span style="color: #f92672">-s</span> <span style="color: #f92672">-X</span> <span style="color: #e6db74">&#34;GET&#34;</span> <span style="color: #e6db74">&#34;http://localhost:9200/soe.orders/_count?pretty=true&#34;</span>|jq <span style="color: #e6db74">&#39;.count&#39;</span>
+45</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Here we’ve proved that the number of records written by Oracle are making it all the way through our pipeline.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_monitoring_the_pipeline">Monitoring the Pipeline&nbsp;<a class="headline-hash" href="#_monitoring_the_pipeline">🔗</a> </h3>
+<div class="paragraph">
+<p>Kafka and Kafka Connect expose metrics through JMX. There’s a variety of tools for capturing, persisting, and visualising this, <a href="https://softwaremill.com/monitoring-apache-kafka-with-influxdb-grafana/">such as detailed here</a>. For now, we’ll just use JConsole to inspect the metrics and get an idea of what’s available.</p>
+</div>
+<div class="paragraph">
+<p>You’ll need a GUI for jconsole, so either a desktop session on the server itself, X11 forwarded, or you can also run JConsole from a local machine (it’s bundled with any JDK) and connect to the remote JMX. In this example I simply connected to the VM’s desktop and ran JConsole locally there. You launch it by running it from the shell prompt:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>jconsole</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>From here I connected to the &#39;Remote Process&#39; on localhost:4242 to access the Kafka server process (because it’s running as root the jconsole process (running as a non-root user) can’t connect to it as a &#39;Local Process&#39;). The port 4242 is what I specified as an environment variable as part of the kafka process launch.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges15.png" alt="ogges15"/>
+</div>
+</div>
+<div class="paragraph">
+<p>On the <strong>MBeans</strong> tab there are a list of MBeans under which the bespoke application metrics (as opposed to JVM ones like heap memory usage) are found. For example, the rate at which data is being received and sent from the cluster:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges16.png" alt="ogges16"/>
+</div>
+</div>
+<div class="paragraph">
+<p>By default when you see an attribute for an MBean is it point-in-time - doubleclick on it to make it a chart that then tracks subsequent changes to the number.</p>
+</div>
+<div class="paragraph">
+<p>By connecting to <code>localhost:4243</code> (press Ctrl-N for a new connection in the same JConsole instance) you can inspect the metrics from the Kafka Connect elasticsearch sink</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges17.png" alt="ogges17"/>
+</div>
+</div>
+<div class="paragraph">
+<p>You can also access JMX metrics for the OGG Kafka handler by connecting to the local processs (assuming you’re running JConsole locally). To find the PID for the RCONF replicat, run:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>pgrep <span style="color: #f92672">-f</span> RCONF</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then select that PID from the JConsole connection list - note that the process name may show as blank.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges18.png" alt="ogges18"/>
+</div>
+</div>
+<div class="paragraph">
+<p>The producer stats show metrics such as the rate at which topic is being written to:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2016/10/ogges19.png" alt="ogges19"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_conclusion">Conclusion&nbsp;<a class="headline-hash" href="#_conclusion">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In this article we’ve seen how stream transactions from a RDBMS such as Oracle into Kafka and out to a target such as Elasticsearch, utilising the Kafka Connect platform and its standardised connector framework. We also saw how to validate and audit the pipeline at various touchpoints, as well as a quick look at accessing the JMX metrics that Kafka provides.</p>
+</div>
+<hr/>
+<div class="paragraph">
+<p><em>This article was also posted on the <a href="http://www.confluent.io/blog/streaming-data-oracle-using-oracle-goldengate-kafka-connect/">Confluent blog</a>, head over there for more great Kafka-related content!</em></p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2016/10/streaming-data-from-oracle-using-oracle-goldengate-and-kafka-connect/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+
+	<hr>
+	<div id="comments" class="giscus-container">
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+	</div>
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">On this page</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_environment">Environment</a></li>
+    <li><a href="#_starting_confluent_platform">Starting Confluent Platform</a></li>
+    <li><a href="#_configuring_oracle_goldengate_to_send_transactions_to_kafka_connect">Configuring Oracle GoldenGate to send transactions to Kafka Connect</a></li>
+    <li><a href="#_testing_the_replication">Testing the Replication</a></li>
+    <li><a href="#_configuring_elasticsearch">Configuring Elasticsearch</a>
+      <ul>
+        <li><a href="#_setting_up_the_elasticsearch_kafka_connect_handler">Setting up the Elasticsearch Kafka Connect handler</a></li>
+        <li><a href="#_elasticseach_index_mappings_and_dynamic_templates">Elasticseach, Index Mappings, and Dynamic Templates</a></li>
+      </ul>
+    </li>
+    <li><a href="#_running_a_full_swingbench_test">Running a Full Swingbench Test</a>
+      <ul>
+        <li><a href="#_configuration">Configuration</a></li>
+        <li><a href="#_running_swingbench">Running Swingbench</a></li>
+        <li><a href="#_auditing_the_pipeline">Auditing the Pipeline</a></li>
+        <li><a href="#_monitoring_the_pipeline">Monitoring the Pipeline</a></li>
+      </ul>
+    </li>
+    <li><a href="#_conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+      </div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+
+		</main>
+
+		
+
+		
+		<footer class="site-footer hide-print" role="contentinfo">
+			<span>&copy; 2026 </span>
+			<span class="footer-sep">&middot;</span>
+			<a href="https://x.com/rmoff">@rmoff</a>
+			<span class="footer-sep">&middot;</span>
+			<a href="/ai/">AI Disclosure</a>
+		</footer>
+		
+
+		
+	</body>
+</html>

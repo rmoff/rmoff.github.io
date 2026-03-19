@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		
+		<title>Forays into Kafka - Logstash transport / centralisation</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2015/10/13/forays-into-kafka-01-logstash-transport-centralisation/">
+		
+		
+
+		
+		<meta property="og:title" content="Forays into Kafka - Logstash transport / centralisation" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2015/10/DataIcon.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2015/10/13/forays-into-kafka-01-logstash-transport-centralisation/" />
+		<meta property="og:site_name" content="Forays into Kafka - Logstash transport / centralisation" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<style>
+			html { background-color: #FAF8F5; color: #2D2926; }
+			body { opacity: 0; transition: opacity 0.1s ease; }
+			body.loaded { opacity: 1; }
+			.site-header { height: 60px; background-color: #FAF8F5; border-bottom: 1px solid #E8421E; }
+		</style>
+
+		
+		
+		
+		<link rel="stylesheet" href="/css/redesign.0549ef1f1a520caaa205998e607f39487a7449f68e5ed56b7a56d7f18a88bcab.css" />
+		
+		<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap">
+		<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+		<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
+		
+
+		
+		
+		<script src="/js/copy-code.a37ee9cf1d31a02dd198332f434b0595201bfac8f5fced07bbcfa510292ee9f6.js"></script>
+		
+
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+			posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P', {
+				api_host: 'https://bobby.moffatt.me',
+				defaults: '2026-01-30'
+			})
+		</script>
+
+		
+		
+		<script src="/js/story.7e8e3e8a35f21c2c00b5e62cd32b02a066e8ff9a9f7194061becb5f8cb9b854e.js"></script>
+		
+		<script src="/js/toc.465cf3045885a3be466e09ee2eda7b42d235cb925f5cea7216dd796117d3ba69.js"></script>
+		
+		<script src="/js/medium-mirror.35aebfe5abe1f5550feac89e219440c133cef497f763b606819f30bad8647115.js"></script>
+		<script src="/js/lightbox.js" defer></script>
+	</head>
+	<body class="ma0 section-post page-kind-page is-page-true  feature-nohdr">
+		<script>document.body.classList.add('loaded');</script>
+
+		<header class="site-header hide-print">
+	<div class="site-header-inner">
+		<a href="/" class="site-title">rmoff's random ramblings</a>
+		<nav class="site-nav">
+			<a href="/categories/interesting-links/" class="nav-il"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Interesting Links</a>
+			<span class="nav-sep"></span>
+			<a href="/categories/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Categories</a>
+			<a href="/search/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search</a>
+			<a href="/index.xml"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg> RSS</a>
+			<div class="nav-social">
+				<a href="https://www.linkedin.com/in/robinmoffatt/" title="linkedin"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+				<a href="https://twitter.com/rmoff/" title="twitter"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+				<a href="https://bsky.app/profile/rmoff.net" title="bluesky"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 568 501" fill="currentColor"><path d="M123.121 33.664C188.241 82.553 258.281 181.68 284 234.873c25.719-53.192 95.759-152.32 160.879-201.21C491.866-1.611 568-28.906 568 57.947c0 17.346-9.945 145.713-15.778 166.555-20.275 72.453-94.155 90.933-159.875 79.748C507.222 323.8 536.444 388.56 473.333 453.32c-119.86 122.992-172.272-30.859-185.702-70.281-2.462-7.227-3.614-10.608-3.631-7.733-.017-2.875-1.169.506-3.631 7.733-13.43 39.422-65.842 193.273-185.702 70.281-63.111-64.76-33.89-129.52 80.986-149.071-65.72 11.185-139.6-7.295-159.875-79.748C10.945 203.659 1 75.291 1 57.946 1-28.906 76.135-1.612 123.121 33.664z"/></svg></a>
+				<a href="https://www.youtube.com/c/rmoff" title="youtube"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+				<a href="https://talks.rmoff.net" title="talks"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/><polyline points="7 8 12 12 17 8"/></svg></a>
+				<a href="https://github.com/rmoff/" title="github"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+			</div>
+		</nav>
+		<button class="nav-toggle" onclick="document.querySelector('.mobile-nav').classList.toggle('open')" aria-label="Menu">
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+		</button>
+	</div>
+	<nav class="mobile-nav">
+		<a href="/">Home</a>
+		<a href="/categories/">Categories</a>
+		<a href="/categories/interesting-links/">Interesting Links</a>
+		<a href="/search/">Search</a>
+		<a href="/index.xml">RSS</a>
+		<a href="https://www.linkedin.com/in/robinmoffatt/">linkedin</a>
+		<a href="https://twitter.com/rmoff/">twitter</a>
+		<a href="https://bsky.app/profile/rmoff.net">bluesky</a>
+		<a href="https://www.youtube.com/c/rmoff">youtube</a>
+		<a href="https://talks.rmoff.net">talks</a>
+		<a href="https://github.com/rmoff/">github</a>
+	</nav>
+</header>
+
+
+		<main role="main">
+		
+
+<div class="article-header">
+	<div class="title-box">
+		<h1>Forays into Kafka - Logstash transport / centralisation</h1>
+		<p class="title-subtitle">
+			
+				Published
+				<time datetime="2015-10-13T00:00:00Z">13 Oct 2015</time>
+				<span class="display-print">by </span>
+				 in <a href="/categories/apache-kafka">Apache Kafka</a>, <a href="/categories/elasticsearch">Elasticsearch</a>, <a href="/categories/apache-drill">Apache Drill</a>, <a href="/categories/obiee">OBIEE</a>, <a href="/categories/monitoring">Monitoring</a>, <a href="/categories/devops">DevOps</a>
+				<span class="display-print">at https://rmoff.net/2015/10/13/forays-into-kafka-01-logstash-transport-centralisation/</span>
+			
+		</p>
+	</div>
+</div>
+
+
+<details class="toc-mobile">
+	<summary>Table of Contents</summary>
+	<nav id="TableOfContents">
+  <ul>
+    <li><a href="#_overview">Overview</a></li>
+    <li><a href="#_build">Build</a>
+      <ul>
+        <li><a href="#_networking_and_host_names">Networking and Host Names</a></li>
+        <li><a href="#_application_server_log_source_sampleappv406">Application Server - log source (“sampleappv406”)</a></li>
+        <li><a href="#_kafka_host_ubuntu_02">Kafka host (“ubuntu-02”)</a></li>
+        <li><a href="#_elk_host_ubuntu_03">ELK host (“ubuntu-03”)</a></li>
+      </ul>
+    </li>
+    <li><a href="#_configuring_kafka">Configuring Kafka</a></li>
+    <li><a href="#_smoke_test">Smoke test</a></li>
+    <li><a href="#_configuring_logstash_on_the_application_server_kafka_producer">Configuring Logstash on the Application Server (Kafka Producer)</a></li>
+    <li><a href="#_configuring_logstash_on_the_elk_server_kafka_consumer">Configuring Logstash on the ELK server (Kafka Consumer)</a></li>
+    <li><a href="#_analysing_obiee_log_data_in_elasticsearch_with_kibana">Analysing OBIEE Log Data in Elasticsearch with Kibana</a></li>
+    <li><a href="#_moar_application_servers">MOAR Application Servers</a></li>
+    <li><a href="#_reprocessing_data">Reprocessing data</a></li>
+    <li><a href="#_conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+</details>
+
+<div class="container-fluid docs">
+	<div class="row">
+		<main class="docs-content" role="main">
+
+<article class="article" data-pagefind-body>
+	<span data-pagefind-filter="category" style="display:none">Apache Kafka</span><span data-pagefind-filter="category" style="display:none">Elasticsearch</span><span data-pagefind-filter="category" style="display:none">Apache Drill</span><span data-pagefind-filter="category" style="display:none">OBIEE</span><span data-pagefind-filter="category" style="display:none">Monitoring</span><span data-pagefind-filter="category" style="display:none">DevOps</span>
+	<img data-pagefind-meta="image[src]" src="/images/2015/10/DataIcon.jpg" style="display:none" alt="">
+	
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2015/10/forays-into-kafka-01-logstash-transport-centralisation/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>The holy trinity of Elasticsearch, Logstash, and Kibana (ELK) are a powerful trio of tools for <a href="https://www.rittmanmead.com/blog/2015/04/using-the-elk-stack-to-analyse-donors-choose-data/">data discovery</a> and <a href="https://www.rittmanmead.com/blog/2014/10/monitoring-obiee-with-elasticsearch-logstash-and-kibana/">systems diagnostics</a>. In a nutshell, they enable you to easily search through your log files, slice &amp; dice them visually, drill into problem timeframes, and generally be the boss of knowing where your application’s at.</p>
+</div>
+<div class="paragraph">
+<p>Getting application logs into ELK in the most basic configuration means doing the processing with Logstash local to the application server, but this has two overheads - the CPU required to do the processing, and (assuming you have more than one application server) the management of multiple configurations and deployments across your servers. A more flexible and maintainable architecture is to ship logs from the application server to a separate ELK server with something like <a href="https://github.com/elastic/logstash-forwarder">Logstash-forwarder</a> (aka Lumberjack), and do all your heavy ELK-lifting there.</p>
+</div>
+<div class="paragraph">
+<p>In this article I’m going to demonstrate an alternative way of shipping and centralising your logs for Logstash processing, with <strong><a href="http://kafka.apache.org/">Apache Kafka</a></strong>.</p>
+</div>
+<div class="paragraph">
+<p>Kafka is a “<em>publish-subscribe messaging rethought as a distributed commit log</em>”. What does that mean in plainer English? My <strong>over-simplified</strong> description would be that it is a tool that:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Enables one or more components, local or across many machines, to send messages (of any format) to …</p>
+</li>
+<li>
+<p>…a centralised store, which may be holding messages from other applications too…</p>
+</li>
+<li>
+<p>…from where one or more consumers can independently opt to pull these messages in exact order, either as they arrive, batched, or ‘rewinding’ to a previous point in time on demand.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Kafka has been designed from the outset to be distributed and fault-tolerant, and for very high performance (low latency) too. For a good introduction to Kafka and its concepts, the <a href="http://kafka.apache.org/documentation.html#introduction">introduction</a> section of the documentation is a good place to start, as is Gwen Shapira’s <a href="http://www.slideshare.net/gwenshap/kafka-for-dbas">Kafka for DBAs</a> presentation.</p>
+</div>
+<div class="paragraph">
+<p>If you’re interested in reading more about Kafka, the article that really caught my imagination with its possibilities was by <a href="http://www.confluent.io/blog/apache-kafka-samza-and-the-unix-philosophy-of-distributed-data">Martin Kleppmann</a> in which he likens (broadly) Kafka to the unix Pipe concept, being the joiner between components that never had to be designed to talk to each other specifically.</p>
+</div>
+<div class="paragraph">
+<p>Kafka gets a lot of press in the context of “Big Data”, Spark, and the like, but it also makes a lot of sense as a “pipe” between slightly more &#39;mundane&#39; systems such as Logstash…</p>
+</div>
+<h1 id="_overview" class="sect0">Overview</h1>
+<div class="paragraph">
+<p>In this article we’re using Kafka at its very simplest - one Producer, one Topic, one Consumer. But hey, if it works and it is a good use of technology who cares if it’s not a gazillion message throughput per second to give us bragging rights on Hacker News</p>
+</div>
+<div class="paragraph">
+<p>We’re going to run Logstash twice; once on the application server to simply get the logfiles out and in to Kafka, and then again to pull the data from Kafka and process it at our leisure:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/119ckl11.png" alt="119ckl11"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Once Logstash has processed the data we’ll load it into Elasticsearch, from where we can do some nice analysis against it in Kibana.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/120ckl10.png" alt="120ckl10"/>
+</div>
+</div>
+<h1 id="_build" class="sect0">Build</h1>
+<div class="paragraph">
+<p>This article was written based on three servers:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Application server (OBIEE)</p>
+</li>
+<li>
+<p>Kafka server</p>
+</li>
+<li>
+<p>ELK server</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>In practice, Kafka could run on the ELK server if you needed it to and throughput was low. If things got busier, splitting them out would make sense as would scaling out Kafka and ELK across multiple nodes each for capacity and resilience. Both Kafka and Elasticsearch are designed to be run distributed and are easy to do so.</p>
+</div>
+<div class="paragraph">
+<p>The steps below show how to get the required software installed and running.</p>
+</div>
+<div class="sect1">
+<h2 id="_networking_and_host_names">Networking and Host Names&nbsp;<a class="headline-hash" href="#_networking_and_host_names">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Make sure that each host has a hostname that is proper (not ‘<code>demo</code>’) and can be resolved from all the other hosts being used. Liberal use of <code>/etc/hosts</code> hardcoding of IP/hostnames and copying to each host is one way around this in a sandbox environment. In the real world use DNS CNAMEs to resolve the static ip of each host.</p>
+</div>
+<div class="paragraph">
+<p>Make sure that the hostname is accessible from all other machines in use. That is, if you type <code>hostname</code> on one machine:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>rmoff@ubuntu-03:~$ hostname
+ubuntu-03</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Make sure that you can ping it from another machine:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>rmoff@ubuntu-02:/opt$ ping ubuntu-03
+PING ubuntu-03 (192.168.56.203) 56(84) bytes of data.
+64 bytes from ubuntu-03 (192.168.56.203): icmp_seq=1 ttl=64 time=0.530 ms
+64 bytes from ubuntu-03 (192.168.56.203): icmp_seq=2 ttl=64 time=0.287 ms
+[...]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and use <strong>netcat</strong> to hit a particular port (assuming that something’s listening on that port):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>rmoff@ubuntu-02:/opt$ nc -vz ubuntu-03 9200
+Connection to ubuntu-03 9200 port [tcp/*] succeeded!</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_application_server_log_source_sampleappv406">Application Server - log source (“sampleappv406”)&nbsp;<a class="headline-hash" href="#_application_server_log_source_sampleappv406">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This is going to be the machine from which we’re collecting logs. In my example it’s OBIEE that’s generating the logs, but it could be any application. All we <em>need</em> to install is Logstash, which is going to ship the logs - unprocessed - over to Kafka. Because we’re working with Kafka, it’s also useful to have the console scripts (that ship with the Kafka distribution) available as well, but strictly speaking, we don’t need to install Kafka on this machine.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Download_kafka is optional, but useful to have the console scripts there for testing_</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell">wget https://download.elastic.co/logstash/logstash/logstash-1.5.4.zip
+wget http://apache.mirror.anlx.net/kafka/0.8.2.0/kafka_2.10-0.8.2.0.tgz</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Install</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell">unzip logstash<span style="color: #66d9ef;font-weight: bold">*</span>.zip
+<span style="color: #f8f8f2">tar</span> <span style="color: #f92672">-xf</span> kafka<span style="color: #66d9ef;font-weight: bold">*</span>
+<span style="color: #f8f8f2">sudo mv </span>kafka<span style="color: #66d9ef;font-weight: bold">*</span> /opt
+<span style="color: #f8f8f2">sudo mv </span>logstash<span style="color: #66d9ef;font-weight: bold">*</span> /opt</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_kafka_host_ubuntu_02">Kafka host (“ubuntu-02”)&nbsp;<a class="headline-hash" href="#_kafka_host_ubuntu_02">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This is our kafka server, where Zookeeper and Kafka run. Messages are stored here before being passed to the consumer.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Download</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell">wget http://apache.mirror.anlx.net/kafka/0.8.2.0/kafka_2.10-0.8.2.0.tgz</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Install</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">tar</span> <span style="color: #f92672">-xf</span> kafka<span style="color: #66d9ef;font-weight: bold">*</span>
+<span style="color: #f8f8f2">sudo mv </span>kafka<span style="color: #66d9ef;font-weight: bold">*</span> /opt</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>ConfigureIf there’s any funny business with your networking, such as a hostname on your kafka server that won’t resolve externally, make sure you set the <code>advertised.host.name</code> value in <code>/opt/kafka*/config/server.properties</code> to a hostname/IP for the kafka server that <em>can</em> be connected to externally.</p>
+</li>
+<li>
+<p>RunUse separate sessions, or even better, <a href="https://www.rittmanmead.com/blog/2012/05/screen-and-obiee/">screen</a>, to run both these concurrently:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Zookeeper</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">cd</span> /opt/kafka<span style="color: #66d9ef;font-weight: bold">*</span>
+bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Kafka Server</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">cd</span> /opt/kafka<span style="color: #66d9ef;font-weight: bold">*</span>
+bin/kafka-server-start.sh config/server.properties</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_elk_host_ubuntu_03">ELK host (“ubuntu-03”)&nbsp;<a class="headline-hash" href="#_elk_host_ubuntu_03">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>All the logs from the application server (“<code>sampleappv406</code>” in our example) are destined for here. We’ll do post-processing on them in Logstash to extract lots of lovely data fields, store it in Elasticsearch, and produce some funky interactive dashboards with Kibana. If, for some bizarre reason, you didn’t want to use Elasticsearch and Kibana but had some other target for your logs after Logtash had parsed them you could use one of the many other <a href="https://www.elastic.co/guide/en/logstash/current/output-plugins.html">output plugins</a> for Logstash.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Download_kafka is optional, but useful to have the console scripts there for testing_</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell">wget https://download.elastic.co/kibana/kibana/kibana-4.1.2-linux-x64.tar.gz
+wget https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.7.2.zip
+wget https://download.elastic.co/logstash/logstash/logstash-1.5.4.zip
+wget http://apache.mirror.anlx.net/kafka/0.8.2.0/kafka_2.10-0.8.2.0.tgz</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Install</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">tar</span> <span style="color: #f92672">-xf</span> kibana<span style="color: #66d9ef;font-weight: bold">*</span>
+unzip elastic<span style="color: #66d9ef;font-weight: bold">*</span>.zip
+unzip logstash<span style="color: #66d9ef;font-weight: bold">*</span>.zip
+<span style="color: #f8f8f2">tar</span> <span style="color: #f92672">-xf</span> kafka<span style="color: #66d9ef;font-weight: bold">*</span>
+<span style="color: #f8f8f2">sudo mv </span>kafka<span style="color: #66d9ef;font-weight: bold">*</span> /opt
+<span style="color: #f8f8f2">sudo mv </span>kibana<span style="color: #66d9ef;font-weight: bold">*</span> /opt
+<span style="color: #f8f8f2">sudo mv </span>elastic<span style="color: #66d9ef;font-weight: bold">*</span> /opt
+<span style="color: #f8f8f2">sudo mv </span>logstash<span style="color: #66d9ef;font-weight: bold">*</span> /opt
+Kopf is an optional, but very useful, Elasticsearch admin web GUI
+/opt/elastic<span style="color: #66d9ef;font-weight: bold">*</span>/bin/plugin <span style="color: #f92672">--install</span> lmenezes/elasticsearch-kopf</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>RunUse separate sessions, or even better, <a href="https://www.rittmanmead.com/blog/2012/05/screen-and-obiee/">screen</a>, to run both these concurrently:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>/opt/elastic*/bin/elasticsearch
+/opt/kibana*/bin/kibana</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<h1 id="_configuring_kafka" class="sect0">Configuring Kafka</h1>
+<div class="paragraph">
+<p>Create the topic. This can be run from any machine with kafka console tools available. The important thing is that you specify the <code>--zookeeper</code> correctly so that it knows where to find Kafka.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">cd</span> /opt/kafka<span style="color: #66d9ef;font-weight: bold">*</span>
+bin/kafka-topics.sh <span style="color: #f92672">--create</span> <span style="color: #f92672">--zookeeper</span> ubuntu-02:2181 <span style="color: #f92672">--replication-factor</span> 1 <span style="color: #f92672">--partitions</span> 1 <span style="color: #f92672">--topic</span> logstash</code></pre>
+</div>
+</div>
+<h1 id="_smoke_test" class="sect0">Smoke test</h1>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Having created the topic, check that the other nodes can connect to zookeeper and see it. The point is less about viewing the topic as checking that the connectivity between the machines is working.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">cd</span> /opt/kafka<span style="color: #66d9ef;font-weight: bold">*</span>
+<span style="color: #f8f8f2">$ </span>./bin/kafka-topics.sh <span style="color: #f92672">--list</span> <span style="color: #f92672">--zookeeper</span> ubuntu-02:2181
+logstash</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you get an error then check that the host resolves and the port is accessible:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>nc <span style="color: #f92672">-vz</span> ubuntu-02 2181
+found 0 associations
+found 1 connections:
+1: <span style="color: #f8f8f2">flags</span><span style="color: #f92672;font-weight: bold">=</span>82&lt;CONNECTED,PREFERRED&gt;
+outif vboxnet0
+src 192.168.56.1 port 63919
+dst 192.168.56.202 port 2181
+rank info not available
+TCP aux info available
+Connection to ubuntu-02 port 2181 <span style="color: #f92672;font-weight: bold">[</span>tcp/eforward] succeeded!</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Set up a simple producer / consumer test</p>
+</li>
+<li>
+<p>On the application server node, run a script that will be the <strong>producer</strong>, sending anything you type to the kafka server:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">cd</span> /opt/kafka<span style="color: #66d9ef;font-weight: bold">*</span>
+./bin/kafka-console-producer.sh
+<span style="color: #f92672">--broker-list</span> ubuntu-02:9092
+<span style="color: #f92672">--topic</span> logstash</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>(I always get the warning <code>WARN Property topic is not valid (kafka.utils.VerifiableProperties)</code>; it seems to be harmless so ignore it…)</p>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>This will sit waiting for input; you won’t get the command prompt back.
+. On the ELK node, run a script that will be the <strong>consumer</strong>:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">cd</span> /opt/kafka<span style="color: #66d9ef;font-weight: bold">*</span>
+./bin/kafka-console-consumer.sh
+<span style="color: #f92672">--zookeeper</span> ubuntu-02:2181
+<span style="color: #f92672">--topic</span> logstash</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+
+. Now go back to the application server node and enter some text and press enter. You should see the same appear shortly afterwards on the ELK node. This is demonstrating Producer → Kafka → Consumer</p>
+</div>
+<div class="paragraph">
+<p>+
+image::/images/2015/10/117ckafka-smoke-test-01.gif[]</p>
+</div>
+<div class="paragraph">
+<p>+
+. Optionally, run <code>kafka-console-consumer.sh</code> on a second machine (either the kafka host itself, or on a Mac where you’ve run <code>brew install kafka</code>). Now when you enter something on the Producer, you see <em>both</em> Consumers receive it</p>
+</div>
+<div class="paragraph">
+<p>+
+image::/images/2015/10/116ckl02.png[]</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>If the two above tests work, then you’re good to go. If not, then you’ve got to sort this out first because the later stuff sure isn’t going to.</p>
+</div>
+<h1 id="_configuring_logstash_on_the_application_server_kafka_producer" class="sect0">Configuring Logstash on the Application Server (Kafka Producer)</h1>
+<div class="paragraph">
+<p>Logstash has a very simple role on the application server - to track the log files that we want to collect, and pass new content in the log file straight across to Kafka. We’re not doing any fancy parsing of the files this side - we want to be as light-touch as possible. This means that our Logstash configuration is dead simple:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>input {
+    file {
+        path =&gt;  [&#34;/app/oracle/biee/instances/instance1/diagnostics/logs/*/*/*.log&#34;]
+    }
+}
+
+output {
+    kafka {
+        broker_list =&gt; &#39;ubuntu-02:9092&#39;
+        topic_id =&gt; &#39;logstash&#39;
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Notice the wildcards in the <strong>path</strong> variable - in this example we’re going to pick up <em>everything</em> related to the OBIEE system components here, so in practice you may want to restrict it down a bit at least during development. You can specify multiple path patterns by comma-separating them within the square brackets, and you can use the <strong>exclude</strong> parameter to (<em>…drum roll…</em>) exclude specific paths from the wildcard match.</p>
+</div>
+<div class="paragraph">
+<p>If you now run Logstash with the above configuration (assuming it’s saved as <code>logstash-obi-kafka-producer.conf</code>)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>/opt/logstash*/bin/logstash -f logstash-obi-kafka-producer.conf</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Logstash will now sit and monitor the file paths that you’ve given it. If they don’t exist, it will keep checking. If they did exist, and got deleted and recreated, or truncated – it’ll still pick up the differences. It’s a whole bunch more smart than your average bear<sup>H</sup>H<sup>H</sup>H` tail -f`.</p>
+</div>
+<div class="paragraph">
+<p>If you happen to have left your Kafka console consumer running you might be in for a bit of a shock, depending on how much activity there is on your application server:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/129ckafka-consumer.gif" alt="129ckafka consumer"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Talk about opening the floodgates!</p>
+</div>
+<h1 id="_configuring_logstash_on_the_elk_server_kafka_consumer" class="sect0">Configuring Logstash on the ELK server (Kafka Consumer)</h1>
+<div class="paragraph">
+<p>Let’s give all these lovely log messages somewhere to head. We’re going to use Logstash again, but on the ELK server this time, and with the Kafka <em>input</em> plugin:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>input {
+    kafka {
+            zk_connect =&gt; &#39;ubuntu-02:2181&#39;
+            topic_id =&gt; &#39;logstash&#39;
+    }
+}
+
+output {
+    stdout { codec =&gt; rubydebug }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Save and run it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>/opt/logstash*/bin/logstash -f logstash-obi-kafka-consumer.conf</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and assuming the application server is still writing new log content we’ll get it written out here:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/114ckl04.png" alt="114ckl04"/>
+</div>
+</div>
+<div class="paragraph">
+<p>So far we’re doing nothing fancy at all - simply dumping to the console whatever messages we receive from kafka. In effect, it’s the same as the <code>kafka-console-consumer.sh</code> script that we ran as part of the smoke test earlier. But now we’ve got the messages come in to Logstash we can do some serious processing on them with grok and the like (something I discuss and demonstrate in an <a href="https://www.rittmanmead.com/blog/2014/10/monitoring-obiee-with-elasticsearch-logstash-and-kibana/">earlier article</a>) to pull out meaningful data fields from each log message. The console is not the best place to write this all too – Elasticsearch is! So we specify that as the output plugin instead. An extract of our configuration looks something like this now:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>input {
+    kafka {
+            zk_connect =&gt; &#39;ubuntu-02:2181&#39;
+            topic_id =&gt; &#39;logstash&#39;
+    }
+}
+
+filter {
+    grok {
+        match =&gt; [&#34;file&#34;, &#34;%{WLSSERVER}&#34;]
+        [...]
+    }
+
+    geoip { source =&gt; &#34;saw_http_RemoteIP&#34;}
+
+[...]
+}
+
+output {
+    elasticsearch {
+        host =&gt; &#34;ubuntu-03&#34;
+        protocol=&gt; &#34;http&#34;
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note the <code>[…​]</code> bit in the filter section - this is all the really cool stuff where we wring every last bit of value from the log data and split it into lots of useful data fields…which is why you should get in touch with us so we can help YOU with your OBIEE and ODI monitoring and diagnostics solution!</p>
+</div>
+<div class="paragraph">
+<p>Advert break over, back to the blog. We’ve set up the new hyper-cool config file, we’ve primed the blasters, we’ve set the “lasers” to 11 … we hit run … <em>and …</em></p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/113ckl05.png" alt="113ckl05"/>
+</div>
+</div>
+<div class="paragraph">
+<p><em>…nothing happens</em>. “<strong>Logstash startup completed</strong>” is the last sign of visible life we see from this console. Checking our <code>kafka-console-consumer.sh</code> we can still see the messages are flowing through:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/129ckafka-consumer.gif" alt="129ckafka consumer"/>
+</div>
+</div>
+<div class="paragraph">
+<p>But Logstash remains silent? Well, no - it’s doing exactly what we told it to, which is to <strong>send all output to Elasticsearch</strong> (and nowhere else), which is exactly what it’s doing. Don’t believe me? Add back in to the output stanza of the configuration file the output to stdout (console in this case):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>output {
+    elasticsearch {
+        host =&gt; &#34;ubuntu-03&#34;
+        protocol=&gt; &#34;http&#34;
+    }
+    stdout { codec =&gt; rubydebug }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><em>(Did I mention Logstash is mega-powerful yet? You can combine, split, and filter data streams however you want from and to mulitple sources. Here we’re sending it to both elasticsearch and stdout, but it could easily be sending it to elasticsearch and then conditionally to email, or pagerduty, or enriched data back to Kafka, or … you get the idea)</em></p>
+</div>
+<div class="paragraph">
+<p>Re-run Logstash with the updated configuration and sure enough, it’s mute no longer:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/115ckl07.png" alt="115ckl07"/>
+</div>
+</div>
+<div class="paragraph">
+<p>(this snippet gives you an idea of the kind of data fields that can be extracted from a log file, and this is one of the <em>less</em> interesting ones, difficult to imagine, I know).</p>
+</div>
+<h1 id="_analysing_obiee_log_data_in_elasticsearch_with_kibana" class="sect0">Analysing OBIEE Log Data in Elasticsearch with Kibana</h1>
+<div class="paragraph">
+<p>The <strong>kopf</strong> plugin provides a nice web frontend to some of the administrative functions of Elasticsearch, including a quick overview of the state of a cluster and number of documents. Using it we can confirm we’ve got some data that’s been loaded from our Logstash → Kafka → Logstash pipeline:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/111ckl08.png" alt="111ckl08"/>
+</div>
+</div>
+<div class="paragraph">
+<p>and now in Kibana:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/112ckl09.png" alt="112ckl09"/>
+</div>
+</div>
+<div class="paragraph">
+<p>You can read a lot more about Kibana, including the (minimal) setup required to get it to show data from Elasticsearch, in other articles that I’ve written <a href="https://www.rittmanmead.com/blog/2014/11/analytics-with-kibana-and-elasticsearch-through-hadoop-part-3-visualising-the-data-in-kibana/">here</a>, <a href="https://www.rittmanmead.com/blog/2015/04/using-the-elk-stack-to-analyse-donors-choose-data/">here</a>, and <a href="https://www.rittmanmead.com/blog/2015/03/an-introduction-to-analysing-odi-runtime-data-through-elasticsearch-and-kibana-4/">here</a>.</p>
+</div>
+<div class="paragraph">
+<p>Using Kibana we can get a very powerful but simple view over the data we extracted from the log files, showing things like response times, errors, hosts, data models used, and so on:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/120ckl10.png" alt="120ckl10"/>
+</div>
+</div>
+<h1 id="_moar_application_servers" class="sect0">MOAR Application Servers</h1>
+<div class="paragraph">
+<p>Let’s scale this thing out a bit, and add a second application server into the mix. All we need to do is replicate the Logstash install and configuration on the second application server - everything else remains the same. Doing this we start to see the benefit of centralising the log processing, and decoupling it from the application server.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/109ckl12.png" alt="109ckl12"/>
+</div>
+</div>
+<div class="paragraph">
+<p>Set the Logstash ‘producer’ running on the second application server, and the data starts passing through, straight into Elasticsearch and Kibana at the other end, no changes needed.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2015/10/106ckl13.png" alt="106ckl13"/>
+</div>
+</div>
+<h1 id="_reprocessing_data" class="sect0">Reprocessing data</h1>
+<div class="paragraph">
+<p>One of the appealing features of Kafka is that it stores data for a period of time. This means that consumers can stream or batch as they desire, and that they can also reprocess data. By acting as a durable ‘buffer’ for the data it means that recovering from a client crash, such as a Logstash failure like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>Error: Your application used more memory than the safety cap of 500M.
+Specify -J-Xmx####m to increase it (#### = cap size in MB).
+Specify -w for full OutOfMemoryError stack trace</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>is really simple - you just restart Logstash and it picks up processing from where it left off. Because Kafka tracks the last message that a consumer (Logstash in this case) read, it can scroll back through its log to pass to the consumer just messages that have accumulated since that point.</p>
+</div>
+<div class="paragraph">
+<p>Another benefit of the data being available in Kafka is the ability to reprocess data because the processing itself has changed. A pertinent example of this is with Logstash. The processing that Logstash can do on logs is incredibly powerful, but it may be that a bug is there in the processing, or maybe an additional enrichment (such as geoip) has been added. Instead of having to go back and bother the application server for all its logs (which may have since been housekept away) we can just rerun our Logstash processing as the Kafka consumer and re-pull the data from Kafka. All that needs doing is telling the Logstash consumer to reset its position in the Kafka log from which it reads:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>input {
+    kafka {
+            zk_connect =&gt; &#39;ubuntu-02:2181&#39;
+            topic_id =&gt; &#39;logstash&#39;
+            # Use the following two if you want to reset processing
+            reset_beginning =&gt; &#39;true&#39;
+            auto_offset_reset =&gt; &#39;smallest&#39;
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Kafka will keep data for the length of time, or size of data, as defined in the <code>log.retention.minutes</code> and <code>log.retention.bytes</code> configuration settings respectively. This is set globally by default to 7 days (and no size limit), and can be changed globally or per topic.</p>
+</div>
+<h1 id="_conclusion" class="sect0">Conclusion</h1>
+<div class="paragraph">
+<p>Logstash with Kafka is a powerful and easy way to stream your application log files off the application server with minimal overhead and then process them on a dedicated host. Elasticsearch and Kibana are a great way to visualise, analyse, and diagnose issues within your application’s log files.</p>
+</div>
+<div class="paragraph">
+<p>Kafka enables you to loosely couple your application server to your monitoring and diagnostics with minimal overhead, whilst adding the benefit of log replay if you want to reprocess them.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2015/10/forays-into-kafka-01-logstash-transport-centralisation/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+
+	<hr>
+	<div id="comments" class="giscus-container">
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+	</div>
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">On this page</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_overview">Overview</a></li>
+    <li><a href="#_build">Build</a>
+      <ul>
+        <li><a href="#_networking_and_host_names">Networking and Host Names</a></li>
+        <li><a href="#_application_server_log_source_sampleappv406">Application Server - log source (“sampleappv406”)</a></li>
+        <li><a href="#_kafka_host_ubuntu_02">Kafka host (“ubuntu-02”)</a></li>
+        <li><a href="#_elk_host_ubuntu_03">ELK host (“ubuntu-03”)</a></li>
+      </ul>
+    </li>
+    <li><a href="#_configuring_kafka">Configuring Kafka</a></li>
+    <li><a href="#_smoke_test">Smoke test</a></li>
+    <li><a href="#_configuring_logstash_on_the_application_server_kafka_producer">Configuring Logstash on the Application Server (Kafka Producer)</a></li>
+    <li><a href="#_configuring_logstash_on_the_elk_server_kafka_consumer">Configuring Logstash on the ELK server (Kafka Consumer)</a></li>
+    <li><a href="#_analysing_obiee_log_data_in_elasticsearch_with_kibana">Analysing OBIEE Log Data in Elasticsearch with Kibana</a></li>
+    <li><a href="#_moar_application_servers">MOAR Application Servers</a></li>
+    <li><a href="#_reprocessing_data">Reprocessing data</a></li>
+    <li><a href="#_conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+      </div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+
+		</main>
+
+		
+
+		
+		<footer class="site-footer hide-print" role="contentinfo">
+			<span>&copy; 2026 </span>
+			<span class="footer-sep">&middot;</span>
+			<a href="https://x.com/rmoff">@rmoff</a>
+			<span class="footer-sep">&middot;</span>
+			<a href="/ai/">AI Disclosure</a>
+		</footer>
+		
+
+		
+	</body>
+</html>

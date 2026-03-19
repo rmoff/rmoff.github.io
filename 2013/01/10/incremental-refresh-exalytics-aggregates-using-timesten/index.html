@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		
+		<title>Incremental refresh of Exalytics Aggregates using TimesTen</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2013/01/10/incremental-refresh-exalytics-aggregates-using-timesten/">
+		
+		
+
+		
+		<meta property="og:title" content="Incremental refresh of Exalytics Aggregates using TimesTen" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/img/default-header-img.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2013/01/10/incremental-refresh-exalytics-aggregates-using-timesten/" />
+		<meta property="og:site_name" content="Incremental refresh of Exalytics Aggregates using TimesTen" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<style>
+			html { background-color: #FAF8F5; color: #2D2926; }
+			body { opacity: 0; transition: opacity 0.1s ease; }
+			body.loaded { opacity: 1; }
+			.site-header { height: 60px; background-color: #FAF8F5; border-bottom: 1px solid #E8421E; }
+		</style>
+
+		
+		
+		
+		<link rel="stylesheet" href="/css/redesign.0549ef1f1a520caaa205998e607f39487a7449f68e5ed56b7a56d7f18a88bcab.css" />
+		
+		<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap">
+		<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+		<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
+		
+
+		
+		
+		<script src="/js/copy-code.a37ee9cf1d31a02dd198332f434b0595201bfac8f5fced07bbcfa510292ee9f6.js"></script>
+		
+
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+			posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P', {
+				api_host: 'https://bobby.moffatt.me',
+				defaults: '2026-01-30'
+			})
+		</script>
+
+		
+		
+		<script src="/js/story.7e8e3e8a35f21c2c00b5e62cd32b02a066e8ff9a9f7194061becb5f8cb9b854e.js"></script>
+		
+		<script src="/js/toc.465cf3045885a3be466e09ee2eda7b42d235cb925f5cea7216dd796117d3ba69.js"></script>
+		
+		<script src="/js/medium-mirror.35aebfe5abe1f5550feac89e219440c133cef497f763b606819f30bad8647115.js"></script>
+		<script src="/js/lightbox.js" defer></script>
+	</head>
+	<body class="ma0 section-post page-kind-page is-page-true  feature-nohdr">
+		<script>document.body.classList.add('loaded');</script>
+
+		<header class="site-header hide-print">
+	<div class="site-header-inner">
+		<a href="/" class="site-title">rmoff's random ramblings</a>
+		<nav class="site-nav">
+			<a href="/categories/interesting-links/" class="nav-il"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Interesting Links</a>
+			<span class="nav-sep"></span>
+			<a href="/categories/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Categories</a>
+			<a href="/search/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search</a>
+			<a href="/index.xml"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg> RSS</a>
+			<div class="nav-social">
+				<a href="https://www.linkedin.com/in/robinmoffatt/" title="linkedin"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+				<a href="https://twitter.com/rmoff/" title="twitter"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+				<a href="https://bsky.app/profile/rmoff.net" title="bluesky"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 568 501" fill="currentColor"><path d="M123.121 33.664C188.241 82.553 258.281 181.68 284 234.873c25.719-53.192 95.759-152.32 160.879-201.21C491.866-1.611 568-28.906 568 57.947c0 17.346-9.945 145.713-15.778 166.555-20.275 72.453-94.155 90.933-159.875 79.748C507.222 323.8 536.444 388.56 473.333 453.32c-119.86 122.992-172.272-30.859-185.702-70.281-2.462-7.227-3.614-10.608-3.631-7.733-.017-2.875-1.169.506-3.631 7.733-13.43 39.422-65.842 193.273-185.702 70.281-63.111-64.76-33.89-129.52 80.986-149.071-65.72 11.185-139.6-7.295-159.875-79.748C10.945 203.659 1 75.291 1 57.946 1-28.906 76.135-1.612 123.121 33.664z"/></svg></a>
+				<a href="https://www.youtube.com/c/rmoff" title="youtube"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+				<a href="https://talks.rmoff.net" title="talks"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/><polyline points="7 8 12 12 17 8"/></svg></a>
+				<a href="https://github.com/rmoff/" title="github"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+			</div>
+		</nav>
+		<button class="nav-toggle" onclick="document.querySelector('.mobile-nav').classList.toggle('open')" aria-label="Menu">
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+		</button>
+	</div>
+	<nav class="mobile-nav">
+		<a href="/">Home</a>
+		<a href="/categories/">Categories</a>
+		<a href="/categories/interesting-links/">Interesting Links</a>
+		<a href="/search/">Search</a>
+		<a href="/index.xml">RSS</a>
+		<a href="https://www.linkedin.com/in/robinmoffatt/">linkedin</a>
+		<a href="https://twitter.com/rmoff/">twitter</a>
+		<a href="https://bsky.app/profile/rmoff.net">bluesky</a>
+		<a href="https://www.youtube.com/c/rmoff">youtube</a>
+		<a href="https://talks.rmoff.net">talks</a>
+		<a href="https://github.com/rmoff/">github</a>
+	</nav>
+</header>
+
+
+		<main role="main">
+		
+
+<div class="article-header">
+	<div class="title-box">
+		<h1>Incremental refresh of Exalytics Aggregates using TimesTen</h1>
+		<p class="title-subtitle">
+			
+				Published
+				<time datetime="2013-01-10T00:00:00Z">10 Jan 2013</time>
+				<span class="display-print">by </span>
+				 in <a href="/categories/obiee">OBIEE</a>, <a href="/categories/odi">ODI</a>, <a href="/categories/exalytics">Exalytics</a>
+				<span class="display-print">at https://rmoff.net/2013/01/10/incremental-refresh-exalytics-aggregates-using-timesten/</span>
+			
+		</p>
+	</div>
+</div>
+
+
+<details class="toc-mobile">
+	<summary>Table of Contents</summary>
+	<nav id="TableOfContents">
+  <ul>
+    <li><a href="#_introduction">Introduction</a></li>
+    <li><a href="#_overview">Overview</a></li>
+    <li><a href="#_step_by_step_part_1_initial_build">Step-by-step - Part 1 - Initial build</a></li>
+    <li><a href="#_step_by_step_part_2_aggregate_refresh_from_timesten">Step-by-step - Part 2 - Aggregate refresh from TimesTen</a>
+      <ul>
+        <li><a href="#_didnt_someone_say_incremental">Didn’t someone say INCREMENTAL?</a></li>
+      </ul>
+    </li>
+    <li><a href="#_running_as_a_refresh_batch">Running as a refresh batch</a></li>
+    <li><a href="#_support_limitations_troubleshooting">Support, Limitations &amp; Troubleshooting</a></li>
+    <li><a href="#_conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+</details>
+
+<div class="container-fluid docs">
+	<div class="row">
+		<main class="docs-content" role="main">
+
+<article class="article" data-pagefind-body>
+	<span data-pagefind-filter="category" style="display:none">OBIEE</span><span data-pagefind-filter="category" style="display:none">ODI</span><span data-pagefind-filter="category" style="display:none">Exalytics</span>
+	<img data-pagefind-meta="image[src]" src="/img/default-header-img.jpg" style="display:none" alt="">
+	
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2013/01/incremental-refresh-exalytics-aggregates-using-timesten/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="sect1">
+<h2 id="_introduction">Introduction&nbsp;<a class="headline-hash" href="#_introduction">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>One of the key reasons that Exalytics can deliver sub-second response times is the use of TimesTen in-memory database to hold data pre-calculated to various levels of aggregation as required by the reports.
+Last year I wrote about <a href="http://www.rittmanmead.com/blog/2012/09/alternatives-to-the-summary-advisor-for-refreshing-exalytics-aggregates/">Alternatives to the Summary Advisor</a> when considering how to build and maintain these aggregates in TimesTen on Exalytics. This is something I also discussed in my recent UKOUG presentation, <a href="http://www.slideshare.net/themoff/exalytics-one-size-fits-all">Exalytics - One Size Fits All?</a>. In these, I outlined how the functionality “out of the box” works, and also why you might want to consider alternatives, the key reasons for which are:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>When Aggregate Persistence runs, it modifies the RPD online. In a Production environment this is often not desirable.<br/></p>
+</li>
+<li>
+<p>Aggregate Persistence does not currently support incremental refresh. If the aggregates take a lot of time to build then the batch window may not be sufficient to do a complete rebuild.<br/>
+Just to whet your appetite, using the method I describe below the refresh time for a single aggregate table can be cut from over <strong>20 minutes</strong> (using the standard Aggregate Persistence method - full rebuild) to under <strong>two seconds</strong> to do an incremental refresh of the data…</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p><em>NB Aggregate Persistence is the refresh technology that OBIEE uses, whether you generate the script using the Exalytics-only <strong>Summary Advisor</strong> or the standard <strong>Aggregate Persistence Wizard</strong>.</em></p>
+</div>
+<div class="paragraph">
+<p>In this post I am going to show how to use a hybrid of Aggregate Persistence <strong>and</strong> new functionality in native TimesTen to implement incremental refresh as well as avoid the online update of the RPD.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_overview">Overview&nbsp;<a class="headline-hash" href="#_overview">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>TimesTen 11.2.2.4 includes new “Load From Oracle” functionality which enables TimesTen to connect directly to Oracle and load data into TimesTen tables from it. <em>This is not the same</em> as <em>In-Memory DataBase Cache</em> (IMDB), which has existed for TimesTen and Oracle for a long time. This is new in 11.2.2.4, and provides an excellent way for loading data into TimesTen from Oracle, without much setup needed. For full details, see <a href="http://docs.oracle.com/cd/E21901_01/doc/timesten.1122/e21633/ttisql.htm#TTOPR750">the documentation here</a></p>
+</div>
+<div class="paragraph">
+<p>The method I am going to describe has two parts:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The initial build. This is standard Exalytics, using Aggregate Persistence, from either the Summary Advisor or Aggregate Persistence Wizard. This step will do several things:</p>
+</li>
+<li>
+<p>Generate the SQL that we will subsequently use to populate the tables.</p>
+</li>
+<li>
+<p>Update the RPD with the aggregates in the Physical and BMM lays</p>
+</li>
+<li>
+<p>Create the physical tables in TimesTen and do the initial load.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>This step needs to be run just once per set of aggregates.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2013/01/06999agg01.png" alt="Part 1 - standard Aggregate Persistence"/>
+</div>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The data refresh, using the SQL extracted from Aggregate Persistence and TimesTen’s <strong>CreateAndLoadFromOraQuery</strong> command.<br/></p>
+<div class="literalblock">
+<div class="content">
+<pre>This step is run each time the aggregate data needs to be refreshed</pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2013/01/06998agg021.png" alt="Part 2 - Aggregate refresh"/>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_step_by_step_part_1_initial_build">Step-by-step - Part 1 - Initial build&nbsp;<a class="headline-hash" href="#_step_by_step_part_1_initial_build">🔗</a> </h2>
+<div class="sectionbody">
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Make sure the Database Features for Exalytics in the your RPD has <strong>COMPRESS_COLUMNS</strong> disabled, since refresh of compressed tables using this method is not yet supported in TimesTen (11.2.2.4.1)</p>
+</li>
+</ol>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2013/01/06997agg031.png" alt="Agg03"/>
+</div>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Run <strong>Summary Advisor</strong> (or <strong>Aggregate Persistence Wizard</strong>) to create the Aggregate Persistence script. In this example I’ve created a very simple aggregate using the standard SampleSales RPD:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>create aggregates
+&#34;ag_1&#34;
+for &#34;01 - Sample App&#34;.&#34;F0 Sales Base Measures&#34;(&#34;1- Revenue&#34;)
+at levels (&#34;01 - Sample App&#34;.&#34;H0 Time&#34;.&#34;Year&#34;)
+using connection pool &#34;TimesTen for Exalytics&#34;.&#34;Connection Pool&#34;
+in &#34;TimesTen for Exalytics&#34;..&#34;EXALYTICS&#34;</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Execute the Aggregate Persistence script. This will create and populate the initial aggregates on TimesTen. It will also do the appropriate ‘plumbing’ in the RPD so that the aggregates are available for use (adding into the Physical and Logical layers):</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>nqcmd <span style="color: #f92672">-d</span> AnalyticsWeb <span style="color: #f92672">-u</span> weblogic <span style="color: #f92672">-p</span> welcome1 <span style="color: #f92672">-s</span> sa.sql
+
+<span style="color: #f92672">-------------------------------------------------------------------------------</span>
+          Oracle BI ODBC Client
+          Copyright <span style="color: #f92672;font-weight: bold">(</span>c<span style="color: #f92672;font-weight: bold">)</span> 1997-2011 Oracle Corporation, All rights reserved
+<span style="color: #f92672">-------------------------------------------------------------------------------</span>
+
+Connection open with info:
+<span style="color: #f92672;font-weight: bold">[</span>0][State: 01000] <span style="color: #f92672;font-weight: bold">[</span>DataDirect][ODBC lib] Application<span style="color: #e6db74">&#39;s WCHAR type must be UTF16, because odbc driver&#39;</span>s unicode <span style="color: #f8f8f2">type </span>is UTF16
+create aggregates
+<span style="color: #e6db74">&#34;ag_1&#34;</span>
+ <span style="color: #66d9ef;font-weight: bold">for</span> <span style="color: #e6db74">&#34;01 - Sample App&#34;</span>.<span style="color: #e6db74">&#34;F0 Sales Base Measures&#34;</span><span style="color: #f92672;font-weight: bold">(</span><span style="color: #e6db74">&#34;1- Revenue&#34;</span><span style="color: #f92672;font-weight: bold">)</span> at levels <span style="color: #f92672;font-weight: bold">(</span><span style="color: #e6db74">&#34;01 - Sample App&#34;</span>.<span style="color: #e6db74">&#34;H0 Time&#34;</span>.<span style="color: #e6db74">&#34;Year&#34;</span><span style="color: #f92672;font-weight: bold">)</span> using connection pool <span style="color: #e6db74">&#34;TimesTen for Exalytics&#34;</span>.<span style="color: #e6db74">&#34;Connection Pool&#34;</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #e6db74">&#34;TimesTen for Exalytics&#34;</span>..<span style="color: #e6db74">&#34;EXALYTICS&#34;</span>
+
+create aggregates
+<span style="color: #e6db74">&#34;ag_1&#34;</span>
+ <span style="color: #66d9ef;font-weight: bold">for</span> <span style="color: #e6db74">&#34;01 - Sample App&#34;</span>.<span style="color: #e6db74">&#34;F0 Sales Base Measures&#34;</span><span style="color: #f92672;font-weight: bold">(</span><span style="color: #e6db74">&#34;1- Revenue&#34;</span><span style="color: #f92672;font-weight: bold">)</span> at levels <span style="color: #f92672;font-weight: bold">(</span><span style="color: #e6db74">&#34;01 - Sample App&#34;</span>.<span style="color: #e6db74">&#34;H0 Time&#34;</span>.<span style="color: #e6db74">&#34;Year&#34;</span><span style="color: #f92672;font-weight: bold">)</span> using connection pool <span style="color: #e6db74">&#34;TimesTen for Exalytics&#34;</span>.<span style="color: #e6db74">&#34;Connection Pool&#34;</span> <span style="color: #66d9ef;font-weight: bold">in</span> <span style="color: #e6db74">&#34;TimesTen for Exalytics&#34;</span>..<span style="color: #e6db74">&#34;EXALYTICS&#34;</span>
+
+
+Statement execute succeeded
+
+
+Processed: 1 queries
+<span style="color: #960050;background-color: #1e0010">$</span></code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Opening up the RPD shows that the physical tables have been created in TimesTen, and the Logical Table Sources have been added in the BMM layer.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2013/01/06995agg09.png" alt="How the RPD looks after Aggregate Persistence has run"/>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_step_by_step_part_2_aggregate_refresh_from_timesten">Step-by-step - Part 2 - Aggregate refresh from TimesTen&nbsp;<a class="headline-hash" href="#_step_by_step_part_2_aggregate_refresh_from_timesten">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Having created the aggregate(s) we can now process the log file and put the refresh logic into TimesTen directly.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Load <strong>nqquery.log</strong> and extract the section that starts “BEGIN: Create Aggregates” and ends “END: Create Aggregates” (minus the quotation marks). Save this to a separate file, for example <strong>ag_1.nqquery.log</strong>.<br/></p>
+</li>
+</ol>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2013/01/06996agg041.png" alt="BEGIN: Create Aggregates"/>
+</div>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre> +
+  +</pre>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/2013/01/06994agg051.png" alt="END: Create Aggregates"/>
+</div>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>In the extracted file (in the above example, <strong>ag_1.nqquery.log</strong>), extract the SQL that’s used to populate each table. Remember for each fact aggregate there is going to be at least one support aggregate dimension table too. Put each of the refresh statements in their own SQL file for subsequent manipulation.</p>
+</li>
+<li>
+<p>Prefix each SQL file with the TimesTen command <strong>createandloadfromoraquery</strong> using the syntax:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>createandloadfromoraquery &lt;OWNER&gt;.&lt;TABLE&gt;</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>where <em>&lt;OWNER&gt;</em> is the Exalytics schema owner, and <em>&lt;TABLE&gt;</em> is the tablename being loaded
+. If rebuilding a table (i.e. not appending data) then prefix the file with:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>TRUNCATE TABLE &lt;OWNER&gt;.&lt;TABLE&gt;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+
+. For example:</p>
+</div>
+<div class="paragraph">
+<p>+
+. Original extract: (as generated by OBIEE’s Aggregate Persistence execution, and subsequently extracted from the nqquery.log)</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">WITH</span>
+<span style="color: #f8f8f2;background-color: #49483e">SAWITH0</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">distinct</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+    <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_TIME_QTR_D</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span> <span style="color: #75715e;font-style: italic">/* D03 Time Quarter Grain */</span> <span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">distinct</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">c1</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+    <span style="color: #f8f8f2;background-color: #49483e">ROW_NUMBER</span><span style="color: #f8f8f2;background-color: #49483e">()</span> <span style="color: #f8f8f2;background-color: #49483e">OVER</span> <span style="color: #f8f8f2;background-color: #49483e">(</span> <span style="color: #66d9ef;font-weight: bold">ORDER</span> <span style="color: #66d9ef;font-weight: bold">BY</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c2</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+     <span style="color: #f8f8f2;background-color: #49483e">SAWITH0</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+
+. With <strong>createandloadfromora</strong> prefix added:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">createandloadfromoraquery</span> <span style="color: #f8f8f2;background-color: #49483e">EXALYTICS</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SA_YEAR00002E83</span> <span style="color: #66d9ef;font-weight: bold">WITH</span>
+<span style="color: #f8f8f2;background-color: #49483e">SAWITH0</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">distinct</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+     <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_TIME_QTR_D</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span> <span style="color: #75715e;font-style: italic">/* D03 Time Quarter Grain */</span> <span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">distinct</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">c1</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+     <span style="color: #f8f8f2;background-color: #49483e">ROW_NUMBER</span><span style="color: #f8f8f2;background-color: #49483e">()</span> <span style="color: #f8f8f2;background-color: #49483e">OVER</span> <span style="color: #f8f8f2;background-color: #49483e">(</span> <span style="color: #66d9ef;font-weight: bold">ORDER</span> <span style="color: #66d9ef;font-weight: bold">BY</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c2</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+     <span style="color: #f8f8f2;background-color: #49483e">SAWITH0</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+
+. With a TRUNCATE statement first:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">TRUNCATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">EXALYTICS</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SA_Year00002E83</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">createandloadfromoraquery</span> <span style="color: #f8f8f2;background-color: #49483e">EXALYTICS</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SA_YEAR00002E83</span> <span style="color: #66d9ef;font-weight: bold">WITH</span>
+<span style="color: #f8f8f2;background-color: #49483e">SAWITH0</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">distinct</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+     <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_TIME_QTR_D</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span> <span style="color: #75715e;font-style: italic">/* D03 Time Quarter Grain */</span> <span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">distinct</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">c1</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+     <span style="color: #f8f8f2;background-color: #49483e">ROW_NUMBER</span><span style="color: #f8f8f2;background-color: #49483e">()</span> <span style="color: #f8f8f2;background-color: #49483e">OVER</span> <span style="color: #f8f8f2;background-color: #49483e">(</span> <span style="color: #66d9ef;font-weight: bold">ORDER</span> <span style="color: #66d9ef;font-weight: bold">BY</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c2</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+     <span style="color: #f8f8f2;background-color: #49483e">SAWITH0</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>+
+. By this point you should have at least two (one fact and minimum one dimension) SQL files. To run them we first need to make sure that TimesTen can connect to Oracle. There are two things to setup:</p>
+</div>
+<div class="paragraph">
+<p>+
+. <strong>Oracle connection details</strong> from TimesTen. This can be defined using a TNS entry - but you then need to make sure TimesTen is configured with the correct tnsnames.ora file- or more easily using <a href="http://docs.oracle.com/cd/E11882_01/network.112/e10836/naming.htm#i498306">EasyConnect</a> syntax such as</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>localhost:1521/orcl</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+
+. <strong>User credentials</strong>. Because of how the connection from TimesTen to Oracle works, the connection we’re going to create between TimesTen and Oracle needs to use <strong>a single username that exists on both</strong>. There are a few ways to do this:</p>
+</div>
+<div class="paragraph">
+<p>+
+<strong>*</strong> Create a new user on TimesTen using the Oracle username. Give it permission to create tables in the TimesTen schema we’re using to store the aggregates.<br/></p>
+</div>
+<div class="paragraph">
+<p>+
+image::/images/2013/01/06993agg06.png[Creating a user on TimesTen]</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>+</pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>or</strong>
+<strong>*</strong> Create a new user on Oracle, using the TimesTen username. Give it permission to select data from the Oracle schema where the base (unaggregated) is stored<br/></p>
+</div>
+<div class="paragraph">
+<p>+
+image::/images/2013/01/06992agg07.png[Creating a user on Oracle]</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>+</pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>or</strong>
+<strong>*</strong> Store data in the same schema name on Oracle and TimesTen</p>
+</div>
+<div class="paragraph">
+<p>+
+image::/images/2013/01/06991agg08.png[Using the same username on both TimesTen and Oracle]</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>In my example I’ve used the first option - creating the Oracle username (BISAMPLE) on TimesTen and giving it permission on the target TimesTen schema (EXALYTICS). To do this, connect to TimesTen database and set up required username to match Oracle. Assign required privileges.</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">create</span> <span style="color: #66d9ef;font-weight: bold">user</span> <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span> <span style="color: #f8f8f2;background-color: #49483e">identified</span> <span style="color: #66d9ef;font-weight: bold">by</span> <span style="color: #f8f8f2;background-color: #49483e">password</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #66d9ef;font-weight: bold">GRANT</span> <span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">SESSION</span> <span style="color: #66d9ef;font-weight: bold">TO</span> <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #66d9ef;font-weight: bold">GRANT</span> <span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">ANY</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">INSERT</span> <span style="color: #66d9ef;font-weight: bold">ANY</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">UPDATE</span> <span style="color: #66d9ef;font-weight: bold">ANY</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">DELETE</span> <span style="color: #66d9ef;font-weight: bold">ANY</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #66d9ef;font-weight: bold">TO</span> <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p><em>NB. If more granular security is required then see <a href="http://docs.oracle.com/cd/E13085_01/doc/timesten.1121/e13070/privileges.htm">the documentation</a> for information on the privileges that can be granted to individual objects</em></p>
+</div>
+<div class="paragraph">
+<p>To test the connection between TimesTen and Oracle, use the <strong>ttIsql</strong> program, with the following connection string syntax:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>ttIsql -connStr &#34;DSN=TT_AGGR_STORE;UID=BISAMPLE;PWD=password;OracleNetServiceName=localhost:1521/orcl;OraclePWD=BISAMPLE&#34;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>Where</p>
+</div>
+<div class="paragraph">
+<p>+
+<strong> <strong>DSN</strong> - The DSN of your TimesTen database (as defined in sys.odbc.ini)
+</strong> <strong>UID</strong> - The username that exists on <em>both TimesTen and Oracle</em>
+<strong> <strong>PWD</strong> - The password for the TimesTen user (UID)
+</strong> <strong>OraclePWD</strong> - The password for the Oracle user (UID)
+<strong>* *OracleNetServiceName</strong> - either a TNS entry, or (easier) use EasyConnect syntax (host:port/SID)</p>
+</div>
+<div class="paragraph">
+<p>+
+When you’ve entered the ttIsql command you should get the <strong>Command&gt;</strong> prompt – but note that this doesn’t prove that the connection to Oracle is working. To do this, we can take advantage of the <strong>ttTableSchemaFromOraQuery</strong> procedure. This runs a query against Oracle (and returns a CREATE TABLE statement, but for our purposes it just serves to validate a query can be executed against Oracle):</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Command</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">call</span> <span style="color: #f8f8f2;background-color: #49483e">ttTableSchemaFromOraQueryGet</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #e6db74">&#39;BISAMPLE&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #e6db74">&#39;TMP&#39;</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #e6db74">&#39;SELECT 1 FROM DUAL&#39;</span><span style="color: #f8f8f2;background-color: #49483e">);</span>
+<span style="color: #f92672;font-weight: bold">&lt;</span> <span style="color: #66d9ef;font-weight: bold">CREATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2">&#34;BISAMPLE&#34;</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2">&#34;TMP&#34;</span> <span style="color: #f8f8f2;background-color: #49483e">(</span>
+<span style="color: #f8f8f2">&#34;1&#34;</span> <span style="color: #f8f8f2;background-color: #49483e">number</span>
+ <span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #f92672;font-weight: bold">&gt;</span>
+<span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span> <span style="color: #66d9ef;font-weight: bold">found</span><span style="color: #f8f8f2;background-color: #49483e">.</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p><em>If you get an error at this point then you need to resolve it, since the next steps rely on having the connectivity between TimesTen and Oracle working.</em>
+. So, we have our aggregate SQL extracted and amended to run on TimesTen. We’ve set up our users and connection so that TimesTen can connect to Oracle. Now, to execute the aggregate refresh script, you can either:</p>
+</div>
+<div class="paragraph">
+<p>+
+<strong> run it interactively from ttIsql
+</strong> pass it as a script option to ttIsql</p>
+</div>
+<div class="paragraph">
+<p>+
+For debugging, the former is easier, whilst to run as part of an ETL batch the latter is more sensible. Here’s running it using the script option to run it as part of a batch:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #960050;background-color: #1e0010">$</span> <span style="color: #f8f8f2;background-color: #49483e">ttIsql</span> <span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">connStr</span> <span style="color: #f8f8f2">&#34;DSN=TT_AGGR_STORE;UID=BISAMPLE;PWD=password;OracleNetServiceName=localhost:1521/orcl;OraclePWD=BISAMPLE&#34;</span> <span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">f</span> <span style="color: #f92672;font-weight: bold">~/</span><span style="color: #f8f8f2;background-color: #49483e">etl</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">SA_Year00002E83</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #66d9ef;font-weight: bold">sql</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Copyright</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">c</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #ae81ff">1996</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">2011</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">Oracle</span><span style="color: #f8f8f2;background-color: #49483e">.</span>  <span style="color: #66d9ef;font-weight: bold">All</span> <span style="color: #f8f8f2;background-color: #49483e">rights</span> <span style="color: #f8f8f2;background-color: #49483e">reserved</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+<span style="color: #66d9ef;font-weight: bold">Type</span> <span style="color: #f92672;font-weight: bold">?</span> <span style="color: #66d9ef;font-weight: bold">or</span> <span style="color: #f8f8f2">&#34;help&#34;</span> <span style="color: #66d9ef;font-weight: bold">for</span> <span style="color: #f8f8f2;background-color: #49483e">help</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">type</span> <span style="color: #f8f8f2">&#34;exit&#34;</span> <span style="color: #66d9ef;font-weight: bold">to</span> <span style="color: #f8f8f2;background-color: #49483e">quit</span> <span style="color: #f8f8f2;background-color: #49483e">ttIsql</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+
+<span style="color: #66d9ef;font-weight: bold">connect</span> <span style="color: #f8f8f2">&#34;DSN=TT_AGGR_STORE;UID=BISAMPLE;PWD=password;OracleNetServiceName=localhost:1521/orcl;OraclePWD=BISAMPLE&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #66d9ef;font-weight: bold">Connection</span> <span style="color: #f8f8f2;background-color: #49483e">successful</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">DSN</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">tt_aggr_store</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">UID</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">DataStore</span><span style="color: #f92672;font-weight: bold">=/</span><span style="color: #f8f8f2;background-color: #49483e">u01</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #66d9ef;font-weight: bold">data</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">tt</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">tt_aggr_store</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">DatabaseCharacterSet</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">AL32UTF8</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">ConnectionCharacterSet</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">US7ASCII</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">DRIVER</span><span style="color: #f92672;font-weight: bold">=/</span><span style="color: #f8f8f2;background-color: #49483e">u01</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">app</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">oracle</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">product</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">TimesTen</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">tt1122</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">lib</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">libtten</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">so</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">PermSize</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">256</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">TempSize</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">256</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">TypeMode</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">OracleNetServiceName</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">localhost</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">1521</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">orcl</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">Default</span> <span style="color: #f8f8f2;background-color: #49483e">setting</span> <span style="color: #f8f8f2;background-color: #49483e">AutoCommit</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">run</span> <span style="color: #f8f8f2">&#34;/home/oracle/etl/SA_Year00002E83.sql&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #66d9ef;font-weight: bold">TRUNCATE</span> <span style="color: #66d9ef;font-weight: bold">TABLE</span> <span style="color: #f8f8f2;background-color: #49483e">EXALYTICS</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SA_Year00002E83</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">createandloadfromoraquery</span> <span style="color: #f8f8f2;background-color: #49483e">EXALYTICS</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SA_YEAR00002E83</span> <span style="color: #66d9ef;font-weight: bold">WITH</span>
+<span style="color: #f8f8f2;background-color: #49483e">SAWITH0</span> <span style="color: #66d9ef;font-weight: bold">AS</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">distinct</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+     <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_TIME_QTR_D</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span> <span style="color: #75715e;font-style: italic">/* D03 Time Quarter Grain */</span> <span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">distinct</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">c1</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+     <span style="color: #f8f8f2;background-color: #49483e">ROW_NUMBER</span><span style="color: #f8f8f2;background-color: #49483e">()</span> <span style="color: #f8f8f2;background-color: #49483e">OVER</span> <span style="color: #f8f8f2;background-color: #49483e">(</span> <span style="color: #66d9ef;font-weight: bold">ORDER</span> <span style="color: #66d9ef;font-weight: bold">BY</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c2</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+     <span style="color: #f8f8f2;background-color: #49483e">SAWITH0</span> <span style="color: #f8f8f2;background-color: #49483e">D1</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f8f8f2;background-color: #49483e">Warning</span>  <span style="color: #ae81ff">2207</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">Table</span> <span style="color: #f8f8f2;background-color: #49483e">EXALYTICS</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SA_YEAR00002E83</span> <span style="color: #f8f8f2;background-color: #49483e">already</span> <span style="color: #66d9ef;font-weight: bold">exists</span>
+<span style="color: #ae81ff">8</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #f8f8f2;background-color: #49483e">loaded</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">oracle</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">exit</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f8f8f2;background-color: #49483e">Disconnecting</span><span style="color: #f8f8f2;background-color: #49483e">...</span>
+<span style="color: #f8f8f2;background-color: #49483e">Done</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">oracle</span><span style="color: #f92672;font-weight: bold">@</span><span style="color: #f8f8f2;background-color: #49483e">rnm</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">ol6</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">3</span> <span style="color: #f8f8f2;background-color: #49483e">instance1</span><span style="color: #f8f8f2;background-color: #49483e">]</span><span style="color: #960050;background-color: #1e0010">$</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>So at this point, you have a scripted method for refreshing aggregate tables held in TimesTen without touching the RPD.</p>
+</div>
+<div class="sect2">
+<h3 id="_didnt_someone_say_incremental">Didn’t someone say INCREMENTAL?&nbsp;<a class="headline-hash" href="#_didnt_someone_say_incremental">🔗</a> </h3>
+<div class="paragraph">
+<p>For incremental refresh of fact tables, customise the WHERE clause as necessary to pick up just data that is expected to have changed. Here you have to understand the data you’re loading and particularly how it can be updated. Typically you will need to do two things for the incremental refresh:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>DELETE some data from the aggregate table for the latest date range (eg on a weekly aggregate table, current week)</p>
+</li>
+<li>
+<p>Use a WHERE clause in the aggregate refresh statement to only pull in data for the correct date range.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Things get more complicated if you consider there might be late data being updated in older date ranges etc, but the approach will remain the roughly same.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>For example, if refreshing a yearly aggregate for 2010, the following SQL could be used:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">delete</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">exalytics</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">ag_1</span> <span style="color: #66d9ef;font-weight: bold">where</span> <span style="color: #f8f8f2;background-color: #49483e">T05_PER_NA00002DA7</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #ae81ff">2010</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">createandloadfromoraquery</span> <span style="color: #f8f8f2;background-color: #49483e">EXALYTICS</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">ag_1</span> <span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+     <span style="color: #66d9ef;font-weight: bold">sum</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">T42442</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">Revenue</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c2</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+     <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_TIME_QTR_D</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span> <span style="color: #75715e;font-style: italic">/* D03 Time Quarter Grain */</span> <span style="color: #f8f8f2;background-color: #49483e">,</span>
+     <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_REVENUE_FA2</span> <span style="color: #f8f8f2;background-color: #49483e">T42442</span> <span style="color: #75715e;font-style: italic">/* F21 Rev. (Aggregate 2) */</span>
+<span style="color: #66d9ef;font-weight: bold">where</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">QTR_KEY</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #f8f8f2;background-color: #49483e">T42442</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">Bill_Qtr_Key</span> <span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #66d9ef;font-weight: bold">and</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #ae81ff">2010</span>
+<span style="color: #66d9ef;font-weight: bold">group</span> <span style="color: #66d9ef;font-weight: bold">by</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span></code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Which in practice would work like this:</p>
+</div>
+<div class="paragraph">
+<p>+
+. Data exists in the fact table:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql">    <span style="color: #f8f8f2;background-color: #49483e">Command</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">ag_1</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+    <span style="color: #f92672;font-weight: bold">&lt;</span> <span style="color: #ae81ff">2008</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">23500000</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0000000</span> <span style="color: #f92672;font-weight: bold">&gt;</span>
+    <span style="color: #f92672;font-weight: bold">&lt;</span> <span style="color: #ae81ff">2009</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">23000000</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0000000</span> <span style="color: #f92672;font-weight: bold">&gt;</span>
+    <span style="color: #f92672;font-weight: bold">&lt;</span> <span style="color: #ae81ff">2010</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">23500000</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0000000</span> <span style="color: #f92672;font-weight: bold">&gt;</span>
+    <span style="color: #ae81ff">3</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">found</span><span style="color: #f8f8f2;background-color: #49483e">.</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+
+. Run the incremental load for new data</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #960050;background-color: #1e0010">$</span> <span style="color: #f8f8f2;background-color: #49483e">ttIsql</span> <span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">connStr</span> <span style="color: #f8f8f2">&#34;DSN=TT_AGGR_STORE;UID=BISAMPLE;PWD=password;OracleNetServiceName=localhost:1521/orcl;OraclePWD=BISAMPLE&#34;</span> <span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">f</span> <span style="color: #f92672;font-weight: bold">~/</span><span style="color: #f8f8f2;background-color: #49483e">etl</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">ag_1</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">incr</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #66d9ef;font-weight: bold">sql</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">Copyright</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">c</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #ae81ff">1996</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">2011</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">Oracle</span><span style="color: #f8f8f2;background-color: #49483e">.</span>  <span style="color: #66d9ef;font-weight: bold">All</span> <span style="color: #f8f8f2;background-color: #49483e">rights</span> <span style="color: #f8f8f2;background-color: #49483e">reserved</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+<span style="color: #66d9ef;font-weight: bold">Type</span> <span style="color: #f92672;font-weight: bold">?</span> <span style="color: #66d9ef;font-weight: bold">or</span> <span style="color: #f8f8f2">&#34;help&#34;</span> <span style="color: #66d9ef;font-weight: bold">for</span> <span style="color: #f8f8f2;background-color: #49483e">help</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">type</span> <span style="color: #f8f8f2">&#34;exit&#34;</span> <span style="color: #66d9ef;font-weight: bold">to</span> <span style="color: #f8f8f2;background-color: #49483e">quit</span> <span style="color: #f8f8f2;background-color: #49483e">ttIsql</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+
+<span style="color: #66d9ef;font-weight: bold">connect</span> <span style="color: #f8f8f2">&#34;DSN=TT_AGGR_STORE;UID=BISAMPLE;PWD=password;OracleNetServiceName=localhost:1521/orcl;OraclePWD=BISAMPLE&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #66d9ef;font-weight: bold">Connection</span> <span style="color: #f8f8f2;background-color: #49483e">successful</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">DSN</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">tt_aggr_store</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">UID</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">DataStore</span><span style="color: #f92672;font-weight: bold">=/</span><span style="color: #f8f8f2;background-color: #49483e">u01</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #66d9ef;font-weight: bold">data</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">tt</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">tt_aggr_store</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">DatabaseCharacterSet</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">AL32UTF8</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">ConnectionCharacterSet</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">US7ASCII</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">DRIVER</span><span style="color: #f92672;font-weight: bold">=/</span><span style="color: #f8f8f2;background-color: #49483e">u01</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">app</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">oracle</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">product</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">TimesTen</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">tt1122</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">lib</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">libtten</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">so</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">PermSize</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">256</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">TempSize</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">256</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">TypeMode</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">;</span><span style="color: #f8f8f2;background-color: #49483e">OracleNetServiceName</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #f8f8f2;background-color: #49483e">localhost</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">1521</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #f8f8f2;background-color: #49483e">orcl</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #66d9ef;font-weight: bold">Default</span> <span style="color: #f8f8f2;background-color: #49483e">setting</span> <span style="color: #f8f8f2;background-color: #49483e">AutoCommit</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #ae81ff">1</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">run</span> <span style="color: #f8f8f2">&#34;/home/oracle/etl/ag_1.incr.sql&#34;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #66d9ef;font-weight: bold">delete</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">exalytics</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">ag_1</span> <span style="color: #66d9ef;font-weight: bold">where</span> <span style="color: #f8f8f2;background-color: #49483e">T05_PER_NA00002DA7</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #ae81ff">2010</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span> <span style="color: #f8f8f2;background-color: #49483e">deleted</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">createandloadfromoraquery</span> <span style="color: #f8f8f2;background-color: #49483e">EXALYTICS</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">ag_1</span> <span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">,</span>
+     <span style="color: #66d9ef;font-weight: bold">sum</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">T42442</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">Revenue</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c2</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+ <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_TIME_QTR_D</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span> <span style="color: #75715e;font-style: italic">/* D03 Time Quarter Grain */</span> <span style="color: #f8f8f2;background-color: #49483e">,</span>
+ <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_REVENUE_FA2</span> <span style="color: #f8f8f2;background-color: #49483e">T42442</span> <span style="color: #75715e;font-style: italic">/* F21 Rev. (Aggregate 2) */</span>
+<span style="color: #66d9ef;font-weight: bold">where</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">QTR_KEY</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #f8f8f2;background-color: #49483e">T42442</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">Bill_Qtr_Key</span> <span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #66d9ef;font-weight: bold">and</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #ae81ff">2010</span>
+<span style="color: #66d9ef;font-weight: bold">group</span> <span style="color: #66d9ef;font-weight: bold">by</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f8f8f2;background-color: #49483e">Warning</span>  <span style="color: #ae81ff">2207</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #66d9ef;font-weight: bold">Table</span> <span style="color: #f8f8f2;background-color: #49483e">EXALYTICS</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">AG_1</span> <span style="color: #f8f8f2;background-color: #49483e">already</span> <span style="color: #66d9ef;font-weight: bold">exists</span>
+<span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">row</span> <span style="color: #f8f8f2;background-color: #49483e">loaded</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">oracle</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">exit</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f8f8f2;background-color: #49483e">Disconnecting</span><span style="color: #f8f8f2;background-color: #49483e">...</span>
+<span style="color: #f8f8f2;background-color: #49483e">Done</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+<span style="color: #f8f8f2;background-color: #49483e">[</span><span style="color: #f8f8f2;background-color: #49483e">oracle</span><span style="color: #f92672;font-weight: bold">@</span><span style="color: #f8f8f2;background-color: #49483e">rnm</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">ol6</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">3</span> <span style="color: #f8f8f2;background-color: #49483e">etl</span><span style="color: #f8f8f2;background-color: #49483e">]</span><span style="color: #960050;background-color: #1e0010">$</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+
+. Validate the loaded data - figures for 2010 have been updated</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Command</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #f92672;font-weight: bold">*</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">exalytics</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">ag_1</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+<span style="color: #f92672;font-weight: bold">&lt;</span> <span style="color: #ae81ff">2008</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">23500000</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0000000</span> <span style="color: #f92672;font-weight: bold">&gt;</span>
+<span style="color: #f92672;font-weight: bold">&lt;</span> <span style="color: #ae81ff">2009</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">23000000</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">0000000</span> <span style="color: #f92672;font-weight: bold">&gt;</span>
+<span style="color: #f92672;font-weight: bold">&lt;</span> <span style="color: #ae81ff">2010</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #ae81ff">24766814</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">4734000</span> <span style="color: #f92672;font-weight: bold">&gt;</span>
+<span style="color: #ae81ff">3</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #66d9ef;font-weight: bold">found</span><span style="color: #f8f8f2;background-color: #49483e">.</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+
+. Compare to source data on Oracle:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c1</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">sum</span><span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">T42442</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">Revenue</span><span style="color: #f8f8f2;background-color: #49483e">)</span> <span style="color: #66d9ef;font-weight: bold">as</span> <span style="color: #f8f8f2;background-color: #49483e">c2</span>
+<span style="color: #66d9ef;font-weight: bold">from</span>
+     <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_TIME_QTR_D</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span> <span style="color: #75715e;font-style: italic">/* D03 Time Quarter Grain */</span> <span style="color: #f8f8f2;background-color: #49483e">,</span>
+     <span style="color: #f8f8f2;background-color: #49483e">BISAMPLE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SAMP_REVENUE_FA2</span> <span style="color: #f8f8f2;background-color: #49483e">T42442</span> <span style="color: #75715e;font-style: italic">/* F21 Rev. (Aggregate 2) */</span>
+<span style="color: #66d9ef;font-weight: bold">where</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">QTR_KEY</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #f8f8f2;background-color: #49483e">T42442</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">Bill_Qtr_Key</span> <span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #66d9ef;font-weight: bold">group</span> <span style="color: #66d9ef;font-weight: bold">by</span> <span style="color: #f8f8f2;background-color: #49483e">T42406</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">PER_NAME_YEAR</span> <span style="color: #66d9ef;font-weight: bold">order</span> <span style="color: #66d9ef;font-weight: bold">by</span> <span style="color: #ae81ff">1</span> <span style="color: #66d9ef;font-weight: bold">asc</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">C1</span>         <span style="color: #f8f8f2;background-color: #49483e">C2</span>
+<span style="color: #75715e;font-style: italic">---------- ---------------</span>
+<span style="color: #ae81ff">2008</span>       <span style="color: #ae81ff">23500000</span>
+<span style="color: #ae81ff">2009</span>       <span style="color: #ae81ff">23000000</span>
+<span style="color: #ae81ff">2010</span>       <span style="color: #ae81ff">24766814</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">4734</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_running_as_a_refresh_batch">Running as a refresh batch&nbsp;<a class="headline-hash" href="#_running_as_a_refresh_batch">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The above illustrates the concepts for using aggregate refresh in TimesTen directly from Oracle. To use it in Production one would need to consider</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>TimesTen statistics gathering (<a href="http://docs.oracle.com/cd/E21901_01/doc/timesten.1122/e21643/proced.htm#CHDJIEFD">ttOptUpdateStats</a> / <a href="http://docs.oracle.com/cd/E21901_01/doc/timesten.1122/e21643/proced.htm#autoId60">ttOptEstimateStats</a>) after refreshing the data</p>
+</li>
+<li>
+<p>Error handling &amp; Notification</p>
+</li>
+<li>
+<p>Management and deployment of the refresh scripts</p>
+</li>
+<li>
+<p>Scheduling and orchestration of the scripts</p>
+</li>
+<li>
+<p>Updating the scripts when new aggregates are required</p>
+</li>
+<li>
+<p>Updating the scripts if the source metadata changes</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>At which point, the question of right tools for the right job raises itself. Quite possibly, shell scripting is ultimately not the best vehicle through which to deploy an ETL batch. Interestingly, it’s no worse/better than the current vanilla Exalytics approach, which is also script batch (nqcmd to execute Summary Advisor scripts).<br/>
+All of the above <em>can</em> be done through shell scripting (for example, use cron to schedule, bash scripting to parse return codes, write log files, etc), the question is more whether it <em>should</em> be.<br/></p>
+</div>
+<div class="paragraph">
+<p>Ultimately, the ease of support and development is not going to be as great as through an Enterprise-ready tool such as Oracle Data Integrator. At the moment, there is no <a href="http://docs.oracle.com/cd/E23943_01/integrate.1111/e12644/timesten.htm#CHDGIJDB">TimesTen ODI Knowledge Module</a> that takes advantage of the Load From Oracle option, but I wouldn’t be surprised if one were in the pipeline.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_support_limitations_troubleshooting">Support, Limitations &amp; Troubleshooting&nbsp;<a class="headline-hash" href="#_support_limitations_troubleshooting">🔗</a> </h2>
+<div class="sectionbody">
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The 11.2.2.4 version of TimesTen, which provides the new CreateAndLoadFromOraQuery command, is only certified as part of the Exalytics patchset 2 (v1.0.0.2). For more details, <a href="http://docs.oracle.com/cd/E27027_01/bi.1/e24706/admin_patch.htm#CBHHEJCC">see here</a></p>
+</li>
+<li>
+<p>This method won’t directly work with Aggregate Persistence scripts configured to use <strong>using_surrogate_key</strong>, since the Logical SQL used to populate the aggregate fact table has multiple Physical statements needed to get the keys generated in the dimensions. That’s not to say a single TimesTen statement couldn’t be fashioned to achieve the same result, but you won’t be able to get it directly from nqquery.log.</p>
+</li>
+<li>
+<p>TimesTen 11.2.2.4 doesn’t yet support loading data from Oracle if the target TimesTen table is compressed. If you try to you will get the error</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>805: Loading of read optimized tables using the Load From Oracle feature has not been implemented</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>The command <em>createandloadfromoraquery</em> will create a table if it doesn’t exist already. Since the table must be created with the column names as specified in the RPD, problems can arise if we let TimesTen implicitly create a table which should already be there. If it creates it implicitly it will label the columns as they are in the SELECT clause, i.e. c1, c2, etc. One way around this is to use the ttLoadFromOracle procedure instead, which will abort if the table does not exist.</p>
+</li>
+<li>
+<p>The character set used on Oracle and TimesTen must be the same, otherwise you get the error:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>8296: TimesTen and Oracle database character sets do not match.  TimesTen: AL32UTF8, Oracle: WE8MSWIN1252
+5109: Cache Connect general error: BDB connection not open.</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>For more information about picking and setting a character set for your TimesTen datastore, see <a href="http://docs.oracle.com/cd/E21901_01/doc/timesten.1122/e21633/globalization.htm#TTOPR276">the documentation</a>.
+. Be aware that the nqquery.log written by BI Server uses UTF–8 encoding with a BOM (*B*yte *O*rder *M*arker) at the beginning; if you use the file (or a descendent of it) directly with TimesTen then you will get puzzling errors such as this:</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code> 1001: Syntax error in SQL statement before or at: &#34;, character position: 1
+???truncate table exalytics.SA_Month00000487
+^^^^^^^^^^^
+The command failed.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="paragraph">
+<p>The solution is to strip out the BOM, which can be easily done on linux (<a href="http://www.linuxask.com/questions/how-to-remove-bom-from-utf-8">h/t</a>) using</p>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>tail --bytes=+4 original_file.txt fixed_file.txt</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>+</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_conclusion">Conclusion&nbsp;<a class="headline-hash" href="#_conclusion">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The method that I’ve presented here is by no means the final word in Exalytics aggregate refresh strategies. Being able to load data directly into TimesTen from Oracle is a great benefit, and I’ve shown one way it can be incorporated into an Exalytics deployment. However the overhead of creating and maintaining these scripts is going to be high, and I would not be surprised if in the future a much neater solution for aggregate creation and maintenance will be provided out of the box with Exalytics.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2013/01/incremental-refresh-exalytics-aggregates-using-timesten/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+
+	<hr>
+	<div id="comments" class="giscus-container">
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+	</div>
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">On this page</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_introduction">Introduction</a></li>
+    <li><a href="#_overview">Overview</a></li>
+    <li><a href="#_step_by_step_part_1_initial_build">Step-by-step - Part 1 - Initial build</a></li>
+    <li><a href="#_step_by_step_part_2_aggregate_refresh_from_timesten">Step-by-step - Part 2 - Aggregate refresh from TimesTen</a>
+      <ul>
+        <li><a href="#_didnt_someone_say_incremental">Didn’t someone say INCREMENTAL?</a></li>
+      </ul>
+    </li>
+    <li><a href="#_running_as_a_refresh_batch">Running as a refresh batch</a></li>
+    <li><a href="#_support_limitations_troubleshooting">Support, Limitations &amp; Troubleshooting</a></li>
+    <li><a href="#_conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+      </div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+
+		</main>
+
+		
+
+		
+		<footer class="site-footer hide-print" role="contentinfo">
+			<span>&copy; 2026 </span>
+			<span class="footer-sep">&middot;</span>
+			<a href="https://x.com/rmoff">@rmoff</a>
+			<span class="footer-sep">&middot;</span>
+			<a href="/ai/">AI Disclosure</a>
+		</footer>
+		
+
+		
+	</body>
+</html>

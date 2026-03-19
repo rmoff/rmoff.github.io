@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		
+		<title>Using Linux Control Groups to Constrain Process Memory</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2015/12/21/using-linux-control-groups-to-constrain-process-memory/">
+		
+		
+
+		
+		<meta property="og:title" content="Using Linux Control Groups to Constrain Process Memory" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/images/2015/12/Performance.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2015/12/21/using-linux-control-groups-to-constrain-process-memory/" />
+		<meta property="og:site_name" content="Using Linux Control Groups to Constrain Process Memory" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<style>
+			html { background-color: #FAF8F5; color: #2D2926; }
+			body { opacity: 0; transition: opacity 0.1s ease; }
+			body.loaded { opacity: 1; }
+			.site-header { height: 60px; background-color: #FAF8F5; border-bottom: 1px solid #E8421E; }
+		</style>
+
+		
+		
+		
+		<link rel="stylesheet" href="/css/redesign.0549ef1f1a520caaa205998e607f39487a7449f68e5ed56b7a56d7f18a88bcab.css" />
+		
+		<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap">
+		<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+		<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
+		
+
+		
+		
+		<script src="/js/copy-code.a37ee9cf1d31a02dd198332f434b0595201bfac8f5fced07bbcfa510292ee9f6.js"></script>
+		
+
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+			posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P', {
+				api_host: 'https://bobby.moffatt.me',
+				defaults: '2026-01-30'
+			})
+		</script>
+
+		
+		
+		<script src="/js/story.7e8e3e8a35f21c2c00b5e62cd32b02a066e8ff9a9f7194061becb5f8cb9b854e.js"></script>
+		
+		<script src="/js/toc.465cf3045885a3be466e09ee2eda7b42d235cb925f5cea7216dd796117d3ba69.js"></script>
+		
+		<script src="/js/medium-mirror.35aebfe5abe1f5550feac89e219440c133cef497f763b606819f30bad8647115.js"></script>
+		<script src="/js/lightbox.js" defer></script>
+	</head>
+	<body class="ma0 section-post page-kind-page is-page-true  feature-nohdr">
+		<script>document.body.classList.add('loaded');</script>
+
+		<header class="site-header hide-print">
+	<div class="site-header-inner">
+		<a href="/" class="site-title">rmoff's random ramblings</a>
+		<nav class="site-nav">
+			<a href="/categories/interesting-links/" class="nav-il"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Interesting Links</a>
+			<span class="nav-sep"></span>
+			<a href="/categories/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Categories</a>
+			<a href="/search/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search</a>
+			<a href="/index.xml"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg> RSS</a>
+			<div class="nav-social">
+				<a href="https://www.linkedin.com/in/robinmoffatt/" title="linkedin"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+				<a href="https://twitter.com/rmoff/" title="twitter"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+				<a href="https://bsky.app/profile/rmoff.net" title="bluesky"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 568 501" fill="currentColor"><path d="M123.121 33.664C188.241 82.553 258.281 181.68 284 234.873c25.719-53.192 95.759-152.32 160.879-201.21C491.866-1.611 568-28.906 568 57.947c0 17.346-9.945 145.713-15.778 166.555-20.275 72.453-94.155 90.933-159.875 79.748C507.222 323.8 536.444 388.56 473.333 453.32c-119.86 122.992-172.272-30.859-185.702-70.281-2.462-7.227-3.614-10.608-3.631-7.733-.017-2.875-1.169.506-3.631 7.733-13.43 39.422-65.842 193.273-185.702 70.281-63.111-64.76-33.89-129.52 80.986-149.071-65.72 11.185-139.6-7.295-159.875-79.748C10.945 203.659 1 75.291 1 57.946 1-28.906 76.135-1.612 123.121 33.664z"/></svg></a>
+				<a href="https://www.youtube.com/c/rmoff" title="youtube"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+				<a href="https://talks.rmoff.net" title="talks"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/><polyline points="7 8 12 12 17 8"/></svg></a>
+				<a href="https://github.com/rmoff/" title="github"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+			</div>
+		</nav>
+		<button class="nav-toggle" onclick="document.querySelector('.mobile-nav').classList.toggle('open')" aria-label="Menu">
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+		</button>
+	</div>
+	<nav class="mobile-nav">
+		<a href="/">Home</a>
+		<a href="/categories/">Categories</a>
+		<a href="/categories/interesting-links/">Interesting Links</a>
+		<a href="/search/">Search</a>
+		<a href="/index.xml">RSS</a>
+		<a href="https://www.linkedin.com/in/robinmoffatt/">linkedin</a>
+		<a href="https://twitter.com/rmoff/">twitter</a>
+		<a href="https://bsky.app/profile/rmoff.net">bluesky</a>
+		<a href="https://www.youtube.com/c/rmoff">youtube</a>
+		<a href="https://talks.rmoff.net">talks</a>
+		<a href="https://github.com/rmoff/">github</a>
+	</nav>
+</header>
+
+
+		<main role="main">
+		
+
+<div class="article-header">
+	<div class="title-box">
+		<h1>Using Linux Control Groups to Constrain Process Memory</h1>
+		<p class="title-subtitle">
+			
+				Published
+				<time datetime="2015-12-21T00:00:00Z">21 Dec 2015</time>
+				<span class="display-print">by </span>
+				 in <a href="/categories/obiee">OBIEE</a>, <a href="/categories/exalytics">Exalytics</a>, <a href="/categories/linux">Linux</a>, <a href="/categories/performance">Performance</a>
+				<span class="display-print">at https://rmoff.net/2015/12/21/using-linux-control-groups-to-constrain-process-memory/</span>
+			
+		</p>
+	</div>
+</div>
+
+
+<details class="toc-mobile">
+	<summary>Table of Contents</summary>
+	
+</details>
+
+<div class="container-fluid docs">
+	<div class="row">
+		<main class="docs-content" role="main">
+
+<article class="article" data-pagefind-body>
+	<span data-pagefind-filter="category" style="display:none">OBIEE</span><span data-pagefind-filter="category" style="display:none">Exalytics</span><span data-pagefind-filter="category" style="display:none">Linux</span><span data-pagefind-filter="category" style="display:none">Performance</span>
+	<img data-pagefind-meta="image[src]" src="/images/2015/12/Performance.jpg" style="display:none" alt="">
+	<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2015/12/using-linux-control-groups-to-constrain-process-memory/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>Linux <a href="http://docs.oracle.com/cd/E37670_01/E37355/html/ol_about_cgroups.html">Control Groups</a> (cgroups) are a nifty way to limit the amount of resource, such as CPU, memory, or IO throughput, that a process or group of processes may use. <a href="https://fritshoogland.wordpress.com/2012/12/15/throttling-io-with-linux/">Frits Hoogland</a> wrote a great blog demonstrating how to use it to constrain the I/O a particular process could use, and was the inspiration for this one. I have been doing some digging into the performance characteristics of OBIEE in certain conditions, including how it behaves under memory pressure. I’ll write more about that in a future blog, but wanted to write this short blog to demonstrate how cgroups can be used to constrain the memory that a given Linux process can be allocated.</p>
+</div>
+<div class="paragraph">
+<p>This was done on Amazon EC2 running an image imported originally from Oracle’s OBIEE SampleApp, built on Oracle Linux 6.5.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">uname</span> <span style="color: #f92672">-a</span>
+Linux demo.us.oracle.com 2.6.32-431.5.1.el6.x86_64 <span style="color: #75715e;font-style: italic">#1 SMP Tue Feb 11 11:09:04 PST 2014 x86_64 x86_64 x86_64 GNU/Linux</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>First off, install the necessary package in order to use them, and start the service. Throughout this blog where I quote shell commands those prefixed with <code>#</code> are run as root and <code>$</code> as non-root:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># yum install libcgroup
+# service cgconfig start</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Create a cgroup (I’m shamelessly ripping off Frits’ code here, hence the same cgroup name ;-) ):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgcreate -g memory:/myGroup</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can use <strong>cgget</strong> to view the current limits, usage, &amp; high watermarks of the cgroup:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgget -g memory:/myGroup|grep bytes
+memory.memsw.limit_in_bytes: 9223372036854775807
+memory.memsw.max_usage_in_bytes: 0
+memory.memsw.usage_in_bytes: 0
+memory.soft_limit_in_bytes: 9223372036854775807
+memory.limit_in_bytes: 9223372036854775807
+memory.max_usage_in_bytes: 0
+memory.usage_in_bytes: 0</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For more information about the field meaning <a href="http://docs.oracle.com/cd/E37670_01/E37355/html/ol_memory_cgroups.html">see the doc here</a>.</p>
+</div>
+<div class="paragraph">
+<p>To test out the cgroup ability to limit memory used by a process we’re going to use the tool <strong><a href="http://linux.die.net/man/1/stress">stress</a></strong>, which can be used to generate CPU, memory, or IO load on a server. It’s great for testing what happens to a server under resource pressure, and also for testing memory allocation capabilities of a process which is what we’re using it for here.</p>
+</div>
+<div class="paragraph">
+<p>We’re going to configure cgroups to add <code>stress</code> to the myGroup group whenever it runs</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"> <span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">cat</span> /etc/cgrules.conf
+<span style="color: #66d9ef;font-weight: bold">*</span>:stress memory myGroup</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>[Re-]start the cg rules engine service:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># service cgred restart</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we’ll use the <strong>watch</strong> command to re-issue the <code>cgget</code> command every second enabling us to watch cgroup’s metrics in realtime:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># watch --interval 1 cgget -g memory:/myGroup
+/myGroup:
+memory.memsw.failcnt: 0
+memory.memsw.limit_in_bytes: 9223372036854775807
+memory.memsw.max_usage_in_bytes: 0
+memory.memsw.usage_in_bytes: 0
+memory.oom_control: oom_kill_disable 0
+        under_oom 0
+memory.move_charge_at_immigrate: 0
+memory.swappiness: 60
+memory.use_hierarchy: 0
+memory.stat: cache 0
+        rss 0
+        mapped_file 0
+        pgpgin 0
+        pgpgout 0
+        swap 0
+        inactive_anon 0
+        active_anon 0
+        inactive_file 0
+        active_file 0
+        unevictable 0
+        hierarchical_memory_limit 9223372036854775807
+        hierarchical_memsw_limit 9223372036854775807
+        total_cache 0
+        total_rss 0
+        total_mapped_file 0
+        total_pgpgin 0
+        total_pgpgout 0
+        total_swap 0
+        total_inactive_anon 0
+        total_active_anon 0
+        total_inactive_file 0
+        total_active_file 0
+        total_unevictable 0
+memory.failcnt: 0
+memory.soft_limit_in_bytes: 9223372036854775807
+memory.limit_in_bytes: 9223372036854775807
+memory.max_usage_in_bytes: 0
+memory.usage_in_bytes: 0</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In a separate terminal (or even better, use <a href="https://www.rittmanmead.com/blog/2012/05/screen-and-obiee/">screen</a>!) run stress, telling it to grab 150MB of memory:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>stress <span style="color: #f92672">--vm-bytes</span> 150M <span style="color: #f92672">--vm-keep</span> <span style="color: #f92672">-m</span> 1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Review the cgroup, and note that the <em>usage</em> fields have increased:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>/myGroup:
+memory.memsw.failcnt: 0
+memory.memsw.limit_in_bytes: 9223372036854775807
+memory.memsw.max_usage_in_bytes: 157548544
+memory.memsw.usage_in_bytes: 157548544
+memory.oom_control: oom_kill_disable 0
+        under_oom 0
+memory.move_charge_at_immigrate: 0
+memory.swappiness: 60
+memory.use_hierarchy: 0
+memory.stat: cache 0
+        rss 157343744
+        mapped_file 0
+        pgpgin 38414
+        pgpgout 0
+        swap 0
+        inactive_anon 0
+        active_anon 157343744
+        inactive_file 0
+        active_file 0
+        unevictable 0
+        hierarchical_memory_limit 9223372036854775807
+        hierarchical_memsw_limit 9223372036854775807
+        total_cache 0
+        total_rss 157343744
+        total_mapped_file 0
+        total_pgpgin 38414
+        total_pgpgout 0
+        total_swap 0
+        total_inactive_anon 0
+        total_active_anon 157343744
+        total_inactive_file 0
+        total_active_file 0
+        total_unevictable 0
+memory.failcnt: 0
+memory.soft_limit_in_bytes: 9223372036854775807
+memory.limit_in_bytes: 9223372036854775807
+memory.max_usage_in_bytes: 157548544
+memory.usage_in_bytes: 157548544</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Both <strong>memory.memsw.usage_in_bytes</strong> and <strong>memory.usage_in_bytes</strong> are 157548544 = 150.25MB</p>
+</div>
+<div class="paragraph">
+<p>Having a look at the process stats for stress shows us:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>ps <span style="color: #f92672">-ef</span>|grep stress
+oracle   15296  9023  0 11:57 pts/12   00:00:00 stress <span style="color: #f92672">--vm-bytes</span> 150M <span style="color: #f92672">--vm-keep</span> <span style="color: #f92672">-m</span> 1
+oracle   15297 15296 96 11:57 pts/12   00:06:23 stress <span style="color: #f92672">--vm-bytes</span> 150M <span style="color: #f92672">--vm-keep</span> <span style="color: #f92672">-m</span> 1
+oracle   20365 29403  0 12:04 pts/10   00:00:00 <span style="color: #f8f8f2">grep </span>stress
+
+<span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">cat</span> /proc/15297/status
+
+Name:   stress
+State:  R <span style="color: #f92672;font-weight: bold">(</span>running<span style="color: #f92672;font-weight: bold">)</span>
+<span style="color: #f92672;font-weight: bold">[</span>...]
+VmPeak:   160124 kB
+VmSize:   160124 kB
+VmLck:         0 kB
+VmHWM:    153860 kB
+VmRSS:    153860 kB
+VmData:   153652 kB
+VmStk:        92 kB
+VmExe:        20 kB
+VmLib:      2232 kB
+VmPTE:       328 kB
+VmSwap:        0 kB
+<span style="color: #f92672;font-weight: bold">[</span>...]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <a href="http://man7.org/linux/man-pages/man5/proc.5.html">man page for proc</a> gives us more information about these fields, but of particular note are:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>VmSize: Virtual memory size.</p>
+</li>
+<li>
+<p>VmRSS: Resident set size.</p>
+</li>
+<li>
+<p>VmSwap: Swapped-out virtual memory size by anonymous private pages</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Our <code>stress</code> process has a VmSize of 156MB, VmRSS of 150MB, and zero swap.</p>
+</div>
+<div class="paragraph">
+<p>Kill the stress process, and set a memory limit of 100MB for any process in this cgroup:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgset -r memory.limit_in_bytes=100m myGroup</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Run <code>cgset</code> and you should see the see new limit. Note that at this stage we’re just setting <strong>memory.limit_in_bytes</strong> and leaving <strong>memory.memsw.limit_in_bytes</strong> unchanged.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgget -g memory:/myGroup|grep limit|grep bytes
+memory.memsw.limit_in_bytes: 9223372036854775807
+memory.soft_limit_in_bytes: 9223372036854775807
+memory.limit_in_bytes: 104857600</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s see what happens when we try to allocate the memory, observing the cgroup and process Virtual Memory process information at each point:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>15MB:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"> <span style="color: #f8f8f2">$ </span>stress <span style="color: #f92672">--vm-bytes</span> 15M <span style="color: #f92672">--vm-keep</span> <span style="color: #f92672">-m</span> 1
+stress: info: <span style="color: #f92672;font-weight: bold">[</span>31942] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd
+
+<span style="color: #75715e;font-style: italic"># cgget -g memory:/myGroup|grep usage|grep -v max</span>
+memory.memsw.usage_in_bytes: 15990784
+memory.usage_in_bytes: 15990784
+
+<span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">cat</span> /proc/<span style="color: #e6db74">$(</span>pgrep stress|tail <span style="color: #f92672">-n1</span><span style="color: #e6db74">)</span>/status|grep VmVmPeak:    21884 kB
+VmSize:    21884 kB
+VmLck:         0 kB
+VmHWM:     15616 kB
+VmRSS:     15616 kB
+VmData:    15412 kB
+VmStk:        92 kB
+VmExe:        20 kB
+VmLib:      2232 kB
+VmPTE:        60 kB
+VmSwap:        0 kB</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>50MB:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"> <span style="color: #f8f8f2">$ </span>stress <span style="color: #f92672">--vm-bytes</span> 50M <span style="color: #f92672">--vm-keep</span> <span style="color: #f92672">-m</span> 1
+stress: info: <span style="color: #f92672;font-weight: bold">[</span>32419] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd
+
+<span style="color: #75715e;font-style: italic"># cgget -g memory:/myGroup|grep usage|grep -v max</span>
+memory.memsw.usage_in_bytes: 52748288
+memory.usage_in_bytes: 52748288
+
+<span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">cat</span> /proc/<span style="color: #e6db74">$(</span>pgrep stress|tail <span style="color: #f92672">-n1</span><span style="color: #e6db74">)</span>/status|grep Vm
+VmPeak:    57724 kB
+VmSize:    57724 kB
+VmLck:         0 kB
+VmHWM:     51456 kB
+VmRSS:     51456 kB
+VmData:    51252 kB
+VmStk:        92 kB
+VmExe:        20 kB
+VmLib:      2232 kB
+VmPTE:       128 kB
+VmSwap:        0 kB</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>100MB:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>stress <span style="color: #f92672">--vm-bytes</span> 100M <span style="color: #f92672">--vm-keep</span> <span style="color: #f92672">-m</span> 1
+stress: info: <span style="color: #f92672;font-weight: bold">[</span>20379] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd
+<span style="color: #75715e;font-style: italic"># cgget -g memory:/myGroup|grep usage|grep -v max</span>
+memory.memsw.usage_in_bytes: 105197568
+memory.usage_in_bytes: 104738816
+
+<span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">cat</span> /proc/<span style="color: #e6db74">$(</span>pgrep stress|tail <span style="color: #f92672">-n1</span><span style="color: #e6db74">)</span>/status|grep Vm
+VmPeak:   108924 kB
+VmSize:   108924 kB
+VmLck:         0 kB
+VmHWM:    102588 kB
+VmRSS:    101448 kB
+VmData:   102452 kB
+VmStk:        92 kB
+VmExe:        20 kB
+VmLib:      2232 kB
+VmPTE:       232 kB
+VmSwap:     1212 kB</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Note that <strong>VmSwap</strong> has now gone above zero, despite the machine having plenty of usable memory:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># vmstat -s
+     16330912  total memory
+     14849864  used memory
+     10583040  active memory
+      3410892  inactive memory
+      1481048  free memory
+       149416  buffer memory
+      8204108  swap cache
+      6143992  total swap
+      1212184  used swap
+      4931808  free swap</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So it looks like the memory cap has kicked in and the <code>stress</code> process is being forced to get the additional memory that it needs from swap.</p>
+</div>
+<div class="paragraph">
+<p>Let’s tighten the screw a bit further:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>stress <span style="color: #f92672">--vm-bytes</span> 200M <span style="color: #f92672">--vm-keep</span> <span style="color: #f92672">-m</span> 1
+stress: info: <span style="color: #f92672;font-weight: bold">[</span>21945] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The process is now using 100MB of swap (since we’ve asked it to grab 200MB but cgroup is constraining it to 100MB real):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">cat</span> /proc/<span style="color: #e6db74">$(</span>pgrep stress|tail <span style="color: #f92672">-n1</span><span style="color: #e6db74">)</span>/status|grep Vm
+VmPeak:   211324 kB
+VmSize:   211324 kB
+VmLck:         0 kB
+VmHWM:    102616 kB
+VmRSS:    102600 kB
+VmData:   204852 kB
+VmStk:        92 kB
+VmExe:        20 kB
+VmLib:      2232 kB
+VmPTE:       432 kB
+VmSwap:   102460 kB</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>cgget</code> command confirms that we’re using swap, as the <strong>memsw</strong> value shows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgget -g memory:/myGroup|grep usage|grep -v max
+memory.memsw.usage_in_bytes: 209788928
+memory.usage_in_bytes: 104759296</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So now what happens if we curtail the use of all memory, including swap? To do this we’ll set the <strong>memory.memsw.limit_in_bytes</strong> parameter. Note that running <code>cgset</code> whilst a task under the cgroup is executing seems to get ignored <strong>if it is below that currently in use</strong> (per the <code>usage_in_bytes</code> field). If it is above this then the change is instantaneous:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Current state</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgget -g memory:/myGroup|grep bytes
+memory.memsw.limit_in_bytes: 9223372036854775807
+memory.memsw.max_usage_in_bytes: 209915904
+memory.memsw.usage_in_bytes: 209784832
+memory.soft_limit_in_bytes: 9223372036854775807
+memory.limit_in_bytes: 104857600
+memory.max_usage_in_bytes: 104857600
+memory.usage_in_bytes: 104775680</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Set the limit <em>below</em> what is currently in use (150m limit vs 200m in use)</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgset -r memory.memsw.limit_in_bytes=150m myGroup</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Check the limit – it remains unchanged</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgget -g memory:/myGroup|grep bytes
+memory.memsw.limit_in_bytes: 9223372036854775807
+memory.memsw.max_usage_in_bytes: 209993728
+memory.memsw.usage_in_bytes: 209784832
+memory.soft_limit_in_bytes: 9223372036854775807
+memory.limit_in_bytes: 104857600
+memory.max_usage_in_bytes: 104857600
+memory.usage_in_bytes: 104751104</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Set the limit <em>above</em> what is currently in use (250m limit vs 200m in use)</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgset -r memory.memsw.limit_in_bytes=250m myGroup</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Check the limit - it’s taken effect</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgget -g memory:/myGroup|grep bytes
+memory.memsw.limit_in_bytes: 262144000
+memory.memsw.max_usage_in_bytes: 210006016
+memory.memsw.usage_in_bytes: 209846272
+memory.soft_limit_in_bytes: 9223372036854775807
+memory.limit_in_bytes: 104857600
+memory.max_usage_in_bytes: 104857600
+memory.usage_in_bytes: 104816640</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>So now we’ve got limits in place of 100MB real memory and 250MB total (real + swap). What happens when we test that out?</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>stress <span style="color: #f92672">--vm-bytes</span> 245M <span style="color: #f92672">--vm-keep</span> <span style="color: #f92672">-m</span> 1
+stress: info: <span style="color: #f92672;font-weight: bold">[</span>25927] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The process is using 245MB total (<code>VmData</code>), of which 95MB is resident (<code>VmRSS</code>) and 150MB is swapped out (<code>VmSwap</code>)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span><span style="color: #f8f8f2">cat</span> /proc/<span style="color: #e6db74">$(</span>pgrep stress|tail <span style="color: #f92672">-n1</span><span style="color: #e6db74">)</span>/status|grep Vm
+VmPeak:   257404 kB
+VmSize:   257404 kB
+VmLck:         0 kB
+VmHWM:    102548 kB
+VmRSS:     97280 kB
+VmData:   250932 kB
+VmStk:        92 kB
+VmExe:        20 kB
+VmLib:      2232 kB
+VmPTE:       520 kB
+VmSwap:   153860 kB</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The cgroup stats reflect this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code># cgget -g memory:/myGroup|grep bytes
+memory.memsw.limit_in_bytes: 262144000
+memory.memsw.max_usage_in_bytes: 257159168
+memory.memsw.usage_in_bytes: 257007616
+[...]
+memory.limit_in_bytes: 104857600
+memory.max_usage_in_bytes: 104857600
+memory.usage_in_bytes: 104849408</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If we try to go above this absolute limit (<strong>memory.memsw.max_usage_in_bytes</strong>) then the cgroup kicks in a stops the process getting the memory, which in turn causes <code>stress</code> to fail:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>stress <span style="color: #f92672">--vm-bytes</span> 250M <span style="color: #f92672">--vm-keep</span> <span style="color: #f92672">-m</span> 1
+stress: info: <span style="color: #f92672;font-weight: bold">[</span>27356] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd
+stress: FAIL: <span style="color: #f92672;font-weight: bold">[</span>27356] <span style="color: #f92672;font-weight: bold">(</span>415<span style="color: #f92672;font-weight: bold">)</span> &lt;<span style="color: #f92672">--</span> worker 27357 got signal 9
+stress: WARN: <span style="color: #f92672;font-weight: bold">[</span>27356] <span style="color: #f92672;font-weight: bold">(</span>417<span style="color: #f92672;font-weight: bold">)</span> now reaping child worker processes
+stress: FAIL: <span style="color: #f92672;font-weight: bold">[</span>27356] <span style="color: #f92672;font-weight: bold">(</span>451<span style="color: #f92672;font-weight: bold">)</span> failed run completed <span style="color: #66d9ef;font-weight: bold">in </span>3s</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This gives you an indication of how careful you need to be using this type of low-level process control. Most tools will not be happy if they are starved of resource, including memory, and may well behave in unstable ways.</p>
+</div>
+<hr/>
+<div class="paragraph">
+<p><em>Thanks to <a href="https://fritshoogland.wordpress.com/">Frits Hoogland</a> for reading a draft of this post and providing valuable feedback.</em></p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2015/12/using-linux-control-groups-to-constrain-process-memory/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+
+	<hr>
+	<div id="comments" class="giscus-container">
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+	</div>
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">On this page</a></li>
+        </ul>
+        
+      </div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+
+		</main>
+
+		
+
+		
+		<footer class="site-footer hide-print" role="contentinfo">
+			<span>&copy; 2026 </span>
+			<span class="footer-sep">&middot;</span>
+			<a href="https://x.com/rmoff">@rmoff</a>
+			<span class="footer-sep">&middot;</span>
+			<a href="/ai/">AI Disclosure</a>
+		</footer>
+		
+
+		
+	</body>
+</html>

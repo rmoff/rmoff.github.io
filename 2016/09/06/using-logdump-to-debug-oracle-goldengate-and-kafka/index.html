@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta http-equiv=X-Clacks-Overhead content="GNU Terry Pratchett">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		
+		<title>Using logdump to Troubleshoot the Oracle GoldenGate for Big Data Kafka Handler</title>
+		<link rel="alternate" type="application/rss+xml" title="RSS" href="https://rmoff.net/index.xml">
+		<link rel="canonical" href="https://rmoff.net/2016/09/06/using-logdump-to-debug-oracle-goldengate-and-kafka/">
+		
+		
+
+		
+		<meta property="og:title" content="Using logdump to Troubleshoot the Oracle GoldenGate for Big Data Kafka Handler" />
+		<meta property="og:type" content="article" />
+		<meta property="og:image" content="https://rmoff.net/img/default-header-img.jpg" />
+		<meta property="og:description" content="" />
+		<meta property="og:url" content="https://rmoff.net/2016/09/06/using-logdump-to-debug-oracle-goldengate-and-kafka/" />
+		<meta property="og:site_name" content="Using logdump to Troubleshoot the Oracle GoldenGate for Big Data Kafka Handler" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@" />
+
+
+		
+		<style>
+			html { background-color: #FAF8F5; color: #2D2926; }
+			body { opacity: 0; transition: opacity 0.1s ease; }
+			body.loaded { opacity: 1; }
+			.site-header { height: 60px; background-color: #FAF8F5; border-bottom: 1px solid #E8421E; }
+		</style>
+
+		
+		
+		
+		<link rel="stylesheet" href="/css/redesign.0549ef1f1a520caaa205998e607f39487a7449f68e5ed56b7a56d7f18a88bcab.css" />
+		
+		<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap">
+		<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+		<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
+		
+
+		
+		
+		<script src="/js/copy-code.a37ee9cf1d31a02dd198332f434b0595201bfac8f5fced07bbcfa510292ee9f6.js"></script>
+		
+
+		
+		<script>
+			!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+			posthog.init('phc_93NEP79Ju4xqXYWXnoLbr4HMW0Iaepj1BGOVoEXYX6P', {
+				api_host: 'https://bobby.moffatt.me',
+				defaults: '2026-01-30'
+			})
+		</script>
+
+		
+		
+		<script src="/js/story.7e8e3e8a35f21c2c00b5e62cd32b02a066e8ff9a9f7194061becb5f8cb9b854e.js"></script>
+		
+		<script src="/js/toc.465cf3045885a3be466e09ee2eda7b42d235cb925f5cea7216dd796117d3ba69.js"></script>
+		
+		<script src="/js/medium-mirror.35aebfe5abe1f5550feac89e219440c133cef497f763b606819f30bad8647115.js"></script>
+		<script src="/js/lightbox.js" defer></script>
+	</head>
+	<body class="ma0 section-post page-kind-page is-page-true  feature-nohdr">
+		<script>document.body.classList.add('loaded');</script>
+
+		<header class="site-header hide-print">
+	<div class="site-header-inner">
+		<a href="/" class="site-title">rmoff's random ramblings</a>
+		<nav class="site-nav">
+			<a href="/categories/interesting-links/" class="nav-il"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Interesting Links</a>
+			<span class="nav-sep"></span>
+			<a href="/categories/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Categories</a>
+			<a href="/search/"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search</a>
+			<a href="/index.xml"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg> RSS</a>
+			<div class="nav-social">
+				<a href="https://www.linkedin.com/in/robinmoffatt/" title="linkedin"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+				<a href="https://twitter.com/rmoff/" title="twitter"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+				<a href="https://bsky.app/profile/rmoff.net" title="bluesky"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 568 501" fill="currentColor"><path d="M123.121 33.664C188.241 82.553 258.281 181.68 284 234.873c25.719-53.192 95.759-152.32 160.879-201.21C491.866-1.611 568-28.906 568 57.947c0 17.346-9.945 145.713-15.778 166.555-20.275 72.453-94.155 90.933-159.875 79.748C507.222 323.8 536.444 388.56 473.333 453.32c-119.86 122.992-172.272-30.859-185.702-70.281-2.462-7.227-3.614-10.608-3.631-7.733-.017-2.875-1.169.506-3.631 7.733-13.43 39.422-65.842 193.273-185.702 70.281-63.111-64.76-33.89-129.52 80.986-149.071-65.72 11.185-139.6-7.295-159.875-79.748C10.945 203.659 1 75.291 1 57.946 1-28.906 76.135-1.612 123.121 33.664z"/></svg></a>
+				<a href="https://www.youtube.com/c/rmoff" title="youtube"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+				<a href="https://talks.rmoff.net" title="talks"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/><polyline points="7 8 12 12 17 8"/></svg></a>
+				<a href="https://github.com/rmoff/" title="github"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+			</div>
+		</nav>
+		<button class="nav-toggle" onclick="document.querySelector('.mobile-nav').classList.toggle('open')" aria-label="Menu">
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+		</button>
+	</div>
+	<nav class="mobile-nav">
+		<a href="/">Home</a>
+		<a href="/categories/">Categories</a>
+		<a href="/categories/interesting-links/">Interesting Links</a>
+		<a href="/search/">Search</a>
+		<a href="/index.xml">RSS</a>
+		<a href="https://www.linkedin.com/in/robinmoffatt/">linkedin</a>
+		<a href="https://twitter.com/rmoff/">twitter</a>
+		<a href="https://bsky.app/profile/rmoff.net">bluesky</a>
+		<a href="https://www.youtube.com/c/rmoff">youtube</a>
+		<a href="https://talks.rmoff.net">talks</a>
+		<a href="https://github.com/rmoff/">github</a>
+	</nav>
+</header>
+
+
+		<main role="main">
+		
+
+<div class="article-header">
+	<div class="title-box">
+		<h1>Using logdump to Troubleshoot the Oracle GoldenGate for Big Data Kafka Handler</h1>
+		<p class="title-subtitle">
+			
+				Published
+				<time datetime="2016-09-06T00:00:00Z">06 Sep 2016</time>
+				<span class="display-print">by </span>
+				 in <a href="/categories/kafka-connect">Kafka Connect</a>, <a href="/categories/apache-kafka">Apache Kafka</a>, <a href="/categories/oracle-goldengate">Oracle GoldenGate</a>, <a href="/categories/java">Java</a>
+				<span class="display-print">at https://rmoff.net/2016/09/06/using-logdump-to-debug-oracle-goldengate-and-kafka/</span>
+			
+		</p>
+	</div>
+</div>
+
+
+<details class="toc-mobile">
+	<summary>Table of Contents</summary>
+	<nav id="TableOfContents">
+  <ul>
+    <li><a href="#_working_around_the_error">Working around the error</a></li>
+    <li><a href="#_a_better_workaround">A Better Workaround?</a></li>
+    <li><a href="#_conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+</details>
+
+<div class="container-fluid docs">
+	<div class="row">
+		<main class="docs-content" role="main">
+
+<article class="article" data-pagefind-body>
+	<span data-pagefind-filter="category" style="display:none">Kafka Connect</span><span data-pagefind-filter="category" style="display:none">Apache Kafka</span><span data-pagefind-filter="category" style="display:none">Oracle GoldenGate</span><span data-pagefind-filter="category" style="display:none">Java</span>
+	<img data-pagefind-meta="image[src]" src="/img/default-header-img.jpg" style="display:none" alt="">
+	
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2016/09/using-logdump-to-debug-oracle-goldengate-and-kafka/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p><a href="http://www.oracle.com/technetwork/middleware/goldengate/overview/index.html">Oracle GoldenGate</a> for Big Data (OGG BD) supports sending transactions as messages to Kafka topics, both through the <a href="http://docs.oracle.com/goldengate/bd1221/gg-bd/GADBD/GUID-2561CA12-9BAC-454B-A2E3-2D36C5C60EE5.htm#GADBD449">native Oracle handler</a> as well as a <a href="https://blogs.oracle.com/dataintegration/entry/oracle_goldengate_adapter_for_confluent">connector into Confluent’s Kafka Connect</a>. In some research that I was doing with it I found an interesting problem that I am going to demonstrate here and show the troubleshooting tools that may be useful to others encountering similar issues.</p>
+</div>
+<div class="paragraph">
+<p>The source for the data is <a href="http://dominicgiles.com/swingbench.html">Swingbench</a> running against Oracle 12c database (pluggable instance). OGG has been configured as follows:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Extract</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>  EXTRACT EXT1
+  USERID SYSTEM, PASSWORD welcome1
+  EXTTRAIL ./dirdat/lt
+  SOURCECATALOG ORCL
+  TABLE SOE.*;</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Datapump (to local machine, an installation of OGG BD)</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>  EXTRACT EXTDP1
+  RMTHOST LOCALHOST, MGRPORT 7810
+  RMTTRAIL ./dirdat/rt
+  SOURCECATALOG ORCL
+  TABLE SOE.*;</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Replicat</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>  REPLICAT rkafka
+  TARGETDB LIBFILE libggjava.so SET property=dirprm/kafka.props
+  REPORTCOUNT EVERY 1 MINUTES, RATE
+  GROUPTRANSOPS 10000
+  MAP *.*.*, TARGET *.*.*;</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>When I start the replicat, it abends almost straight away. In <code>ggserr.log</code> I see:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>ERROR   OGG-15051  Oracle GoldenGate Delivery, rkafka.prm:  Java or JNI exception:
+oracle.goldengate.util.GGException: Kafka Handler failed to format and process operation: table=[ORCL.SOE.CUSTOMERS], op pos=00000000000000006636, tx pos=00000000000000002437, op ts=2016-09-06 10:59:23.000589.
+ERROR   OGG-01668  Oracle GoldenGate Delivery, rkafka.prm:  PROCESS ABENDING.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Within the properties file for the Kafka handler (<code>dirprm/kafka.props</code>) I increased the logging level</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="properties"><span style="color: #f8f8f2;background-color: #49483e">gg.log.level</span><span style="color: #f8f8f2;background-color: #49483e">=</span><span style="color: #e6db74">DEBUG</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and restart the replicat. Now we get a debug file written to <code>dirrpt/RKAFKA_debug_log4j.log</code> which includes successful work:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>[...]
+[main] DEBUG (UserExitDataSource.java:1190) - Received txInd is: WHOLE RBA is: 4939
+[main] DEBUG (KafkaHandler.java:484) - Process operation: table=[ORCL.SOE.LOGON], op pos=00000000000000004939, tx pos=00000000000000002437, op ts=2016-09-06 10:59:23.000179
+[main] DEBUG (KafkaHandler.java:529) - Creating the producer record and sending to Kafka Producer
+[main] DEBUG (NonBlockingKafkaProducer.java:64) - Sending producer record to Non Blocking kafka producer
+[main] DEBUG (NonBlockingKafkaProducer.java:76) - NBKP:send(): Returning status: OK
+[main] DEBUG (PendingOpGroup.java:316) - now ready to checkpoint? false (was ready? false): {pendingOps=18, groupSize=0, timer=0:00:00.000 [total = 0 ms ]}
+[main] DEBUG (UserExitDataSource.java:1401) - applyQueuedConfigurationChanges: on Operation? false
+[main] DEBUG (UserExitDataSource.java:2342) - UpdateActivityTime call received
+[...]</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>but then a failure, matching the more high-level message we got previously in <code>ggserr.log</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>DEBUG 2016-09-06 15:50:52,909 [main] DEBUG (KafkaHandler.java:484) - Process operation: table=[ORCL.SOE.CUSTOMERS], op pos=00000000000000006636, tx pos=00000000000000002437, op ts=2016-09-06 10:59:23.000589
+INFO 2016-09-06 15:50:52,910 [main] INFO  (AvroOperationSchemaGenerator.java:36) - Generating the Avro schema for the table [ORCL.SOE.CUSTOMERS].
+ERROR 2016-09-06 15:50:52,914 [main] ERROR (AvroOperationFormatter.java:188) - The Avro Formatter formatOp operation failed.
+org.apache.avro.SchemaParseException: Illegal character in: SYS_NC00017$
+    at org.apache.avro.Schema.validateName(Schema.java:1083)
+    at org.apache.avro.Schema.access$200(Schema.java:79)
+    at org.apache.avro.Schema$Field.&lt;init&gt;(Schema.java:372)
+    at org.apache.avro.SchemaBuilder$FieldBuilder.completeField(SchemaBuilder.java:2124)
+    at org.apache.avro.SchemaBuilder$FieldBuilder.completeField(SchemaBuilder.java:2116)
+    at org.apache.avro.SchemaBuilder$FieldBuilder.access$5300(SchemaBuilder.java:2034)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So from this we’ve got the table (<code>ORCL.SOE.CUSTOMERS</code>), log offset (<code>6636</code>), and from the stack trace even a hint at what the issue may be (something to do with the Schema, and a column called <code>SYS_NC00017$</code>).</p>
+</div>
+<div class="paragraph">
+<p>Now let’s see if we can find out more. A colleague of mine pointed me towards <a href="https://docs.oracle.com/goldengate/1212/gg-winux/GLOGD/toc.htm">Logdump</a>, which is <a href="https://docs.oracle.com/goldengate/1212/gg-winux/GLOGD/wu_logdump.htm">well documented</a> and also covered by Oracle’s A-Team <a href="http://www.ateam-oracle.com/oracle-goldengate-logdump/">blog here</a>.</p>
+</div>
+<div class="paragraph">
+<p>Launch <code>logdump</code> from the OGG BD folder, ideally using <code>rlwrap</code> so that you can scroll and search through command history:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>rlwrap ./logdump
+
+Oracle GoldenGate Log File Dump Utility
+Version 12.2.0.1.160419 OGGCORE_12.2.0.1.0OGGBP_PLATFORMS_160430.1401
+
+Copyright <span style="color: #f92672;font-weight: bold">(</span>C<span style="color: #f92672;font-weight: bold">)</span> 1995, 2016, Oracle and/or its affiliates. All rights reserved.
+
+
+Logdump 1 <span style="color: #f92672;font-weight: bold">&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then enter the following, which will determine what information is shown:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Show <a href="https://docs.oracle.com/goldengate/1212/gg-winux/GLOGD/logdump_commands.htm#GLOGD182">record headers</a></p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>  GHDR ON</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Show <a href="https://docs.oracle.com/goldengate/1212/gg-winux/GLOGD/logdump_commands.htm#GLOGD159">detailed column data</a>, in both hex and ASCII</p>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>  DETAIL ON
+  DETAIL DATA</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>After that, specify the trail file to be examined:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>OPEN /u01/ogg-bd/dirdat/rt000000000</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can enter <code>next</code> (or simply <code>n</code>) to view the records one at a time:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="yaml"><span style="color: #e6db74">Logdump 6 &gt;OPEN /u01/ogg-bd/dirdat/rt000000000</span>
+<span style="color: #e6db74">Current LogTrail is /u01/ogg-bd/dirdat/rt000000000</span>
+<span style="color: #e6db74">Logdump 7 &gt;n</span>
+
+<span style="color: #e6db74">2016/09/02 15:54:48.329.147 FileHeader           Len  1451 RBA </span><span style="color: #ae81ff">0</span>
+<span style="color: #a6e22e">Name</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2">*FileHeader</span><span style="color: #960050;background-color: #1e0010">*</span>
+<span style="color: #e6db74">3000 0338 3000 0008 4747 0d0a 544c 0a0d 3100 0002 | 0..80...GG..TL..1...</span>
+<span style="color: #e6db74">0005 3200 0004 2000 0000 3300 0008 02f2 61ba f7c1 | ..2... ...3.....a...</span>
+<span style="color: #e6db74">f3bb 3400 002d 002b 7572 693a 6269 6764 6174 616c | ..4..-.+uri:bigdatal</span>
+<span style="color: #e6db74">6974 653a 6c6f 6361 6c64 6f6d 6169 6e3a 3a75 3031 | ite:localdomain::u01</span>
+<span style="color: #e6db74">3a6f 6767 3a45 5854 4450 3135 0000 2f35 0000 2b00 | :ogg:EXTDP15../5..+.</span>
+<span style="color: #e6db74">2975 7269 3a62 6967 6461 7461 6c69 7465 3a6c 6f63 | )uri:bigdatalite:loc</span>
+<span style="color: #e6db74">616c 646f 6d61 696e 3a3a 7530 313a 6f67 673a 4558 | aldomain::u01:ogg:EX</span>
+
+<span style="color: #e6db74">Logdump 8 &gt;n</span>
+<span style="color: #e6db74">-------------------------------------------------------------------</span>
+<span style="color: #a6e22e">Hdr-Ind    </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #a6e22e">E  (x45)     Partition  </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #e6db74">.  (x00)</span>
+<span style="color: #a6e22e">UndoFlag   </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #a6e22e">.  (x00)     BeforeAfter</span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #e6db74">A  (x41)</span>
+<span style="color: #a6e22e">RecLength  </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #a6e22e">0  (x0000)   IO Time    </span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #e6db74">2016/09/02 15:54:47.562.301</span>
+<span style="color: #a6e22e">IOType     </span><span style="color: #f8f8f2;background-color: #49483e">:</span>   <span style="color: #a6e22e">151  (x97)     OrigNode   </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #e6db74">0  (x00)</span>
+<span style="color: #a6e22e">TransInd   </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #a6e22e">.  (x03)     FormatType </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #e6db74">R  (x52)</span>
+<span style="color: #a6e22e">SyskeyLen  </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #a6e22e">0  (x00)     Incomplete </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #e6db74">.  (x00)</span>
+<span style="color: #a6e22e">AuditRBA   </span><span style="color: #f8f8f2;background-color: #49483e">:</span>          <span style="color: #a6e22e">0       AuditPos   </span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">0</span>
+<span style="color: #a6e22e">Continued  </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #a6e22e">N  (x00)     RecCount   </span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #e6db74">0  (x00)</span>
+
+<span style="color: #e6db74">2016/09/02 15:54:47.562.301 RestartOK            Len     0 RBA </span><span style="color: #ae81ff">1459</span>
+<span style="color: #a6e22e">Name</span><span style="color: #f8f8f2;background-color: #49483e">:</span>
+<span style="color: #a6e22e">After  Image</span><span style="color: #f8f8f2;background-color: #49483e">:</span>                                             <span style="color: #e6db74">Partition 0   G  s</span>
+
+<span style="color: #a6e22e">GGS tokens</span><span style="color: #f8f8f2;background-color: #49483e">:</span>
+<span style="color: #e6db74">4e00 0004 4558 5431                               | N...EXT1</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>But ploughing through the file a transaction at a time is no fun, so lets zero-in on the problem record. We can either just jump straight to the transaction offset that we got from the error log using <code>POSITION</code> (or <code>POS</code>) followed by <code>NEXT</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #f8f8f2;background-color: #49483e">Logdump</span> <span style="color: #ae81ff">12</span> <span style="color: #f92672;font-weight: bold">&gt;</span><span style="color: #f8f8f2;background-color: #49483e">pos</span> <span style="color: #ae81ff">6636</span>
+<span style="color: #f8f8f2;background-color: #49483e">Reading</span> <span style="color: #66d9ef;font-weight: bold">forward</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">RBA</span> <span style="color: #ae81ff">6636</span>
+<span style="color: #f8f8f2;background-color: #49483e">Logdump</span> <span style="color: #ae81ff">13</span> <span style="color: #f92672;font-weight: bold">&gt;</span><span style="color: #f8f8f2;background-color: #49483e">n</span>
+<span style="color: #75715e;font-style: italic">-------------------------------------------------------------------</span>
+<span style="color: #f8f8f2;background-color: #49483e">Hdr</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">Ind</span>    <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #f8f8f2;background-color: #49483e">E</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x45</span><span style="color: #f8f8f2;background-color: #49483e">)</span>     <span style="color: #66d9ef;font-weight: bold">Partition</span>  <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #f8f8f2;background-color: #49483e">.</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0c</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #f8f8f2;background-color: #49483e">UndoFlag</span>   <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #f8f8f2;background-color: #49483e">.</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x00</span><span style="color: #f8f8f2;background-color: #49483e">)</span>     <span style="color: #f8f8f2;background-color: #49483e">BeforeAfter</span><span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #f8f8f2;background-color: #49483e">A</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x41</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #f8f8f2;background-color: #49483e">RecLength</span>  <span style="color: #f8f8f2;background-color: #49483e">:</span>   <span style="color: #ae81ff">256</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0100</span><span style="color: #f8f8f2;background-color: #49483e">)</span>   <span style="color: #f8f8f2;background-color: #49483e">IO</span> <span style="color: #f8f8f2">Time</span>    <span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">2016</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #ae81ff">09</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #ae81ff">06</span> <span style="color: #ae81ff">11</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">59</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">23</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">000</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">589</span>
+<span style="color: #f8f8f2;background-color: #49483e">IOType</span>     <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #ae81ff">5</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x05</span><span style="color: #f8f8f2;background-color: #49483e">)</span>     <span style="color: #f8f8f2;background-color: #49483e">OrigNode</span>   <span style="color: #f8f8f2;background-color: #49483e">:</span>   <span style="color: #ae81ff">255</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">xff</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #f8f8f2;background-color: #49483e">TransInd</span>   <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #f8f8f2;background-color: #49483e">.</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x00</span><span style="color: #f8f8f2;background-color: #49483e">)</span>     <span style="color: #f8f8f2;background-color: #49483e">FormatType</span> <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #f8f8f2;background-color: #49483e">R</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x52</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #f8f8f2;background-color: #49483e">SyskeyLen</span>  <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #ae81ff">0</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x00</span><span style="color: #f8f8f2;background-color: #49483e">)</span>     <span style="color: #f8f8f2;background-color: #49483e">Incomplete</span> <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #f8f8f2;background-color: #49483e">.</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x00</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #f8f8f2;background-color: #49483e">AuditRBA</span>   <span style="color: #f8f8f2;background-color: #49483e">:</span>        <span style="color: #ae81ff">393</span>       <span style="color: #f8f8f2;background-color: #49483e">AuditPos</span>   <span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">30266384</span>
+<span style="color: #f8f8f2;background-color: #49483e">Continued</span>  <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #f8f8f2;background-color: #49483e">N</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x00</span><span style="color: #f8f8f2;background-color: #49483e">)</span>     <span style="color: #f8f8f2;background-color: #49483e">RecCount</span>   <span style="color: #f8f8f2;background-color: #49483e">:</span>     <span style="color: #ae81ff">1</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x01</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+
+<span style="color: #ae81ff">2016</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #ae81ff">09</span><span style="color: #f92672;font-weight: bold">/</span><span style="color: #ae81ff">06</span> <span style="color: #ae81ff">11</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">59</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">23</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">000</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #ae81ff">589</span> <span style="color: #66d9ef;font-weight: bold">Insert</span>               <span style="color: #f8f8f2;background-color: #49483e">Len</span>   <span style="color: #ae81ff">256</span> <span style="color: #f8f8f2;background-color: #49483e">RBA</span> <span style="color: #ae81ff">6636</span>
+<span style="color: #f8f8f2;background-color: #49483e">Name</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #f8f8f2;background-color: #49483e">ORCL</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">SOE</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">CUSTOMERS</span>  <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">TDR</span> <span style="color: #66d9ef;font-weight: bold">Index</span><span style="color: #f8f8f2;background-color: #49483e">:</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #66d9ef;font-weight: bold">After</span>  <span style="color: #f8f8f2;background-color: #49483e">Image</span><span style="color: #f8f8f2;background-color: #49483e">:</span>                                             <span style="color: #66d9ef;font-weight: bold">Partition</span> <span style="color: #ae81ff">12</span>   <span style="color: #66d9ef;font-weight: bold">G</span>  <span style="color: #f8f8f2;background-color: #49483e">b</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">000</span><span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0001</span> <span style="color: #ae81ff">86</span><span style="color: #f8f8f2;background-color: #49483e">a1</span> <span style="color: #ae81ff">0001</span> <span style="color: #ae81ff">000</span><span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #ae81ff">0000</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....................</span>
+<span style="color: #ae81ff">0006</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">e</span> <span style="color: #ae81ff">7477</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">e</span> <span style="color: #ae81ff">0002</span> <span style="color: #ae81ff">000</span><span style="color: #f8f8f2;background-color: #49483e">b</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0007</span> <span style="color: #ae81ff">7361</span> <span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">d70</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">..</span><span style="color: #f8f8f2;background-color: #49483e">antwan</span><span style="color: #f8f8f2;background-color: #49483e">........</span><span style="color: #f8f8f2;background-color: #49483e">samp</span>
+<span style="color: #ae81ff">736</span><span style="color: #f8f8f2;background-color: #49483e">f</span> <span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">e00</span> <span style="color: #ae81ff">0300</span> <span style="color: #ae81ff">0600</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0275</span> <span style="color: #ae81ff">7300</span> <span style="color: #ae81ff">0400</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">b00</span> <span style="color: #ae81ff">0000</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">son</span><span style="color: #f8f8f2;background-color: #49483e">........</span><span style="color: #f8f8f2;background-color: #49483e">us</span><span style="color: #f8f8f2;background-color: #49483e">.......</span>
+<span style="color: #ae81ff">0741</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">d45</span> <span style="color: #ae81ff">5249</span> <span style="color: #ae81ff">4341</span> <span style="color: #ae81ff">0005</span> <span style="color: #ae81ff">000</span><span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">AMERICA</span><span style="color: #f8f8f2;background-color: #49483e">............</span>
+<span style="color: #ae81ff">8980</span> <span style="color: #ae81ff">0006</span> <span style="color: #ae81ff">001</span><span style="color: #f8f8f2;background-color: #49483e">d</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0019</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">e</span> <span style="color: #ae81ff">7477</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">e</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">e73</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">d</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">..........</span><span style="color: #f8f8f2;background-color: #49483e">antwan</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">sam</span>
+<span style="color: #ae81ff">7073</span> <span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">f6e</span> <span style="color: #ae81ff">406</span><span style="color: #f8f8f2;background-color: #49483e">f</span> <span style="color: #ae81ff">7261</span> <span style="color: #ae81ff">636</span><span style="color: #66d9ef;font-weight: bold">c</span> <span style="color: #ae81ff">652</span><span style="color: #f8f8f2;background-color: #49483e">e</span> <span style="color: #ae81ff">636</span><span style="color: #f8f8f2;background-color: #49483e">f</span> <span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">d00</span> <span style="color: #ae81ff">0700</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2;background-color: #49483e">a00</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">pson</span><span style="color: #f92672;font-weight: bold">@</span><span style="color: #f8f8f2;background-color: #49483e">oracle</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">com</span><span style="color: #f8f8f2;background-color: #49483e">.....</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">9500</span> <span style="color: #ae81ff">0800</span> <span style="color: #ae81ff">1500</span> <span style="color: #ae81ff">0032</span> <span style="color: #ae81ff">3031</span> <span style="color: #ae81ff">362</span><span style="color: #f8f8f2;background-color: #49483e">d</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">...............</span><span style="color: #ae81ff">2016</span><span style="color: #f92672;font-weight: bold">-</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">0</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0000</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">10</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000a</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0001</span> <span style="color: #ae81ff">86</span><span style="color: #f8f8f2;background-color: #49483e">a1</span>                          <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">..........</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">1</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0001</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">10</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000a</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0006</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">e</span> <span style="color: #ae81ff">7477</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">e</span>                          <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....</span><span style="color: #f8f8f2;background-color: #49483e">antwan</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">2</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0002</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">11</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000b</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0007</span> <span style="color: #ae81ff">7361</span> <span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">d70</span> <span style="color: #ae81ff">736</span><span style="color: #f8f8f2;background-color: #49483e">f</span> <span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">e</span>                       <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....</span><span style="color: #f8f8f2;background-color: #49483e">sampson</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">3</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0003</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>     <span style="color: #ae81ff">6</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0006</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0002</span> <span style="color: #ae81ff">7573</span>                                    <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....</span><span style="color: #f8f8f2;background-color: #49483e">us</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">4</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0004</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">11</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000b</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0007</span> <span style="color: #ae81ff">414</span><span style="color: #f8f8f2;background-color: #49483e">d</span> <span style="color: #ae81ff">4552</span> <span style="color: #ae81ff">4943</span> <span style="color: #ae81ff">41</span>                       <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....</span><span style="color: #f8f8f2;background-color: #49483e">AMERICA</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">5</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0005</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">10</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000a</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">8980</span>                          <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">..........</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">6</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0006</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">29</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x001d</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0019</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">e</span> <span style="color: #ae81ff">7477</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">e</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">e73</span> <span style="color: #ae81ff">616</span><span style="color: #f8f8f2;background-color: #49483e">d</span> <span style="color: #ae81ff">7073</span> <span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">f6e</span> <span style="color: #ae81ff">406</span><span style="color: #f8f8f2;background-color: #49483e">f</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....</span><span style="color: #f8f8f2;background-color: #49483e">antwan</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">sampson</span><span style="color: #f92672;font-weight: bold">@</span><span style="color: #f8f8f2;background-color: #49483e">o</span>
+<span style="color: #ae81ff">7261</span> <span style="color: #ae81ff">636</span><span style="color: #66d9ef;font-weight: bold">c</span> <span style="color: #ae81ff">652</span><span style="color: #f8f8f2;background-color: #49483e">e</span> <span style="color: #ae81ff">636</span><span style="color: #f8f8f2;background-color: #49483e">f</span> <span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">d</span>                            <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">racle</span><span style="color: #f8f8f2;background-color: #49483e">.</span><span style="color: #f8f8f2;background-color: #49483e">com</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">7</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0007</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">10</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000a</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0095</span>                          <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">..........</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">8</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0008</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">21</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0015</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">3230</span> <span style="color: #ae81ff">3136</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">d30</span> <span style="color: #ae81ff">392</span><span style="color: #f8f8f2;background-color: #49483e">d</span> <span style="color: #ae81ff">3036</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">a30</span> <span style="color: #ae81ff">303</span><span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #ae81ff">3030</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">a30</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">..</span><span style="color: #ae81ff">2016</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">09</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">06</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">00</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">00</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">0</span>
+<span style="color: #ae81ff">30</span>                                                <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">0</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>     <span style="color: #ae81ff">9</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0009</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">14</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000e</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">000</span><span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">f63</span> <span style="color: #ae81ff">6361</span> <span style="color: #ae81ff">7369</span> <span style="color: #ae81ff">6</span><span style="color: #f8f8f2;background-color: #49483e">f6e</span> <span style="color: #ae81ff">616</span><span style="color: #66d9ef;font-weight: bold">c</span>                <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....</span><span style="color: #f8f8f2;background-color: #49483e">Occasional</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>    <span style="color: #ae81ff">10</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000a</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>     <span style="color: #ae81ff">9</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0009</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0005</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">d75</span> <span style="color: #ae81ff">7369</span> <span style="color: #ae81ff">63</span>                            <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....</span><span style="color: #f8f8f2;background-color: #49483e">Music</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>    <span style="color: #ae81ff">11</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000b</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">21</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0015</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">3139</span> <span style="color: #ae81ff">3635</span> <span style="color: #ae81ff">2</span><span style="color: #f8f8f2;background-color: #49483e">d30</span> <span style="color: #ae81ff">352</span><span style="color: #f8f8f2;background-color: #49483e">d</span> <span style="color: #ae81ff">3130</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">a30</span> <span style="color: #ae81ff">303</span><span style="color: #f8f8f2;background-color: #49483e">a</span> <span style="color: #ae81ff">3030</span> <span style="color: #ae81ff">3</span><span style="color: #f8f8f2;background-color: #49483e">a30</span> <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">..</span><span style="color: #ae81ff">1965</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">05</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #ae81ff">10</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">00</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">00</span><span style="color: #f8f8f2;background-color: #49483e">:</span><span style="color: #ae81ff">0</span>
+<span style="color: #ae81ff">30</span>                                                <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #ae81ff">0</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>    <span style="color: #ae81ff">12</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000c</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>     <span style="color: #ae81ff">5</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0005</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0001</span> <span style="color: #ae81ff">59</span>                                      <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....</span><span style="color: #f8f8f2;background-color: #49483e">Y</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>    <span style="color: #ae81ff">13</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000d</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>     <span style="color: #ae81ff">5</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x0005</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0001</span> <span style="color: #ae81ff">4</span><span style="color: #f8f8f2;background-color: #49483e">e</span>                                      <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">....</span><span style="color: #f8f8f2;background-color: #49483e">N</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>    <span style="color: #ae81ff">14</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000e</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">10</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000a</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0002</span> <span style="color: #ae81ff">49</span><span style="color: #f8f8f2;background-color: #49483e">f1</span>                          <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">........</span><span style="color: #f8f8f2;background-color: #49483e">I</span><span style="color: #f8f8f2;background-color: #49483e">.</span>
+<span style="color: #66d9ef;font-weight: bold">Column</span>    <span style="color: #ae81ff">15</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000f</span><span style="color: #f8f8f2;background-color: #49483e">),</span> <span style="color: #f8f8f2;background-color: #49483e">Len</span>    <span style="color: #ae81ff">10</span> <span style="color: #f8f8f2;background-color: #49483e">(</span><span style="color: #f8f8f2;background-color: #49483e">x000a</span><span style="color: #f8f8f2;background-color: #49483e">)</span>
+<span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0000</span> <span style="color: #ae81ff">0002</span> <span style="color: #ae81ff">49</span><span style="color: #f8f8f2;background-color: #49483e">f1</span>                          <span style="color: #f92672;font-weight: bold">|</span> <span style="color: #f8f8f2;background-color: #49483e">........</span><span style="color: #f8f8f2;background-color: #49483e">I</span><span style="color: #f8f8f2;background-color: #49483e">.</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>or we can also use the <code>FILTER</code> command, but we’ll come back to that in a moment. First let’s have a look at the record in question that’s causing the Kafka handler to abend. It’s shown in full above.</p>
+</div>
+<div class="paragraph">
+<p>The table name matches - <code>ORCL.SOE.CUSTOMERS</code>, and we can see that the operation was an <code>INSERT</code> along with the values for sixteen columns. Now, since we know that the error thrown by the Kafka handler was something to do with schema and columns, let’s take a step back. The record we’re looking at is the actual data record, but in the trail file will also be metadata about the table itself which will have been read by the handler. We can look for all records in the trail file relating to this table using the <code>FILTER</code> command (preceeded by a <code>POS 0</code> to move the read back to the beginning of the file):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>Logdump 37 &gt;POS 0
+Reading forward from RBA 0
+Logdump 38 &gt;FILTER INCLUDE FILENAME ORCL.SOE.CUSTOMERS
+Logdump 39 &gt;N
+-------------------------------------------------------------------
+Hdr-Ind    :     E  (x45)     Partition  :     .  (x00)
+UndoFlag   :     .  (x00)     BeforeAfter:     A  (x41)
+RecLength  :  1464  (x05b8)   IO Time    : 2016/09/06 11:59:26.461.886
+IOType     :   170  (xaa)     OrigNode   :     2  (x02)
+TransInd   :     .  (x03)     FormatType :     R  (x52)
+SyskeyLen  :     0  (x00)     Incomplete :     .  (x00)
+DDR/TDR Idx:   (002, 003)     AuditPos   : 30266384
+Continued  :     N  (x00)     RecCount   :     1  (x01)
+
+2016/09/06 11:59:26.461.886 Metadata             Len 1464 RBA 5103
+Name: ORCL.SOE.CUSTOMERS
+*
+1)Name          2)Data Type        3)External Length  4)Fetch Offset      5)Scale         6)Level
+7)Null          8)Bump if Odd      9)Internal Length 10)Binary Length    11)Table Length 12)Most Sig DT
+13)Least Sig DT 14)High Precision  15)Low Precision   16)Elementary Item  17)Occurs       18)Key Column
+19)Sub DataType 20)Native DataType 21)Character Set   22)Character Length 23)LOB Type     24)Partial Type
+*
+TDR version: 1
+Definition for table ORCL.SOE.CUSTOMERS
+Record Length: 542
+Columns: 18
+CUSTOMER_ID        134     13        0  0  0 1 0      8      8      8 0 0 0 0 1    0 1   3    2       -1      0 0 0
+CUST_FIRST_NAME     64     40       12  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+CUST_LAST_NAME      64     40       58  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+NLS_LANGUAGE        64      3      104  0  0 1 0      3      3      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+NLS_TERRITORY       64     30      112  0  0 1 0     30     30      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+CREDIT_LIMIT       134     11      148  2  0 1 0      8      8      8 0 0 0 0 1    0 0   3    2       -1      0 0 0
+CUST_EMAIL          64    100      160  0  0 1 0    100    100      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+ACCOUNT_MGR_ID     134     13      266  0  0 1 0      8      8      8 0 0 0 0 1    0 0   3    2       -1      0 0 0
+CUSTOMER_SINCE     192     19      278  0  0 1 0     19     19     19 0 5 0 0 1    0 0   0   12       -1      0 0 0
+CUSTOMER_CLASS      64     40      300  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+SUGGESTIONS         64     40      346  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+DOB                192     19      392  0  0 1 0     19     19     19 0 5 0 0 1    0 0   0   12       -1      0 0 0
+MAILSHOT            64      1      414  0  0 1 0      1      1      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+PARTNER_MAILSHOT    64      1      420  0  0 1 0      1      1      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+PREFERRED_ADDRESS  134     13      426  0  0 1 0      8      8      8 0 0 0 0 1    0 0   3    2       -1      0 0 0
+PREFERRED_CARD     134     13      438  0  0 1 0      8      8      8 0 0 0 0 1    0 0   3    2       -1      0 0 0
+SYS_NC00017$        64     40      450  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+SYS_NC00018$        64     40      496  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+End of definition</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>I spy with my little eye …​ <code>SYS_NC00017$</code>, which was named in the debug log that we saw above. Also note:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>Columns: 18</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So the OGG metadata for the table shows it with <em>eighteen</em> columns, including two <code>SYS_[…​]</code>. If you look at the data shown in the record at position 6636 above you’ll see that there are only <em>sixteen</em> columns of data. Let’s now check out the schema for the table in question in Oracle.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">select</span> <span style="color: #66d9ef;font-weight: bold">COLUMN_NAME</span><span style="color: #f8f8f2;background-color: #49483e">,</span><span style="color: #f8f8f2;background-color: #49483e">DATA_TYPE</span> <span style="color: #66d9ef;font-weight: bold">from</span> <span style="color: #f8f8f2;background-color: #49483e">user_tab_columns</span> <span style="color: #66d9ef;font-weight: bold">where</span> <span style="color: #66d9ef;font-weight: bold">table_name</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;CUSTOMERS&#39;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #66d9ef;font-weight: bold">COLUMN_NAME</span>          <span style="color: #f8f8f2;background-color: #49483e">DATA_TYPE</span>
+<span style="color: #75715e;font-style: italic">-------------------- ----------------</span>
+<span style="color: #f8f8f2;background-color: #49483e">PREFERRED_CARD</span>       <span style="color: #f8f8f2;background-color: #49483e">NUMBER</span>
+<span style="color: #f8f8f2;background-color: #49483e">PREFERRED_ADDRESS</span>    <span style="color: #f8f8f2;background-color: #49483e">NUMBER</span>
+<span style="color: #f8f8f2;background-color: #49483e">PARTNER_MAILSHOT</span>     <span style="color: #f8f8f2;background-color: #49483e">VARCHAR2</span>
+<span style="color: #f8f8f2;background-color: #49483e">MAILSHOT</span>             <span style="color: #f8f8f2;background-color: #49483e">VARCHAR2</span>
+<span style="color: #f8f8f2;background-color: #49483e">DOB</span>                  <span style="color: #f8f8f2">DATE</span>
+<span style="color: #f8f8f2;background-color: #49483e">SUGGESTIONS</span>          <span style="color: #f8f8f2;background-color: #49483e">VARCHAR2</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMER_CLASS</span>       <span style="color: #f8f8f2;background-color: #49483e">VARCHAR2</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMER_SINCE</span>       <span style="color: #f8f8f2">DATE</span>
+<span style="color: #f8f8f2;background-color: #49483e">ACCOUNT_MGR_ID</span>       <span style="color: #f8f8f2;background-color: #49483e">NUMBER</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUST_EMAIL</span>           <span style="color: #f8f8f2;background-color: #49483e">VARCHAR2</span>
+<span style="color: #f8f8f2;background-color: #49483e">CREDIT_LIMIT</span>         <span style="color: #f8f8f2;background-color: #49483e">NUMBER</span>
+<span style="color: #f8f8f2;background-color: #49483e">NLS_TERRITORY</span>        <span style="color: #f8f8f2;background-color: #49483e">VARCHAR2</span>
+<span style="color: #f8f8f2;background-color: #49483e">NLS_LANGUAGE</span>         <span style="color: #f8f8f2;background-color: #49483e">VARCHAR2</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUST_LAST_NAME</span>       <span style="color: #f8f8f2;background-color: #49483e">VARCHAR2</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUST_FIRST_NAME</span>      <span style="color: #f8f8f2;background-color: #49483e">VARCHAR2</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMER_ID</span>          <span style="color: #f8f8f2;background-color: #49483e">NUMBER</span>
+
+<span style="color: #ae81ff">16</span> <span style="color: #66d9ef;font-weight: bold">rows</span> <span style="color: #f8f8f2;background-color: #49483e">selected</span><span style="color: #f8f8f2;background-color: #49483e">.</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Sixteen columns. Not eighteen, as the OGG trail file Metadata record showed. Hmmm.</p>
+</div>
+<div class="paragraph">
+<p>Interestingly, Google <a href="https://dbvisit.atlassian.net/wiki/display/REPA11XE/02+-+Initialise+the+Replication">throws up a match for this very column</a> in which the output of <a href="http://www.dbvisit.com/products/dbvisit_replicate_real_time_oracle_database_replication/">Dbvisit’s replicate tool</a> run against the Swingbench schema announces:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>Column SYS_NC00017$ is special: virtual column. Excluding.
+Column SYS_NC00017$ is special: hidden column. Excluding.
+Column SYS_NC00017$ is special: system-generated column. Excluding.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>That it’s a hidden column we’d pretty much guessed given its elusiveness. But - virtual column? system generated? This then prompted me to look at the indices on the table:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #66d9ef;font-weight: bold">TABLE_NAME</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">INDEX_NAME</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #66d9ef;font-weight: bold">COLUMN_NAME</span>
+     <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">USER_IND_COLUMNS</span>
+     <span style="color: #66d9ef;font-weight: bold">WHERE</span> <span style="color: #66d9ef;font-weight: bold">TABLE_NAME</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;CUSTOMERS&#39;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #66d9ef;font-weight: bold">TABLE_NAME</span>       <span style="color: #f8f8f2;background-color: #49483e">INDEX_NAME</span>                       <span style="color: #66d9ef;font-weight: bold">COLUMN_NAME</span>
+<span style="color: #75715e;font-style: italic">---------------- -------------------------------- --------------------</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMERS</span>        <span style="color: #f8f8f2;background-color: #49483e">CUST_ACCOUNT_MANAGER_IX</span>          <span style="color: #f8f8f2;background-color: #49483e">ACCOUNT_MGR_ID</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMERS</span>        <span style="color: #f8f8f2;background-color: #49483e">CUST_EMAIL_IX</span>                    <span style="color: #f8f8f2;background-color: #49483e">CUST_EMAIL</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMERS</span>        <span style="color: #f8f8f2;background-color: #49483e">CUST_FUNC_LOWER_NAME_IX</span>          <span style="color: #f8f8f2;background-color: #49483e">SYS_NC00017</span><span style="color: #960050;background-color: #1e0010">$</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMERS</span>        <span style="color: #f8f8f2;background-color: #49483e">CUST_FUNC_LOWER_NAME_IX</span>          <span style="color: #f8f8f2;background-color: #49483e">SYS_NC00018</span><span style="color: #960050;background-color: #1e0010">$</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMERS</span>        <span style="color: #f8f8f2;background-color: #49483e">CUSTOMERS_PK</span>                     <span style="color: #f8f8f2;background-color: #49483e">CUSTOMER_ID</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUSTOMERS</span>        <span style="color: #f8f8f2;background-color: #49483e">CUST_DOB_IX</span>                      <span style="color: #f8f8f2;background-color: #49483e">DOB</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><a href="https://www.youtube.com/watch?v=uuN7kOW7iwo">Aha</a>! I spy system generated columns! Let’s take a closer look at the <code>CUST_FUNC_LOWER_NAME_IX</code> index:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="sql"><span style="color: #66d9ef;font-weight: bold">SQL</span><span style="color: #f92672;font-weight: bold">&gt;</span> <span style="color: #66d9ef;font-weight: bold">SELECT</span> <span style="color: #f8f8f2;background-color: #49483e">INDEX_NAME</span><span style="color: #f8f8f2;background-color: #49483e">,</span> <span style="color: #f8f8f2;background-color: #49483e">INDEX_TYPE</span>
+     <span style="color: #66d9ef;font-weight: bold">FROM</span> <span style="color: #f8f8f2;background-color: #49483e">USER_INDEXES</span>
+     <span style="color: #66d9ef;font-weight: bold">WHERE</span> <span style="color: #66d9ef;font-weight: bold">TABLE_NAME</span> <span style="color: #f92672;font-weight: bold">=</span> <span style="color: #e6db74">&#39;CUSTOMERS&#39;</span>
+       <span style="color: #66d9ef;font-weight: bold">AND</span> <span style="color: #f8f8f2;background-color: #49483e">INDEX_NAME</span><span style="color: #f92672;font-weight: bold">=</span><span style="color: #e6db74">&#39;CUST_FUNC_LOWER_NAME_IX&#39;</span><span style="color: #f8f8f2;background-color: #49483e">;</span>
+
+<span style="color: #f8f8f2;background-color: #49483e">INDEX_NAME</span>                       <span style="color: #f8f8f2;background-color: #49483e">INDEX_TYPE</span>
+<span style="color: #75715e;font-style: italic">-------------------------------- ---------------------------</span>
+<span style="color: #f8f8f2;background-color: #49483e">CUST_FUNC_LOWER_NAME_IX</span>          <span style="color: #66d9ef;font-weight: bold">FUNCTION</span><span style="color: #f92672;font-weight: bold">-</span><span style="color: #f8f8f2;background-color: #49483e">BASED</span> <span style="color: #f8f8f2;background-color: #49483e">NORMAL</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So we have a <a href="http://docs.oracle.com/cd/E11882_01/server.112/e40540/indexiot.htm#CNCPT1161">function-based index</a>, which in the background appears to implement itself via two hidden columns. My guess is that the Kafka handler code is taking the metadata definition record of 18 columns too literally, and expecting to find a value for it in the transaction record when it reads it and falls over when it can’t. Similar behaviour happens with the Kafka Connect OGG connector when it tries to process this particular record:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>ERROR 2016-08-30 17:25:09,548 [main] ERROR (KafkaConnectFormatter.java:251) - The Kafka Connect Row Formatter formatOp operation failed.
+java.lang.IndexOutOfBoundsException: Index: 16, Size: 16
+at java.util.ArrayList.rangeCheck(ArrayList.java:653)
+at java.util.ArrayList.get(ArrayList.java:429)
+at oracle.goldengate.datasource.meta.TableMetaData.getColumnMetaData(TableMetaData.java:73)
+at oracle.goldengate.kafkaconnect.formatter.KafkaConnectFormatter.formatAfterValues(KafkaConnectFormatter.java:329)
+at oracle.goldengate.kafkaconnect.formatter.KafkaConnectFormatter.formatAfterValuesOp(KafkaConnectFormatter.java:278)
+at oracle.goldengate.kafkaconnect.formatter.KafkaConnectFormatter.formatOp(KafkaConnectFormatter.java:212)
+at oracle.goldengate.kafkaconnect.KafkaConnectHandler.formatOp(KafkaConnectHandler.java:309)
+at oracle.goldengate.kafkaconnect.KafkaConnectHandler.transactionCommit(KafkaConnectHandler.java:186)
+at oracle.goldengate.datasource.DsEventManager$2.send(DsEventManager.java:414)
+at oracle.goldengate.datasource.DsEventManager$EventDispatcher.distributeEvent(DsEventManager.java:231)
+at oracle.goldengate.datasource.DsEventManager.fireTransactionCommit(DsEventManager.java:422)
+at oracle.goldengate.datasource.AbstractDataSource.fireTransactionCommit(AbstractDataSource.java:490)
+at oracle.goldengate.datasource.UserExitDataSource.commitActiveTransaction(UserExitDataSource.java:1582)
+at oracle.goldengate.datasource.UserExitDataSource.commitTx(UserExitDataSource.java:1525)
+ERROR 2016-08-30 17:25:09,550 [main] ERROR (KafkaConnectHandler.java:312) - Confluent Kafka Handler failed to format and process operation: table=[PDB.SOE.CUSTOMERS], op pos=00000000000000008091, tx pos=00000000000000003011, op ts=2016-07-29 14:59:47.000137
+java.lang.IndexOutOfBoundsException: Index: 16, Size: 16
+at java.util.ArrayList.rangeCheck(ArrayList.java:653)
+at java.util.ArrayList.get(ArrayList.java:429)
+at oracle.goldengate.datasource.meta.TableMetaData.getColumnMetaData(TableMetaData.java:73)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note the <code>IndexOutOfBoundsException</code> error.</p>
+</div>
+<div class="sect1">
+<h2 id="_working_around_the_error">Working around the error&nbsp;<a class="headline-hash" href="#_working_around_the_error">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>I’m in the fortunate position of being in a sandbox environment in which I can modify the source schema to suit my needs - so I just dropped the function-based index. In reality this evidently would not be a good approach on the assumption that the index was there for a good reason!</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>DROP INDEX &#34;SOE&#34;.&#34;CUST_FUNC_LOWER_NAME_IX&#34;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Having run this, we still have the question of how to get the replicat working. To do this we could go the whole-hog and drop and recreate the extracts; or, we can get the replicat to skip the section of the trail file with the records in that we can’t process. Assuming you’ve run the above <code>DROP</code> and then written more data to the table, there’ll be a second metadata record in the OGG trail file. We can use the <code>FILTER</code> command to find this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>Logdump 69 &gt;FILTER INCLUDE FILENAME ORCL.SOE.CUSTOMERS;FILTER EXCLUDE RECTYPE 5,134;FILTER MATCH ALL</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This shows records for just this table, and excludes record types 5 and 134 (<code>INSERT</code> and <code>UPDATE</code> respectively). We can then scan through the file with <code>NEXT</code> command and see:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>Logdump 72 &gt;n
+Scanned     10000 records, RBA    2365691, 2016/09/06 12:12:16.001.191
+Scanned     20000 records, RBA    4716374, 2016/09/06 14:48:54.971.161
+Scanned     30000 records, RBA    7067022, 2016/09/06 14:57:34.000.170
+Scanned     40000 records, RBA    9413177, 2016/09/06 15:07:41.000.186
+Scanned     50000 records, RBA   11773709, 2016/09/06 15:16:07.000.594
+Scanned     60000 records, RBA   14126750, 2016/09/06 15:24:38.001.063
+-------------------------------------------------------------------
+Hdr-Ind    :     E  (x45)     Partition  :     .  (x00)
+UndoFlag   :     .  (x00)     BeforeAfter:     A  (x41)
+RecLength  :  1308  (x051c)   IO Time    : 2016/09/06 17:11:21.717.818
+IOType     :   170  (xaa)     OrigNode   :     2  (x02)
+TransInd   :     .  (x03)     FormatType :     R  (x52)
+SyskeyLen  :     0  (x00)     Incomplete :     .  (x00)
+DDR/TDR Idx:   (002, 009)     AuditPos   : 9986576
+Continued  :     N  (x00)     RecCount   :     1  (x01)
+
+2016/09/06 17:11:21.717.818 Metadata             Len 1308 RBA 14702330
+Name: ORCL.SOE.CUSTOMERS
+*
+1)Name          2)Data Type        3)External Length  4)Fetch Offset      5)Scale         6)Level
+7)Null          8)Bump if Odd      9)Internal Length 10)Binary Length    11)Table Length 12)Most Sig DT
+13)Least Sig DT 14)High Precision  15)Low Precision   16)Elementary Item  17)Occurs       18)Key Column
+19)Sub DataType 20)Native DataType 21)Character Set   22)Character Length 23)LOB Type     24)Partial Type
+*
+TDR version: 1
+Definition for table ORCL.SOE.CUSTOMERS
+Record Length: 450
+Columns: 16
+CUSTOMER_ID        134     13        0  0  0 1 0      8      8      8 0 0 0 0 1    0 1   3    2       -1      0 0 0
+CUST_FIRST_NAME     64     40       12  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+CUST_LAST_NAME      64     40       58  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+NLS_LANGUAGE        64      3      104  0  0 1 0      3      3      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+NLS_TERRITORY       64     30      112  0  0 1 0     30     30      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+CREDIT_LIMIT       134     11      148  2  0 1 0      8      8      8 0 0 0 0 1    0 0   3    2       -1      0 0 0
+CUST_EMAIL          64    100      160  0  0 1 0    100    100      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+ACCOUNT_MGR_ID     134     13      266  0  0 1 0      8      8      8 0 0 0 0 1    0 0   3    2       -1      0 0 0
+CUSTOMER_SINCE     192     19      278  0  0 1 0     19     19     19 0 5 0 0 1    0 0   0   12       -1      0 0 0
+CUSTOMER_CLASS      64     40      300  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+SUGGESTIONS         64     40      346  0  0 1 0     40     40      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+DOB                192     19      392  0  0 1 0     19     19     19 0 5 0 0 1    0 0   0   12       -1      0 0 0
+MAILSHOT            64      1      414  0  0 1 0      1      1      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+PARTNER_MAILSHOT    64      1      420  0  0 1 0      1      1      0 0 0 0 0 1    0 0   0    1       -1      0 0 0
+PREFERRED_ADDRESS  134     13      426  0  0 1 0      8      8      8 0 0 0 0 1    0 0   3    2       -1      0 0 0
+PREFERRED_CARD     134     13      438  0  0 1 0      8      8      8 0 0 0 0 1    0 0   3    2       -1      0 0 0
+End of definition
+
+
+Filtering suppressed  62444 records</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Here’s the new table metadata, for sixten columns only and minus the <code>SYS_[…​]</code> columns. Its position as shown in the record above is RBA 14702330. To get the commit sequence number (CSN), which we can use to restart the replicat, we need to enable the display of OGG-generated data in the records (<a href="https://docs.oracle.com/goldengate/1212/gg-winux/GLOGD/logdump_commands.htm#GLOGD235">ref</a>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>GGSTOKEN ON
+GGSTOKEN DETAIL</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The Metadata record itself doesn’t have a CSN, so disable the filtering</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>FILTER OFF</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and then go to the next record</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>Logdump 123 &gt;FILTER OFF
+Logdump 124 &gt;N
+-------------------------------------------------------------------
+Hdr-Ind    :     E  (x45)     Partition  :     .  (x0c)
+UndoFlag   :     .  (x00)     BeforeAfter:     A  (x41)
+RecLength  :   255  (x00ff)   IO Time    : 2016/09/06 17:11:18.000.200
+IOType     :     5  (x05)     OrigNode   :   255  (xff)
+TransInd   :     .  (x00)     FormatType :     R  (x52)
+SyskeyLen  :     0  (x00)     Incomplete :     .  (x00)
+AuditRBA   :        396       AuditPos   : 9986576
+Continued  :     N  (x00)     RecCount   :     1  (x01)
+
+2016/09/06 17:11:18.000.200 Insert               Len   255 RBA 14703707
+Name: ORCL.SOE.CUSTOMERS  (TDR Index: 9)
+After  Image:                                             Partition 12   G  b
+0000 000a 0000 0000 0000 0009 27c1 0001 000b 0000 | ............&#39;.......
+0007 6775 7374 6176 6f00 0200 0a00 0000 0663 6173 | ..gustavo........cas
+
+[...]
+
+GGS tokens:
+TokenID x52 &#39;R&#39; ORAROWID         Info x00  Length   20
+4141 4166 632f 4141 4141 4141 434d 6541 4162 0001 | AAAfc/AAAAAACMeAAb..
+TokenID x4c &#39;L&#39; LOGCSN           Info x00  Length    8
+3131 3637 3235 3433                               | 11672543
+TokenID x36 &#39;6&#39; TRANID           Info x00  Length    9
+3236 2e32 372e 3139 35                            | 26.27.195
+TokenID x69 &#39;i&#39; ORATHREADID      Info x01  Length    2
+0001                                              | ..</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It’s an <code>INSERT</code> record for our table, with the <code>LOGCSN</code> shown as 11672543.</p>
+</div>
+<div class="paragraph">
+<p>So if we’re happy to ditch all the data in the trail file since it was set up until the point at which we &#39;fixed&#39; the virtual column issue, we can run in GGSCI:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>GGSCI (bigdatalite.localdomain) 44&gt; start rkafka atcsn 0.11672543
+
+Sending START request to MANAGER ...
+REPLICAT RKAFKA starting
+
+GGSCI (bigdatalite.localdomain) 49&gt; info rkafka
+
+REPLICAT   RKAFKA    Last Started 2016-09-06 17:32   Status RUNNING
+Checkpoint Lag       00:00:00 (updated 00:00:09 ago)
+Process ID           25860
+Log Read Checkpoint  File ./dirdat/rt000000000
+2016-09-06 17:11:22.000764  RBA 14724721</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and over in Kafka itself we can now see the records coming through:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code data-lang="shell"><span style="color: #f8f8f2">$ </span>kafka-console-consumer <span style="color: #f92672">--zookeeper</span> localhost <span style="color: #f92672">--topic</span> ORCL.SOE.LOGON
+ORCL.SOE.LOGONI42016-09-02 14:56:26.00041142016-09-06T15:50:52.194000<span style="color: #f92672;font-weight: bold">(</span>00000000000000002010LOGON_IDCUSTOMER_IDLOGON_DATE4242&amp;2016-09-02:15:56:25
+ORCL.SOE.LOGONI42016-09-05 14:39:02.00040942016-09-06T15:50:52.875000<span style="color: #f92672;font-weight: bold">(</span>00000000000000002437LOGON_IDCUSTOMER_IDLOGON_DATE4242&amp;2016-09-05:15:39:00
+ORCL.SOE.LOGONI42016-09-05 14:44:15.00046042016-09-06T15:50:52.877000<span style="color: #f92672;font-weight: bold">(</span>00000000000000002593LOGON_IDCUSTOMER_IDLOGON_DATE4242&amp;2016-09-05:15:44:13
+ORCL.SOE.LOGONI42016-09-05 14:46:16.00043642016-09-06T15:50:52.879000<span style="color: #f92672;font-weight: bold">(</span>00000000000000002748LOGON_IDCUSTOMER_IDLOGON_DATE4242&amp;2016-09-05:15:46:11
+ORCL.SOE.LOGONI42016-09-05 16:17:25.00014242016-09-06T15:50:52.881000<span style="color: #f92672;font-weight: bold">(</span>00000000000000002903LOGON_IDCUSTOMER_IDLOGON_DATE4242&amp;2016-09-05:17:17:24
+ORCL.SOE.LOGONI42016-09-05 16:22:38.00040142016-09-06T15:50:52.883000<span style="color: #f92672;font-weight: bold">(</span>00000000000000003058LOGON_IDCUSTOMER_IDLOGON_DATE4242&amp;2016-09-05:17:22:37
+ORCL.SOE.LOGONI42016-09-05 16:25:16.00015142016-09-06T15:50:52.885000<span style="color: #f92672;font-weight: bold">(</span>00000000000000003215LOGON_IDCUSTOMER_IDLOGON_DATE4242&amp;2016-09-05:17:25:16
+ORCL.SOE.LOGONI42016-09-05 16:26:25.00017542016-09-06T15:50:52.886000<span style="color: #f92672;font-weight: bold">(</span>00000000000000003372LOGON_IDCUSTOMER_IDLOGON_DATE4242&amp;2016-09-05:17:26:25
+ORCL.SOE.LOGONI42016-09-05 16:27:20.00018642016-09-06T15:50:52.888000<span style="color: #f92672;font-weight: bold">(</span>00000000000000003527LOGON_IDCUSTOMER_IDLOGON_DATE4242&amp;2016-09-05:17:27:19</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_a_better_workaround">A Better Workaround?&nbsp;<a class="headline-hash" href="#_a_better_workaround">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Per <a href="https://docs.oracle.com/goldengate/1212/gg-winux/GIORA/additional_config.htm#GIORA382">Handling Other Database Properties</a>, virtual columns can be handled by using the <a href="https://docs.oracle.com/goldengate/1212/gg-winux/GWURF/gg_parameters160.htm"><code>TABLE</code></a> <a href="https://docs.oracle.com/goldengate/1212/gg-winux/GWURF/gg_parameters160.htm#CEGHBBED"><code>FETCHCOLS</code></a> configuration on the extract to read the virtual values and <code>MAP</code> of the replicat to map them to actual columns on the target. Unfortunately, the system-generated column name isn’t accepted by OGG in the <code>FETCHCOLS</code> syntax:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>INFO    OGG-06507  Oracle GoldenGate Capture for Oracle, ext1.prm:  MAP (TABLE) resolved (entry ORCL.SOE.CUSTOMERS): TABLE &#34;ORCL&#34;.&#34;SOE&#34;.&#34;CUSTOMERS&#34;, FETCHCOLS(SYS_NC00017$).
+ERROR   OGG-00366  Oracle GoldenGate Capture for Oracle, ext1.prm:  Invalid column specified in FETCHCOLS/FETCHCOLSEXCEPT: SYS_NC00017$.
+ERROR   OGG-01668  Oracle GoldenGate Capture for Oracle, ext1.prm:  PROCESS ABENDING.</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Another tack to try, given that in our case we simply want to make sure the virtual columns don’t get picked up at all - is to try and ignore the column altogether. Unfortunately from my experimentation with <a href="https://docs.oracle.com/goldengate/1212/gg-winux/GWURF/gg_parameters160.htm#CEGICBHB"><code>COLSEXCEPT</code></a> it appears that OGG excludes specified columns from record data, but not the initial metadata (which is what causes the above problems in the first place). Even if this had worked, <code>COLSEXCEPT</code> doesn’t like the system-generated column name, abending the Extract process with:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight" style="color: #f8f8f2;background-color: #49483e"><code>INFO    OGG-06507  Oracle GoldenGate Capture for Oracle, ext1.prm:  MAP (TABLE) resolved (entry ORCL.SOE.CUSTOMERS): TABLE &#34;ORCL&#34;.&#34;SOE&#34;.&#34;CUSTOMERS&#34;, COLSEXCEPT(SYS_NC00017$).
+ERROR   OGG-00366  Oracle GoldenGate Capture for Oracle, ext1.prm:  Invalid column specified in COLS/COLSEXCEPT: SYS_NC00017$.
+ERROR   OGG-01668  Oracle GoldenGate Capture for Oracle, ext1.prm:  PROCESS ABENDING.</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_conclusion">Conclusion&nbsp;<a class="headline-hash" href="#_conclusion">🔗</a> </h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Oracle GoldenGate is a fantastic way to stream changes from many different RDBMS to a variety of targets, including Kafka. The potential that this offers in terms of data integration and pipelines is great. This post has hopefully shed a little bit of light on how to go about troubleshooting issues that can occur when using this set of tools. Do let me know in the comments below if you have better suggestions for how to deal with the virtual columns created as a result of the function-based index!</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This post originally appeared on the <a href="https://www.rittmanmead.com/blog/2016/09/using-logdump-to-debug-oracle-goldengate-and-kafka/">Rittman Mead blog</a>.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+
+	<hr>
+	<div id="comments" class="giscus-container">
+		<script src="https://giscus.app/client.js"
+				data-repo="rmoff/rmoff-blog"
+				data-repo-id="MDEwOlJlcG9zaXRvcnkxNTE3NDg2MTE="
+				data-category="Announcements"
+				data-category-id="DIC_kwDOCQuAA84CvP5T"
+				data-mapping="pathname"
+				data-strict="1"
+				data-reactions-enabled="1"
+				data-emit-metadata="0"
+				data-input-position="bottom"
+				data-theme="light"
+				data-lang="en"
+				crossorigin="anonymous"
+				async>
+		</script>
+	</div>
+</article>
+      </main>
+    
+      
+      <div class="docs-toc">
+        <ul class="nav toc-top">
+          <li><a href="#" id="back_to_top" class="docs-toc-title">On this page</a></li>
+        </ul>
+        <nav id="TableOfContents">
+  <ul>
+    <li><a href="#_working_around_the_error">Working around the error</a></li>
+    <li><a href="#_a_better_workaround">A Better Workaround?</a></li>
+    <li><a href="#_conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+      </div>
+      
+    
+    </div>
+  </div>
+</div>
+
+
+
+		</main>
+
+		
+
+		
+		<footer class="site-footer hide-print" role="contentinfo">
+			<span>&copy; 2026 </span>
+			<span class="footer-sep">&middot;</span>
+			<a href="https://x.com/rmoff">@rmoff</a>
+			<span class="footer-sep">&middot;</span>
+			<a href="/ai/">AI Disclosure</a>
+		</footer>
+		
+
+		
+	</body>
+</html>
