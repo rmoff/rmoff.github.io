@@ -37,7 +37,7 @@
 		
 		
 		
-		<link rel="stylesheet" href="/css/redesign.4d5e743d36710b7ffb7d615c60a7b339695cd8c2d404ef57bac1db2ad6ed4571.css" />
+		<link rel="stylesheet" href="/css/redesign.52bffd3e10d543835fd050f6b2ac70da194e2b5728f5f04a6534d877101853ca.css" />
 		
 		<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap">
 		<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
@@ -61,7 +61,7 @@
 		
 		<script src="/js/toc.465cf3045885a3be466e09ee2eda7b42d235cb925f5cea7216dd796117d3ba69.js"></script>
 		
-		<script src="/js/medium-mirror.35aebfe5abe1f5550feac89e219440c133cef497f763b606819f30bad8647115.js"></script>
+		<script src="/js/medium-mirror.f4594c6ba1373144e5a3b7400c582ef0e16c690a5f679c129e52e0e873f23dbb.js"></script>
 		<script src="/js/lightbox.js" defer></script>
 	</head>
 	<body class="ma0 section-post page-kind-page is-page-true ">
@@ -153,7 +153,7 @@
 	<span data-pagefind-filter="category" style="display:none">oracle</span><span data-pagefind-filter="category" style="display:none">performance</span><span data-pagefind-filter="category" style="display:none">resource-manager</span><span data-pagefind-filter="category" style="display:none">unix</span>
 	<img data-pagefind-meta="image[src]" src="/img/default-header-img.jpg" style="display:none" alt="">
 	<span data-pagefind-meta="date:10 September 2010" data-pagefind-sort="date:2010-09-10" style="display:none"></span>
-	<h2 id="introduction">Introduction&nbsp;<a class="headline-hash" href="#introduction">🔗</a> </h2>
+	<h2 id="introduction">Introduction<a class="headline-hash" href="#introduction">&nbsp;🔗</a></h2>
 <p>We&rsquo;re in the process of implemention <a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28310/dbrm.htm#i1010776">Resource Manager</a> (RM) on our Oracle 11gR1 Data Warehouse. We&rsquo;ve currently got one DW application live, but have several more imminent. We identified RM as a suitable way of - as the name would suggest - managing the resources on the server.</p>
 <p>In the first instance we&rsquo;re looking at simply protecting CPU for, and from, future applications. At some point it would be interesting to use some of the more granular and precise functions to demote long-running queries, have nighttime/daytime plans, etc. I&rsquo;d also like to explore the <a href="http://www.oracle-base.com/articles/11g/ResourceManagerEnhancements_11gR1.php#per_session_io_limits">management of IO</a> but for us the pain is in bandwidth that a query consumes, and it looks like RM can only work with total session MB, or IOPS. Reading about Exadata it sounds like the Exadata I/O Resource Management might do this ([&hellip;]<a href="http://blogs.sun.com/Samson/entry/oracle_exadata_storage_server_a">It allows intra and inter-database I/O bandwidth to be defined and managed</a>[..]). But for that I&rsquo;ll have to write to Santa and promise to be a good boy this year.</p>
 <p>Here are some good resources for learning about Resource Manager:</p>
@@ -167,7 +167,7 @@
 <li><a href="http://www.oracle-base.com/articles/11g/ResourceManagerEnhancements_11gR1.php">Resource Manager Enhancements in Oracle Database 11g Release 1</a> - by Tim Hall</li>
 <li><a href="http://www.oracle.com/pls/db111/search?remark=quick_search&amp;word=resource+manager">Further Oracle documentation on Resource Manager</a></li>
 </ul>
-<h2 id="our-implementation-of-rm">Our implementation of RM&nbsp;<a class="headline-hash" href="#our-implementation-of-rm">🔗</a> </h2>
+<h2 id="our-implementation-of-rm">Our implementation of RM<a class="headline-hash" href="#our-implementation-of-rm">&nbsp;🔗</a></h2>
 <p>Our initial aim with RM is to do nothing more than ensure that everything we need to run does not do so at the expense of other applications on the server. A 64-way parallel beast of a query should not be allowed to freeze out lightweight workload from application backend processes (such as Usage Tracking, Informatica and DAC Repositories, etc).</p>
 <p>We&rsquo;ve implemented this by grouping schema IDs from the four projects into consumer groups (PROJ_A_GRP, PROJ_B_GRP, PROJ_C_GRP, PROJ_D_GRP). The other group where users are explicitly defined is SYS_GROUP, for the SYS and SYSTEM users. All other users (i.e. those from application backend processes) go in the OTHER_GROUP.</p>
 <p>Our Resource Plan is this: CPU priority is allocated entirely to SYSTEM_GROUP. If any is remaining, it is allocated to OTHER_GROUP. Any CPU remaining after that gets divided up in quarters to the four project groups. It&rsquo;s worth pointing out that Oracle itself manages Oracle core processes, in a group called _ORACLE_BACKGROUND_GROUP_.</p>
@@ -194,7 +194,7 @@ DW_PLAN    PROJ_D_GRP           CONSUMER_GROUP      0      0     25       0     
 </code></pre><p>My understanding of RM&rsquo;s control of CPU is that in essence it does nothing, until the database is under CPU pressures. Once queries are being constrained by CPU, RM will enforce the allocation of CPU between the various consumer groups as defined in the currently active Resource Plan.</p>
 <p>Note that RM is only within the Oracle context - it cannot do anything about non-Oracle processes on the same server using lots of CPU. An example of this that we&rsquo;ve seen is ODI agents running local to the database - if these are doing lots of work then they may impact Oracle but we cannot use RM to control it.</p>
 <p>Here&rsquo;s my understanding of how we&rsquo;ll see RM in action - and as you&rsquo;ll see from the tests that I run, I&rsquo;m not sure that it is entirely correct. Generally, there will be no SYSTEM_GROUP activity, and very minimal OTHER_GROUP activity. This leaves the lion&rsquo;s share for our application queries/ETL. Until the CPU on the box hits 100%, no throttling will be done. This is important to note. Our allocation of 25% CPU to PROJ_A_GRP only means that it is the minimum it can expect (see below - this doesn&rsquo;t seem to be correct). If nothing else is running, it will get 100%. Conversely, if an application backend process (in the OTHER_GROUP consumer group) is using lots of CPU, let&rsquo;s say 60%, and all four project groups are demanding CPU, then each will get 25% of the remaining 40% of the box&rsquo;s capacity, i.e. 10% host CPU.</p>
-<h2 id="scripts-to-monitor-and-test-rm">Scripts to Monitor and Test RM&nbsp;<a class="headline-hash" href="#scripts-to-monitor-and-test-rm">🔗</a> </h2>
+<h2 id="scripts-to-monitor-and-test-rm">Scripts to Monitor and Test RM<a class="headline-hash" href="#scripts-to-monitor-and-test-rm">&nbsp;🔗</a></h2>
 <p>It&rsquo;s important to know that RM is doing what we think it is, and to also be able to determine the current state of a system in terms of resources. If a system is at 100% CPU and users are demanding why RM &ldquo;isn&rsquo;t working&rdquo; it will be useful to prove that it is non-Oracle processes creating the CPU demand.</p>
 <p>I&rsquo;ve been working on some queries to both validate and monitor RM. <a href="http://www.oracle.com/technetwork/database/features/performance/resource-manager-twp-133705.pdf">This excellent whitepaper on RM</a> has some queries illustrating how to use <a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28320/dynviews_2155.htm#REFRN30483">v$rsrcmgrmetric_history</a> to report on RM behaviour. I built on this to incorporate <a href="http://download.oracle.com/docs/cd/B28359_01/server.111/b28320/dynviews_3084.htm#I1030344">V$SYSMETRIC_HISTORY</a> to source host CPU %, creating this query which infers the workload on the system.</p>
 <p>We&rsquo;re looking at system statistics per minute slice (which is the level that v$rsrcmgrmetric_history is at, and then GROUP_ID=2 on V$SYSMETRIC_HISTORY).</p>
@@ -390,7 +390,7 @@ end;
 /
 select to_char(sysdate,&#39;YYYY-MM-DD HH24:MI:SS&#39;) as end_time from dual;
 /
-</code></pre><h2 id="test-01">Test 01&nbsp;<a class="headline-hash" href="#test-01">🔗</a> </h2>
+</code></pre><h2 id="test-01">Test 01<a class="headline-hash" href="#test-01">&nbsp;🔗</a></h2>
 <p>I started the hit_cpu script at 15:38:32. You can see its impact :</p>
 <pre tabindex="0"><code>Total Available  Used Oracle  Used Host  Oracle Throttled
 BEGIN_TIME               CPU Seconds      Seconds      CPU %          Time (s)
@@ -433,7 +433,7 @@ TIME                 CONSUMER_GROUP_NAME                 CPU Seconds  Oracle Sec
 15:47:47      14       1       0      86
 15:48:47      10       1       0      89
 15:49:47       1       1       0      98
-</code></pre><h2 id="test-02">Test 02&nbsp;<a class="headline-hash" href="#test-02">🔗</a> </h2>
+</code></pre><h2 id="test-02">Test 02<a class="headline-hash" href="#test-02">&nbsp;🔗</a></h2>
 <p>I added two more scripts into the test, initiating them from a shell script using the ampersand operator to create them as background jobs running in parallel:</p>
 <pre tabindex="0"><code>/app/oracle/product/11.1.0/db_1/bin/sqlplus USER/PW @hit_cpu &amp;
 /app/oracle/product/11.1.0/db_1/bin/sqlplus USER/PW @hit_cpu &amp;
@@ -489,7 +489,7 @@ BEGIN_TIME               CPU Seconds      Seconds      CPU %
 2010-09-10 22:04:50              480         12.3        4.0       
 2010-09-10 22:05:50              480          0.1        1.7       
 2010-09-10 22:06:50              480          0.2        1.8
-</code></pre><h2 id="test-03">Test 03&nbsp;<a class="headline-hash" href="#test-03">🔗</a> </h2>
+</code></pre><h2 id="test-03">Test 03<a class="headline-hash" href="#test-03">&nbsp;🔗</a></h2>
 <p>The next test I ran used the hit_cpu script and was called once from a user in one each of the four consumer groups, plus a user not allocated a consumer group and therefore in OTHER_GROUP. Five scripts in total, so should expect to see CPU usage around (5 x c.60) = c.300 seconds, and machine CPU at something like (5/8)*100 so c.60-70%</p>
 <p>Test started at 2010-09-10 16:20:20. CPU immediately hit about 64% - which based on my calculation above was satisfying :-)</p>
 <p>Using rm_05 (see above), the breakdown of Oracle CPU time could be seen:</p>
@@ -514,7 +514,7 @@ BEGIN_TIME               CPU Seconds      Seconds      CPU %          Time (s)
 16:21:47      65       2       0      34
 16:22:47      64       1       0      35
 </code></pre><p>(note that sar&rsquo;s timestamp is the END of a sample, whereas the BEGIN_TIME in my Oracle queries is the BEGINNING of a sample)</p>
-<h2 id="test-04">Test 04&nbsp;<a class="headline-hash" href="#test-04">🔗</a> </h2>
+<h2 id="test-04">Test 04<a class="headline-hash" href="#test-04">&nbsp;🔗</a></h2>
 <p>Having seen that RM is correctly assigning our different users to the appropriate consumer groups, we can start testing how RM behaves once the host CPU hits capacity and RM has to start throttling its allocation to the groups.</p>
 <p>In theory eight instances of the script should be enough to load the CPU entirely (since there are eight CPUs on the server). I ran four as a user from PROJ_B_GRP and four from PROJ_A_GRP, starting at 2010-09-10 18:27:53</p>
 <p>As predicated CPU usage hits about 100%, according to sar:</p>
@@ -562,7 +562,7 @@ TIME                 CONSUMER_GROUP_NAME                 CPU Seconds  Oracle Sec
                      SYS_GROUP                                   480             0.0                 0.0               0.0
                      _ORACLE_BACKGROUND_GROUP_                   480             0.0                 0.0               0.0
 </code></pre><p>Note that the throttling is applied pretty much equally to both consumer groups. In plan terms, CPU for level 1 (100% to SYS_GROUP) is unused, so passes to level 2 (100% to OTHER_GROUP). OTHER_GROUP consumes a small amount, and note that it is not [really] throttled. The remaining CPU (96%, from rm_cpu_01, minus 6% shown in rm_05 output = c.90%), is passed onto level 3 of the plan. Whilst the four projects are defined an allocation of 25% each in the plan, two of the consumer groups are not consuming their chunk, so it is divided up amongst the groups that are, according to the ratio of their allocations. Hence, PROJ_A_GRP and PROJ_B_GRP are using c.45% of host CPU. <strong>N.B.</strong> see below for discussion around allocation of CPU, as this statement about ratio may not be true.</p>
-<h2 id="test-05">Test 05&nbsp;<a class="headline-hash" href="#test-05">🔗</a> </h2>
+<h2 id="test-05">Test 05<a class="headline-hash" href="#test-05">&nbsp;🔗</a></h2>
 <p>Test 04 above showed that RM applies throttling evenly to consumer groups, but it could have been influenced by an equal number of sessions for each consumer group running (that is, if it had throttled in a round-robin manner the result could have been the same).</p>
 <p>This test will run a similar workload, but with a skewed number of sessions; 1 PROJ_A_GRP and 7 PROJ_B_GRP.</p>
 <p>The test began at 2010-09-10 19:03:22.</p>
@@ -629,7 +629,7 @@ OTHER_GROUP    491  myuser0          RUNNING          0         0       1       
 <li>Why were the PROJ_B_GRP queries throttled even when there was idle CPU? From 19:17 onwards there was around 35% idle.</li>
 </ul>
 <p>FWIW the scripts were started from a shell script similar to above, with the PROJ_B_GRP sessions first, and then PROJ_A_GRP session.</p>
-<h2 id="test-06">Test 06&nbsp;<a class="headline-hash" href="#test-06">🔗</a> </h2>
+<h2 id="test-06">Test 06<a class="headline-hash" href="#test-06">&nbsp;🔗</a></h2>
 <p>In Test 05 PROJ_A_GRP was running only one process, so would not be demanding as much or more than its theoretical 25% allocation. This test will run three PROJ_A_GRP sessions and which would (based on Test 02 above) require c.36% host CPU to run. In addition I will run six PROJ_B_GRP sessions, theoretical CPU requirement of c.72% host CPU. The total CPU should be driven above 100% and RM kick in.</p>
 <p>My understanding (which could be wrong) of RM is that it will do as it did above when there were equal numbers of sessions in each consumer group to throttle; it will allocate the resource 50:50 to the two consumer groups, even though the ratio of sessions will be 1:2.</p>
 <p>The test started at 2010-09-10 19:43:51. The results were different from what I had expected.</p>
@@ -686,7 +686,7 @@ PROJ_B_GRP     489  PROJB_USR        RUNNING       1836       146    1836      2
 <li>Is it possible that CPU isn&rsquo;t hitting 100% because RM is throttling the queries <em>too</em> much?</li>
 </ul>
 <p>I suspect I&rsquo;m misunderstanding something about how RM is supposed to work and/or how it is implemented to do what it does.</p>
-<h2 id="test-07">Test 07&nbsp;<a class="headline-hash" href="#test-07">🔗</a> </h2>
+<h2 id="test-07">Test 07<a class="headline-hash" href="#test-07">&nbsp;🔗</a></h2>
 <p>Leaving to one side my inability to explain the above observations with RM, I then wantd to add more load so that the machine would be under serious CPU pressure, and see how RM dealt with it.</p>
 <p>I would run:</p>
 <ul>
@@ -781,9 +781,9 @@ TIME                 CONSUMER_GROUP_NAME                 CPU Seconds  Oracle Sec
                      SYS_GROUP                                   480             0.0            0.0               0.0
                      _ORACLE_BACKGROUND_GROUP_                   480             0.0            0.0               0.0
 </code></pre><p><em>Why aren&rsquo;t and PROJ_B_GRP PROJ_D_GRP getting an equal share of CPU as PROJ_A_GRP and PROJ_C_GRP?</em></p>
-<h2 id="whats-next">What&rsquo;s next?&nbsp;<a class="headline-hash" href="#whats-next">🔗</a> </h2>
+<h2 id="whats-next">What&rsquo;s next?<a class="headline-hash" href="#whats-next">&nbsp;🔗</a></h2>
 <p>I&rsquo;m going to re-run some of the above tests to check that the same behaviour is seen. I&rsquo;m also planning to test with non-Oracle processes using lots of CPU to see how RM deals with that. We&rsquo;re considering how RM fits into Performance Testing our applications, as it introduces quite a possible varience in the response times the users could see in Production. Finally, it will be interesting to observe RM in action against real DW workloads where there may be lots of I/O waits and not pure CPU demand.</p>
-<h2 id="summmary">Summmary&nbsp;<a class="headline-hash" href="#summmary">🔗</a> </h2>
+<h2 id="summmary">Summmary<a class="headline-hash" href="#summmary">&nbsp;🔗</a></h2>
 <p>It&rsquo;s been very interesting running these tests and looking closely at what RM appears to be doing. Some of my understanding &amp; assumptions have been challenged, and I would love to hear from people with more experience and knowlegde of RM and Oracle to explain what I&rsquo;m observing and where I&rsquo;ve gone wrong. All of the query results quoted here are representative of the steady-state seen during each test. I&rsquo;m sure I&rsquo;ve just misunderstood part of the principle of RM, but I would like to know in what way :-) and also if there is a way to implement what I thought we had - a way of ensuring that of four consumer groups they all get a fair and equal bite of the pie.</p>
 
 	<hr>
