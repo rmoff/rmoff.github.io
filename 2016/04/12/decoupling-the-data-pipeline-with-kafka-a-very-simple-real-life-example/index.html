@@ -60,7 +60,7 @@
 		
 		
 		
-		<link rel="stylesheet" href="/css/redesign.e6421397da5d6e31496fd3403a337da1dbd3a782072295815406bb0cbbd732ef.css" />
+		<link rel="stylesheet" href="/css/redesign.223222485ae73f73c75fcd24a66e023e8c6fd4a3e68f205f8dc9276a8532870d.css" />
 		
 		<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap">
 		<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
@@ -167,7 +167,7 @@
 		<main role="main">
 		
 
-<div class="article-hero" style="background-image: url('/images/2016/04/kd05a-1.png');">
+<div class="article-hero" style="--hero-img: url('/images/2016/04/kd05a-1.png');">
 	<div class="article-hero-overlay">
 		<div class="article-hero-content">
 			<h1>Decoupling the Data Pipeline with Kafka - A (Very) Simple Real Life Example</h1>
@@ -204,7 +204,7 @@
 
 <article class="article" data-pagefind-body>
 	<div data-pagefind-ignore style="display:none"><span data-pagefind-filter="category">apache kafka</span><span data-pagefind-filter="category">Apache Kafka</span><span data-pagefind-filter="category">logstash</span><span data-pagefind-filter="category">elastic</span><span data-pagefind-filter="category">elasticsearch</span><span data-pagefind-filter="category">kibana</span><span data-pagefind-filter="category">elastic v5</span><span data-pagefind-filter="category">zookeeper</span>
-		<img data-pagefind-meta="image[src]" src="/images/2016/04/kd05a-1.png" alt="">
+		<img data-pagefind-meta="image[src]" src="/images/2016/04/kd05a-1.png" alt="" loading="lazy">
 		<span data-pagefind-meta="date:12 April 2016" data-pagefind-sort="date:2016-04-12"></span>
 	</div>
 	<p>I&rsquo;ve recently been playing around with the ELK stack (<a href="https://www.elastic.co/blog/heya-elastic-stack-and-x-pack">now officially known as the Elastic stack</a>) collecting data from <a href="/2016/03/03/obihackers-irc-channel/">an IRC channel</a> with Elastic&rsquo;s Logstash, storing it in Elasticsearch and <a href="/2016/03/24/my-latest-irc-client-kibana/">analysing it with Kibana</a>. But, this isn&rsquo;t an &ldquo;ELK&rdquo; post - this is a Kafka post! ELK is just some example data manipulation tooling that helps demonstrate the principles.</p>
@@ -215,11 +215,11 @@
 <li>The ability to replay the ingest phase of a pipeline repeatedly into multiple consumers, with no change required to the configuration from source</li>
 </ol>
 <p>The simplest form of the pipeline I was using looks like this:</p>
-<p><img src="/images/2016/04/kd01.png" alt=""></p>
+<p><img decoding="async" loading="lazy" width="639" height="786" src="/images/2016/04/kd01.png" alt=""></p>
 <p>A logstash configuration (<a href="https://gist.github.com/rmoff/862d0ceea223aa7283244b1b27594941#file-01-logstash-irc-conf"><code>logstash-irc.conf</code></a>) gets Logstash to connect to the IRC server and send messages received to Elasticsearch. From here they can be displayed and analysed within Kibana. <a href="/2016/03/24/my-latest-irc-client-kibana/">Read more about the details here</a> if you&rsquo;re interested.</p>
 <p>From a &ldquo;pipeline&rdquo; point of view this is a pretty typical pattern. A tool (Logstash here, but could be ODI, Informatica, etc) runs with a set of &ldquo;code&rdquo; (a very simple <code>.conf</code> here, elsewhere it could be mappings and load plans), reading data from a source. Obviously in full-blown system there&rsquo;s a dozen more moving parts than this simple example, but the point stands.</p>
 <p>Let&rsquo;s think a bit more about what a pipeline does, as this will give us the basis for understanding why and how Kafka fits in so nicely. Overlaying some labels onto the above diagram shows all the processing that we&rsquo;re doing:</p>
-<p><img src="/images/2016/04/kd01a-1.png" alt=""></p>
+<p><img decoding="async" loading="lazy" width="522" height="526" src="/images/2016/04/kd01a-1.png" alt=""></p>
 <p>If any of this needs reconfiguring, restarting, or rerunning, it&rsquo;s an all-or-nothing job. Given that we&rsquo;re streaming data in near-real-time (or conceptually, designing something that <em>could</em> if needed with minimal-to-no rework), shutting down the pipeline just to change one of these bits is a problem because we&rsquo;ll lose the data that the source system is spitting out whether we&rsquo;re there to gather it or not.</p>
 <p>Why would we need to change the pipeline configuration? Consider:</p>
 <ul>
@@ -227,12 +227,12 @@
 <li>Restarting - if the load fails, ideally we don&rsquo;t want to be hitting the source system again for our data if we&rsquo;ve extracted it once already. Similarly if the load process needs to be stopped, maybe for maintenance of the target load system, it&rsquo;s useful to be able to restart the processing exactly from where it left off.</li>
 </ul>
 <p>So I decoupled the source extract from any subsequent processing with a very simple Logstash configuration (<a href="https://gist.github.com/rmoff/862d0ceea223aa7283244b1b27594941#file-02-logstash-irc-kafka-conf"><code>logstash-irc-kafka.conf</code></a>) that pulls the data from IRC as before and <strong>just</strong> sends it straight to Kafka:</p>
-<p><img src="/images/2016/04/kd02a.png" alt=""></p>
+<p><img decoding="async" loading="lazy" width="511" height="184" src="/images/2016/04/kd02a.png" alt=""></p>
 <p>The data lands in Kafka, which becomes our &lsquo;staging&rsquo; area in effect, taking advantage of Kafka&rsquo;s &ldquo;durable buffer&rdquo; concept. The data extracted is ideally as raw as possible - because we don&rsquo;t know what subsequent processing we want to do with it, maybe now, or at some future date. Kafka can be configured to retain data based on age or volume - since the data I was working with was low volume I set the topic to retain it for 90 days:</p>
 <pre><code>./kafka-topics.sh --zookeeper localhost:2181 --topic irc --alter --config retention.ms=7776000000
 </code></pre>
 <p>With the data streaming into Kafka and building up there we can then set up one or more consumers of that data. <em>Note that I&rsquo;m using consumers in the logical sense, not the Kafka &ldquo;Consumer&rdquo; specific terminology</em>. My consumer here is Logstash using <a href="https://gist.github.com/rmoff/862d0ceea223aa7283244b1b27594941#file-03-logstash-kafka-es-conf"><code>logstash-kafka-es.conf</code></a>, which is a variant of the original configuration, this time pulling from Kafka instead of the live IRC feed. And since Kafka is so low-latency, a side-benefit of this setup is that I can both catch up on and replay past records, as well as stream live ones in near-real-time. Result!</p>
-<p><img src="/images/2016/04/kd03a.png" alt=""></p>
+<p><img decoding="async" loading="lazy" width="738" height="480" src="/images/2016/04/kd03a.png" alt=""></p>
 <p>At this point I&rsquo;m <a href="/2016/03/24/my-latest-irc-client-kibana/">where I was before</a>; streaming IRC content in near-real-time to Elasticsearch and analysing it with Kibana. The only difference is that I&rsquo;ve added in Kafka as a buffer, decoupling the reading messages from IRC with the processing and subsequent storage of them.</p>
 <p>Now here&rsquo;s the money shot &ndash; I can add new consumers of this data that&rsquo;s in Kafka, whenever I want, without needing to know about them at the time that I extracted the source data. I can pick up from the end of the feed, or I can reprocess the whole lot, <em>per consumer</em>. I&rsquo;ve used this in a couple of instances recently:</p>
 <ul>
@@ -240,7 +240,7 @@
 <li>Testing the <a href="https://www.elastic.co/blog/elasticsearch-5-0-0-alpha1-released">Elastic stack v5 alpha release</a> by processing the <strong>same source data again</strong> but with a different version of the downstream tools, enabling a proper like-for-like comparison of the pipeline. This is similar in concept to an idea that <a href="https://twitter.com/gwenshap">Gwen Shapira</a> wrote about <a href="http://radar.oreilly.com/2015/05/validating-data-models-with-kafka-based-pipelines.html">in an article in 2015</a>.</li>
 </ul>
 <p>In both of these cases <strong>the existing original consumer remains running and untouched</strong>. This kind of concurrent running is a great way to work with a single feed from the source system, keep the data pipeline running for subsequent analytics, whilst also developing and validating new functionality.</p>
-<p><img src="/images/2016/04/kd05a.png" alt="kd05a"></p>
+<p><img decoding="async" loading="lazy" width="789" height="642" src="/images/2016/04/kd05a.png" alt="kd05a"></p>
 <h3 id="consumer-groups-and-offsets">Consumer Groups and Offsets<a class="headline-hash" href="#consumer-groups-and-offsets" data-pagefind-ignore>&nbsp;🔗</a></h3>
 <p>One of the key concepts in all of this is that of the Kafka <strong>consumer group</strong>, which is a unique identifier for a given consumer (or group of consumers for the same logical entity if you want to parallelise the consumption). In Kafka 0.8 Zookeeper is used by default to keep track off the <strong>offset</strong> of the last record that a given consumer group received. So in my development environment I can look on my Kafka server at Zookeeper and see for each consumer group the latest offset: (<a href="https://cwiki.apache.org/confluence/display/KAFKA/System+Tools#SystemTools-ExportZookeeperOffsets">reference</a>)</p>
 <pre tabindex="0"><code>$ bin/kafka-run-class.sh kafka.tools.ExportZkOffsets --zkconnect localhost:2181 --output-file &gt;(cat)
@@ -382,6 +382,8 @@ logstash-5-testing irc                            0   4143            4148      
   </div>
 </div>
 
+
+<script src="/js/print-images.3d80da75637e362b1f1c8cf89363448b8014497aea6e693e246005f84ba46fac.js" defer></script>
 
 
 
